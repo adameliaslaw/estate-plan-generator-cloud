@@ -1,0 +1,102 @@
+/**
+ * Firebase configuration and service initialization
+ *
+ * Configuration is read from Vite environment variables (VITE_FIREBASE_*).
+ * Copy .env.example to .env and fill in your project values.
+ *
+ * Emulators are connected when:
+ *   - import.meta.env.DEV is true  AND
+ *   - VITE_USE_EMULATORS=true
+ */
+
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import {
+  getAuth,
+  connectAuthEmulator,
+  type Auth,
+} from 'firebase/auth';
+import {
+  initializeFirestore,
+  connectFirestoreEmulator,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore';
+import {
+  getStorage,
+  connectStorageEmulator,
+  type FirebaseStorage,
+} from 'firebase/storage';
+import {
+  getFunctions,
+  connectFunctionsEmulator,
+  type Functions,
+} from 'firebase/functions';
+
+// ---------------------------------------------------------------------------
+// Firebase config from Vite environment variables
+// ---------------------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID as string,
+};
+
+// ---------------------------------------------------------------------------
+// Initialize Firebase app — idempotent, safe for Vite HMR
+// ---------------------------------------------------------------------------
+const app: FirebaseApp = getApps().length === 0
+  ? initializeApp(firebaseConfig)
+  : getApp();
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+const auth: Auth = getAuth(app);
+
+// ---------------------------------------------------------------------------
+// Firestore — initializeFirestore enables the persistent multi-tab cache
+// for offline support. Falls back gracefully in environments that do not
+// support IndexedDB (e.g. private browsing, some Safari versions).
+// ---------------------------------------------------------------------------
+const db: Firestore = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+const storage: FirebaseStorage = getStorage(app);
+
+// ---------------------------------------------------------------------------
+// Cloud Functions — region us-east1 (matches Cloud Functions deployment)
+// ---------------------------------------------------------------------------
+const functions: Functions = getFunctions(app, 'us-east1');
+
+// ---------------------------------------------------------------------------
+// Emulator connections (development only)
+// Controlled by both import.meta.env.DEV and VITE_USE_EMULATORS=true
+// ---------------------------------------------------------------------------
+const useEmulators =
+  import.meta.env.DEV &&
+  (import.meta.env.VITE_USE_EMULATORS === 'true' ||
+    import.meta.env.VITE_USE_EMULATORS === true);
+
+if (useEmulators) {
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: false });
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectStorageEmulator(storage, 'localhost', 9199);
+  connectFunctionsEmulator(functions, 'localhost', 5001);
+
+  // eslint-disable-next-line no-console
+  console.info(
+    '[Firebase] Emulators active — Auth:9099 | Firestore:8080 | Storage:9199 | Functions:5001',
+  );
+}
+
+export { app, auth, db, storage, functions };

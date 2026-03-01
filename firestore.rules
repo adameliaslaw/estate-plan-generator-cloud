@@ -1,0 +1,383 @@
+rules_version = '2';
+
+// ============================================================
+// NJ Estate Plan Generator — Firestore Security Rules
+// ============================================================
+//
+// Role-Based Access Control (RBAC) using Firebase Auth custom claims.
+//
+// Roles (set as custom claims on the Firebase Auth token):
+//   admin     — Full access to everything across all firms
+//   attorney  — Full read/write to all client data within their firm
+//   paralegal — Read all client data within their firm; write only
+//               notes, calendar, and documents subcollections
+//   client    — Read/write only their own client document and
+//               read-only access to their own documents, notes,
+//               calendar, and payment records
+//
+// Collection hierarchy:
+//   /firms/{firmId}
+//   /firms/{firmId}/clients/{clientId}
+//   /firms/{firmId}/clients/{clientId}/documents/{docId}
+//   /firms/{firmId}/clients/{clientId}/notes/{noteId}
+//   /firms/{firmId}/clients/{clientId}/payments/{paymentId}
+//   /firms/{firmId}/clients/{clientId}/calendar/{eventId}
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================================
+    // HELPER FUNCTIONS
+    // ==========================================================
+
+    // Verify the request is coming from an authenticated user.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check whether the authenticated user holds a specific role.
+    // Roles are stored as custom claims on the Firebase Auth token.
+    // e.g. { role: "attorney", firmId: "firm_abc123" }
+    function hasRole(role) {
+      return isAuthenticated()
+          && request.auth.token.role == role;
+    }
+
+    // Shortcut: admin role — full access to everything.
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    // Shortcut: attorney role — full read/write within their firm.
+    function isAttorney() {
+      return hasRole('attorney');
+    }
+
+    // Shortcut: paralegal role — read all, limited writes within firm.
+    function isParalegal() {
+      return hasRole('paralegal');
+    }
+
+    // Shortcut: client role — scoped to own record only.
+    function isClient() {
+      return hasRole('client');
+    }
+
+    // Verify the authenticated user's firmId claim matches the
+    // firmId path segment being accessed. This ensures attorneys
+    // and paralegals can only access data belonging to their firm.
+    function belongsToFirm(firmId) {
+      return isAuthenticated()
+          && request.auth.token.firmId == firmId;
+    }
+
+    // Verify a client is accessing their own record.
+    // Matches either by UID (when clientId IS the UID) or by the
+    // linkedUserId field stored on the client document (for cases
+    // where client records were created before the user signed up).
+    function isOwnClientRecord(clientId) {
+      return isAuthenticated()
+          && (request.auth.uid == clientId
+              || (resource != null
+                  && resource.data.linkedUserId == request.auth.uid));
+    }
+
+    // ==========================================================
+    // VALIDATION HELPER FUNCTIONS
+    // ==========================================================
+
+    // Validate that personalInfo contains the required name fields.
+    // Used when creating or updating a client document.
+    function hasValidPersonalInfo() {
+      return request.resource.data.personalInfo is map
+          && request.resource.data.personalInfo.keys().hasAll(['firstName', 'lastName'])
+          && request.resource.data.personalInfo.firstName is string
+          && request.resource.data.personalInfo.firstName.size() > 0
+          && request.resource.data.personalInfo.lastName is string
+          && request.resource.data.personalInfo.lastName.size() > 0;
+    }
+
+    // Validate that a document record has a docType and title.
+    function hasValidDocumentFields() {
+      return request.resource.data.keys().hasAll(['docType', 'title'])
+          && request.resource.data.docType is string
+          && request.resource.data.docType.size() > 0
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0;
+    }
+
+    // Validate that a payment record has a positive numeric amount.
+    function hasValidPaymentAmount() {
+      return request.resource.data.keys().hasAll(['amount'])
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0;
+    }
+
+    // Validate client status against the allowed enum values.
+    // Status is optional on the document; only validated when present.
+    function hasValidClientStatus() {
+      return !('status' in request.resource.data)
+          || request.resource.data.status in [
+               'prospect',
+               'active',
+               'pending_review',
+               'completed',
+               'archived'
+             ];
+    }
+
+    // Validate document status against the allowed enum values.
+    function hasValidDocumentStatus() {
+      return !('status' in request.resource.data)
+          || request.resource.data.status in [
+               'draft',
+               'under_review',
+               'approved',
+               'signed',
+               'filed',
+               'archived'
+             ];
+    }
+
+    // Validate payment status against the allowed enum values.
+    function hasValidPaymentStatus() {
+      return !('status' in request.resource.data)
+          || request.resource.data.status in [
+               'pending',
+               'processing',
+               'completed',
+               'failed',
+               'refunded'
+             ];
+    }
+
+    // Validate calendar event status against the allowed enum values.
+    function hasValidEventStatus() {
+      return !('status' in request.resource.data)
+          || request.resource.data.status in [
+               'scheduled',
+               'confirmed',
+               'cancelled',
+               'completed',
+               'rescheduled'
+             ];
+    }
+
+    // ==========================================================
+    // /firms/{firmId}
+    // Firm-level documents contain metadata about each law firm.
+    // ==========================================================
+    match /firms/{firmId} {
+
+      // Admins can read and write firm documents.
+      // Attorneys and paralegals who belong to this firm can read
+      // the firm document (e.g. to display firm name/branding).
+      // Clients and unauthenticated users have no access.
+      allow read: if isAdmin()
+                  || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+
+      allow create: if isAdmin();
+
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+
+      // ========================================================
+      // /firms/{firmId}/clients/{clientId}
+      // Client profile documents, including personalInfo and
+      // questionnaire data for estate planning intake.
+      // ========================================================
+      match /clients/{clientId} {
+
+        // --- READ ---
+        // Admin: always allowed.
+        // Attorney/Paralegal: must belong to the same firm.
+        // Client: may only read their own record.
+        allow read: if isAdmin()
+                    || ((isAttorney() || isParalegal()) && belongsToFirm(firmId))
+                    || (isClient() && isOwnClientRecord(clientId));
+
+        // --- CREATE ---
+        // Admin: always allowed.
+        // Attorney: allowed within their firm; personalInfo + status validated.
+        // Paralegal: NOT allowed to create new client records.
+        // Client: NOT allowed to create client records directly
+        //         (provisioned by the app backend / attorney).
+        allow create: if isAdmin()
+                      || (isAttorney()
+                          && belongsToFirm(firmId)
+                          && hasValidPersonalInfo()
+                          && hasValidClientStatus());
+
+        // --- UPDATE ---
+        // Admin: always allowed.
+        // Attorney: allowed within their firm with validation.
+        // Paralegal: NOT allowed to update the client root document.
+        // Client: may update ONLY their own record (questionnaire data)
+        //         with status and personalInfo validation.
+        allow update: if isAdmin()
+                      || (isAttorney()
+                          && belongsToFirm(firmId)
+                          && hasValidPersonalInfo()
+                          && hasValidClientStatus())
+                      || (isClient()
+                          && isOwnClientRecord(clientId)
+                          && hasValidPersonalInfo()
+                          && hasValidClientStatus());
+
+        // --- DELETE ---
+        // Only admins may delete client records to prevent accidental
+        // data loss. Attorneys should archive instead (status update).
+        allow delete: if isAdmin();
+
+        // ======================================================
+        // /firms/{firmId}/clients/{clientId}/documents/{docId}
+        // Generated estate planning documents (wills, trusts, POAs).
+        // Per spec: documents can be created/edited by attorney or
+        // paralegal roles. Clients may read but not write.
+        // ======================================================
+        match /documents/{docId} {
+
+          // Admin: always.
+          // Attorney/Paralegal: within their firm.
+          // Client: read-only access to their own documents.
+          allow read: if isAdmin()
+                      || ((isAttorney() || isParalegal()) && belongsToFirm(firmId))
+                      || (isClient() && isOwnClientRecord(clientId));
+
+          // Admin: always.
+          // Attorney or Paralegal: within their firm; docType, title,
+          // and status fields are validated on every write.
+          // Client: no write access to documents.
+          allow create: if isAdmin()
+                        || ((isAttorney() || isParalegal())
+                            && belongsToFirm(firmId)
+                            && hasValidDocumentFields()
+                            && hasValidDocumentStatus());
+
+          allow update: if isAdmin()
+                        || ((isAttorney() || isParalegal())
+                            && belongsToFirm(firmId)
+                            && hasValidDocumentFields()
+                            && hasValidDocumentStatus());
+
+          // Only admins and attorneys may delete documents.
+          // Paralegals should update status to 'archived' instead.
+          allow delete: if isAdmin()
+                        || (isAttorney() && belongsToFirm(firmId));
+        }
+
+        // ======================================================
+        // /firms/{firmId}/clients/{clientId}/notes/{noteId}
+        // Internal case notes. Attorneys and paralegals can write;
+        // clients may read notes addressed to them.
+        // ======================================================
+        match /notes/{noteId} {
+
+          // Admin: always.
+          // Attorney/Paralegal: within their firm.
+          // Client: may read notes on their own record (e.g. visible
+          //         case updates shared by the attorney).
+          allow read: if isAdmin()
+                      || ((isAttorney() || isParalegal()) && belongsToFirm(firmId))
+                      || (isClient() && isOwnClientRecord(clientId));
+
+          // Admin: always.
+          // Attorney or Paralegal: within their firm.
+          // Client: no write access to notes.
+          allow create: if isAdmin()
+                        || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+
+          allow update: if isAdmin()
+                        || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+
+          // Only admins and attorneys may delete notes.
+          allow delete: if isAdmin()
+                        || (isAttorney() && belongsToFirm(firmId));
+        }
+
+        // ======================================================
+        // /firms/{firmId}/clients/{clientId}/payments/{paymentId}
+        // Payment records for legal services rendered.
+        // Clients may view their own payment history (read-only).
+        // No client writes — payments are recorded by the system
+        // or by attorneys/admins only.
+        // ======================================================
+        match /payments/{paymentId} {
+
+          // Admin: always.
+          // Attorney/Paralegal: within their firm (for billing review).
+          // Client: read-only access to their own payment records.
+          allow read: if isAdmin()
+                      || ((isAttorney() || isParalegal()) && belongsToFirm(firmId))
+                      || (isClient() && isOwnClientRecord(clientId));
+
+          // Admin: always.
+          // Attorney: within their firm; amount and status validated.
+          // Paralegal: NOT allowed to create or modify payment records.
+          // Client: NO write access.
+          allow create: if isAdmin()
+                        || (isAttorney()
+                            && belongsToFirm(firmId)
+                            && hasValidPaymentAmount()
+                            && hasValidPaymentStatus());
+
+          allow update: if isAdmin()
+                        || (isAttorney()
+                            && belongsToFirm(firmId)
+                            && hasValidPaymentAmount()
+                            && hasValidPaymentStatus());
+
+          // Only admins may delete payment records (audit trail).
+          allow delete: if isAdmin();
+        }
+
+        // ======================================================
+        // /firms/{firmId}/clients/{clientId}/calendar/{eventId}
+        // Scheduled appointments and events for the client.
+        // Attorneys and paralegals can create/edit; clients can
+        // read their own upcoming appointments.
+        // ======================================================
+        match /calendar/{eventId} {
+
+          // Admin: always.
+          // Attorney/Paralegal: within their firm.
+          // Client: read-only access to their own calendar events.
+          allow read: if isAdmin()
+                      || ((isAttorney() || isParalegal()) && belongsToFirm(firmId))
+                      || (isClient() && isOwnClientRecord(clientId));
+
+          // Admin: always.
+          // Attorney or Paralegal: within their firm; event status validated.
+          // Client: no write access to calendar events.
+          allow create: if isAdmin()
+                        || ((isAttorney() || isParalegal())
+                            && belongsToFirm(firmId)
+                            && hasValidEventStatus());
+
+          allow update: if isAdmin()
+                        || ((isAttorney() || isParalegal())
+                            && belongsToFirm(firmId)
+                            && hasValidEventStatus());
+
+          // Only admins and attorneys may delete calendar events.
+          allow delete: if isAdmin()
+                        || (isAttorney() && belongsToFirm(firmId));
+        }
+
+      } // end /clients/{clientId}
+
+    } // end /firms/{firmId}
+
+    // ==========================================================
+    // DEFAULT DENY
+    // Any path not explicitly matched above is denied by default.
+    // This is Firestore's built-in behaviour, but calling it out
+    // here makes the intent explicit.
+    //
+    // No rule matches → access denied.
+    // ==========================================================
+
+  } // end match /databases/{database}/documents
+} // end service cloud.firestore

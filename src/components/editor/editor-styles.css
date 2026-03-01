@@ -1,0 +1,409 @@
+/**
+ * editor-styles.css
+ *
+ * Custom CSS for the TipTap-based legal document editor.
+ * Provides a realistic legal document page appearance with:
+ *   - White "paper" with drop shadow on a gray background
+ *   - ~1 inch margins (96px at 96dpi)
+ *   - Times New Roman serif font at 12pt / 16px
+ *   - DRAFT watermark for draft-status documents
+ *   - NJ-compliant heading styles (centered H1, bold H2, underline H3)
+ *   - Table formatting for legal schedules
+ *   - Print styles that remove chrome and watermark
+ */
+
+/* ── Page appearance ─────────────────────────────────────────────────────────── */
+
+.legal-editor-wrap {
+  background-color: #e5e7eb; /* gray-200 background to simulate desk */
+  padding: 32px 24px;
+  min-height: calc(100vh - 160px); /* account for toolbar + status bar */
+  overflow-y: auto;
+}
+
+.legal-editor .tiptap {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px; /* ~12pt */
+  line-height: 1.6;
+  color: #000;
+  background: #fff;
+  padding: 96px 96px 120px; /* ~1 inch margins — top/bottom/left/right */
+  min-height: 1056px; /* ~11 inches at 96dpi */
+  max-width: 816px;   /* ~8.5 inches at 96dpi */
+  margin: 0 auto;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid #d1d5db;
+  position: relative;
+  outline: none;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ── DRAFT watermark ─────────────────────────────────────────────────────────── */
+
+.legal-editor.is-draft .tiptap::before {
+  content: 'DRAFT — NOT YET EXECUTED';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 64px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 900;
+  color: rgba(180, 180, 180, 0.22);
+  pointer-events: none;
+  z-index: 0;
+  white-space: nowrap;
+  letter-spacing: 2px;
+  user-select: none;
+}
+
+.legal-editor.is-review .tiptap::before {
+  content: 'UNDER ATTORNEY REVIEW';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 52px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 900;
+  color: rgba(37, 99, 235, 0.12);
+  pointer-events: none;
+  z-index: 0;
+  white-space: nowrap;
+  letter-spacing: 2px;
+  user-select: none;
+}
+
+/* All content renders above the watermark */
+.legal-editor .tiptap > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Focus ring ──────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: -2px;
+}
+
+/* ── Placeholder ─────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* ── Headings ────────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap h1 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18pt;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 32px;
+  margin-bottom: 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.legal-editor .tiptap h2 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14pt;
+  font-weight: bold;
+  margin-top: 28px;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.legal-editor .tiptap h3 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  font-weight: bold;
+  text-decoration: underline;
+  margin-top: 20px;
+  margin-bottom: 12px;
+}
+
+.legal-editor .tiptap h4 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  font-weight: bold;
+  font-style: italic;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+/* ── Paragraphs ──────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap p {
+  margin-top: 0;
+  margin-bottom: 12px;
+  text-align: justify;
+}
+
+/* ── Lists ───────────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap ul,
+.legal-editor .tiptap ol {
+  margin: 0 0 12px 0;
+  padding-left: 32px;
+}
+
+.legal-editor .tiptap li {
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+
+.legal-editor .tiptap li p {
+  margin: 0;
+}
+
+/* ── Blockquote ──────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap blockquote {
+  border-left: 3px solid #9ca3af;
+  margin: 16px 0;
+  padding: 8px 16px;
+  color: #374151;
+  font-style: italic;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 16px;
+  font-size: 11pt;
+}
+
+.legal-editor .tiptap td,
+.legal-editor .tiptap th {
+  border: 1px solid #000;
+  padding: 6px 10px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.legal-editor .tiptap th {
+  background-color: #f3f4f6;
+  font-weight: bold;
+}
+
+.legal-editor .tiptap .selectedCell::after {
+  background: rgba(43, 108, 176, 0.12);
+  content: '';
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.legal-editor .tiptap .column-resize-handle {
+  background-color: #2b6cb0;
+  bottom: -2px;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+}
+
+.legal-editor .tiptap .tableWrapper {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+/* ── Horizontal rule (page break indicator) ──────────────────────────────────── */
+
+.legal-editor .tiptap hr {
+  border: none;
+  border-top: 2px dashed #d1d5db;
+  margin: 48px 0 36px;
+  position: relative;
+}
+
+.legal-editor .tiptap hr::after {
+  content: '— Page Break —';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  padding: 0 12px;
+  color: #9ca3af;
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  white-space: nowrap;
+}
+
+/* ── Links ───────────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.legal-editor .tiptap a:hover {
+  color: #1e40af;
+}
+
+/* ── Highlight ───────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap mark {
+  background-color: #fef08a;
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+/* ── Code ────────────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap code {
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11pt;
+  padding: 1px 4px;
+}
+
+.legal-editor .tiptap pre {
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11pt;
+  margin: 12px 0;
+  padding: 12px 16px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.legal-editor .tiptap pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ── Text alignment ──────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap .tiptap-text-left   { text-align: left; }
+.legal-editor .tiptap .tiptap-text-center { text-align: center; }
+.legal-editor .tiptap .tiptap-text-right  { text-align: right; }
+.legal-editor .tiptap .tiptap-text-justify { text-align: justify; }
+
+/* ── Selection ───────────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap ::selection {
+  background-color: rgba(43, 108, 176, 0.2);
+}
+
+/* ── Read-only overlay ───────────────────────────────────────────────────────── */
+
+.legal-editor.is-readonly .tiptap {
+  cursor: default;
+  user-select: text;
+  background: #fafafa;
+}
+
+/* ── Superscript / Subscript ─────────────────────────────────────────────────── */
+
+.legal-editor .tiptap sup {
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+.legal-editor .tiptap sub {
+  font-size: 0.75em;
+  vertical-align: sub;
+}
+
+/* ── Strikethrough ───────────────────────────────────────────────────────────── */
+
+.legal-editor .tiptap s {
+  text-decoration: line-through;
+  color: #dc2626;
+}
+
+/* ── Bubble / link tooltip ───────────────────────────────────────────────────── */
+
+.link-tooltip {
+  background: #1a365d;
+  border-radius: 4px;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  padding: 4px 8px;
+  pointer-events: none;
+  position: fixed;
+  z-index: 50;
+  white-space: nowrap;
+}
+
+/* ── Indentation (legal paragraph numbering) ─────────────────────────────────── */
+
+.legal-editor .tiptap [data-indent='1'] { padding-left: 32px; }
+.legal-editor .tiptap [data-indent='2'] { padding-left: 64px; }
+.legal-editor .tiptap [data-indent='3'] { padding-left: 96px; }
+.legal-editor .tiptap [data-indent='4'] { padding-left: 128px; }
+
+/* ── Print styles ────────────────────────────────────────────────────────────── */
+
+@media print {
+  .legal-editor-wrap {
+    background: transparent;
+    padding: 0;
+  }
+
+  .legal-editor .tiptap {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+    max-width: none;
+    min-height: auto;
+    margin: 0;
+  }
+
+  /* Remove watermark in print — actual print production should use final docs */
+  .legal-editor.is-draft .tiptap::before,
+  .legal-editor.is-review .tiptap::before {
+    display: none;
+  }
+
+  /* Hide all editor chrome */
+  .editor-toolbar,
+  .editor-statusbar,
+  .comments-panel,
+  .version-history-panel {
+    display: none !important;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .legal-editor .tiptap {
+    padding: 48px 40px;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .legal-editor .tiptap {
+    padding: 24px 20px;
+    font-size: 14px;
+  }
+
+  .legal-editor-wrap {
+    padding: 8px 0;
+  }
+}
