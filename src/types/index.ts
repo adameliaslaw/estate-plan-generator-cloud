@@ -185,17 +185,23 @@ export interface FirmSettings {
   openAiApiKey?: string;
   anthropicApiKey?: string;
   geminiApiKey?: string;
-  activeAiProvider?: 'openai' | 'anthropic' | 'gemini';
+  perplexityApiKey?: string;
+  activeAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
   // Levitate Contacts
   levitateApiKey?: string;
   levitateWebhookUrl?: string;
   // Google Maps
   googleMapsApiKey?: string;
+  // Other integrations
+  lawPayApiKey?: string;
+  sendGridApiKey?: string;
+  lawPayMerchantId?: string;
 }
 
 export interface Firm {
   id: string;
   firmName: string;
+  logoUrl?: string;
   firmAddress: string;
   firmPhone: string;
   firmEmail: string;

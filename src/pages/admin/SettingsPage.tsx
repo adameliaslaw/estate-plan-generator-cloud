@@ -531,18 +531,7 @@ export default function SettingsPage() {
 
   const handleSaveApiKey = useCallback(
     async (
-      field: keyof Pick<
-        FirmSettings,
-        | 'openAiApiKey'
-        | 'anthropicApiKey'
-        | 'geminiApiKey'
-        | 'perplexityApiKey'
-        | 'lawPayApiKey'
-        | 'sendGridApiKey'
-        | 'lawPayMerchantId'
-        | 'levitateWebhookUrl'
-        | 'googleMapsApiKey'
-      >,
+      field: string,
       value: string,
       setLoading: (v: boolean) => void,
       clearField: () => void,
@@ -1241,7 +1230,7 @@ export default function SettingsPage() {
                                 <>
                                   <SelectItem value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</SelectItem>
                                   <SelectItem value="claude-3-opus-20240229">claude-3-opus-20240229</SelectItem>
-                                  <SelectItem value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</SelectItem>
+                                  <SelectItem value="claude-3-haiku-20240307">claude-3-haiku-20240307</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'gemini' && (
@@ -1291,7 +1280,7 @@ export default function SettingsPage() {
                                 <>
                                   <SelectItem value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</SelectItem>
                                   <SelectItem value="claude-3-opus-20240229">claude-3-opus-20240229</SelectItem>
-                                  <SelectItem value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</SelectItem>
+                                  <SelectItem value="claude-3-haiku-20240307">claude-3-haiku-20240307</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'gemini' && (

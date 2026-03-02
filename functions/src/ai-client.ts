@@ -60,7 +60,15 @@ export async function callAI(
   firmData: any, // Using 'any' here locally to avoid circular dependencies with frontend types if needed, or import Firm.
   options: CallAIOptions = {},
 ): Promise<string> {
-  const provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
+  let provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
+
+  if (options.model) {
+    const m = options.model.toLowerCase();
+    if (m.startsWith('gemini')) provider = 'gemini';
+    else if (m.startsWith('claude')) provider = 'anthropic';
+    else if (m.startsWith('sonar')) provider = 'perplexity';
+    else provider = 'openai';
+  }
 
   if (provider === 'anthropic') {
     return _callAnthropic(systemPrompt, userPrompt, firmData, options);
@@ -168,7 +176,7 @@ async function _callGemini(
     throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'gemini-2.5-pro';
+  const model = options.model ?? 'gemini-1.5-flash';
   const temperature = options.temperature ?? 0.2;
 
   // Gemini requires system prompt to be passed inside 'system_instruction'

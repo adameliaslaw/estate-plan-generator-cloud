@@ -61,6 +61,7 @@ import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsBut
 import NotesTab from '@/components/dashboard/NotesTab';
 import PaymentsTab from '@/components/dashboard/PaymentsTab';
 import CalendarTab from '@/components/dashboard/CalendarTab';
+import { TasksList } from '@/components/dashboard/TasksList';
 import { AudioRecorderModal } from '@/components/ui/audio-recorder-modal';
 import { UploadScanModal } from '@/components/ui/upload-scan-modal';
 import { db } from '@/config/firebase';
@@ -576,6 +577,13 @@ export default function ClientDashboardPage() {
             <CalendarDays className="h-4 w-4" />
             Calendar
           </TabsTrigger>
+          <TabsTrigger
+            value="tasks"
+            className="gap-2 data-[state=active]:bg-white data-[state=active]:text-[#1a365d] data-[state=active]:shadow-sm"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Tasks
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Tab 1: Client Information ──────────────────────────────────── */}
@@ -835,6 +843,14 @@ export default function ClientDashboardPage() {
             clientId={clientId ?? ''}
             clientName={displayHeading}
             autoOpenNewEvent={autoOpenNewEvent}
+          />
+        </TabsContent>
+
+        {/* ── Tab 6: Tasks ──────────────────────────────────────────────── */}
+        <TabsContent value="tasks">
+          <TasksList
+            clientId={clientId ?? ''}
+            clientName={displayHeading}
           />
         </TabsContent>
       </Tabs>

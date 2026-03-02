@@ -303,13 +303,16 @@ export default function DashboardPage() {
     });
   }, [rawActivities]);
 
-  const displayedActivityItems = isExpanded ? allActivityItems : allActivityItems.slice(0, 8);
+  const displayedActivityItems = isExpanded ? allActivityItems : allActivityItems.slice(0, 5);
 
-  // ── Client-side  // ── Search filter handler ───────────────────────────────────────────────────
+  // ── Search filter handler ───────────────────────────────────────────────────
   const filteredClients = useMemo(() => {
-    if (!searchQuery) return recentClients;
+    let baseList = searchQuery ? allClients : recentClients;
+    baseList = baseList.filter((c) => !c.isArchived);
+
+    if (!searchQuery) return baseList;
     const q = searchQuery.toLowerCase();
-    return allClients.filter((c) => {
+    return baseList.filter((c) => {
       const { firstName = '', lastName = '', email = '', phone = '' } = c.personalInfo;
       return (
         firstName.toLowerCase().includes(q) ||
@@ -320,7 +323,7 @@ export default function DashboardPage() {
     });
   }, [recentClients, allClients, searchQuery]);
 
-  const showEmptyState = !clientsLoading && filteredClients.length === 0 && !searchQuery && allClients.length === 0;
+  const showEmptyState = !clientsLoading && filteredClients.length === 0 && !searchQuery && allClients.filter(c => !c.isArchived).length === 0;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleSaveAudioNote = async (data: any) => {
@@ -642,7 +645,7 @@ export default function DashboardPage() {
               </ul>
 
               {/* Expand/Collapse Toggle */}
-              {allActivityItems.length > 6 && (
+              {allActivityItems.length > 5 && (
                 <div className="border-t border-gray-100 p-2 text-center sticky bottom-0 bg-white/95 backdrop-blur-sm">
                   <button
                     onClick={toggleExpanded}
@@ -669,8 +672,8 @@ export default function DashboardPage() {
 
       {/* Task & Calendar Row */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 h-[500px]">
-        <TasksList />
-        <UpcomingAppointments />
+        <TasksList activeClientIds={filteredClients.map(c => c.id)} />
+        <UpcomingAppointments activeClientIds={filteredClients.map(c => c.id)} />
       </div>
 
       <AudioRecorderModal
@@ -678,7 +681,7 @@ export default function DashboardPage() {
         onOpenChange={setIsRecordModalOpen}
         onSave={handleSaveAudioNote}
         isSaving={isSavingRecord}
-        clients={allClients.map((c) => ({
+        clients={filteredClients.map((c) => ({
           id: c.id,
           name: clientDisplayName(c),
         }))}

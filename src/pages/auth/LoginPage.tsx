@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Scale, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { ROUTES, FIRM_DEFAULTS } from '@/config/constants';
+import { db } from '@/config/firebase';
+import { collection, query, limit, getDocs } from 'firebase/firestore';
+import { ROUTES, FIRM_DEFAULTS, COLLECTIONS } from '@/config/constants';
 
 // ── Form schema ──────────────────────────────────────────────────────────────
 
@@ -60,6 +62,23 @@ export default function LoginPage() {
     }
   }, [user, userProfile, navigate, redirectTo]);
 
+  const [firmLogoUrl, setFirmLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchLogo() {
+      try {
+        const q = query(collection(db, COLLECTIONS.FIRMS), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          setFirmLogoUrl(snap.docs[0].data().logoUrl || null);
+        }
+      } catch (e) {
+        console.error('Failed to fetch firm logo for login page:', e);
+      }
+    }
+    void fetchLogo();
+  }, []);
+
   const {
     register,
     handleSubmit,
@@ -100,9 +119,13 @@ export default function LoginPage() {
         <div className="rounded-2xl border border-blue-100 bg-white px-8 py-10 shadow-lg">
           {/* Branding */}
           <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#1a365d] shadow-md">
-              <Scale className="h-8 w-8 text-white" />
-            </div>
+            {firmLogoUrl ? (
+              <img src={firmLogoUrl} alt="Logo" className="mb-4 max-h-16 max-w-[200px] object-contain" />
+            ) : (
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#1a365d] shadow-md">
+                <Scale className="h-8 w-8 text-white" />
+              </div>
+            )}
             <h1 className="text-2xl font-bold tracking-tight text-[#1a365d]">
               {FIRM_DEFAULTS.firmName}
             </h1>

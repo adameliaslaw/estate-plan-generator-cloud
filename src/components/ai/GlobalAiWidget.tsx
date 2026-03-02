@@ -105,7 +105,7 @@ export function GlobalAiWidget() {
         return (
             <button
                 onClick={() => setIsOpen(true)}
-                className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-purple-600 text-white shadow-xl hover:bg-purple-700 transition-transform hover:scale-105 active:scale-95"
+                className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-purple-600 text-white shadow-xl hover:bg-purple-700 transition-transform hover:scale-105 active:scale-95 print:hidden"
                 aria-label="Open AI Assistant"
             >
                 <Bot className="h-6 w-6" />
@@ -116,7 +116,7 @@ export function GlobalAiWidget() {
     return (
         <div
             className={cn(
-                'fixed bottom-0 right-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300 ease-in-out',
+                'fixed bottom-0 right-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300 ease-in-out print:hidden',
                 isMaximized
                     ? 'inset-x-0 bottom-0 top-0 sm:inset-4 sm:rounded-2xl' // Full screen
                     : 'bottom-4 right-4 h-[600px] max-h-[calc(100vh-2rem)] w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200' // Floating window

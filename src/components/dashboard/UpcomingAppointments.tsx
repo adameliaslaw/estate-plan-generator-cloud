@@ -6,7 +6,11 @@ import { useAuth } from '@/hooks/useAuth';
 import type { CalendarEvent } from '@/types';
 import { cn } from '@/lib/utils';
 
-export function UpcomingAppointments() {
+export interface UpcomingAppointmentsProps {
+    activeClientIds?: string[];
+}
+
+export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsProps = {}) {
     const { userProfile } = useAuth();
     const firmId = userProfile?.firmId;
 
@@ -81,7 +85,9 @@ export function UpcomingAppointments() {
                     </div>
                 ) : (
                     <div className="space-y-3 p-3">
-                        {upcomingEvents?.map(event => (
+                        {upcomingEvents?.filter(event =>
+                            !activeClientIds || !event.clientId || activeClientIds.includes(event.clientId)
+                        ).map(event => (
                             <div
                                 key={event.id}
                                 className="group flex gap-4 rounded-xl border border-gray-100 bg-white p-4 transition-all hover:border-blue-100 hover:shadow-md hover:shadow-blue-50/50"

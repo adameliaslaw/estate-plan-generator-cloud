@@ -26,9 +26,10 @@ import type { AppTask } from '@/types';
 interface TasksListProps {
     clientId?: string;
     clientName?: string;
+    activeClientIds?: string[];
 }
 
-export function TasksList({ clientId, clientName }: TasksListProps = {}) {
+export function TasksList({ clientId, clientName, activeClientIds }: TasksListProps = {}) {
     const { userProfile, user } = useAuth();
     const firmId = userProfile?.firmId;
 
@@ -54,7 +55,6 @@ export function TasksList({ clientId, clientName }: TasksListProps = {}) {
                 createdAt: serverTimestamp() as Timestamp,
                 updatedAt: serverTimestamp() as Timestamp,
                 createdBy: user.uid,
-                updatedBy: user.uid,
                 updatedBy: user.uid,
                 assignedTo: user.uid,
             };
@@ -120,7 +120,11 @@ export function TasksList({ clientId, clientName }: TasksListProps = {}) {
     };
 
     // Split tasks and sort active tasks
-    const activeTasks = [...(tasks?.filter(t => t.status !== 'completed' && (!clientId || t.relatedClientId === clientId)) || [])].sort((a, b) => {
+    const activeTasks = [...(tasks?.filter(t =>
+        t.status !== 'completed' &&
+        (!clientId || t.relatedClientId === clientId) &&
+        (!activeClientIds || !t.relatedClientId || activeClientIds.includes(t.relatedClientId))
+    ) || [])].sort((a, b) => {
         const now = new Date();
         now.setHours(0, 0, 0, 0); // start of today for overdue check
         const aDue = a.dueDate?.toDate();
@@ -138,7 +142,11 @@ export function TasksList({ clientId, clientName }: TasksListProps = {}) {
 
         return a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime();
     });
-    const completedTasks = tasks?.filter(t => t.status === 'completed' && (!clientId || t.relatedClientId === clientId)) || [];
+    const completedTasks = tasks?.filter(t =>
+        t.status === 'completed' &&
+        (!clientId || t.relatedClientId === clientId) &&
+        (!activeClientIds || !t.relatedClientId || activeClientIds.includes(t.relatedClientId))
+    ) || [];
 
     const formatShortDate = (ts?: Timestamp) => {
         if (!ts) return '';

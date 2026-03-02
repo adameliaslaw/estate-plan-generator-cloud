@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { ROUTES, FIRM_DEFAULTS } from '@/config/constants';
+import { ROUTES, FIRM_DEFAULTS, COLLECTIONS } from '@/config/constants';
+import { useDocument } from '@/hooks/useFirestore';
+import type { Firm } from '@/types';
 
 interface NavItem {
   label: string;
@@ -30,6 +32,10 @@ interface AppSidebarProps {
 export function AppSidebar({ onClose, isSheet = false }: AppSidebarProps) {
   const { userProfile, signOut } = useAuth();
   const navigate = useNavigate();
+
+  const { data: firmDoc } = useDocument<Firm>(
+    userProfile?.firmId ? `${COLLECTIONS.FIRMS}/${userProfile.firmId}` : null
+  );
 
   async function handleSignOut() {
     try {
@@ -60,15 +66,21 @@ export function AppSidebar({ onClose, isSheet = false }: AppSidebarProps) {
       <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
         <Link to={ROUTES.DASHBOARD} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           {/* Logo mark */}
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 ring-2 ring-white/20">
-            <Scale className="h-5 w-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight text-white">
-              {FIRM_DEFAULTS.firmName}
-            </p>
-            <p className="text-xs text-white/60 mt-0.5">Estate Planning</p>
-          </div>
+          {firmDoc?.logoUrl ? (
+            <img src={firmDoc.logoUrl} alt="Logo" className="max-h-12 max-w-[150px] object-contain" />
+          ) : (
+            <>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 ring-2 ring-white/20">
+                <Scale className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight text-white">
+                  {firmDoc?.firmName || FIRM_DEFAULTS.firmName}
+                </p>
+                <p className="text-xs text-white/60 mt-0.5">Estate Planning</p>
+              </div>
+            </>
+          )}
         </Link>
         {isSheet && onClose && (
           <button

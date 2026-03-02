@@ -88,7 +88,7 @@ export function AudioRecorderModal({
                 setSelectedClientId('');
             }
         }
-    }, [open, defaultClientId, audioRecorder]);
+    }, [open, defaultClientId, audioRecorder.clearAudio]);
 
     const handleDone = async () => {
         if (!selectedClientId) {
