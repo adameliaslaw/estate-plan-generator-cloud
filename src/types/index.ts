@@ -189,6 +189,8 @@ export interface FirmSettings {
   // Levitate Contacts
   levitateApiKey?: string;
   levitateWebhookUrl?: string;
+  // Google Maps
+  googleMapsApiKey?: string;
 }
 
 export interface Firm {
@@ -930,6 +932,7 @@ export interface AppTask {
   status: 'todo' | 'in_progress' | 'completed';
   assignedTo?: string;           // Optional user ID
   relatedClientId?: string;      // If task belongs to a specific matter
+  relatedClientName?: string;    // Name of the specific client for display
   dueDate?: Timestamp;
   completedAt?: Timestamp;
   createdAt: Timestamp;

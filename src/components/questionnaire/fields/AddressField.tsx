@@ -14,6 +14,12 @@
 
 import { cn } from '@/lib/utils';
 import { NJ_COUNTIES, US_STATES } from '@/config/constants';
+import { useAuth } from '@/hooks/useAuth';
+import { useDocument } from '@/hooks/useFirestore';
+import { COLLECTIONS } from '@/config/constants';
+import type { Firm } from '@/types';
+import { useGooglePlacesAutocomplete } from '@/hooks/useGooglePlacesAutocomplete';
+import { useRef, useCallback } from 'react';
 
 interface AddressFieldProps {
   parentPath: string;
@@ -41,10 +47,29 @@ function labelClass() {
 
 export function AddressField({ value, onChange, required }: AddressFieldProps) {
   const current = value ?? {};
+  const { userProfile } = useAuth();
+  const { data: firmDoc } = useDocument<Firm>(
+    userProfile?.firmId ? `${COLLECTIONS.FIRMS}/${userProfile.firmId}` : null
+  );
 
   function update(field: string, val: unknown) {
     onChange({ ...current, [field]: val });
   }
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handlePlaceSelect = useCallback((components: any) => {
+    onChange({
+      ...current,
+      ...(components.streetNumber && { address: components.streetNumber }),
+      ...(components.city && { city: components.city }),
+      ...(components.state && { state: components.state }),
+      ...(components.zip && { zip: components.zip }),
+      ...(components.county && { county: components.county }),
+    });
+  }, [current, onChange]);
+
+  useGooglePlacesAutocomplete(firmDoc?.settings?.googleMapsApiKey, inputRef, handlePlaceSelect);
 
   const state = (current['state'] as string) ?? 'NJ';
   const isNJ = state === 'NJ';
@@ -58,6 +83,7 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
           {required && <span className="ml-1 text-red-500">*</span>}
         </label>
         <input
+          ref={inputRef}
           type="text"
           value={(current['address'] as string) ?? ''}
           onChange={(e) => update('address', e.target.value)}

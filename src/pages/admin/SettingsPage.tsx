@@ -65,6 +65,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { storage, auth } from '@/config/firebase';
 import { COLLECTIONS, FIRM_DEFAULTS } from '@/config/constants';
@@ -533,8 +540,8 @@ export default function SettingsPage() {
         | 'lawPayApiKey'
         | 'sendGridApiKey'
         | 'lawPayMerchantId'
-        | 'levitateApiKey'
         | 'levitateWebhookUrl'
+        | 'googleMapsApiKey'
       >,
       value: string,
       setLoading: (v: boolean) => void,
@@ -1216,12 +1223,45 @@ export default function SettingsPage() {
                         <Label className="text-sm font-medium text-[#1a365d]">Chatbot Model</Label>
                         <p className="text-xs text-gray-500 mb-3">Model for the legal AI assistant.</p>
                         <div className="flex gap-2">
-                          <Input
-                            value={chatbotModel}
-                            onChange={(e) => setChatbotModel(e.target.value)}
-                            placeholder="e.g. gpt-4o, claude-3-5-sonnet-20241022"
-                            className="text-sm"
-                          />
+                          <Select value={chatbotModel} onValueChange={setChatbotModel}>
+                            <SelectTrigger className="w-full bg-white text-sm">
+                              <SelectValue placeholder="Select a model..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activeAiProvider === 'openai' && (
+                                <>
+                                  <SelectItem value="gpt-4o">gpt-4o</SelectItem>
+                                  <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
+                                  <SelectItem value="o1-preview">o1-preview</SelectItem>
+                                  <SelectItem value="o1-mini">o1-mini</SelectItem>
+                                  <SelectItem value="o3-mini">o3-mini</SelectItem>
+                                </>
+                              )}
+                              {activeAiProvider === 'anthropic' && (
+                                <>
+                                  <SelectItem value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</SelectItem>
+                                  <SelectItem value="claude-3-opus-20240229">claude-3-opus-20240229</SelectItem>
+                                  <SelectItem value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</SelectItem>
+                                </>
+                              )}
+                              {activeAiProvider === 'gemini' && (
+                                <>
+                                  <SelectItem value="gemini-1.5-pro">gemini-1.5-pro</SelectItem>
+                                  <SelectItem value="gemini-1.5-flash">gemini-1.5-flash</SelectItem>
+                                  <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
+                                  <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
+                                </>
+                              )}
+                              {activeAiProvider === 'perplexity' && (
+                                <>
+                                  <SelectItem value="sonar-reasoning-pro">sonar-reasoning-pro</SelectItem>
+                                  <SelectItem value="sonar-pro">sonar-pro</SelectItem>
+                                  <SelectItem value="sonar-reasoning">sonar-reasoning</SelectItem>
+                                  <SelectItem value="sonar">sonar</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
                           <Button size="sm" onClick={() => handleSaveModel('chatbotModel', chatbotModel, setSavingChatbotModel)} disabled={savingChatbotModel} className="bg-[#2b6cb0] hover:bg-[#1a365d]">
                             {savingChatbotModel ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Save'}
                           </Button>
@@ -1233,12 +1273,45 @@ export default function SettingsPage() {
                         <Label className="text-sm font-medium text-[#1a365d]">Document Drafting Model</Label>
                         <p className="text-xs text-gray-500 mb-3">Model for generating legal documents.</p>
                         <div className="flex gap-2">
-                          <Input
-                            value={documentDraftingModel}
-                            onChange={(e) => setDocumentDraftingModel(e.target.value)}
-                            placeholder="e.g. gpt-4o, claude-3-5-sonnet-20241022"
-                            className="text-sm"
-                          />
+                          <Select value={documentDraftingModel} onValueChange={setDocumentDraftingModel}>
+                            <SelectTrigger className="w-full bg-white text-sm">
+                              <SelectValue placeholder="Select a model..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activeAiProvider === 'openai' && (
+                                <>
+                                  <SelectItem value="gpt-4o">gpt-4o</SelectItem>
+                                  <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
+                                  <SelectItem value="o1-preview">o1-preview</SelectItem>
+                                  <SelectItem value="o1-mini">o1-mini</SelectItem>
+                                  <SelectItem value="o3-mini">o3-mini</SelectItem>
+                                </>
+                              )}
+                              {activeAiProvider === 'anthropic' && (
+                                <>
+                                  <SelectItem value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</SelectItem>
+                                  <SelectItem value="claude-3-opus-20240229">claude-3-opus-20240229</SelectItem>
+                                  <SelectItem value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</SelectItem>
+                                </>
+                              )}
+                              {activeAiProvider === 'gemini' && (
+                                <>
+                                  <SelectItem value="gemini-1.5-pro">gemini-1.5-pro</SelectItem>
+                                  <SelectItem value="gemini-1.5-flash">gemini-1.5-flash</SelectItem>
+                                  <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
+                                  <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
+                                </>
+                              )}
+                              {activeAiProvider === 'perplexity' && (
+                                <>
+                                  <SelectItem value="sonar-reasoning-pro">sonar-reasoning-pro</SelectItem>
+                                  <SelectItem value="sonar-pro">sonar-pro</SelectItem>
+                                  <SelectItem value="sonar-reasoning">sonar-reasoning</SelectItem>
+                                  <SelectItem value="sonar">sonar</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
                           <Button size="sm" onClick={() => handleSaveModel('documentDraftingModel', documentDraftingModel, setSavingDocumentDraftingModel)} disabled={savingDocumentDraftingModel} className="bg-[#2b6cb0] hover:bg-[#1a365d]">
                             {savingDocumentDraftingModel ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Save'}
                           </Button>

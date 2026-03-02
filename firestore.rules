@@ -228,6 +228,24 @@ service cloud.firestore {
       }
 
       // ========================================================
+      // /firms/{firmId}/tasks/{taskId}
+      // Firm-wide tasks
+      // ========================================================
+      match /tasks/{taskId} {
+        allow read: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+        allow write: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+      }
+
+      // ========================================================
+      // /firms/{firmId}/emailTemplates/{templateId}
+      // Firm-wide email templates
+      // ========================================================
+      match /emailTemplates/{templateId} {
+        allow read: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+        allow write: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+      }
+
+      // ========================================================
       // /firms/{firmId}/clients/{clientId}
       // Client profile documents, including personalInfo and
       // questionnaire data for estate planning intake.

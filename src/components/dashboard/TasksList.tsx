@@ -23,7 +23,12 @@ import { Button } from '@/components/ui/button';
 import { logSystemActivity } from '@/utils/activity-logger';
 import type { AppTask } from '@/types';
 
-export function TasksList() {
+interface TasksListProps {
+    clientId?: string;
+    clientName?: string;
+}
+
+export function TasksList({ clientId, clientName }: TasksListProps = {}) {
     const { userProfile, user } = useAuth();
     const firmId = userProfile?.firmId;
 
@@ -50,8 +55,14 @@ export function TasksList() {
                 updatedAt: serverTimestamp() as Timestamp,
                 createdBy: user.uid,
                 updatedBy: user.uid,
+                updatedBy: user.uid,
                 assignedTo: user.uid,
             };
+
+            if (clientId) {
+                taskData.relatedClientId = clientId;
+                if (clientName) taskData.relatedClientName = clientName;
+            }
 
             if (newTaskDueDate) {
                 // Prevent timezone issues showing "yesterday" by setting noon local time
@@ -109,7 +120,7 @@ export function TasksList() {
     };
 
     // Split tasks and sort active tasks
-    const activeTasks = [...(tasks?.filter(t => t.status !== 'completed') || [])].sort((a, b) => {
+    const activeTasks = [...(tasks?.filter(t => t.status !== 'completed' && (!clientId || t.relatedClientId === clientId)) || [])].sort((a, b) => {
         const now = new Date();
         now.setHours(0, 0, 0, 0); // start of today for overdue check
         const aDue = a.dueDate?.toDate();
@@ -127,7 +138,7 @@ export function TasksList() {
 
         return a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime();
     });
-    const completedTasks = tasks?.filter(t => t.status === 'completed') || [];
+    const completedTasks = tasks?.filter(t => t.status === 'completed' && (!clientId || t.relatedClientId === clientId)) || [];
 
     const formatShortDate = (ts?: Timestamp) => {
         if (!ts) return '';
@@ -183,6 +194,9 @@ export function TasksList() {
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-gray-800">{task.title}</p>
                                             <div className="mt-0.5 flex flex-wrap gap-2 text-[11px]">
+                                                {!clientId && task.relatedClientName && (
+                                                    <span className="text-blue-600 font-medium">[{task.relatedClientName}]</span>
+                                                )}
                                                 <span className="text-gray-400">Created: {formatShortDate(task.createdAt)}</span>
                                                 {task.dueDate && (
                                                     <span className={isOverdue(task.dueDate) ? "text-red-600 font-semibold" : "text-gray-500"}>
@@ -223,7 +237,12 @@ export function TasksList() {
                                                 <CheckCircle2 className="h-5 w-5" />
                                             </button>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-500 line-through">{task.title}</p>
+                                                <p className="text-sm font-medium text-gray-500 line-through">
+                                                    {!clientId && task.relatedClientName && (
+                                                        <span className="text-blue-400 mr-1">[{task.relatedClientName}]</span>
+                                                    )}
+                                                    {task.title}
+                                                </p>
                                             </div>
                                             <button
                                                 onClick={() => deleteTask(task.id)}

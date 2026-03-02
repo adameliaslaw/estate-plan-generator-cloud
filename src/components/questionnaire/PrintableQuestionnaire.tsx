@@ -124,6 +124,13 @@ function renderAnswerArea(field: FieldConfig, value?: any) {
 
   // Radio / select with options — show checkboxes
   if ((type === 'radio' || type === 'select') && field.options && field.options.length > 0) {
+    if (type === 'select' && field.options.length > 10) {
+      if (value) {
+        return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{value}</p>;
+      }
+      return <div className="mt-2"><BlankLines count={1} /></div>;
+    }
+
     return (
       <div className="mt-1 space-y-1">
         {field.options.map((opt) => {

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 
 export interface AudioRecorderState {
@@ -90,35 +90,38 @@ export function useAudioRecorder() {
             mediaRecorderRef.current.stream?.getTracks().forEach((t) => t.stop());
             mediaRecorderRef.current.stop();
         }
-        setState({
+        setState((prev) => ({
+            ...prev,
             isRecording: false,
             durationSeconds: 0,
             audioBlob: null,
             audioFileName: '',
             audioDataUri: null,
-        });
+        }));
     }, []);
 
     const clearAudio = useCallback(() => {
-        setState({
+        setState((prev) => ({
+            ...prev,
             isRecording: false,
             durationSeconds: 0,
             audioBlob: null,
             audioFileName: '',
             audioDataUri: null,
-        });
+        }));
     }, []);
 
     const setUploadedAudio = useCallback((blob: Blob, fileName: string) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-            setState({
+            setState((prev) => ({
+                ...prev,
                 isRecording: false,
                 durationSeconds: 0,
                 audioBlob: blob,
                 audioFileName: fileName,
                 audioDataUri: reader.result as string,
-            });
+            }));
         };
         reader.readAsDataURL(blob);
     }, []);
@@ -129,12 +132,17 @@ export function useAudioRecorder() {
         };
     }, []);
 
-    return {
-        ...state,
-        startRecording,
-        stopRecording,
-        cancelRecording,
-        clearAudio,
-        setUploadedAudio,
-    };
+    const result = useMemo(
+        () => ({
+            ...state,
+            startRecording,
+            stopRecording,
+            cancelRecording,
+            clearAudio,
+            setUploadedAudio,
+        }),
+        [state, startRecording, stopRecording, cancelRecording, clearAudio, setUploadedAudio]
+    );
+
+    return result;
 }
