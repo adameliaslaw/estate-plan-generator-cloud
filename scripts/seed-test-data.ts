@@ -13,14 +13,16 @@
  *   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npx ts-node scripts/seed-test-data.ts
  */
 
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 
+// Initialize Firebase Admin globally
+admin.initializeApp();
 // ---------------------------------------------------------------------------
 // Initialize
 // ---------------------------------------------------------------------------
 if (process.env.FIRESTORE_EMULATOR_HOST) {
   console.log(`Using Firestore emulator at ${process.env.FIRESTORE_EMULATOR_HOST}`);
-  admin.initializeApp({ projectId: 'nj-estate-plan-dev' });
+  admin.app().options.projectId = 'nj-estate-plan-dev'; // Set project ID for emulator
 } else {
   admin.initializeApp(); // uses GOOGLE_APPLICATION_CREDENTIALS / ADC
 }
@@ -531,8 +533,8 @@ async function seedClient(data: ClientData, packagePrice: number): Promise<void>
 // ---------------------------------------------------------------------------
 const PACKAGE_PRICES: Record<string, number> = {
   foundation: 1500,
-  guardian:   2500,
-  fortress:   4500,
+  guardian: 2500,
+  fortress: 4500,
 };
 
 // ---------------------------------------------------------------------------

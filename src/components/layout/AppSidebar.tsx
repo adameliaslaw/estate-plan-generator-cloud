@@ -1,10 +1,7 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  FileText,
-  Calendar,
-  Settings,
   LogOut,
   X,
   Scale,
@@ -23,9 +20,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },
   { label: 'Clients', href: ROUTES.CLIENTS, icon: Users },
-  { label: 'Documents', href: '/documents', icon: FileText, disabled: true },
-  { label: 'Calendar', href: ROUTES.CALENDAR, icon: Calendar, disabled: true },
-  { label: 'Settings', href: ROUTES.SETTINGS, icon: Settings, disabled: true },
 ];
 
 interface AppSidebarProps {
@@ -64,7 +58,7 @@ export function AppSidebar({ onClose, isSheet = false }: AppSidebarProps) {
     <aside className="flex h-full w-64 flex-col bg-[#1a365d] text-white">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
-        <div className="flex items-center gap-3">
+        <Link to={ROUTES.DASHBOARD} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           {/* Logo mark */}
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 ring-2 ring-white/20">
             <Scale className="h-5 w-5 text-white" />
@@ -75,7 +69,7 @@ export function AppSidebar({ onClose, isSheet = false }: AppSidebarProps) {
             </p>
             <p className="text-xs text-white/60 mt-0.5">Estate Planning</p>
           </div>
-        </div>
+        </Link>
         {isSheet && onClose && (
           <button
             onClick={onClose}
@@ -135,11 +129,11 @@ export function AppSidebar({ onClose, isSheet = false }: AppSidebarProps) {
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2b6cb0] text-sm font-semibold text-white">
               {userProfile.displayName
                 ? userProfile.displayName
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2)
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2)
                 : userProfile.email[0].toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">

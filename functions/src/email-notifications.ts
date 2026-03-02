@@ -74,7 +74,7 @@ function getSendGridKey(firmData: admin.firestore.DocumentData): string {
   if (!key || key.trim() === '') {
     throw new HttpsError(
       'failed-precondition',
-      'SendGrid not configured. Add your API key in Settings.',
+      'SendGrid API key not configured. Please add one in Settings → Integrations.',
     );
   }
   return key.trim();
@@ -221,6 +221,7 @@ async function sendViaSendGrid(
   apiKey: string,
   payload: SendGridPayload,
 ): Promise<void> {
+
   const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
@@ -267,7 +268,7 @@ interface QuestionnaireInvitationRequest {
  * Callable by authenticated firm staff only.
  */
 export const sendQuestionnaireInvitation = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     // Auth check
     if (!request.auth) {
@@ -360,7 +361,7 @@ interface QuestionnaireCompleteRequest {
  * Notify the assigned attorney when a client finishes their questionnaire.
  */
 export const sendQuestionnaireCompleteNotification = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
@@ -447,7 +448,7 @@ interface DocumentReadyRequest {
  * Notify attorney/paralegal that AI-generated documents are ready for review.
  */
 export const sendDocumentReadyNotification = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
@@ -553,7 +554,7 @@ interface PaymentReceiptRequest {
  * Email a payment receipt to the client after a successful payment.
  */
 export const sendPaymentReceipt = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
@@ -672,7 +673,7 @@ interface PaymentReceivedNotificationRequest {
  * Notify the attorney that a client payment has been received.
  */
 export const sendPaymentReceivedNotification = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
@@ -772,7 +773,7 @@ interface AppointmentReminderRequest {
  * Called manually or by the scheduledReminders function.
  */
 export const sendAppointmentReminder = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
@@ -910,7 +911,7 @@ interface FollowUpReminderRequest {
  * questionnaire. Typically triggered after 7 days of inactivity.
  */
 export const sendFollowUpReminder = onCall(
-  { region: 'us-east1' },
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request: any /* CallableRequest */) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');

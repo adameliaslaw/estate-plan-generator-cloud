@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users,
   ClipboardList,
-  FileEdit,
-  DollarSign,
   Search,
   UserPlus,
   ArrowRight,
@@ -12,14 +10,19 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
-  CalendarDays,
+  FileEdit,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { orderBy, limit } from 'firebase/firestore';
+import { orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
+import { db } from '@/config/firebase';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { cn } from '@/lib/utils';
 import type { Client } from '@/types';
+import { TasksList } from '@/components/dashboard/TasksList';
+import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -175,7 +178,6 @@ function buildActivityItems(clients: (Client & { id: string })[]): ActivityItem[
   const items: ActivityItem[] = [];
 
   for (const client of clients) {
-    if (items.length >= 8) break;
     const name = clientDisplayName(client);
     const qStatus = client.questionnaireProgress?.status;
     const createdAt = client.createdAt as { seconds: number; nanoseconds: number } | undefined;
@@ -256,15 +258,29 @@ function buildActivityItems(clients: (Client & { id: string })[]): ActivityItem[
     });
   }
 
-  return items.slice(0, 8);
+  return items;
 }
 
 // ── Page component ─────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+
+  // ── Persistent expansion state ──────────────────────────────────────────────
+  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
+    return userProfile?.recentActivityExpanded ?? false;
+  });
+
+  const toggleExpanded = async () => {
+    const nextState = !isExpanded;
+    setIsExpanded(nextState);
+    if (user?.uid) {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { recentActivityExpanded: nextState }).catch(console.error);
+    }
+  };
 
   const firmId = userProfile?.firmId ?? '';
 
@@ -295,13 +311,15 @@ export default function DashboardPage() {
   }, [allClients]);
 
   // ── Activity items ────────────────────────────────────────────────────────
-  const activityItems = useMemo(() => buildActivityItems(allClients), [allClients]);
+  const allActivityItems = useMemo(() => buildActivityItems(allClients), [allClients]);
+  const displayedActivityItems = isExpanded ? allActivityItems : allActivityItems.slice(0, 6);
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filteredClients = useMemo(() => {
-    if (!searchQuery.trim()) return recentClients;
+    let result = recentClients.filter(c => !c.isArchived);
+    if (!searchQuery.trim()) return result;
     const q = searchQuery.toLowerCase();
-    return recentClients.filter((c) => {
+    return result.filter((c) => {
       const name = clientDisplayName(c).toLowerCase();
       const email = c.personalInfo?.email?.toLowerCase() ?? '';
       return name.includes(q) || email.includes(q);
@@ -343,7 +361,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
           title="Active Clients"
           value={loading ? '…' : stats.activeCount}
@@ -357,22 +375,6 @@ export default function DashboardPage() {
           icon={ClipboardList}
           color="amber"
           loading={loading}
-        />
-        <StatCard
-          title="Documents in Draft"
-          value="—"
-          icon={FileEdit}
-          subtitle="Requires cross-collection query"
-          subtitleMuted
-          color="blue"
-        />
-        <StatCard
-          title="Revenue This Month"
-          value="—"
-          icon={DollarSign}
-          subtitle="Requires cross-collection query"
-          subtitleMuted
-          color="green"
         />
       </div>
 
@@ -431,7 +433,7 @@ export default function DashboardPage() {
                 <table className="min-w-full divide-y divide-gray-100">
                   <thead>
                     <tr className="bg-gray-50/60">
-                      {['Client Name', 'Package', 'Questionnaire', 'Documents', 'Balance', 'Next Appt'].map(
+                      {['Client Name', 'Package', 'Questionnaire', 'Documents', 'Balance'].map(
                         (col) => (
                           <th
                             key={col}
@@ -441,6 +443,7 @@ export default function DashboardPage() {
                           </th>
                         ),
                       )}
+                      <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
@@ -514,11 +517,18 @@ export default function DashboardPage() {
                                 <span className="font-medium text-red-600">{balance}</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-400">
-                              <span className="flex items-center gap-1">
-                                <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                                —
-                              </span>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!firmId) return;
+                                  navigate(`/questionnaire/${firmId}/${client.id}`);
+                                }}
+                                className="inline-flex items-center justify-center p-2 rounded hover:bg-[#ebf4ff] text-[#2b6cb0] transition-colors"
+                                title={qStatus === 'completed' ? 'View Questionnaire' : qStatus === 'in_progress' ? 'Continue Questionnaire' : 'Start Questionnaire'}
+                              >
+                                <FileEdit className="h-4 w-4" />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -550,36 +560,67 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
-          ) : activityItems.length === 0 ? (
+          ) : displayedActivityItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center">
               <Clock className="h-8 w-8 text-gray-300" />
               <p className="text-sm text-gray-400">No recent activity</p>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100">
-              {activityItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <li key={item.id} className="flex gap-3 px-5 py-3.5">
-                    <div
-                      className={cn(
-                        'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-                        item.iconBg,
-                      )}
-                    >
-                      <Icon className={cn('h-4 w-4', item.iconColor)} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-700 leading-snug">{item.description}</p>
-                      <p className="mt-0.5 text-xs text-gray-400">{item.time}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className={cn("flex flex-col", isExpanded && "max-h-[600px] overflow-y-auto")}>
+              <ul className="divide-y divide-gray-100">
+                {displayedActivityItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.id} className="flex gap-3 px-5 py-3.5">
+                      <div
+                        className={cn(
+                          'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                          item.iconBg,
+                        )}
+                      >
+                        <Icon className={cn('h-4 w-4', item.iconColor)} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-gray-700 leading-snug">{item.description}</p>
+                        <p className="mt-0.5 text-xs text-gray-400">{item.time}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Expand/Collapse Toggle */}
+              {allActivityItems.length > 6 && (
+                <div className="border-t border-gray-100 p-2 text-center sticky bottom-0 bg-white/95 backdrop-blur-sm">
+                  <button
+                    onClick={toggleExpanded}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium text-[#2b6cb0] hover:bg-blue-50/50 transition-colors"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Show Less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        View All Activity
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
+
+      {/* Task & Calendar Row */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 h-[500px]">
+        <TasksList />
+        <UpcomingAppointments />
+      </div>
+
     </div>
   );
 }

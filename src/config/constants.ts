@@ -378,6 +378,7 @@ export const COLLECTIONS = {
   PAYMENTS: (firmId: string, clientId: string) =>
     `firms/${firmId}/clients/${clientId}/payments`,
   CALENDAR_EVENTS: (firmId: string) => `firms/${firmId}/calendarEvents`,
+  TASKS: (firmId: string) => `firms/${firmId}/tasks`,
 } as const;
 
 // ---------------------------------------------------------------------------

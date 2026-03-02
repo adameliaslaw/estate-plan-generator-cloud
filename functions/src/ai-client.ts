@@ -12,6 +12,17 @@
 import OpenAI from 'openai';
 
 // ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface CallAIOptions {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  jsonMode?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Singleton OpenAI client
 // ---------------------------------------------------------------------------
 
@@ -35,30 +46,47 @@ function getOpenAIClient(): OpenAI {
 // Core callAI helper
 // ---------------------------------------------------------------------------
 
-export interface CallAIOptions {
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-  /** When true, instructs the model to respond with a JSON object. */
-  jsonMode?: boolean;
-}
-
 /**
- * Send a single-turn chat completion to OpenAI and return the text content.
+ * Send a single-turn chat completion to the configured AI provider and return the text content.
  *
  * @param systemPrompt  Role="system" message — sets the model's behaviour.
  * @param userPrompt    Role="user" message — the specific task.
+ * @param firmData      The Firm object containing settings, `activeAiProvider`, and API keys.
  * @param options       Optional model/temperature/token overrides.
  */
 export async function callAI(
   systemPrompt: string,
   userPrompt: string,
+  firmData: any, // Using 'any' here locally to avoid circular dependencies with frontend types if needed, or import Firm.
   options: CallAIOptions = {},
 ): Promise<string> {
-  const client = getOpenAIClient();
+  const provider = firmData?.settings?.activeAiProvider ?? 'openai';
 
-  const model = options.model ?? 'gpt-4.1';
-  const temperature = options.temperature ?? 0.2; // Low for legal accuracy
+  if (provider === 'anthropic') {
+    return _callAnthropic(systemPrompt, userPrompt, firmData, options);
+  } else if (provider === 'gemini') {
+    return _callGemini(systemPrompt, userPrompt, firmData, options);
+  } else {
+    // Default to OpenAI
+    return _callOpenAI(systemPrompt, userPrompt, firmData, options);
+  }
+}
+
+async function _callOpenAI(
+  systemPrompt: string,
+  userPrompt: string,
+  firmData: any,
+  options: CallAIOptions
+): Promise<string> {
+  // Use the firm's API key if provided, fallback to the environment variable
+  const apiKey = firmData?.settings?.openAiApiKey || process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key is missing. Configure it in Firm Settings.');
+  }
+
+  const client = new OpenAI({ apiKey });
+  const model = options.model ?? 'gpt-4o'; // Upgrading default model
+  const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 
   const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
@@ -77,6 +105,109 @@ export async function callAI(
 
   const response = await client.chat.completions.create(requestParams);
   return response.choices[0]?.message?.content ?? '';
+}
+
+async function _callAnthropic(
+  systemPrompt: string,
+  userPrompt: string,
+  firmData: any,
+  options: CallAIOptions
+): Promise<string> {
+  const apiKey = firmData?.settings?.anthropicApiKey;
+  if (!apiKey) {
+    throw new Error('Anthropic API key is missing. Configure it in Firm Settings.');
+  }
+
+  const model = options.model ?? 'claude-3-5-sonnet-20241022';
+  const temperature = options.temperature ?? 0.2;
+  const maxTokens = options.maxTokens ?? 8192;
+
+  // If JSON mode is requested, explicitly instruct Claude to output ONLY JSON
+  let finalSystemPrompt = systemPrompt;
+  if (options.jsonMode) {
+    finalSystemPrompt += '\n\nIMPORTANT: You must output ONLY a valid JSON object. Do not include any markdown formatting, preamble, or conversational text. Start directly with { and end with }';
+  }
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      system: finalSystemPrompt,
+      messages: [
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: maxTokens,
+      temperature,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return data.content[0]?.text ?? '';
+}
+
+async function _callGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  firmData: any,
+  options: CallAIOptions
+): Promise<string> {
+  const apiKey = firmData?.settings?.geminiApiKey;
+  if (!apiKey) {
+    throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
+  }
+
+  const model = options.model ?? 'gemini-2.5-pro';
+  const temperature = options.temperature ?? 0.2;
+
+  // Gemini requires system prompt to be passed inside 'system_instruction'
+  // But standard system instruction text is expected. 
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const requestBody: any = {
+    system_instruction: {
+      parts: [{ text: systemPrompt }]
+    },
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: userPrompt }]
+      }
+    ],
+    generationConfig: {
+      temperature,
+    }
+  };
+
+  if (options.jsonMode) {
+    requestBody.generationConfig.responseMimeType = "application/json";
+  }
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
 // ---------------------------------------------------------------------------

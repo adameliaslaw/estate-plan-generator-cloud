@@ -22,8 +22,9 @@ import React, {
   useRef,
 } from 'react';
 
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import {
   QUESTIONNAIRE_STEPS,
   SECTION_META,
@@ -229,6 +230,8 @@ export function QuestionnaireProvider({
   clientId,
   children,
 }: QuestionnaireProviderProps) {
+  const { userProfile } = useAuth();
+
   const [state, dispatch] = useReducer(questionnaireReducer, {
     data: createEmptyQuestionnaireData(),
     currentStep: 0,
@@ -286,6 +289,7 @@ export function QuestionnaireProvider({
             'pendingLegalDetails',
             'additionalNotes',
             'referralSource',
+            'uploads',
             'currentStepIndex',
             'completedSteps',
             'sectionProgress',
@@ -325,7 +329,7 @@ export function QuestionnaireProvider({
     async (data: QuestionnaireData, stepIndex: number) => {
       dispatch({ type: 'SET_SAVING', value: true });
       try {
-        await updateDoc(doc(db, docPath), {
+        await setDoc(doc(db, docPath), {
           personalInfo: data.personalInfo,
           spouseInfo: data.spouseInfo ?? null,
           hasChildren: data.hasChildren,
@@ -351,11 +355,24 @@ export function QuestionnaireProvider({
           pendingLegalDetails: data.pendingLegalDetails ?? null,
           additionalNotes: data.additionalNotes ?? null,
           referralSource: data.referralSource ?? null,
+          uploads: data.uploads ?? [],
           currentStepIndex: stepIndex,
           completedSteps: data.completedSteps,
           sectionProgress: data.sectionProgress,
           updatedAt: serverTimestamp(),
+        }, { merge: true }); // Use merge in case the document is strictly a questionnaire stub
+
+        // Also update the questionnaireProgress tracker specifically
+        const updaterName = userProfile?.role === 'client'
+          ? 'Client'
+          : `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
+
+        await updateDoc(doc(db, docPath), {
+          'questionnaireProgress.status': 'in_progress',
+          'questionnaireProgress.lastUpdatedBy': updaterName,
+          'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
         });
+
         pendingSaveRef.current = false;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to save progress';

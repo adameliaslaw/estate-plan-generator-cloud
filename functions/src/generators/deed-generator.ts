@@ -179,7 +179,7 @@ PREPARING ATTORNEY:
 Generate the complete deed. Include the RTF exemption clause, full property description with block/lot, grantor covenants, "together with" clause, "subject to" clause (existing mortgage${mortgageBalance ? ' — state lender and approximate balance' : ''}), full grantor execution block${isMarried ? ', spousal joinder block' : ''}, and full NJ notary acknowledgment block for each signatory. Also include recording instructions footer.
 `.trim();
 
-  const raw = await callAI(DEED_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(DEED_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 6144,

@@ -198,29 +198,29 @@ ALTERNATE/SUCCESSOR TRUSTEE:
 
 CHILDREN (${children.length}):
 ${children.length === 0 ? '  None.' : children.map((c: admin.firestore.DocumentData) =>
-  `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'MINOR' : 'adult'}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardianshipNotes ? `: ${sanitizeForPrompt(c.guardianshipNotes)}` : ''}`
-).join('\n')}
+    `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'MINOR' : 'adult'}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardianshipNotes ? `: ${sanitizeForPrompt(c.guardianshipNotes)}` : ''}`
+  ).join('\n')}
 
 TRUST BENEFICIARIES:
 ${beneficiaries.length > 0
-  ? beneficiaries.map((b: admin.firestore.DocumentData) =>
-    `  - ${sanitizeForPrompt(b.name)} (${sanitizeForPrompt(b.relationship)}) — ${b.percentage ?? ''}%${b.notes ? `: ${sanitizeForPrompt(b.notes)}` : ''}`
-  ).join('\n')
-  : residualText || '  Settlor during lifetime; then equal shares to children, per stirpes.'}
+      ? beneficiaries.map((b: admin.firestore.DocumentData) =>
+        `  - ${sanitizeForPrompt(b.name)} (${sanitizeForPrompt(b.relationship)}) — ${b.percentage ?? ''}%${b.notes ? `: ${sanitizeForPrompt(b.notes)}` : ''}`
+      ).join('\n')
+      : residualText || '  Settlor during lifetime; then equal shares to children, per stirpes.'}
 
 DISTRIBUTION STANDARD: ${distributionStandard}
 TERMINATION AGE FOR MINOR TRUSTS: ${primaryTrustDef?.terminationAge ?? 25}
 
 FUNDED ASSETS:
   Real estate: ${fundingAssets.map((r: admin.firestore.DocumentData) =>
-    `${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ ${r.zip} (Block ${r.blockLot ?? 'TBD'})`
-  ).join('; ') || 'None specified — add to Schedule A at funding'}
+        `${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ ${r.zip} (Block ${r.blockLot ?? 'TBD'})`
+      ).join('; ') || 'None specified — add to Schedule A at funding'}
   Bank accounts: ${fundingBankAccounts.map((b: admin.firestore.DocumentData) =>
-    `${sanitizeForPrompt(b.institution)} ${b.accountType}`
-  ).join('; ') || 'None specified'}
+        `${sanitizeForPrompt(b.institution)} ${b.accountType}`
+      ).join('; ') || 'None specified'}
   Investment accounts: ${fundingInvestments.map((i: admin.firestore.DocumentData) =>
-    `${sanitizeForPrompt(i.institution)} ${i.accountType}`
-  ).join('; ') || 'None specified'}
+        `${sanitizeForPrompt(i.institution)} ${i.accountType}`
+      ).join('; ') || 'None specified'}
 
 SPECIAL PROVISIONS:
   Spendthrift: ${distribution.spendthriftProvision ? 'YES — include spendthrift clause' : 'No'}
@@ -236,7 +236,7 @@ FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
 Generate the complete ${trustType} now. Include all standard articles, comprehensive trustee powers per N.J.S.A. 3B:14-23, successor trustee provisions, distribution plan, Schedule A, execution block, and notary acknowledgment.
 `.trim();
 
-  const raw = await callAI(TRUST_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(TRUST_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,

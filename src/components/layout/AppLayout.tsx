@@ -2,6 +2,7 @@ import { type ReactNode, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, ChevronDown, LogOut, User, AlertTriangle } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
+import { GlobalAiWidget } from '@/components/ai/GlobalAiWidget';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useAuth } from '@/hooks/useAuth';
@@ -91,11 +92,11 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
 
   const initials = userProfile?.displayName
     ? userProfile.displayName
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
     : (userProfile?.email?.[0]?.toUpperCase() ?? '?');
 
   return (
@@ -227,6 +228,9 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
           )}
         </main>
       </div>
+
+      {/* ── Global AI Chat Widget ── */}
+      <GlobalAiWidget />
     </div>
   );
 }

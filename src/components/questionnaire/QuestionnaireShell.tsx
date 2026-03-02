@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -28,12 +29,18 @@ import {
   Save,
   CheckCircle2,
 } from 'lucide-react';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { documentService } from '@/services/document-service';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 import { useQuestionnaire } from '@/contexts/QuestionnaireContext';
 import { SECTION_META } from '@/types/questionnaire';
 import { StepRenderer } from './StepRenderer';
 import { PackageSelector } from './PackageSelector';
 import { QuestionnaireComplete } from './QuestionnaireComplete';
+import { QuestionnaireUploader } from './QuestionnaireUploader';
 import { cn } from '@/lib/utils';
 import type { PackageType } from '@/types';
 
@@ -70,7 +77,7 @@ function SectionBanner({ section }: { section: typeof SECTION_META[number] }) {
   const [show, setShow] = useState(true);
 
   useEffect(() => {
-    setShow(true);
+    // If section changes, remount animation by clearing and resetting
     const t = setTimeout(() => setShow(false), 2500);
     return () => clearTimeout(t);
   }, [section.id]);
@@ -181,7 +188,11 @@ export function QuestionnaireShell() {
     goNext,
     goBack,
     saveProgress,
+    data,
   } = useQuestionnaire();
+
+  const { firmId, clientId } = useParams<{ firmId: string; clientId: string }>();
+  const { userProfile } = useAuth();
 
   // ── Phase state ───────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('questionnaire');
@@ -240,10 +251,13 @@ export function QuestionnaireShell() {
   const isLastStep = currentStep === totalSteps - 1;
 
   const handleNext = useCallback(() => {
-    goNext();
-    // If we were on the last step, the context will null out currentStepDef
-    // and the useEffect above will fire — no extra work needed here.
-  }, [goNext]);
+    if (isLastStep) {
+      goNext(); // marks the last step as complete
+      setPhase('package'); // explicitly transition to the next phase
+    } else {
+      goNext();
+    }
+  }, [goNext, isLastStep]);
 
   // ── Package selection → complete phase ────────────────────────────────────
   function handlePackageContinue(pkg: PackageType, trustType?: string) {
@@ -254,19 +268,43 @@ export function QuestionnaireShell() {
 
   // ── Submit handler ────────────────────────────────────────────────────────
   async function handleSubmit() {
-    // Save final state to Firestore with completed status and selected package
-    await saveProgress();
     try {
-      // We don't have firmId / clientId directly here, but saveProgress covers it.
-      // If a package was selected, also persist it. The QuestionnaireContext
-      // exposes saveProgress which writes all data fields. We additionally mark
-      // questionnaireProgress.status = completed via a secondary write here
-      // using whatever docPath was used in the context.
-      // For now, saveProgress handles the data; status update will be done
-      // when the full Firebase integration is wired. This is a clean seam.
+      if (!firmId || !clientId) throw new Error('Missing route params');
+
+      // Save final state to Firestore with completed status and selected package
+      await saveProgress();
+
+      const updaterName = userProfile?.role === 'client'
+        ? 'Client'
+        : `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
+
+      // Update progress explicitly to completed
+      const docRef = doc(db, `firms/${firmId}/clients/${clientId}`);
+      await updateDoc(docRef, {
+        'questionnaireProgress.status': 'completed',
+        'questionnaireProgress.lastUpdatedBy': updaterName,
+        'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
+      });
+
+      // Send the firm notification
+      const attorneyEmail = userProfile?.role === 'attorney'
+        ? userProfile.email
+        : 'admin@firm.com'; // fallback if no specific attorney mapping exists yet
+
+      const clientName = `${data.personalInfo?.firstName || 'Client'} ${data.personalInfo?.lastName || ''}`.trim() || 'A Client';
+
+      await documentService.sendQuestionnaireCompleteNotification({
+        firmId,
+        clientId,
+        clientName,
+        attorneyEmail,
+      });
+
       setSubmitted(true);
+      toast.success('Questionnaire submitted successfully');
     } catch (err) {
       console.error('Submit error:', err);
+      toast.error('Failed to submit questionnaire');
     }
   }
 
@@ -338,32 +376,38 @@ export function QuestionnaireShell() {
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-2xl px-4 py-3">
           {/* Section name + step counter */}
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-y-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#1a365d]">
                 {currentSectionMeta.title}
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Auto-save indicator */}
-              {isSaving ? (
-                <span className="flex items-center gap-1 text-xs text-gray-400">
-                  <Save className="h-3 w-3 animate-pulse" />
-                  Saving…
+            <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3">
+              {/* File Uploader */}
+              <div className="mr-0 sm:mr-2">
+                <QuestionnaireUploader />
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Auto-save indicator */}
+                {isSaving ? (
+                  <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <Save className="h-3 w-3 animate-pulse" />
+                    <span className="hidden sm:inline">Saving…</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => void saveProgress()}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#1a365d] transition-colors"
+                    title="Save progress"
+                  >
+                    <Save className="h-3 w-3" />
+                    <span className="hidden sm:inline">Saved</span>
+                  </button>
+                )}
+                <span className="text-xs text-gray-400 rounded-full bg-gray-100 px-2 py-0.5 whitespace-nowrap">
+                  {stepNumber} / {totalSteps}
                 </span>
-              ) : (
-                <button
-                  onClick={() => void saveProgress()}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#1a365d] transition-colors"
-                  title="Save progress"
-                >
-                  <Save className="h-3 w-3" />
-                  Saved
-                </button>
-              )}
-              <span className="text-xs text-gray-400">
-                {stepNumber} / {totalSteps}
-              </span>
+              </div>
             </div>
           </div>
 

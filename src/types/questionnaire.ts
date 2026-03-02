@@ -183,6 +183,16 @@ export interface QuestionnaireData {
   additionalNotes?: string;
   referralSource?: string;
 
+  // File Uploads
+  uploads: Array<{
+    name: string;
+    url: string;
+    date: string;
+    size: number;
+    path: string;
+    type: string;
+  }>;
+
   // Meta — progress tracking
   currentStepIndex: number;
   completedSteps: string[];
@@ -227,6 +237,7 @@ export function createEmptyQuestionnaireData(): QuestionnaireData {
     healthcarePreferences: {},
     hasExistingDocuments: false,
     hasPendingLegalMatters: false,
+    uploads: [],
     currentStepIndex: 0,
     completedSteps: [],
     sectionProgress: {

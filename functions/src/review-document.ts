@@ -340,6 +340,10 @@ export const reviewDocument = onCall(
     const pi = (clientData as admin.firestore.DocumentData).personalInfo ?? {};
     const clientFullName = [pi.firstName, pi.lastName].filter(Boolean).join(' ');
 
+    // Fetch firm data to get settings for AI provider
+    const firmSnap = await db.doc(`firms/${firmId}`).get();
+    const firmData = firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {};
+
     // ------------------------------------------------------------------
     // 5. Build prompts and call AI
     // ------------------------------------------------------------------
@@ -372,7 +376,7 @@ Identify all issues by severity. Be specific about location (article/section nam
 
     console.log(`[reviewDocument] Reviewing ${docType} (${documentId}) for client ${clientId}`);
 
-    const raw = await callAI(systemPrompt, userPrompt, {
+    const raw = await callAI(systemPrompt, userPrompt, firmData, {
       model: 'gpt-4.1',
       temperature: 0.1,
       maxTokens: 4096,

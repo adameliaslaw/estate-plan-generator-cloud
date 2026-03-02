@@ -339,6 +339,20 @@ export const documentService = {
     return result.data;
   },
 
+  async sendQuestionnaireCompleteNotification(params: {
+    firmId: string;
+    clientId: string;
+    clientName: string;
+    attorneyEmail: string;
+  }): Promise<{ success: boolean }> {
+    const fn = httpsCallable<typeof params, { success: boolean }>(
+      functions,
+      'sendQuestionnaireCompleteNotification',
+    );
+    const result = await fn(params);
+    return result.data;
+  },
+
   async sendAppointmentReminder(params: {
     firmId: string;
     clientId: string;

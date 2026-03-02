@@ -165,8 +165,8 @@ ${packageDocs.map(d => `• ${d}`).join('\n')}
 
 CHILDREN (${children.length}):
 ${children.length === 0 ? 'None.' : children.map((c: admin.firestore.DocumentData) =>
-  `• ${sanitizeForPrompt(c.name)}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [Special Needs]' : ''}`
-).join('\n')}
+    `• ${sanitizeForPrompt(c.name)}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [Special Needs]' : ''}`
+  ).join('\n')}
 
 ${hasTrust ? `TRUST: ${trustName} (${(trustTypes ?? ['Revocable Living Trust']).join(', ')})` : ''}
 
@@ -192,13 +192,13 @@ HEALTHCARE PREFERENCES (key):
 
 REAL ESTATE:
 ${realEstate.length === 0 ? 'None.' : realEstate.map((r: admin.firestore.DocumentData) =>
-  `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred to trust'}`
-).join('\n')}
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred to trust'}`
+  ).join('\n')}
 
 PROPERTIES TO DEED INTO TRUST (${propertiesForTrust.length}):
 ${propertiesForTrust.map((r: admin.firestore.DocumentData) =>
-  `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, ${sanitizeForPrompt(r.county)} County — deed, affidavit, and GIT/REP-3 prepared`
-).join('\n') || 'None.'}
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, ${sanitizeForPrompt(r.county)} County — deed, affidavit, and GIT/REP-3 prepared`
+  ).join('\n') || 'None.'}
 
 SPECIAL NOTES:
   Gift-making power: ${poa.giftingPower ? 'Yes — agent can make gifts on your behalf' : 'No'}
@@ -214,7 +214,7 @@ FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
 Generate the complete estate plan summary. Use the client's actual names throughout. For next steps, include specific county recording information for ${propertiesForTrust.map((r: admin.firestore.DocumentData) => sanitizeForPrompt(r.county)).filter(Boolean).join(', ') || 'relevant NJ counties'}.
 `.trim();
 
-  const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.3, // Slightly higher — this is client-friendly prose
     maxTokens: 8192,

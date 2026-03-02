@@ -11,12 +11,15 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { documentService } from '@/services/document-service';
 import {
   ArrowLeft,
   User,
   Users,
   FileText,
   MessageSquare,
+  FileEdit,
   DollarSign,
   CalendarDays,
   Sparkles,
@@ -152,6 +155,7 @@ export default function ClientDashboardPage() {
   const [activeTab, setActiveTab] = useState('info');
   const [autoOpenNewNote, setAutoOpenNewNote] = useState(false);
   const [autoOpenNewEvent, setAutoOpenNewEvent] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const clientPath = clientId && firmId
     ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}`
@@ -216,8 +220,8 @@ export default function ClientDashboardPage() {
 
   const spouseFullName = spouse
     ? [spouse.firstName, spouse.middleName, spouse.lastName, spouse.suffix]
-        .filter(Boolean)
-        .join(' ')
+      .filter(Boolean)
+      .join(' ')
     : null;
 
   const displayHeading = spouseFullName
@@ -327,18 +331,55 @@ export default function ClientDashboardPage() {
             </div>
           </div>
 
-          {/* Right: quick-action buttons */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 mt-4 lg:mt-0">
             <Button
               size="sm"
               variant="outline"
               className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
-              onClick={() => {
-                // Send questionnaire link — Phase 5
+              disabled={isSending || !info?.email}
+              onClick={async () => {
+                if (!clientId || !firmId || !info?.email) {
+                  toast.error('Client email is missing.');
+                  return;
+                }
+
+                setIsSending(true);
+                try {
+                  const url = `${window.location.origin}/questionnaire/${firmId}/${clientId}`;
+                  await documentService.sendQuestionnaireInvitation({
+                    firmId,
+                    clientId,
+                    clientEmail: info.email,
+                    clientName: displayHeading,
+                    questionnaireUrl: url,
+                  });
+                  toast.success('Questionnaire invitation sent to the client.');
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to send invitation.');
+                } finally {
+                  setIsSending(false);
+                }
               }}
             >
-              <Mail className="h-4 w-4" />
+              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
               Send Questionnaire
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+              onClick={() => {
+                if (!firmId || !clientId) return;
+                navigate(`/questionnaire/${firmId}/${clientId}`);
+              }}
+            >
+              <FileEdit className="h-4 w-4" />
+              {qProgress?.status === 'completed'
+                ? 'View Questionnaire'
+                : qProgress?.status === 'in_progress'
+                  ? 'Continue Questionnaire'
+                  : 'Start Questionnaire'}
             </Button>
 
             <Button

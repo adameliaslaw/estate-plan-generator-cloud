@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -44,7 +44,7 @@ function GoogleIcon({ className }: { className?: string }) {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
-  const { signInWithEmail, signInWithGoogle } = useAuth();
+  const { signInWithEmail, signInWithGoogle, user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect') ?? ROUTES.DASHBOARD;
@@ -52,6 +52,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-redirect if user gets fully logged in and AuthContext updates with profile
+  useEffect(() => {
+    if (user && userProfile) {
+      navigate(decodeURIComponent(redirectTo), { replace: true });
+    }
+  }, [user, userProfile, navigate, redirectTo]);
 
   const {
     register,
@@ -65,7 +72,7 @@ export default function LoginPage() {
     setErrorMessage(null);
     try {
       await signInWithEmail(values.email, values.password);
-      navigate(decodeURIComponent(redirectTo), { replace: true });
+      // Navigation handled by useEffect on user state change
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Sign in failed. Please try again.');
     }
@@ -76,7 +83,7 @@ export default function LoginPage() {
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
-      navigate(decodeURIComponent(redirectTo), { replace: true });
+      // Navigation handled by useEffect on user state change
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
     } finally {

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { Scale, Lock } from 'lucide-react';
-import { FIRM_DEFAULTS } from '@/config/constants';
+import { Link, useNavigate } from 'react-router-dom';
+import { Scale, Lock, LogOut } from 'lucide-react';
+import { FIRM_DEFAULTS, ROUTES } from '@/config/constants';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ClientLayoutProps {
   children: ReactNode;
@@ -12,19 +14,55 @@ interface ClientLayoutProps {
  * with an attorney-client privilege notice.
  */
 export function ClientLayout({ children }: ClientLayoutProps) {
+  const { userProfile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const isClient = userProfile?.role === 'client';
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate(ROUTES.LOGIN, { replace: true });
+    } catch {
+      // Ignored
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-[#ebf4ff]">
       {/* Header */}
-      <header className="border-b border-[#2b6cb0]/20 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 sm:px-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a365d]">
-            <Scale className="h-5 w-5 text-white" />
+      <header className="border-b border-[#2b6cb0]/20 bg-white shadow-sm px-4 sm:px-6 py-4 flex items-center justify-between">
+        {isClient ? (
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a365d]">
+              <Scale className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-[#1a365d]">{FIRM_DEFAULTS.firmName}</p>
+              <p className="text-xs text-gray-500">Estate Planning Questionnaire</p>
+            </div>
           </div>
-          <div>
-            <p className="text-base font-semibold text-[#1a365d]">{FIRM_DEFAULTS.firmName}</p>
-            <p className="text-xs text-gray-500">Estate Planning Questionnaire</p>
-          </div>
-        </div>
+        ) : (
+          <Link
+            to={ROUTES.DASHBOARD}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a365d]">
+              <Scale className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-[#1a365d]">{FIRM_DEFAULTS.firmName}</p>
+              <p className="text-xs text-gray-500">Back to Dashboard</p>
+            </div>
+          </Link>
+        )}
+
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-600 transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="hidden sm:inline">Sign Out</span>
+        </button>
       </header>
 
       {/* Page content */}

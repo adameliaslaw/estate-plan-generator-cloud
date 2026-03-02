@@ -146,8 +146,8 @@ ${hasSpouse && spouse ? `SPOUSE:
 
 CHILDREN (${children.length}):
 ${children.length === 0 ? '  None.' : children.map((c: admin.firestore.DocumentData) =>
-  `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardian ? `, guardian: ${sanitizeForPrompt(c.guardian)}` : ''}`
-).join('\n')}
+    `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardian ? `, guardian: ${sanitizeForPrompt(c.guardian)}` : ''}`
+  ).join('\n')}
 
 TRUST RECEIVING POUR-OVER:
   Trust name: ${trustName}
@@ -180,7 +180,7 @@ FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
 Generate the complete pour-over will now. The POUR-OVER ARTICLE must name the trust by its exact full name and date, include "as amended" language, and specify the trustee. Include full execution block, NJ witness attestation, and complete N.J.S.A. 3B:3-4 self-proving affidavit.
 `.trim();
 
-  const raw = await callAI(POUR_OVER_WILL_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(POUR_OVER_WILL_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,

@@ -141,8 +141,8 @@ ${hasSpouse && spouse ? `SPOUSE:
 
 CHILDREN (${children.length}):
 ${children.length === 0 ? '  None.' : children.map((c: admin.firestore.DocumentData) =>
-  `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'minor' : 'adult'}, ${c.relationship}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardian ? `, guardian: ${sanitizeForPrompt(c.guardian)}` : ''}${c.alternateGuardian ? `, alternate guardian: ${sanitizeForPrompt(c.alternateGuardian)}` : ''}`
-).join('\n')}
+    `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'minor' : 'adult'}, ${c.relationship}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardian ? `, guardian: ${sanitizeForPrompt(c.guardian)}` : ''}${c.alternateGuardian ? `, alternate guardian: ${sanitizeForPrompt(c.alternateGuardian)}` : ''}`
+  ).join('\n')}
 
 EXECUTOR:
   Primary: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')}, ${sanitizeForPrompt(executor.primary?.relationship ?? '')}, ${sanitizeForPrompt(executor.primary?.address ?? '')}
@@ -182,7 +182,7 @@ FIRM:
 Generate the complete, execution-ready will now. Include all required articles, the full NJ witness attestation, and the complete N.J.S.A. 3B:3-4 self-proving affidavit with notary block.
 `.trim();
 
-  const raw = await callAI(WILL_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(WILL_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,

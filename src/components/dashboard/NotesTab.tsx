@@ -23,7 +23,9 @@ import {
   useRef,
   useState,
 } from 'react';
-import { orderBy } from 'firebase/firestore';
+import { orderBy, doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 import {
   Bot,
   CheckSquare,
@@ -68,11 +70,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { COLLECTIONS } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  createDoc,
   deleteDoc,
   updateDoc,
   useCollection,
 } from '@/hooks/useFirestore';
+import { db, storage, functions } from '@/config/firebase';
 import type { Note, NoteType } from '@/types';
 import { sanitizeInput } from '@/utils/sanitize';
 
@@ -87,21 +89,16 @@ async function uploadAudioToStorage(
   firmId: string,
   clientId: string,
   noteId: string,
-): Promise<string> {
-  if (import.meta.env.DEV) console.info('[uploadAudioToStorage] Would upload audio for note:', {
-    firmId,
-    clientId,
-    noteId,
-    size: blob.size,
-    type: blob.type,
-  });
-  toast.info('Audio upload queued — will be processed by Cloud Function.');
-  // Return a base64 data URI as a stand-in until real storage is wired up.
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.readAsDataURL(blob);
-  });
+): Promise<{ url: string; fullPath: string }> {
+  // Use .webm since MediaRecorder produces webm, or extract from blob.type
+  const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('wav') ? 'wav' : 'webm';
+  const storagePath = `firms/${firmId}/clients/${clientId}/audio/${noteId}.${ext}`;
+  const storageRef = ref(storage, storagePath);
+
+  await uploadBytes(storageRef, blob, { contentType: blob.type });
+  const url = await getDownloadURL(storageRef);
+
+  return { url, fullPath: storagePath };
 }
 
 /**
@@ -111,13 +108,15 @@ async function requestTranscription(
   firmId: string,
   clientId: string,
   noteId: string,
+  storagePath: string,
 ): Promise<void> {
-  if (import.meta.env.DEV) console.info('[requestTranscription] Would request transcription for:', {
-    firmId,
-    clientId,
-    noteId,
-  });
-  toast.info('Transcription request queued — Whisper will process this shortly.');
+  const transcribeAudio = httpsCallable(functions, 'transcribeAudio');
+  try {
+    await transcribeAudio({ firmId, clientId, noteId, storagePath });
+  } catch (error) {
+    console.error('[requestTranscription] Cloud Function error:', error);
+    toast.error('Transcription request failed.');
+  }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -388,6 +387,8 @@ interface NoteFormProps {
   initialData?: Partial<NoteFormState>;
   /** If provided, we're editing an existing note */
   editNoteId?: string;
+  /** Automatically trigger an action on mount */
+  initialAction?: 'record' | 'upload';
 }
 
 function NoteForm({
@@ -397,108 +398,166 @@ function NoteForm({
   onClose,
   initialData,
   editNoteId,
+  initialAction,
 }: NoteFormProps) {
   const [form, setForm] = useState<NoteFormState>({
     ...DEFAULT_FORM,
     ...initialData,
   });
-  const [saving, setSaving] = useState(false);
 
   const audioRecorder = useAudioRecorder();
   const audioFileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!editNoteId;
 
-  const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    audioRecorder.setUploadedAudio(file, file.name);
-    // Reset the input so the same file can be re-selected if needed
-    e.target.value = '';
-  };
+  // Generate an ID up-front so we can autosave to it
+  const [activeNoteId] = useState<string>(() => {
+    return editNoteId || doc(collection(db, COLLECTIONS.NOTES(firmId, clientId))).id;
+  });
 
-  const handleSave = async () => {
-    const trimmedContent = form.content.trim();
-    if (!trimmedContent) {
-      toast.error('Note content is required.');
-      return;
+  const [lastSavedState, setLastSavedState] = useState<string>('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  // Trigger quick actions on mount
+  useEffect(() => {
+    if (initialAction === 'record') {
+      audioRecorder.startRecording();
+    } else if (initialAction === 'upload') {
+      setTimeout(() => {
+        audioFileInputRef.current?.click();
+      }, 100);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    setSaving(true);
-    try {
-      const sanitizedContent = sanitizeInput(trimmedContent);
-      const sanitizedTitle = sanitizeInput(form.title.trim());
+  // 1. Text / options autosave
+  useEffect(() => {
+    const currentStateStr = JSON.stringify(form);
+    if (currentStateStr === lastSavedState) return;
 
-      const collPath = COLLECTIONS.NOTES(firmId, clientId);
+    // Do not create empty notes
+    if (!isEditing && !form.content.trim() && !form.title.trim() && !audioRecorder.audioBlob) return;
 
-      if (isEditing) {
-        const docPath = `${collPath}/${editNoteId}`;
-        await updateDoc<Note>(docPath, {
-          title: sanitizedTitle || undefined,
+    setSaveStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        const collPath = COLLECTIONS.NOTES(firmId, clientId);
+        const docRef = doc(db, collPath, activeNoteId);
+
+        const partialNote: Partial<Note> = {
+          title: sanitizeInput(form.title.trim()) || undefined,
           noteType: form.noteType,
-          content: sanitizedContent,
+          content: sanitizeInput(form.content.trim()),
           isPinned: form.isPinned,
           isPrivate: form.isPrivate,
           updatedBy: authorUid,
-        });
-        toast.success('Note updated.');
-      } else {
-        // Create the note first to get an ID
-        const noteId = await createDoc<Omit<Note, 'id' | 'createdAt' | 'updatedAt'>>(
-          collPath,
-          {
-            firmId,
-            clientId,
-            noteType: form.noteType,
-            source: 'manual',
-            title: sanitizedTitle || undefined,
-            content: sanitizedContent,
-            isPinned: form.isPinned,
-            isPrivate: form.isPrivate,
-            createdBy: authorUid,
-            updatedBy: authorUid,
-            // Audio fields — populated below if audio is present
-            audioUrl: null,
-            audioFileName: undefined,
-            audioDurationSeconds: undefined,
-            transcription: null,
-            transcriptionStatus: undefined,
-            aiSummary: null,
-          },
-        );
+          updatedAt: serverTimestamp() as any,
+        };
 
-        // If audio was recorded / uploaded, process it now
-        if (audioRecorder.audioBlob) {
-          try {
-            const audioUrl = await uploadAudioToStorage(
-              audioRecorder.audioBlob,
-              firmId,
-              clientId,
-              noteId,
-            );
-            await updateDoc<Note>(`${collPath}/${noteId}`, {
-              audioUrl,
-              audioFileName: audioRecorder.audioFileName,
-              audioDurationSeconds: audioRecorder.durationSeconds || undefined,
-              transcriptionStatus: 'pending',
-              updatedBy: authorUid,
-            });
-            await requestTranscription(firmId, clientId, noteId);
-          } catch (audioErr) {
-            console.error('[NoteForm] Audio processing error:', audioErr);
-            toast.warning('Note saved, but audio upload failed. Please try again.');
-          }
+        if (!isEditing && !lastSavedState) {
+          partialNote.firmId = firmId;
+          partialNote.clientId = clientId;
+          partialNote.source = 'manual';
+          partialNote.createdBy = authorUid;
+          partialNote.createdAt = serverTimestamp() as any;
         }
 
-        toast.success('Note added.');
+        await setDoc(docRef, partialNote, { merge: true });
+        setLastSavedState(currentStateStr);
+        setSaveStatus('saved');
+      } catch (err) {
+        console.error('[NoteForm] Autosave error:', err);
+        setSaveStatus('idle');
       }
+    }, 1000);
 
-      onClose();
-    } catch (err) {
-      console.error('[NoteForm] Save error:', err);
-      toast.error('Failed to save note. Please try again.');
-    } finally {
-      setSaving(false);
+    return () => clearTimeout(timer);
+  }, [form, lastSavedState, isEditing, firmId, clientId, activeNoteId, authorUid, audioRecorder.audioBlob]);
+
+  // 2. Audio autosave
+  useEffect(() => {
+    if (audioRecorder.audioBlob && !audioRecorder.isRecording) {
+      const processAudio = async () => {
+        setSaveStatus('saving');
+        try {
+          const { url, fullPath } = await uploadAudioToStorage(
+            audioRecorder.audioBlob!,
+            firmId,
+            clientId,
+            activeNoteId,
+          );
+
+          const collPath = COLLECTIONS.NOTES(firmId, clientId);
+          const docRef = doc(db, collPath, activeNoteId);
+
+          const audioUpdate: Partial<Note> = {
+            audioUrl: url,
+            audioStoragePath: fullPath,
+            audioFileName: audioRecorder.audioFileName,
+            audioDurationSeconds: audioRecorder.durationSeconds || undefined,
+            transcriptionStatus: 'processing',
+            updatedBy: authorUid,
+            updatedAt: serverTimestamp() as any,
+          };
+
+          if (!isEditing && !lastSavedState) {
+            audioUpdate.firmId = firmId;
+            audioUpdate.clientId = clientId;
+            audioUpdate.source = 'manual';
+            audioUpdate.title = sanitizeInput(form.title.trim()) || 'Audio Note';
+            audioUpdate.createdBy = authorUid;
+            audioUpdate.createdAt = serverTimestamp() as any;
+          }
+
+          await setDoc(docRef, audioUpdate, { merge: true });
+          setLastSavedState('audio_uploaded'); // Force state to skip redundant creation
+          requestTranscription(firmId, clientId, activeNoteId, fullPath);
+          toast.success('Audio uploaded & transcription started');
+          audioRecorder.clearAudio();
+          setSaveStatus('saved');
+        } catch (err) {
+          console.error('[NoteForm] Audio processing error:', err);
+          toast.error('Failed to upload audio');
+          setSaveStatus('idle');
+        }
+      };
+      processAudio();
+    }
+  }, [audioRecorder.audioBlob, audioRecorder.isRecording]);
+
+  // Flush any final changes synchronously when clicking "Done"
+  const handleDone = () => {
+    const currentStateStr = JSON.stringify(form);
+    if (currentStateStr !== lastSavedState) {
+      if (isEditing || form.content.trim() || form.title.trim()) {
+        const collPath = COLLECTIONS.NOTES(firmId, clientId);
+        setDoc(doc(db, collPath, activeNoteId), {
+          title: sanitizeInput(form.title.trim()) || undefined,
+          noteType: form.noteType,
+          content: sanitizeInput(form.content.trim()),
+          isPinned: form.isPinned,
+          isPrivate: form.isPrivate,
+          updatedBy: authorUid,
+          updatedAt: serverTimestamp() as any,
+        }, { merge: true }).catch(console.error);
+      }
+    }
+    onClose();
+  };
+
+  const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('Audio file must be under 50MB.');
+      return;
+    }
+
+    audioRecorder.setUploadedAudio(file, file.name);
+
+    if (audioFileInputRef.current) {
+      audioFileInputRef.current.value = '';
     }
   };
 
@@ -685,25 +744,32 @@ function NoteForm({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onClose}
-          disabled={saving}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="bg-[#1a365d] text-white hover:bg-[#1e407a]"
-          onClick={() => void handleSave()}
-          disabled={saving}
-        >
-          {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Add Note'}
-        </Button>
+      <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+        <div className="text-xs font-medium italic text-gray-500">
+          {saveStatus === 'saving' && 'Autosaving…'}
+          {saveStatus === 'saved' && 'All changes saved.'}
+        </div>
+        <div className="flex gap-2">
+          {(!form.content.trim() && !form.title.trim() && !audioRecorder.audioBlob && !isEditing) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDone}
+            >
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              className="bg-[#1a365d] text-white hover:bg-[#1e407a]"
+              onClick={handleDone}
+            >
+              Done
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1002,6 +1068,7 @@ export default function NotesTab({ firmId, clientId, autoOpenNewNote = false }: 
   const authorUid = user?.uid ?? '';
 
   const [showNewForm, setShowNewForm] = useState(autoOpenNewNote);
+  const [initialAction, setInitialAction] = useState<'record' | 'upload' | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Sync if parent toggles autoOpenNewNote dynamically
@@ -1058,24 +1125,61 @@ export default function NotesTab({ firmId, clientId, autoOpenNewNote = false }: 
           />
         </div>
 
-        {/* New note button */}
-        <Button
-          size="sm"
-          className="gap-2 bg-[#1a365d] text-white hover:bg-[#1e407a]"
-          onClick={() => setShowNewForm((v) => !v)}
-        >
-          {showNewForm ? (
-            <>
-              <X className="h-4 w-4" />
-              Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4" />
-              New Note
-            </>
-          )}
-        </Button>
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 text-[#2b6cb0] border-[#2b6cb0]/20 hover:bg-blue-50"
+            onClick={() => {
+              setInitialAction('record');
+              setShowNewForm(true);
+            }}
+          >
+            <Mic className="h-4 w-4" />
+            <span className="hidden sm:inline">Record Audio</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 text-[#2b6cb0] border-[#2b6cb0]/20 hover:bg-blue-50"
+            onClick={() => {
+              setInitialAction('upload');
+              setShowNewForm(true);
+            }}
+          >
+            <Paperclip className="h-4 w-4" />
+            <span className="hidden sm:inline">Upload Audio</span>
+          </Button>
+
+          {/* New note button */}
+          <Button
+            size="sm"
+            className="gap-2 bg-[#1a365d] text-white hover:bg-[#1e407a]"
+            onClick={() => {
+              if (showNewForm) {
+                setShowNewForm(false);
+                setInitialAction(undefined);
+              } else {
+                setInitialAction(undefined);
+                setShowNewForm(true);
+              }
+            }}
+          >
+            {showNewForm ? (
+              <>
+                <X className="h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                New Note
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* ── New note form ─────────────────────────────────────────────────── */}
@@ -1084,7 +1188,11 @@ export default function NotesTab({ firmId, clientId, autoOpenNewNote = false }: 
           firmId={firmId}
           clientId={clientId}
           authorUid={authorUid}
-          onClose={() => setShowNewForm(false)}
+          initialAction={initialAction}
+          onClose={() => {
+            setShowNewForm(false);
+            setInitialAction(undefined);
+          }}
         />
       )}
 

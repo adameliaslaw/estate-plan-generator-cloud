@@ -147,7 +147,7 @@ PREPARING ATTORNEY:
 Generate the complete affidavit. Include the state/county caption, deponent ID, property description, RTF exemption statement citing N.J.S.A. 46:15-10(a)(7), trust identification, certification statement, signature block, and full NJ notary acknowledgment.
 `.trim();
 
-  const raw = await callAI(AFFIDAVIT_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(AFFIDAVIT_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 4096,

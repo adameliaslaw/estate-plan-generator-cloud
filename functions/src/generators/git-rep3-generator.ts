@@ -164,7 +164,7 @@ PREPARER:
 Generate the complete GIT/REP-3 form styled as an official NJ tax form. Clearly mark Exemption Code 5 as selected. Include full certification text citing N.J.S.A. 54A:8-9(b), seller signature block, and preparer information.
 `.trim();
 
-  const raw = await callAI(GIT_REP3_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(GIT_REP3_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 3072,

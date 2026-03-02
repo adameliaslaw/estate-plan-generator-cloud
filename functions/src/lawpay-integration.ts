@@ -79,7 +79,7 @@ function getLawPayCredentials(): { apiKey: string; merchantId: string } {
     throw new HttpsError(
       'failed-precondition',
       'LawPay integration not configured. Set LAWPAY_API_KEY and LAWPAY_MERCHANT_ID ' +
-        'as Cloud Function environment variables (see Settings → Integrations).',
+      'as Cloud Function environment variables (see Settings → Integrations).',
     );
   }
 
@@ -112,7 +112,7 @@ function verifyWebhookSignature(
   if (!webhookSecret) {
     console.warn(
       '[lawpayWebhook] LAWPAY_WEBHOOK_SECRET not set — skipping signature verification. ' +
-        'Set this variable before going to production.',
+      'Set this variable before going to production.',
     );
     return true; // Allow in dev; reject in prod once secret is configured
   }
@@ -123,16 +123,29 @@ function verifyWebhookSignature(
     return false;
   }
 
-  // TODO: Implement full HMAC-SHA256 verification:
-  //   const crypto = require('crypto');
-  //   const expected = crypto
-  //     .createHmac('sha256', webhookSecret)
-  //     .update(rawBody)
-  //     .digest('hex');
-  //   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  const crypto = require('crypto');
+  try {
+    const expected = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
 
-  console.warn('[lawpayWebhook] Placeholder signature check passed — implement HMAC before prod.');
-  return true;
+    // Use timingSafeEqual to prevent timing attacks
+    const isValid = crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    );
+
+    if (!isValid) {
+      console.error('[lawpayWebhook] Signature mismatch');
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[lawpayWebhook] Error verifying signature:', error);
+    return false;
+  }
 }
 
 /**
@@ -217,7 +230,7 @@ export const createPaymentRequest = onCall(
 
     console.log(
       `[createPaymentRequest] firmId=${firmId} clientId=${clientId} ` +
-        `amount=${amount} designation=${accountDesignation}`,
+      `amount=${amount} designation=${accountDesignation}`,
     );
 
     // ------------------------------------------------------------------
@@ -277,7 +290,7 @@ export const createPaymentRequest = onCall(
         throw new HttpsError(
           'internal',
           `LawPay API returned an error (${response.status}). ` +
-            'Please check your API credentials and try again.',
+          'Please check your API credentials and try again.',
         );
       }
 

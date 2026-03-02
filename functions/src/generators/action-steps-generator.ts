@@ -345,18 +345,18 @@ ${propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) 
 
 BANK/INVESTMENT ACCOUNTS TO RE-TITLE TO TRUST (${bankAccounts.length + investmentAccounts.length}):
 ${[...bankAccounts, ...investmentAccounts].map((a: admin.firestore.DocumentData) =>
-  `• ${sanitizeForPrompt(a.institution ?? '')} — ${a.accountType}`
-).join('\n') || 'None specified.'}
+    `• ${sanitizeForPrompt(a.institution ?? '')} — ${a.accountType}`
+  ).join('\n') || 'None specified.'}
 
 RETIREMENT ACCOUNTS (update beneficiary designations only — do NOT transfer to trust):
 ${retirementAccounts.map((r: admin.firestore.DocumentData) =>
-  `• ${sanitizeForPrompt(r.institution ?? '')} ${r.accountType} — current beneficiary: ${sanitizeForPrompt(r.primaryBeneficiary ?? 'unknown')}`
-).join('\n') || 'None.'}
+    `• ${sanitizeForPrompt(r.institution ?? '')} ${r.accountType} — current beneficiary: ${sanitizeForPrompt(r.primaryBeneficiary ?? 'unknown')}`
+  ).join('\n') || 'None.'}
 
 LIFE INSURANCE (update beneficiary designations):
 ${lifeInsurance.map((l: admin.firestore.DocumentData) =>
-  `• ${sanitizeForPrompt(l.company ?? '')} — current beneficiary: ${sanitizeForPrompt(l.primaryBeneficiary ?? 'unknown')} — transfer to trust: ${l.transferToTrust ? 'Yes (ILIT consideration)' : 'No'}`
-).join('\n') || 'None.'}
+    `• ${sanitizeForPrompt(l.company ?? '')} — current beneficiary: ${sanitizeForPrompt(l.primaryBeneficiary ?? 'unknown')} — transfer to trust: ${l.transferToTrust ? 'Yes (ILIT consideration)' : 'No'}`
+  ).join('\n') || 'None.'}
 
 KEY CONTACTS TO GIVE COPIES OF DOCUMENTS:
   Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} — ${sanitizeForPrompt(executor.primary?.phone ?? '')} — ${sanitizeForPrompt(executor.primary?.email ?? '')}
@@ -371,7 +371,7 @@ FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
 Generate the complete action steps checklist. For each real property, include the specific county clerk's name, address, phone, website, and approximate recording fee. Include all sections: immediate steps, trust funding (real estate with specific county info), financial account re-titling, beneficiary designation updates, and annual review reminder.
 `.trim();
 
-  const raw = await callAI(ACTION_STEPS_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(ACTION_STEPS_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.25,
     maxTokens: 8192,

@@ -51,142 +51,142 @@ export default function App() {
       />
 
       <ErrorBoundary>
-      <Suspense fallback={<LoadingSpinner fullScreen />}>
-      <Routes>
-        {/* ── Root redirect ── */}
-        <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+        <Suspense fallback={<LoadingSpinner fullScreen />}>
+          <Routes>
+            {/* ── Root redirect ── */}
+            <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
 
-        {/* ── Public auth routes ── */}
-        <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path={ROUTES.UNAUTHORIZED} element={<UnauthorizedPage />} />
+            {/* ── Public auth routes ── */}
+            <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path={ROUTES.UNAUTHORIZED} element={<UnauthorizedPage />} />
 
-        {/* ── Protected staff routes (AppLayout) ── */}
-        <Route
-          path={ROUTES.DASHBOARD}
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <DashboardPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.CLIENTS}
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <ClientListPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.CLIENT_NEW}
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <NewClientPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path="/clients/:clientId"
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <ClientDashboardPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path="/clients/:clientId/questionnaire"
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <QuestionnairePage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path="/clients/:clientId/documents"
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <ClientDashboardPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path="/clients/:clientId/documents/:documentId/edit"
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]} fullWidth>
-              <DocumentEditorPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.SETTINGS}
-          element={
-            <AppLayout allowedRoles={['admin', 'attorney']}>
-              <SettingsPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.SETTINGS_FIRM}
-          element={
-            <AppLayout allowedRoles={['admin', 'attorney']}>
-              <SettingsPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.SETTINGS_USERS}
-          element={
-            <AppLayout allowedRoles={['admin']}>
-              <SettingsPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.SETTINGS_BILLING}
-          element={
-            <AppLayout allowedRoles={['admin', 'attorney']}>
-              <SettingsPage />
-            </AppLayout>
-          }
-        />
-        <Route
-          path={ROUTES.CALENDAR}
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <CalendarPage />
-            </AppLayout>
-          }
-        />
+            {/* ── Protected staff routes (AppLayout) ── */}
+            <Route
+              path={ROUTES.DASHBOARD}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <DashboardPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.CLIENTS}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <ClientListPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.CLIENT_NEW}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <NewClientPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path="/clients/:clientId"
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <ClientDashboardPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path="/clients/:clientId/questionnaire"
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <QuestionnairePage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path="/clients/:clientId/documents"
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <ClientDashboardPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path="/clients/:clientId/documents/:documentId/edit"
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]} fullWidth>
+                  <DocumentEditorPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.SETTINGS}
+              element={
+                <AppLayout allowedRoles={['admin', 'attorney']}>
+                  <SettingsPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.SETTINGS_FIRM}
+              element={
+                <AppLayout allowedRoles={['admin', 'attorney']}>
+                  <SettingsPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.SETTINGS_USERS}
+              element={
+                <AppLayout allowedRoles={['admin']}>
+                  <SettingsPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.SETTINGS_BILLING}
+              element={
+                <AppLayout allowedRoles={['admin', 'attorney']}>
+                  <SettingsPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.CALENDAR}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <CalendarPage />
+                </AppLayout>
+              }
+            />
 
-        {/* ── Client-facing routes (ClientLayout) ── */}
-        <Route
-          path="/questionnaire/:clientId"
-          element={
-            <ClientLayout>
-              <QuestionnairePage />
-            </ClientLayout>
-          }
-        />
+            {/* ── Client-facing routes (ClientLayout) ── */}
+            <Route
+              path="/questionnaire/:firmId/:clientId"
+              element={
+                <ClientLayout>
+                  <QuestionnairePage />
+                </ClientLayout>
+              }
+            />
 
-        {/* ── Printable questionnaire (staff only, print-optimized) ── */}
-        <Route
-          path="/questionnaire/print"
-          element={
-            <AppLayout allowedRoles={[...STAFF_ROLES]}>
-              <PrintableQuestionnaire />
-            </AppLayout>
-          }
-        />
+            {/* ── Printable questionnaire (staff only, print-optimized) ── */}
+            <Route
+              path="/questionnaire/print"
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <PrintableQuestionnaire />
+                </AppLayout>
+              }
+            />
 
-        {/* ── Legal pages (public) ── */}
-        <Route path="/terms" element={<TermsOfServicePage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            {/* ── Legal pages (public) ── */}
+            <Route path="/terms" element={<TermsOfServicePage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
-        {/* ── 404 ── */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-      </Suspense>
+            {/* ── 404 ── */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
     </BrowserRouter>
   );

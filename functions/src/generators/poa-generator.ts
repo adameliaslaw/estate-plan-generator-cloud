@@ -158,7 +158,7 @@ FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
 Generate the complete Durable POA now. Include all enumerated powers, the exact N.J.S.A. 46:2B-8.2 durability clause, ${poa.giftingPower ? 'gift-making authority,' : ''} third-party reliance clause, and full NJ notary acknowledgment block.
 `.trim();
 
-  const raw = await callAI(POA_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(POA_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,

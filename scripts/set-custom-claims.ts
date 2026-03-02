@@ -10,7 +10,7 @@
  *   npx ts-node scripts/set-custom-claims.ts def456 client test-firm test-client-1
  */
 
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 
 admin.initializeApp();
 

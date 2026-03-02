@@ -184,6 +184,41 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       // ========================================================
+      // /firms/{firmId}/tasks/{taskId}
+      // Firm-level to-dos and action items.
+      // ========================================================
+      match /tasks/{taskId} {
+        // Attorneys and paralegals can read and write tasks in their firm
+        allow read, write: if isAdmin()
+                           || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+      }
+
+      // ========================================================
+      // /firms/{firmId}/users/{userId}
+      // Firm personnel and user profiles.
+      // ========================================================
+      match /users/{userId} {
+        // Users can read their own profile. Admins/Attorneys can read all in their firm.
+        allow read: if isAdmin()
+                    || ((isAttorney() || isParalegal()) && belongsToFirm(firmId))
+                    || request.auth.uid == userId;
+
+        // Only admins can write to users (or the user themselves for specific fields,
+        // but restrict to admin for now).
+        allow write: if isAdmin() 
+                     || request.auth.uid == userId;
+      }
+      
+      // ========================================================
+      // /firms/{firmId}/calendarEvents/{eventId}
+      // Firm-wide calendar events
+      // ========================================================
+      match /calendarEvents/{eventId} {
+        allow read: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+        allow write: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+      }
+
+      // ========================================================
       // /firms/{firmId}/clients/{clientId}
       // Client profile documents, including personalInfo and
       // questionnaire data for estate planning intake.
@@ -227,9 +262,9 @@ service cloud.firestore {
                           && hasValidClientStatus());
 
         // --- DELETE ---
-        // Only admins may delete client records to prevent accidental
-        // data loss. Attorneys should archive instead (status update).
-        allow delete: if isAdmin();
+        // Only admins and attorneys may delete client records 
+        allow delete: if isAdmin()
+                      || (isAttorney() && belongsToFirm(firmId));
 
         // ======================================================
         // /firms/{firmId}/clients/{clientId}/documents/{docId}

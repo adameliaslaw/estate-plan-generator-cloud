@@ -207,52 +207,50 @@ async function refreshAccessTokenIfNeeded(
     return tokens.accessToken; // Still valid — no refresh needed.
   }
 
-  // ── NOT YET CONFIGURED ───────────────────────────────────────────────────
-  // The OAuth refresh flow described in the JSDoc above has not been wired up
-  // yet.  To activate it:
-  //   1. Store GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Firebase Secret Manager.
-  //   2. Add `secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']` to each
-  //      onCall() function definition that calls this helper.
-  //   3. Replace the throw below with the real fetch() implementation:
-  //
-  //   const response = await fetch('https://oauth2.googleapis.com/token', {
-  //     method: 'POST',
-  //     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  //     body: new URLSearchParams({
-  //       grant_type:    'refresh_token',
-  //       client_id:     process.env.GOOGLE_CLIENT_ID!,
-  //       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-  //       refresh_token: tokens.refreshToken,
-  //     }),
-  //   });
-  //
-  //   if (!response.ok) {
-  //     const err = await response.json();
-  //     if (err.error === 'invalid_grant') {
-  //       throw new HttpsError(
-  //         'unauthenticated',
-  //         'Google Calendar authorisation has been revoked. ' +
-  //         'Please reconnect via Settings → Integrations → Google Calendar.',
-  //       );
-  //     }
-  //     throw new HttpsError('internal', `Token refresh failed: ${err.error}`);
-  //   }
-  //
-  //   const { access_token, expires_in } = await response.json();
-  //   await db.doc(`firms/${firmId}`).update({
-  //     'googleCalendar.accessToken': access_token,
-  //     'googleCalendar.tokenExpiry': Date.now() + expires_in * 1000,
-  //   });
-  //   return access_token;
-  // ─────────────────────────────────────────────────────────────────────────
+  // OAuth Refresh Flow
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
-  // Configure in Settings → Integrations → Google Calendar
-  throw new Error(
-    'OAuth token refresh not yet configured. ' +
-    'Provision GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Firebase Secret Manager, ' +
-    'then implement the refresh flow in refreshAccessTokenIfNeeded(). ' +
-    'See: Settings → Integrations → Google Calendar.',
-  );
+  if (!clientId || !clientSecret) {
+    console.warn('[calendar-sync] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET, unable to refresh token. Add them via Firebase secret manager.');
+    throw new HttpsError(
+      'internal',
+      'OAuth refresh is not fully configured. Missing client secrets in Cloud Functions.',
+    );
+  }
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: tokens.refreshToken,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = (await response.json()) as any;
+    if (err.error === 'invalid_grant') {
+      throw new HttpsError(
+        'unauthenticated',
+        'Google Calendar authorisation has been revoked. ' +
+        'Please reconnect via Settings → Integrations → Google Calendar.',
+      );
+    }
+    throw new HttpsError('internal', `Token refresh failed: ${err.error}`);
+  }
+
+  const { access_token, expires_in } = (await response.json()) as any;
+  const newExpiry = Date.now() + expires_in * 1000;
+
+  await db.doc(`firms/${firmId}`).update({
+    'googleCalendar.accessToken': access_token,
+    'googleCalendar.tokenExpiry': newExpiry,
+  });
+
+  return access_token;
 }
 
 /**
@@ -339,17 +337,21 @@ export const pushEventToGoogleCalendar = onCall(
     // ------------------------------------------------------------------
     // 4. Build the Google Calendar event resource
     // ------------------------------------------------------------------
+    const firmSnap = await db.collection('firms').doc(firmId).get();
+    const firmData = firmSnap.data() || {};
+    const timeZone = firmData.timeZone || 'America/New_York';
+
     const gcalEvent: GoogleCalendarEvent = {
       summary: eventDoc.title,
       description: eventDoc.description ?? '',
       location: eventDoc.location ?? '',
       start: {
         dateTime: timestampToISO(eventDoc.startAt),
-        timeZone: 'America/New_York', // Default to Eastern; TODO: pull from firm settings
+        timeZone: timeZone,
       },
       end: {
         dateTime: timestampToISO(eventDoc.endAt),
-        timeZone: 'America/New_York',
+        timeZone: timeZone,
       },
     };
 

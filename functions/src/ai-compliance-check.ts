@@ -17,7 +17,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import { callAI, sanitizeForPrompt, parseAIJson } from './ai-client';
+import { callAI, sanitizeForPrompt, parseAIJson, sanitizeObject } from './ai-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -179,6 +179,10 @@ export const checkDocumentCompliance = onCall(
     const docTitle: string = docData.title ?? 'Untitled Document';
     const docContent: string = docData.content ?? '';
 
+    // Fetch the firm to get settings for AI provider
+    const firmSnap = await db.doc(`firms/${firmId}`).get();
+    const firmData = firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {};
+
     if (!docContent.trim()) {
       throw new HttpsError(
         'failed-precondition',
@@ -204,7 +208,7 @@ Check this document against all applicable NJ statutory requirements as describe
     // ── Call GPT-4.1 ──────────────────────────────────────────────────────
     let rawResponse: string;
     try {
-      rawResponse = await callAI(COMPLIANCE_SYSTEM_PROMPT, userPrompt, {
+      rawResponse = await callAI(COMPLIANCE_SYSTEM_PROMPT, userPrompt, firmData, {
         model: 'gpt-4.1',
         temperature: 0.1, // Maximum accuracy for legal compliance
         maxTokens: 3000,

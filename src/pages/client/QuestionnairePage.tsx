@@ -3,14 +3,15 @@ import { QuestionnaireProvider } from '@/contexts/QuestionnaireContext';
 import { QuestionnaireShell } from '@/components/questionnaire/QuestionnaireShell';
 
 export default function QuestionnairePage() {
-  const { clientId } = useParams<{ clientId: string }>();
+  const { clientId, firmId: urlFirmId } = useParams<{ clientId: string; firmId?: string }>();
   // firmId is extracted from URL context; for the client-facing route
-  // (/questionnaire/:clientId) we use a default until Firebase auth is wired.
+  // (/questionnaire/:firmId/:clientId) it will be present.
   // For the staff route (/clients/:clientId/questionnaire) the staff are
-  // authenticated so we could read firmId from auth context later.
-  const firmId = 'default-firm'; // placeholder until real firm auth is set
+  // authenticated, but the route currently doesn't have firmId. We use a fallback
+  // if needed, though in the future we should read firmId from auth context.
+  const firmId = urlFirmId || 'default-firm'; // placeholder until real firm auth is set
 
-  if (!clientId) {
+  if (!clientId || !firmId) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
         <p className="text-lg font-semibold text-red-600">Invalid questionnaire link.</p>

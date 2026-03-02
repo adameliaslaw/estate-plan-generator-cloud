@@ -149,28 +149,28 @@ HIPAA AUTHORIZATION: ${proxy.hipaaAuthorization !== false ? 'YES — include HIP
 
 LIFE-SUSTAINING TREATMENT CHOICE:
   ${hp.lifeSupport === 'withhold' ? '✓ WITHHOLD life-sustaining treatment (comfort care only)' :
-    hp.lifeSupport === 'provide' ? '✓ PROVIDE all life-sustaining treatment' :
-    '✓ DEFER to healthcare representative'}
+      hp.lifeSupport === 'provide' ? '✓ PROVIDE all life-sustaining treatment' :
+        '✓ DEFER to healthcare representative'}
 
 ARTIFICIAL NUTRITION:
   ${hp.artificialNutrition === 'withhold' ? '✓ WITHHOLD artificial nutrition' :
-    hp.artificialNutrition === 'provide' ? '✓ PROVIDE artificial nutrition' :
-    '✓ DEFER to healthcare representative'}
+      hp.artificialNutrition === 'provide' ? '✓ PROVIDE artificial nutrition' :
+        '✓ DEFER to healthcare representative'}
 
 ARTIFICIAL HYDRATION:
   ${hp.artificialHydration === 'withhold' ? '✓ WITHHOLD artificial hydration' :
-    hp.artificialHydration === 'provide' ? '✓ PROVIDE artificial hydration' :
-    '✓ DEFER to healthcare representative'}
+      hp.artificialHydration === 'provide' ? '✓ PROVIDE artificial hydration' :
+        '✓ DEFER to healthcare representative'}
 
 PAIN MANAGEMENT:
   ${hp.painManagement === 'comfort_care' ? '✓ COMFORT CARE / palliative care only — no aggressive treatment' :
-    hp.painManagement === 'all_measures' ? '✓ ALL pain management measures' :
-    '✓ DEFER to healthcare representative'}
+      hp.painManagement === 'all_measures' ? '✓ ALL pain management measures' :
+        '✓ DEFER to healthcare representative'}
 
 CPR DIRECTIVE:
   ${hp.cprDirective === 'dnr' ? '✓ DO NOT RESUSCITATE (DNR)' :
-    hp.cprDirective === 'full_code' ? '✓ FULL CODE — attempt CPR' :
-    '✓ DEFER to healthcare representative'}
+      hp.cprDirective === 'full_code' ? '✓ FULL CODE — attempt CPR' :
+        '✓ DEFER to healthcare representative'}
 
 NJ ALZHEIMER/DEMENTIA DIRECTIVE: ${hp.njADRD ? 'YES — include NJ ADRD provision: if I have Alzheimer\'s disease or related dementia and lack decision-making capacity, my representative\'s instructions shall govern.' : 'NO'}
 
@@ -186,7 +186,7 @@ FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
 Generate the complete Advance Directive now. Mark the declarant's ACTUAL choices clearly. Include Part One (proxy), Part Two (instruction directive with all subsections), Part Three (general provisions), full execution block, and witness attestation with the NJ statutory disqualification language.
 `.trim();
 
-  const raw = await callAI(ADVANCE_DIRECTIVE_SYSTEM_PROMPT, userPrompt, {
+  const raw = await callAI(ADVANCE_DIRECTIVE_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,

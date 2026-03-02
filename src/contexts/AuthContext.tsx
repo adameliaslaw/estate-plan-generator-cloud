@@ -50,7 +50,7 @@ import {
 
 import { auth, db } from '@/config/firebase';
 import { AUTH_ERRORS, SESSION_TIMEOUT_MS, SESSION_WARNING_MS, COLLECTIONS } from '@/config/constants';
-import type { UserProfile, UserRole } from '@/types';
+import type { UserProfile as AppUserProfile, UserRole } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Context value shape
@@ -60,7 +60,7 @@ export interface AuthContextValue {
   /** Firebase Auth user object, or null when signed out. */
   user: User | null;
   /** Extended profile from Firestore + custom claims. */
-  userProfile: UserProfile | null;
+  userProfile: AppUserProfile | null;
   /** True while the initial auth state is being resolved. */
   loading: boolean;
 
@@ -73,7 +73,7 @@ export interface AuthContextValue {
   signUp(email: string, password: string, displayName: string): Promise<void>;
   signOut(): Promise<void>;
   resetPassword(email: string): Promise<void>;
-  updateUserProfile(data: Partial<UserProfile> & { newPassword?: string; newEmail?: string }): Promise<void>;
+  updateUserProfile(data: Partial<AppUserProfile> & { newPassword?: string; newEmail?: string }): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ async function getCustomClaims(
 async function loadFirestoreProfile(
   uid: string,
   firmId: string,
-): Promise<Partial<UserProfile> | null> {
+): Promise<Partial<AppUserProfile> | null> {
   if (!firmId) return null;
   const ref = doc(db, COLLECTIONS.USERS(firmId), uid);
   const snap = await getDoc(ref);
@@ -125,9 +125,10 @@ async function loadFirestoreProfile(
   const data = snap.data();
   return {
     ...data,
+    recentActivityExpanded: data['recentActivityExpanded'] ?? false,
     createdAt: data['createdAt']?.toDate?.() ?? new Date(),
     updatedAt: data['updatedAt']?.toDate?.() ?? new Date(),
-  } as Partial<UserProfile>;
+  } as Partial<AppUserProfile>;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +141,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Refs for the session timeout timers so we can clear/reset them.
@@ -155,7 +156,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   /** Build a full UserProfile by merging auth data + claims + Firestore doc. */
   const buildProfile = useCallback(
-    async (firebaseUser: User): Promise<UserProfile> => {
+    async (firebaseUser: User): Promise<AppUserProfile> => {
       const { role, firmId } = await getCustomClaims(firebaseUser);
       const firestoreData = await loadFirestoreProfile(firebaseUser.uid, firmId);
 
@@ -168,10 +169,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         firmId,
         photoURL: firestoreData?.photoURL ?? firebaseUser.photoURL ?? undefined,
         phone: firestoreData?.phone,
+        recentActivityExpanded: firestoreData?.recentActivityExpanded ?? false,
         onboarded: firestoreData?.onboarded ?? false,
         createdAt: firestoreData?.createdAt ?? new Date(),
         updatedAt: firestoreData?.updatedAt ?? new Date(),
-      };
+      } as AppUserProfile;
     },
     [],
   );
@@ -376,7 +378,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const updateUserProfileAction = useCallback(
     async (
-      data: Partial<UserProfile> & {
+      data: Partial<AppUserProfile> & {
         newPassword?: string;
         newEmail?: string;
       },

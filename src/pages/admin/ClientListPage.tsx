@@ -3,18 +3,41 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   UserPlus,
-  ChevronRight,
   Users,
   SlidersHorizontal,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  FileEdit,
+  MoreVertical,
+  Archive,
+  Trash2,
 } from 'lucide-react';
-import { orderBy } from 'firebase/firestore';
+import { orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { Client, PackageType, QuestionnaireStatus } from '@/types';
 
 // ── Badge / label maps ─────────────────────────────────────────────────────────
@@ -137,6 +160,10 @@ export default function ClientListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [packageFilter, setPackageFilter] = useState<string>('all');
   const [qFilter, setQFilter] = useState<string>('all');
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Archive/Delete state
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   // Sort state
   const [sortField, setSortField] = useState<SortField>('name');
@@ -165,7 +192,10 @@ export default function ClientListPage() {
       const matchesQ =
         qFilter === 'all' || (c.questionnaireProgress?.status ?? 'not_started') === qFilter;
 
-      return matchesSearch && matchesPkg && matchesQ;
+      // If showArchived is false, ONLY show clients where isArchived is exactly false or undefined
+      const matchesArchive = showArchived ? true : !c.isArchived;
+
+      return matchesSearch && matchesPkg && matchesQ && matchesArchive;
     });
 
     // Client-side sort
@@ -210,6 +240,34 @@ export default function ClientListPage() {
     setSearchQuery('');
     setPackageFilter('all');
     setQFilter('all');
+    setShowArchived(false);
+  };
+
+  // ── Actions ──────────────────────────────────────────────────────────────
+  const handleArchive = async (clientId: string, isArchived: boolean) => {
+    if (!firmId) return;
+    try {
+      await updateDoc(doc(db, COLLECTIONS.CLIENTS(firmId), clientId), {
+        isArchived: !isArchived,
+      });
+      toast.success(isArchived ? 'Client unarchived' : 'Client archived');
+    } catch (error) {
+      console.error('Error changing archive status:', error);
+      toast.error('Failed to update client');
+    }
+  };
+
+  const handleDelete = async (clientId: string) => {
+    if (!firmId) return;
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.CLIENTS(firmId), clientId));
+      toast.success('Client permanently deleted');
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      toast.error('Failed to delete client');
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   // ── Sortable column header ───────────────────────────────────────────────
@@ -291,6 +349,15 @@ export default function ClientListPage() {
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
           </select>
+          <label className="flex items-center gap-2 text-sm text-gray-700 whitespace-nowrap bg-white border border-gray-300 rounded-lg px-3 h-10 cursor-pointer hover:bg-gray-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="rounded border-gray-300 text-[#1a365d] focus:ring-[#1a365d]"
+            />
+            Show Archived
+          </label>
         </div>
       </div>
 
@@ -403,6 +470,11 @@ export default function ClientListPage() {
                       >
                         <td className="px-4 py-3 text-sm font-medium text-[#1a365d]">
                           {clientDisplayName(client)}
+                          {client.isArchived && (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                              Archived
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {client.personalInfo?.email ?? '—'}
@@ -450,7 +522,54 @@ export default function ClientListPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <ChevronRight className="ml-auto h-4 w-4 text-gray-400" />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className="inline-flex items-center justify-center p-2 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!firmId) return;
+                                  navigate(`/questionnaire/${firmId}/${client.id}`);
+                                }}
+                              >
+                                <FileEdit className="mr-2 h-4 w-4" />
+                                {qStatus === 'completed'
+                                  ? 'View Questionnaire'
+                                  : qStatus === 'in_progress'
+                                    ? 'Continue Questionnaire'
+                                    : 'Start Questionnaire'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleArchive(client.id, !!client.isArchived);
+                                }}
+                              >
+                                <Archive className="mr-2 h-4 w-4" />
+                                {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsDeleting(client.id);
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete Client
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     );
@@ -476,6 +595,11 @@ export default function ClientListPage() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="text-sm font-semibold text-[#1a365d]">
                         {clientDisplayName(client)}
+                        {client.isArchived && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                            Archived
+                          </span>
+                        )}
                       </p>
                       <p className="truncate text-xs text-gray-500">
                         {client.personalInfo?.email ?? '—'}
@@ -501,7 +625,55 @@ export default function ClientListPage() {
                         </span>
                       </div>
                     </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-400" />
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="inline-flex items-center justify-center p-2 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-5 w-5 shrink-0" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!firmId) return;
+                            navigate(`/questionnaire/${firmId}/${client.id}`);
+                          }}
+                        >
+                          <FileEdit className="mr-2 h-4 w-4" />
+                          {qStatus === 'completed'
+                            ? 'View Questionnaire'
+                            : qStatus === 'in_progress'
+                              ? 'Continue Questionnaire'
+                              : 'Start Questionnaire'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArchive(client.id, !!client.isArchived);
+                          }}
+                        >
+                          <Archive className="mr-2 h-4 w-4" />
+                          {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsDeleting(client.id);
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Client
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 );
               })}
@@ -509,6 +681,26 @@ export default function ClientListPage() {
           </>
         )}
       </div>
+
+      <AlertDialog open={!!isDeleting} onOpenChange={(open) => !open && setIsDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the client and remove all of their data, questionnaires, and uploaded documents from our servers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => isDeleting && handleDelete(isDeleting)}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Confirm Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

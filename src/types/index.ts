@@ -181,6 +181,11 @@ export interface FirmSettings {
   emailNotifications: boolean;
   smsNotifications: boolean;
   autoSaveIntervalMs: number;
+  // Multi-LLM Settings
+  openAiApiKey?: string;
+  anthropicApiKey?: string;
+  geminiApiKey?: string;
+  activeAiProvider?: 'openai' | 'anthropic' | 'gemini';
 }
 
 export interface Firm {
@@ -212,6 +217,7 @@ export interface User {
   phone?: string;
   photoUrl?: string;
   barNumber?: string;           // for attorneys
+  recentActivityExpanded?: boolean;
   isActive: boolean;
   lastLoginAt?: Timestamp;
   createdAt: Timestamp;
@@ -797,7 +803,8 @@ export interface Note {
     uploadedAt: Timestamp;
   }>;
   // Audio transcription fields (Whisper API)
-  audioUrl?: string | null;      // Cloud Storage ref for uploaded/recorded audio
+  audioUrl?: string | null;      // Cloud Storage download URL
+  audioStoragePath?: string | null; // Absolute Cloud Storage path used by Cloud Functions
   audioFileName?: string;        // original filename for display
   audioDurationSeconds?: number;
   transcription?: string | null; // Whisper transcription result
@@ -881,6 +888,26 @@ export interface CalendarEvent {
 }
 
 // ============================================================================
+// Task — /firms/{firmId}/tasks/{taskId}
+// ============================================================================
+
+export interface AppTask {
+  id: string;
+  firmId: string;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'completed';
+  assignedTo?: string;           // Optional user ID
+  relatedClientId?: string;      // If task belongs to a specific matter
+  dueDate?: Timestamp;
+  completedAt?: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy: string;
+  updatedBy: string;
+}
+
+// ============================================================================
 // Utility / form state types
 // ============================================================================
 
@@ -935,6 +962,7 @@ export interface UserProfile {
   photoURL?: string;
   phone?: string;
   onboarded: boolean;
+  recentActivityExpanded?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
