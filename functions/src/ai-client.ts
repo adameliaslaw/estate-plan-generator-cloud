@@ -82,6 +82,21 @@ export async function callAI(
   }
 }
 
+async function fetchWithRetry(url: string, options: any, maxRetries = 3): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const response = await fetch(url, options);
+    if (!response.ok && response.status === 429 && attempt < maxRetries) {
+      const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+      console.warn(`[callAI] Rate limited (429). Retrying in ${Math.round(waitTime)}ms...`);
+      await new Promise(r => setTimeout(r, waitTime));
+      attempt++;
+      continue;
+    }
+    return response;
+  }
+}
+
 async function _callOpenAI(
   systemPrompt: string,
   userPrompt: string,
@@ -138,7 +153,7 @@ async function _callAnthropic(
     finalSystemPrompt += '\n\nIMPORTANT: You must output ONLY a valid JSON object. Do not include any markdown formatting, preamble, or conversational text. Start directly with { and end with }';
   }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
@@ -203,7 +218,7 @@ async function _callGemini(
     requestBody.generationConfig.responseMimeType = "application/json";
   }
 
-  const response = await fetch(endpoint, {
+  const response = await fetchWithRetry(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -234,7 +249,7 @@ async function _callPerplexity(
   const model = options.model ?? 'sonar-pro';
   const temperature = options.temperature ?? 0.2;
 
-  const response = await fetch('https://api.perplexity.ai/chat/completions', {
+  const response = await fetchWithRetry('https://api.perplexity.ai/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,

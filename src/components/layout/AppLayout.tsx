@@ -100,7 +100,7 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
     : (userProfile?.email?.[0]?.toUpperCase() ?? '?');
 
   return (
-    <div className="flex h-screen print:h-auto overflow-hidden print:overflow-visible bg-gray-50">
+    <div className="flex h-screen print:h-auto overflow-hidden print:!overflow-visible bg-gray-50">
       {/* ── Desktop sidebar ── */}
       <div className="hidden lg:flex lg:shrink-0">
         <AppSidebar />
@@ -123,7 +123,7 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
       )}
 
       {/* ── Main column ── */}
-      <div className="flex flex-1 flex-col overflow-hidden print:overflow-visible">
+      <div className="flex flex-1 flex-col overflow-hidden print:!overflow-visible">
         {/* Session timeout warning banner */}
         {sessionWarning && (
           <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800">
@@ -220,7 +220,7 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
         </header>
 
         {/* Main scrollable content */}
-        <main className={cn('flex-1 overflow-hidden print:overflow-visible', !fullWidth && 'overflow-y-auto')}>
+        <main className={cn('flex-1 overflow-hidden print:!overflow-visible', !fullWidth && 'overflow-y-auto print:!overflow-y-visible')}>
           {fullWidth ? (
             <div className="h-full">{children}</div>
           ) : (

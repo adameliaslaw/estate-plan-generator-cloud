@@ -31,6 +31,7 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -669,95 +670,99 @@ export const pullGoogleCalendarEvents = onCall(
 
 // ---------------------------------------------------------------------------
 // Function 3 — syncGoogleCalendar (scheduled)
-// COMMENTED OUT — activate via Cloud Scheduler at deployment time
 // ---------------------------------------------------------------------------
 
-/*
- * syncGoogleCalendar
- *
- * Bidirectional sync job that runs every 5 minutes to keep Firestore
- * CalendarEvent documents in sync with Google Calendar.
- *
- * To activate:
- *   1. Uncomment this export.
- *   2. Ensure the Cloud Scheduler API is enabled in your Firebase project.
- *   3. Deploy with: firebase deploy --only functions:syncGoogleCalendar
- *   4. The schedule ("every 5 minutes") will create the Cloud Scheduler job
- *      automatically on first deploy.
- *
- * Sync logic outline:
- *   1. Query all firms that have googleCalendar.accessToken set.
- *   2. For each firm:
- *      a. Refresh access token if within 5-minute expiry window.
- *      b. Fetch events updated since the last sync watermark
- *         (stored in firms/{firmId}.googleCalendarLastSyncAt).
- *         Use the Google Calendar Events.list `updatedMin` param.
- *      c. For each updated Google event:
- *         - If a Firestore doc exists (matched by googleCalendarEventId) → update it.
- *         - If no matching doc and the event summary contains a client name → insert.
- *         - If the Google event status is 'cancelled' → mark Firestore doc cancelled.
- *      d. Push any Firestore events modified since last sync that have no
- *         googleCalendarEventId yet (i.e. call pushEventToGoogleCalendar logic).
- *      e. Update firms/{firmId}.googleCalendarLastSyncAt = now.
- *   3. Log a summary: { firmsProcessed, eventsUpdated, eventsInserted, eventsPushed }
- */
+export const syncGoogleCalendar = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    region: 'us-east1',
+    timeoutSeconds: 540,  // 9 minutes max (Cloud Scheduler allows up to 10)
+    memory: '512MiB',
+  },
+  async (_event) => {
+    console.log('[syncGoogleCalendar] Starting scheduled sync...');
+    const db = admin.firestore();
+    const now = admin.firestore.FieldValue.serverTimestamp();
 
-// import { onSchedule } from 'firebase-functions/v2/scheduler';
+    // 1. Find all firms
+    const firmsSnap = await db.collection('firms').get();
 
-// export const syncGoogleCalendar = onSchedule(
-//   {
-//     schedule: 'every 5 minutes',
-//     region: 'us-east1',
-//     timeoutSeconds: 540,  // 9 minutes max (Cloud Scheduler allows up to 10)
-//     memory: '512MiB',
-//   },
-//   async (_event) => {
-//     console.log('[syncGoogleCalendar] Starting scheduled sync...');
-//     const db = admin.firestore();
-//     const now = admin.firestore.FieldValue.serverTimestamp();
-//
-//     // 1. Find all firms with Google Calendar configured
-//     const firmsSnap = await db
-//       .collection('firms')
-//       .where('googleCalendar.accessToken', '!=', null)
-//       .get();
-//
-//     let firmsProcessed = 0;
-//     let eventsUpdated = 0;
-//
-//     for (const firmDoc of firmsSnap.docs) {
-//       const firmId = firmDoc.id;
-//       try {
-//         const tokens = firmDoc.data().googleCalendar as GoogleCalendarTokens;
-//         const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
-//         const lastSync = firmDoc.data().googleCalendarLastSyncAt?.toDate?.()?.toISOString()
-//           ?? new Date(Date.now() - 5 * 60 * 1000).toISOString();
-//
-//         // Fetch events updated since last sync
-//         const params = new URLSearchParams({
-//           updatedMin: lastSync,
-//           showDeleted: 'true',
-//           singleEvents: 'true',
-//           maxResults: '100',
-//         });
-//         const response = await fetch(
-//           `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-//           { headers: { Authorization: `Bearer ${accessToken}` } },
-//         );
-//         const { items = [] } = await response.json();
-//
-//         // Process each updated event (update/insert/cancel in Firestore)
-//         // ... (per-event logic here) ...
-//         eventsUpdated += items.length;
-//
-//         // Update last sync watermark
-//         await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
-//         firmsProcessed++;
-//       } catch (err) {
-//         console.error(`[syncGoogleCalendar] Error for firmId=${firmId}:`, err);
-//       }
-//     }
-//
-//     console.log(`[syncGoogleCalendar] Done — firmsProcessed=${firmsProcessed} eventsUpdated=${eventsUpdated}`);
-//   },
-// );
+    let firmsProcessed = 0;
+    let eventsUpdated = 0;
+
+    for (const firmDoc of firmsSnap.docs) {
+      const firmId = firmDoc.id;
+      const data = firmDoc.data();
+      if (!data.googleCalendar || !data.googleCalendar.accessToken) continue;
+
+      try {
+        const tokens = data.googleCalendar as GoogleCalendarTokens;
+        const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
+        const lastSync = (data.googleCalendarLastSyncAt as admin.firestore.Timestamp)?.toDate?.()?.toISOString()
+          ?? new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+        // Fetch events updated since last sync
+        const params = new URLSearchParams({
+          updatedMin: lastSync,
+          showDeleted: 'true',
+          singleEvents: 'true',
+          maxResults: '100',
+        });
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+
+        if (!response.ok) {
+          console.error(`[syncGoogleCalendar] API error for firm ${firmId}: ${response.status} ${await response.text()}`);
+          continue;
+        }
+
+        const listData = await response.json() as GoogleCalendarEventsListResponse;
+        const items = listData.items ?? [];
+
+        // Process each updated event (update/insert/cancel in Firestore)
+        if (items.length > 0) {
+          const batch = db.batch();
+          for (const gcalEvent of items) {
+            if (!gcalEvent.id) continue;
+
+            // Find existing Firestore doc
+            const eventQuery = await db.collection('firms').doc(firmId).collection('calendarEvents')
+              .where('googleCalendarEventId', '==', gcalEvent.id).limit(1).get();
+
+            if (!eventQuery.empty) {
+              const docRef = eventQuery.docs[0].ref;
+              if (gcalEvent.status === 'cancelled') {
+                batch.delete(docRef);
+              } else {
+                const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
+                const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
+                batch.update(docRef, {
+                  title: gcalEvent.summary ?? '(No Title)',
+                  description: gcalEvent.description ?? '',
+                  location: gcalEvent.location ?? '',
+                  startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
+                  endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
+                  updatedAt: now,
+                  googleCalendarSyncedAt: now,
+                });
+              }
+            }
+          }
+          await batch.commit();
+        }
+
+        eventsUpdated += items.length;
+
+        // Update last sync watermark
+        await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
+        firmsProcessed++;
+      } catch (err) {
+        console.error(`[syncGoogleCalendar] Error for firmId=${firmId}:`, err);
+      }
+    }
+
+    console.log(`[syncGoogleCalendar] Done — firmsProcessed=${firmsProcessed} eventsUpdated=${eventsUpdated}`);
+  },
+);

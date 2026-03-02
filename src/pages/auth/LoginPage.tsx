@@ -5,9 +5,9 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Scale, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/config/firebase';
-import { collection, query, limit, getDocs } from 'firebase/firestore';
-import { ROUTES, FIRM_DEFAULTS, COLLECTIONS } from '@/config/constants';
+import { functions } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { ROUTES, FIRM_DEFAULTS } from '@/config/constants';
 
 // ── Form schema ──────────────────────────────────────────────────────────────
 
@@ -67,10 +67,11 @@ export default function LoginPage() {
   useEffect(() => {
     async function fetchLogo() {
       try {
-        const q = query(collection(db, COLLECTIONS.FIRMS), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          setFirmLogoUrl(snap.docs[0].data().logoUrl || null);
+        const getBranding = httpsCallable(functions, 'getFirmBranding');
+        const result = await getBranding();
+        const data = result.data as { logoUrl: string | null; firmName: string | null };
+        if (data && data.logoUrl) {
+          setFirmLogoUrl(data.logoUrl);
         }
       } catch (e) {
         console.error('Failed to fetch firm logo for login page:', e);

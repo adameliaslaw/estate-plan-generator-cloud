@@ -385,6 +385,13 @@ export default function DashboardPage() {
   // ── Empty state ───────────────────────────────────────────────────────────
   // const showEmptyState = !loading && recentClients.length === 0; // Replaced by new showEmptyState above
 
+  const audioModalClients = useMemo(() => {
+    return filteredClients.map((c) => ({
+      id: c.id,
+      name: clientDisplayName(c),
+    }));
+  }, [filteredClients]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
       {/* Header row */}
@@ -681,10 +688,7 @@ export default function DashboardPage() {
         onOpenChange={setIsRecordModalOpen}
         onSave={handleSaveAudioNote}
         isSaving={isSavingRecord}
-        clients={filteredClients.map((c) => ({
-          id: c.id,
-          name: clientDisplayName(c),
-        }))}
+        clients={audioModalClients}
       />
     </div>
   );
