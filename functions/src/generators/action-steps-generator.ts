@@ -372,7 +372,7 @@ Generate the complete action steps checklist. For each real property, include th
 `.trim();
 
   const raw = await callAI(ACTION_STEPS_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: 'gpt-4.1',
+    model: safeFirm?.documentDraftingModel || 'gpt-4.1',
     temperature: 0.25,
     maxTokens: 8192,
     jsonMode: true,

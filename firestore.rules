@@ -219,6 +219,15 @@ service cloud.firestore {
       }
 
       // ========================================================
+      // /firms/{firmId}/activities/{activityId}
+      // System activity logs for dashboard feed
+      // ========================================================
+      match /activities/{activityId} {
+        allow read: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+        allow write: if isAdmin() || ((isAttorney() || isParalegal()) && belongsToFirm(firmId));
+      }
+
+      // ========================================================
       // /firms/{firmId}/clients/{clientId}
       // Client profile documents, including personalInfo and
       // questionnaire data for estate planning intake.

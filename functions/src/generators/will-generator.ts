@@ -183,7 +183,7 @@ Generate the complete, execution-ready will now. Include all required articles, 
 `.trim();
 
   const raw = await callAI(WILL_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: 'gpt-4.1',
+    model: safeFirm?.documentDraftingModel || 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,
     jsonMode: true,

@@ -60,12 +60,14 @@ export async function callAI(
   firmData: any, // Using 'any' here locally to avoid circular dependencies with frontend types if needed, or import Firm.
   options: CallAIOptions = {},
 ): Promise<string> {
-  const provider = firmData?.settings?.activeAiProvider ?? 'openai';
+  const provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
 
   if (provider === 'anthropic') {
     return _callAnthropic(systemPrompt, userPrompt, firmData, options);
   } else if (provider === 'gemini') {
     return _callGemini(systemPrompt, userPrompt, firmData, options);
+  } else if (provider === 'perplexity') {
+    return _callPerplexity(systemPrompt, userPrompt, firmData, options);
   } else {
     // Default to OpenAI
     return _callOpenAI(systemPrompt, userPrompt, firmData, options);
@@ -79,7 +81,7 @@ async function _callOpenAI(
   options: CallAIOptions
 ): Promise<string> {
   // Use the firm's API key if provided, fallback to the environment variable
-  const apiKey = firmData?.settings?.openAiApiKey || process.env.OPENAI_API_KEY;
+  const apiKey = firmData?.openAiApiKey ?? firmData?.settings?.openAiApiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OpenAI API key is missing. Configure it in Firm Settings.');
   }
@@ -113,7 +115,7 @@ async function _callAnthropic(
   firmData: any,
   options: CallAIOptions
 ): Promise<string> {
-  const apiKey = firmData?.settings?.anthropicApiKey;
+  const apiKey = firmData?.anthropicApiKey ?? firmData?.settings?.anthropicApiKey;
   if (!apiKey) {
     throw new Error('Anthropic API key is missing. Configure it in Firm Settings.');
   }
@@ -161,7 +163,7 @@ async function _callGemini(
   firmData: any,
   options: CallAIOptions
 ): Promise<string> {
-  const apiKey = firmData?.settings?.geminiApiKey;
+  const apiKey = firmData?.geminiApiKey ?? firmData?.settings?.geminiApiKey;
   if (!apiKey) {
     throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
@@ -208,6 +210,45 @@ async function _callGemini(
 
   const data = await response.json() as any;
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+async function _callPerplexity(
+  systemPrompt: string,
+  userPrompt: string,
+  firmData: any,
+  options: CallAIOptions
+): Promise<string> {
+  const apiKey = firmData?.perplexityApiKey ?? firmData?.settings?.perplexityApiKey;
+  if (!apiKey) {
+    throw new Error('Perplexity API key is missing. Configure it in Firm Settings.');
+  }
+
+  const model = options.model ?? 'sonar-pro';
+  const temperature = options.temperature ?? 0.2;
+
+  const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return data.choices?.[0]?.message?.content ?? '';
 }
 
 // ---------------------------------------------------------------------------

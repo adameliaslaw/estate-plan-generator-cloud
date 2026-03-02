@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
+import { logSystemActivity } from '@/utils/activity-logger';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -260,7 +261,14 @@ export default function ClientListPage() {
   const handleDelete = async (clientId: string) => {
     if (!firmId) return;
     try {
+      const client = clients.find(c => c.id === clientId);
+      const cName = client ? clientDisplayName(client) : 'Unknown Client';
       await deleteDoc(doc(db, COLLECTIONS.CLIENTS(firmId), clientId));
+
+      await logSystemActivity(firmId, userProfile, 'deleting client', {
+        clientName: cName
+      });
+
       toast.success('Client permanently deleted');
     } catch (error) {
       console.error('Error deleting client:', error);

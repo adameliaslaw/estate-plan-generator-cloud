@@ -69,6 +69,7 @@ import { COLLECTIONS } from '@/config/constants';
 import { sanitizeInput } from '@/utils/sanitize';
 import type { Payment, PaymentMethod, PaymentStatus, AccountDesignation } from '@/types';
 import { cn } from '@/lib/utils';
+import { logSystemActivity } from '@/utils/activity-logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,7 @@ interface RecordPaymentDialogProps {
   onClose: () => void;
   firmId: string;
   clientId: string;
+  clientName?: string;
   createdBy: string;
 }
 
@@ -296,8 +298,10 @@ function RecordPaymentDialog({
   onClose,
   firmId,
   clientId,
+  clientName,
   createdBy,
 }: RecordPaymentDialogProps) {
+  const { userProfile } = useAuth();
   const [description, setDescription] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
   const [method, setMethod] = useState<PaymentMethod | ''>('');
@@ -367,6 +371,12 @@ function RecordPaymentDialog({
       );
 
       await createDoc(COLLECTIONS.PAYMENTS(firmId, clientId), clean);
+
+      await logSystemActivity(firmId, userProfile, 'logging payment', {
+        clientName,
+        paymentAmount: `$${amountDollars}`
+      });
+
       toast.success('Payment recorded successfully.');
       handleClose();
     } catch (err) {
@@ -530,6 +540,7 @@ function SendRequestDialog({
   clientName,
   createdBy,
 }: SendRequestDialogProps) {
+  const { userProfile } = useAuth();
   const [description, setDescription] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
   const [accountDesignation, setAccountDesignation] = useState<AccountDesignation>('operating');
@@ -593,6 +604,11 @@ function SendRequestDialog({
         cleanDescription,
         accountDesignation,
       );
+
+      await logSystemActivity(firmId, userProfile, 'sending payment request', {
+        clientName,
+        paymentAmount: `$${amountDollars}`
+      });
 
       handleClose();
     } catch (err) {
@@ -921,10 +937,10 @@ export default function PaymentsTab({
                           ? formatDate(payment.paidAt)
                           : payment.dueDate
                             ? new Date(payment.dueDate).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
                             : formatDate(payment.createdAt)}
                       </td>
 
@@ -1101,6 +1117,7 @@ export default function PaymentsTab({
         onClose={() => setShowRecordDialog(false)}
         firmId={firmId}
         clientId={clientId}
+        clientName={clientName}
         createdBy={uid}
       />
       <SendRequestDialog

@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { documentService, type GenerateDocumentsResponse } from '@/services/document-service';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { logSystemActivity } from '@/utils/activity-logger';
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -114,6 +116,7 @@ export default function GenerateDocumentsButton({
   onSuccess,
   variant = 'default',
 }: Props) {
+  const { userProfile } = useAuth();
   const [phase, setPhase] = useState<Phase>('idle');
   const [progress, setProgress] = useState(0);
   const [currentDoc, setCurrentDoc] = useState('');
@@ -151,6 +154,11 @@ export default function GenerateDocumentsButton({
         clientId,
         packageType,
         trustTypes,
+      });
+
+      await logSystemActivity(firmId, userProfile, 'drafting documents', {
+        clientName,
+        packageType,
       });
 
       stopProgress();

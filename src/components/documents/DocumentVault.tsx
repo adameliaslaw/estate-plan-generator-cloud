@@ -24,6 +24,7 @@ import {
   Search,
   SlidersHorizontal,
   FileText,
+  FileSignature,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -70,6 +71,7 @@ import DocumentReviewDialog from './DocumentReviewDialog';
 import FlexDocumentGenerator from './FlexDocumentGenerator';
 import ExportButton from './ExportButton';
 import BatchExportButton from './BatchExportButton';
+import ESignatureDialog from './ESignatureDialog';
 import { cn } from '@/lib/utils';
 
 // ── Doc type display names ────────────────────────────────────────────────────
@@ -187,9 +189,10 @@ interface RowActionsProps {
   onReview: (doc: Document) => void;
   onApprove: (doc: Document) => void;
   onDelete: (doc: Document) => void;
+  onSendSignature: (doc: Document) => void;
 }
 
-function RowActions({ doc, firmId, clientId, onReview, onApprove, onDelete }: RowActionsProps) {
+function RowActions({ doc, firmId, clientId, onReview, onApprove, onDelete, onSendSignature }: RowActionsProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex items-center gap-1">
@@ -224,6 +227,21 @@ function RowActions({ doc, firmId, clientId, onReview, onApprove, onDelete }: Ro
             </span>
           </TooltipTrigger>
           <TooltipContent>Export PDF / DOCX</TooltipContent>
+        </Tooltip>
+
+        {/* Send for E-Signature */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-gray-400 hover:text-blue-600"
+              onClick={() => onSendSignature(doc)}
+            >
+              <FileSignature className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Send for E-Signature</TooltipContent>
         </Tooltip>
 
         {/* AI Review */}
@@ -329,6 +347,8 @@ export default function DocumentVault({
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
+  const [signDoc, setSignDoc] = useState<Document | null>(null);
 
   const [showFlexGen, setShowFlexGen] = useState(false);
 
@@ -678,6 +698,7 @@ export default function DocumentVault({
                         onReview={handleAiReview}
                         onApprove={(d) => setApproveDoc(d)}
                         onDelete={(d) => setDeleteTarget(d)}
+                        onSendSignature={(d) => setSignDoc(d)}
                       />
                     </td>
                   </tr>
@@ -769,6 +790,18 @@ export default function DocumentVault({
         open={showFlexGen}
         onClose={() => setShowFlexGen(false)}
       />
+
+      {/* ── E-Signature Dialog ──────────────────────────────────────────────── */}
+      {signDoc && (
+        <ESignatureDialog
+          open={!!signDoc}
+          onClose={() => setSignDoc(null)}
+          firmId={firmId}
+          clientId={clientId}
+          documentId={signDoc.id}
+          documentName={signDoc.displayName}
+        />
+      )}
     </div>
   );
 }

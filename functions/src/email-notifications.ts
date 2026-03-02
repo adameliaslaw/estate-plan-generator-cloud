@@ -250,6 +250,43 @@ async function sendViaSendGrid(
 }
 
 // ---------------------------------------------------------------------------
+// Custom Template Helpers
+// ---------------------------------------------------------------------------
+
+async function getCustomTemplate(firmId: string, trigger: string): Promise<{ subject: string, content: string } | null> {
+  const db = admin.firestore();
+  const snap = await db.collection(`firms/${firmId}/emailTemplates`)
+    .where('trigger', '==', trigger)
+    .where('isActive', '==', true)
+    .limit(1)
+    .get();
+
+  if (snap.empty) return null;
+  const data = snap.docs[0].data();
+  return { subject: data.subject || '', content: data.content || '' };
+}
+
+function processCustomTemplate(
+  template: { subject: string; content: string },
+  variables: Record<string, string>,
+): { subject: string; bodyHtml: string } {
+  let { subject, content } = template;
+
+  for (const [key, val] of Object.entries(variables)) {
+    const rx = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+    subject = subject.replace(rx, val);
+    content = content.replace(rx, val);
+  }
+
+  if (!content.includes('<p>') && !content.includes('<br')) {
+    content = content.replace(/\n/g, '<br />');
+  }
+
+  const bodyHtml = `<div style="font-size:15px;color:#1a202c;line-height:1.6;">${content}</div>`;
+  return { subject, bodyHtml };
+}
+
+// ---------------------------------------------------------------------------
 // 1. sendQuestionnaireInvitation
 // ---------------------------------------------------------------------------
 
@@ -294,9 +331,8 @@ export const sendQuestionnaireInvitation = onCall(
     const apiKey = getSendGridKey(firmData);
     const branding = extractBranding(firmData);
 
-    const subject = `Complete Your Estate Planning Questionnaire — ${branding.firmName}`;
-
-    const bodyHtml = `
+    let subject = `Complete Your Estate Planning Questionnaire — ${branding.firmName}`;
+    let bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Hello, ${clientName}!</h2>
 <p style="margin:0 0 12px;">
   Thank you for choosing <strong>${branding.firmName}</strong> to assist with your estate planning.
@@ -319,6 +355,17 @@ ${ctaButton('Complete My Questionnaire', questionnaireUrl, branding.primaryColor
   If you have any questions, please do not hesitate to contact us at
   ${branding.firmEmail || branding.firmPhone || 'our office'}.
 </p>`;
+
+    const customTemplate = await getCustomTemplate(firmId, 'questionnaire_invitation');
+    if (customTemplate) {
+      const processed = processCustomTemplate(customTemplate, {
+        clientName,
+        firmName: branding.firmName,
+        link: `<a href="${questionnaireUrl}" style="color:${branding.primaryColor};">${questionnaireUrl}</a>`
+      });
+      subject = processed.subject;
+      bodyHtml = processed.bodyHtml;
+    }
 
     const html = buildEmailHtml(bodyHtml, branding, 'Your estate planning questionnaire is ready — click to begin.');
 
@@ -575,7 +622,7 @@ export const sendPaymentReceipt = onCall(
     const branding = extractBranding(firmData);
 
     const formattedAmount = formatCurrency(amount);
-    const subject = `Payment Receipt — ${branding.firmName}`;
+    let subject = `Payment Receipt — ${branding.firmName}`;
     const receiptDate = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -583,7 +630,7 @@ export const sendPaymentReceipt = onCall(
       day: 'numeric',
     });
 
-    const bodyHtml = `
+    let bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Payment Receipt</h2>
 <p style="margin:0 0 16px;">
   Dear ${clientName}, thank you for your payment. Please retain this receipt for your records.
@@ -804,7 +851,7 @@ export const sendAppointmentReminder = onCall(
     const apiKey = getSendGridKey(firmData);
     const branding = extractBranding(firmData);
 
-    const subject = `Reminder: ${eventTitle} — ${eventDate}`;
+    let subject = `Reminder: ${eventTitle} — ${eventDate}`;
 
     const locationBlock = location
       ? `<tr>
@@ -813,7 +860,7 @@ export const sendAppointmentReminder = onCall(
          </tr>`
       : '';
 
-    const bodyHtml = `
+    let bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Appointment Reminder</h2>
 <p style="margin:0 0 16px;">
   Dear ${recipientName}, this is a friendly reminder about your upcoming appointment.
@@ -849,9 +896,22 @@ export const sendAppointmentReminder = onCall(
   If you need to reschedule or have any questions, please contact us as soon as possible at
   ${branding.firmEmail || branding.firmPhone || 'our office'}.
 </p>
-<p style="margin:0;font-size:13px;color:#718096;">
   We look forward to meeting with you.
 </p>`;
+
+    const customTemplate = await getCustomTemplate(firmId, 'appointment_confirmation');
+    if (customTemplate) {
+      const processed = processCustomTemplate(customTemplate, {
+        clientName: recipientName,
+        firmName: branding.firmName,
+        date: eventDate,
+        eventTitle,
+        eventTime,
+        location,
+      });
+      subject = processed.subject;
+      bodyHtml = processed.bodyHtml;
+    }
 
     const html = buildEmailHtml(
       bodyHtml,
@@ -1079,3 +1139,84 @@ ${urlLine}
 //     logger.info('[scheduledReminders] Completed run', { ts: now.toDate().toISOString() });
 //   },
 // );
+
+// ---------------------------------------------------------------------------
+// 8. Auto Email: On Client Created
+// ---------------------------------------------------------------------------
+
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+
+/**
+ * Automatically send a welcome email if the firm has an active
+ * 'client_created' email template.
+ */
+export const onClientCreatedSendEmail = onDocumentCreated(
+  { document: 'firms/{firmId}/clients/{clientId}', region: 'us-east1' },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const firmId = event.params.firmId;
+    const clientId = event.params.clientId;
+    const clientData = snap.data();
+
+    // Check if client has email
+    const clientEmail = clientData.email;
+    const clientName = clientData.firstName
+      ? `${clientData.firstName} ${clientData.lastName || ''}`.trim()
+      : 'Client';
+
+    if (!clientEmail) return;
+
+    // Check for active 'client_created' template
+    const customTemplate = await getCustomTemplate(firmId, 'client_created');
+    if (!customTemplate) {
+      // No automation configured for welcome emails
+      return;
+    }
+
+    try {
+      const firmData = await getFirmData(firmId);
+      const apiKey = getSendGridKey(firmData);
+      const branding = extractBranding(firmData);
+
+      const processed = processCustomTemplate(customTemplate, {
+        clientName,
+        firmName: branding.firmName,
+        date: new Date().toLocaleDateString('en-US'),
+      });
+
+      const html = buildEmailHtml(
+        processed.bodyHtml,
+        branding,
+        `Welcome to ${branding.firmName}`,
+      );
+
+      await sendViaSendGrid(apiKey, {
+        personalizations: [{ to: [{ email: clientEmail, name: clientName }], subject: processed.subject }],
+        from: { email: branding.firmEmail || 'noreply@estateplan.app', name: branding.firmName },
+        content: [{ type: 'text/html', value: html }],
+      });
+
+      logger.info('[onClientCreatedSendEmail] Sent', { firmId, clientId, clientEmail });
+
+      // Audit trail (System generated)
+      await logAuditEvent({
+        firmId,
+        eventType: 'email_sent',
+        userId: 'system',
+        userEmail: 'system@estateplan.app',
+        userRole: 'system',
+        clientId,
+        clientName,
+        details: `Automated 'Client Created' welcome email sent to ${clientEmail}`,
+        metadata: {
+          emailType: 'client_created_auto',
+          recipientEmail: clientEmail,
+        },
+      });
+    } catch (error) {
+      logger.error('[onClientCreatedSendEmail] Failed to process template', error);
+    }
+  }
+);

@@ -17,6 +17,7 @@ import PrivilegeNotice from '@/components/common/PrivilegeNotice';
 import { UserPlus, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { logSystemActivity } from '@/utils/activity-logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,11 @@ export default function NewClientPage() {
       toast.success(
         `Client ${values.firstName} ${values.lastName} created successfully.`,
       );
+
+      // Log activity
+      await logSystemActivity(firmId, userProfile, 'adding client', {
+        clientName: `${values.firstName} ${values.lastName}`.trim(),
+      });
 
       // Navigate to the new client's dashboard
       navigate(ROUTES.CLIENT_DETAIL(docRef.id));

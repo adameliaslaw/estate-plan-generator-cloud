@@ -17,15 +17,13 @@
  */
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { orderBy, doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
+
 import {
   Bot,
   CheckSquare,
@@ -74,50 +72,11 @@ import {
   updateDoc,
   useCollection,
 } from '@/hooks/useFirestore';
-import { db, storage, functions } from '@/config/firebase';
+import { db } from '@/config/firebase';
 import type { Note, NoteType } from '@/types';
 import { sanitizeInput } from '@/utils/sanitize';
-
-// ─── Placeholder audio helpers (to be replaced by real Cloud Function calls) ──
-
-/**
- * Placeholder: upload audio blob to Cloud Storage via a Cloud Function.
- * Returns the storage URL once the upload is complete.
- */
-async function uploadAudioToStorage(
-  blob: Blob,
-  firmId: string,
-  clientId: string,
-  noteId: string,
-): Promise<{ url: string; fullPath: string }> {
-  // Use .webm since MediaRecorder produces webm, or extract from blob.type
-  const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('wav') ? 'wav' : 'webm';
-  const storagePath = `firms/${firmId}/clients/${clientId}/audio/${noteId}.${ext}`;
-  const storageRef = ref(storage, storagePath);
-
-  await uploadBytes(storageRef, blob, { contentType: blob.type });
-  const url = await getDownloadURL(storageRef);
-
-  return { url, fullPath: storagePath };
-}
-
-/**
- * Placeholder: trigger Whisper transcription via a Cloud Function.
- */
-async function requestTranscription(
-  firmId: string,
-  clientId: string,
-  noteId: string,
-  storagePath: string,
-): Promise<void> {
-  const transcribeAudio = httpsCallable(functions, 'transcribeAudio');
-  try {
-    await transcribeAudio({ firmId, clientId, noteId, storagePath });
-  } catch (error) {
-    console.error('[requestTranscription] Cloud Function error:', error);
-    toast.error('Transcription request failed.');
-  }
-}
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -233,149 +192,6 @@ const DEFAULT_FORM: NoteFormState = {
   isPinned: false,
   isPrivate: false,
 };
-
-// ─── Audio recorder hook ──────────────────────────────────────────────────────
-
-interface AudioRecorderState {
-  isRecording: boolean;
-  durationSeconds: number;
-  audioBlob: Blob | null;
-  audioFileName: string;
-  audioDataUri: string | null;
-}
-
-function useAudioRecorder() {
-  const [state, setState] = useState<AudioRecorderState>({
-    isRecording: false,
-    durationSeconds: 0,
-    audioBlob: null,
-    audioFileName: '',
-    audioDataUri: null,
-  });
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      mediaRecorderRef.current = mr;
-      chunksRef.current = [];
-
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const fileName = `recording-${Date.now()}.webm`;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setState((prev) => ({
-            ...prev,
-            isRecording: false,
-            audioBlob: blob,
-            audioFileName: fileName,
-            audioDataUri: reader.result as string,
-          }));
-        };
-        reader.readAsDataURL(blob);
-        // Stop all tracks to release the microphone
-        stream.getTracks().forEach((t) => t.stop());
-      };
-
-      mr.start();
-
-      let elapsed = 0;
-      timerRef.current = setInterval(() => {
-        elapsed += 1;
-        setState((prev) => ({ ...prev, durationSeconds: elapsed }));
-      }, 1000);
-
-      setState((prev) => ({
-        ...prev,
-        isRecording: true,
-        durationSeconds: 0,
-        audioBlob: null,
-        audioFileName: '',
-        audioDataUri: null,
-      }));
-    } catch {
-      toast.error('Microphone access denied. Please allow mic permission and try again.');
-    }
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-  }, []);
-
-  const cancelRecording = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      // Stop all tracks first to cut the mic
-      mediaRecorderRef.current.stream?.getTracks().forEach((t) => t.stop());
-      mediaRecorderRef.current.stop();
-    }
-    setState({
-      isRecording: false,
-      durationSeconds: 0,
-      audioBlob: null,
-      audioFileName: '',
-      audioDataUri: null,
-    });
-  }, []);
-
-  const clearAudio = useCallback(() => {
-    setState({
-      isRecording: false,
-      durationSeconds: 0,
-      audioBlob: null,
-      audioFileName: '',
-      audioDataUri: null,
-    });
-  }, []);
-
-  const setUploadedAudio = useCallback((blob: Blob, fileName: string) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setState({
-        isRecording: false,
-        durationSeconds: 0,
-        audioBlob: blob,
-        audioFileName: fileName,
-        audioDataUri: reader.result as string,
-      });
-    };
-    reader.readAsDataURL(blob);
-  }, []);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  return {
-    ...state,
-    startRecording,
-    stopRecording,
-    cancelRecording,
-    clearAudio,
-    setUploadedAudio,
-  };
-}
 
 // ─── NoteForm component ───────────────────────────────────────────────────────
 
@@ -511,8 +327,13 @@ function NoteForm({
 
           await setDoc(docRef, audioUpdate, { merge: true });
           setLastSavedState('audio_uploaded'); // Force state to skip redundant creation
-          requestTranscription(firmId, clientId, activeNoteId, fullPath);
-          toast.success('Audio uploaded & transcription started');
+          try {
+            await requestTranscription(firmId, clientId, activeNoteId, fullPath);
+            toast.success('Audio uploaded & transcription started');
+          } catch (error) {
+            console.error('[NoteForm] Transcription request error:', error);
+            toast.error('Transcription request failed.');
+          }
           audioRecorder.clearAudio();
           setSaveStatus('saved');
         } catch (err) {

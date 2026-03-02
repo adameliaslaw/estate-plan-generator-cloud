@@ -37,7 +37,11 @@ import {
   Heart,
   Baby,
   LayoutDashboard,
+  Mic,
+  Printer,
+  UploadCloud,
 } from 'lucide-react';
+import { collection, setDoc, serverTimestamp, doc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,6 +61,10 @@ import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsBut
 import NotesTab from '@/components/dashboard/NotesTab';
 import PaymentsTab from '@/components/dashboard/PaymentsTab';
 import CalendarTab from '@/components/dashboard/CalendarTab';
+import { AudioRecorderModal } from '@/components/ui/audio-recorder-modal';
+import { UploadScanModal } from '@/components/ui/upload-scan-modal';
+import { db } from '@/config/firebase';
+import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
 
 // ── Package badge helpers ─────────────────────────────────────────────────────
 
@@ -157,6 +165,10 @@ export default function ClientDashboardPage() {
   const [autoOpenNewEvent, setAutoOpenNewEvent] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [isUploadScanOpen, setIsUploadScanOpen] = useState(false);
+
   const clientPath = clientId && firmId
     ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}`
     : null;
@@ -231,6 +243,61 @@ export default function ClientDashboardPage() {
   const packageType = pkg?.packageType ?? 'foundation';
   const qStatusCfg = Q_STATUS_CONFIG[qProgress?.status ?? 'not_started'];
   const QIcon = qStatusCfg.icon;
+
+  const handleSaveAudioNote = async (data: any) => {
+    if (!userProfile?.uid || !firmId || !clientId) return;
+    setIsSavingRecord(true);
+    try {
+      const collPath = COLLECTIONS.NOTES(firmId, clientId);
+      const docRef = doc(collection(db, collPath));
+      const activeNoteId = docRef.id;
+
+      let audioUrl = null;
+      let storagePath = null;
+      let status = null;
+
+      if (data.audioBlob) {
+        const upload = await uploadAudioToStorage(data.audioBlob, firmId, clientId, activeNoteId);
+        audioUrl = upload.url;
+        storagePath = upload.fullPath;
+        status = 'processing';
+      }
+
+      const newNote = {
+        title: data.title || (data.audioBlob ? 'Audio Note' : 'Manual Note'),
+        noteType: data.noteType,
+        content: data.content,
+        isPinned: false,
+        isPrivate: false,
+        audioUrl,
+        audioStoragePath: storagePath,
+        audioFileName: data.audioFileName,
+        audioDurationSeconds: data.durationSeconds || undefined,
+        transcriptionStatus: status,
+        firmId,
+        clientId,
+        source: 'manual',
+        createdBy: userProfile.uid,
+        updatedBy: userProfile.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(docRef, newNote);
+
+      if (storagePath) {
+        requestTranscription(firmId, clientId, activeNoteId, storagePath);
+        toast.success('Note saved. Audio uploading and transcription started.');
+      } else {
+        toast.success('Note saved successfully.');
+      }
+    } catch (err) {
+      console.error('Failed to save audio note', err);
+      toast.error('Failed to save note.');
+    } finally {
+      setIsSavingRecord(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -380,6 +447,39 @@ export default function ClientDashboardPage() {
                 : qProgress?.status === 'in_progress'
                   ? 'Continue Questionnaire'
                   : 'Start Questionnaire'}
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 text-gray-600"
+              onClick={() => {
+                if (!firmId || !clientId) return;
+                window.open(`/questionnaire/${firmId}/${clientId}/print`, '_blank');
+              }}
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+              onClick={() => setIsUploadScanOpen(true)}
+            >
+              <UploadCloud className="h-4 w-4" />
+              Upload Scan
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+              onClick={() => setIsRecordModalOpen(true)}
+            >
+              <Mic className="h-4 w-4" />
+              Record Note
             </Button>
 
             <Button
@@ -738,6 +838,21 @@ export default function ClientDashboardPage() {
           />
         </TabsContent>
       </Tabs>
+
+      <AudioRecorderModal
+        open={isRecordModalOpen}
+        onOpenChange={setIsRecordModalOpen}
+        onSave={handleSaveAudioNote}
+        isSaving={isSavingRecord}
+        defaultClientId={clientId}
+      />
+
+      <UploadScanModal
+        open={isUploadScanOpen}
+        onOpenChange={setIsUploadScanOpen}
+        firmId={firmId || ''}
+        clientId={clientId || ''}
+      />
     </div>
   );
 }

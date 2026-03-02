@@ -72,9 +72,11 @@ function BlankLines({ count = 1 }: { count?: number }) {
 function PrintField({
   field,
   questionNumber,
+  value,
 }: {
   field: FieldConfig;
   questionNumber?: number;
+  value?: any;
 }) {
   // Skip internal heading and info fields
   if (field.type === 'heading' || field.type === 'info') {
@@ -112,48 +114,59 @@ function PrintField({
       )}
 
       {/* Answer area based on field type */}
-      {renderAnswerArea(field)}
+      {renderAnswerArea(field, value)}
     </div>
   );
 }
 
-function renderAnswerArea(field: FieldConfig) {
+function renderAnswerArea(field: FieldConfig, value?: any) {
   const type = field.type;
 
   // Radio / select with options — show checkboxes
   if ((type === 'radio' || type === 'select') && field.options && field.options.length > 0) {
     return (
       <div className="mt-1 space-y-1">
-        {field.options.map((opt) => (
-          <div key={opt.value} className="flex items-start gap-2">
-            <div
-              className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 rounded-sm border border-gray-500 print:h-3 print:w-3"
-              aria-hidden="true"
-            />
-            <div>
-              <span className="text-sm text-gray-800 print:text-[10pt]">{opt.label}</span>
-              {'description' in opt && opt.description && (
-                <p className="text-xs text-gray-500 leading-tight print:text-[8pt]">
-                  {opt.description}
-                </p>
-              )}
+        {field.options.map((opt) => {
+          const isSelected = value === opt.value;
+          return (
+            <div key={opt.value} className="flex items-start gap-2">
+              <div
+                className="mt-0.5 flex h-3.5 w-3.5 items-center justify-center flex-shrink-0 rounded-sm border border-gray-500 print:h-3 print:w-3"
+                aria-hidden="true"
+              >
+                {isSelected && <span className="text-[10px] leading-none font-bold print:text-[8px]">X</span>}
+              </div>
+              <div>
+                <span className="text-sm text-gray-800 print:text-[10pt]">{opt.label}</span>
+                {'description' in opt && opt.description && (
+                  <p className="text-xs text-gray-500 leading-tight print:text-[8pt]">
+                    {opt.description}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
 
   // Yes/No
   if (type === 'yesno') {
+    const isYes = value === true || value === 'yes';
+    const isNo = value === false || value === 'no';
     return (
       <div className="mt-1 flex items-center gap-6">
         <div className="flex items-center gap-1.5">
-          <div className="h-3.5 w-3.5 rounded-sm border border-gray-500 print:h-3 print:w-3" />
+          <div className="flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-gray-500 print:h-3 print:w-3">
+            {isYes && <span className="text-[10px] leading-none font-bold print:text-[8px]">X</span>}
+          </div>
           <span className="text-sm print:text-[10pt]">Yes</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3.5 w-3.5 rounded-sm border border-gray-500 print:h-3 print:w-3" />
+          <div className="flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-gray-500 print:h-3 print:w-3">
+            {isNo && <span className="text-[10px] leading-none font-bold print:text-[8px]">X</span>}
+          </div>
           <span className="text-sm print:text-[10pt]">No</span>
         </div>
       </div>
@@ -162,6 +175,13 @@ function renderAnswerArea(field: FieldConfig) {
 
   // Textarea — multiple lines
   if (type === 'textarea') {
+    if (value) {
+      return (
+        <div className="mt-1 rounded bg-gray-50 px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap print:bg-transparent print:p-0 print:text-[10pt] print:italic">
+          {value}
+        </div>
+      );
+    }
     const rows = field.rows ?? 4;
     return <BlankLines count={rows} />;
   }
@@ -169,39 +189,53 @@ function renderAnswerArea(field: FieldConfig) {
   // Repeater — render a compact sub-form
   if (type === 'repeater' && field.repeaterConfig) {
     const { itemLabel, fields: subFields = [] } = field.repeaterConfig;
+    const items = Array.isArray(value) && value.length > 0 ? value : [{}];
+
     return (
-      <div className="mt-2 border border-gray-300 rounded p-3 print:border-gray-400">
-        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 print:text-[8pt]">
-          {itemLabel} 1
-        </p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 print:gap-y-2">
-          {subFields
-            .filter((sf) => sf.type !== 'heading' && sf.type !== 'info')
-            .map((sf) => (
-              <div
-                key={sf.name}
-                className={
-                  sf.width === 'full' || sf.type === 'textarea' || sf.type === 'yesno'
-                    ? 'col-span-2'
-                    : 'col-span-1'
-                }
-              >
-                <label className="block text-xs font-medium text-gray-700 print:text-[9pt]">
-                  {sf.label}
-                </label>
-                {renderAnswerArea(sf)}
-              </div>
-            ))}
-        </div>
-        <p className="mt-3 text-[10px] text-gray-400 italic print:text-[8pt]">
-          Add additional {itemLabel?.toLowerCase() ?? 'items'} on a separate sheet if needed.
-        </p>
+      <div className="space-y-4">
+        {items.map((item, idx) => (
+          <div key={idx} className="mt-2 border border-gray-300 rounded p-3 print:border-gray-400">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 print:text-[8pt]">
+              {itemLabel} {idx + 1}
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 print:gap-y-2">
+              {subFields
+                .filter((sf) => sf.type !== 'heading' && sf.type !== 'info')
+                .map((sf) => {
+                  const sfValue = item?.[sf.name];
+                  return (
+                    <div
+                      key={sf.name}
+                      className={
+                        sf.width === 'full' || sf.type === 'textarea' || sf.type === 'yesno'
+                          ? 'col-span-2'
+                          : 'col-span-1'
+                      }
+                    >
+                      <label className="block text-xs font-medium text-gray-700 print:text-[9pt]">
+                        {sf.label}
+                      </label>
+                      {renderAnswerArea(sf, sfValue)}
+                    </div>
+                  );
+                })}
+            </div>
+            {idx === items.length - 1 && (
+              <p className="mt-3 text-[10px] text-gray-400 italic print:text-[8pt]">
+                Add additional {itemLabel?.toLowerCase() ?? 'items'} on a separate sheet if needed.
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     );
   }
 
   // Date field
   if (type === 'date') {
+    if (value) {
+      return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{value}</p>;
+    }
     return (
       <div className="mt-1 flex items-end gap-1">
         <div>
@@ -222,19 +256,27 @@ function renderAnswerArea(field: FieldConfig) {
     );
   }
 
-  // Number
-  if (type === 'number') {
-    return <BlankLines count={1} />;
-  }
-
   // Currency
   if (type === 'currency') {
+    if (value) {
+      return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">${value}</p>;
+    }
     return (
       <div className="mt-1 flex items-end gap-1">
         <span className="text-sm text-gray-500 mb-0.5">$</span>
         <div className="flex-1 border-b border-gray-400" style={{ height: '1.5rem' }} />
       </div>
     );
+  }
+
+  // Pre-filled simple text (number, phone, ssn4, text, email)
+  if (value !== undefined && value !== null && value !== '') {
+    return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{value}</p>;
+  }
+
+  // Number
+  if (type === 'number') {
+    return <BlankLines count={1} />;
   }
 
   // Phone
@@ -272,10 +314,12 @@ function renderAnswerArea(field: FieldConfig) {
 function PrintSection({
   section,
   steps,
+  data,
   globalQuestionRef,
 }: {
   section: string;
   steps: QuestionnaireStep[];
+  data?: any;
   globalQuestionRef: { current: number };
 }) {
   if (steps.length === 0) return null;
@@ -360,7 +404,7 @@ function PrintSection({
                       key={field.name}
                       className={isFullWidth ? 'col-span-2' : 'col-span-1'}
                     >
-                      <PrintField field={field} questionNumber={qNum} />
+                      <PrintField field={field} questionNumber={qNum} value={data?.[field.name]} />
                     </div>
                   );
                 })}
@@ -379,10 +423,12 @@ function PrintSection({
 
 interface PrintableQuestionnaireProps {
   clientName?: string;
+  data?: any;
 }
 
 export default function PrintableQuestionnaire({
   clientName,
+  data,
 }: PrintableQuestionnaireProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -491,6 +537,7 @@ export default function PrintableQuestionnaire({
             key={section}
             section={section}
             steps={stepsBySection[section] ?? []}
+            data={data}
             globalQuestionRef={globalQuestionRef}
           />
         ))}

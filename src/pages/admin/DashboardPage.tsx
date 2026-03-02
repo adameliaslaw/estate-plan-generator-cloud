@@ -13,6 +13,7 @@ import {
   FileEdit,
   ChevronDown,
   ChevronUp,
+  Activity,
 } from 'lucide-react';
 import { orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,10 +24,15 @@ import { cn } from '@/lib/utils';
 import type { Client } from '@/types';
 import { TasksList } from '@/components/dashboard/TasksList';
 import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
+import { AudioRecorderModal } from '@/components/ui/audio-recorder-modal';
+import { Mic } from 'lucide-react';
+import { collection, setDoc, serverTimestamp } from 'firebase/firestore';
+import { toast } from 'sonner';
+import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatRelativeTime(ts: { seconds: number; nanoseconds: number } | undefined): string {
+function formatDetailedTime(ts: { seconds: number; nanoseconds: number } | undefined): string {
   if (!ts) return '';
   const date = new Date(ts.seconds * 1000);
   const now = new Date();
@@ -34,12 +40,23 @@ function formatRelativeTime(ts: { seconds: number; nanoseconds: number } | undef
   const diffMins = Math.floor(diffMs / 60_000);
   const diffHrs = Math.floor(diffMs / 3_600_000);
   const diffDays = Math.floor(diffMs / 86_400_000);
-  if (diffMins < 2) return 'Just now';
-  if (diffMins < 60) return `${diffMins} minutes ago`;
-  if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  const exactTime = date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  let relative = '';
+  if (diffMins < 2) relative = 'Just now';
+  else if (diffMins < 60) relative = `${diffMins} minutes ago`;
+  else if (diffHrs < 24) relative = `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
+  else if (diffDays === 1) relative = 'Yesterday';
+  else relative = `${diffDays} days ago`;
+
+  return `${exactTime} (${relative})`;
 }
 
 function clientDisplayName(client: Client): string {
@@ -165,101 +182,8 @@ const packageLabel: Record<string, string> = {
 
 // ── Activity feed ──────────────────────────────────────────────────────────────
 
-interface ActivityItem {
-  id: string;
-  icon: React.ComponentType<{ className?: string }>;
-  iconColor: string;
-  iconBg: string;
-  description: string;
-  time: string;
-}
-
-function buildActivityItems(clients: (Client & { id: string })[]): ActivityItem[] {
-  const items: ActivityItem[] = [];
-
-  for (const client of clients) {
-    const name = clientDisplayName(client);
-    const qStatus = client.questionnaireProgress?.status;
-    const createdAt = client.createdAt as { seconds: number; nanoseconds: number } | undefined;
-    const updatedAt = client.updatedAt as { seconds: number; nanoseconds: number } | undefined;
-
-    // Completed questionnaire
-    if (qStatus === 'completed' && client.questionnaireProgress?.completedAt) {
-      const completedAt = client.questionnaireProgress.completedAt as unknown as {
-        seconds: number;
-        nanoseconds: number;
-      };
-      items.push({
-        id: `q-completed-${client.id}`,
-        icon: CheckCircle2,
-        iconColor: 'text-emerald-600',
-        iconBg: 'bg-emerald-50',
-        description: `Questionnaire completed by ${name}`,
-        time: formatRelativeTime(completedAt),
-      });
-      continue;
-    }
-
-    // In progress questionnaire
-    if (qStatus === 'in_progress') {
-      items.push({
-        id: `q-progress-${client.id}`,
-        icon: ClipboardList,
-        iconColor: 'text-amber-600',
-        iconBg: 'bg-amber-50',
-        description: `Questionnaire in progress for ${name}`,
-        time: formatRelativeTime(updatedAt),
-      });
-      continue;
-    }
-
-    // Outstanding balance
-    const balance = client.packageDetails?.balanceDue;
-    if (balance && balance > 0) {
-      const dollars = (balance / 100).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-      items.push({
-        id: `balance-${client.id}`,
-        icon: AlertCircle,
-        iconColor: 'text-amber-600',
-        iconBg: 'bg-amber-50',
-        description: `Outstanding balance of $${dollars} on ${name} matter`,
-        time: formatRelativeTime(updatedAt),
-      });
-      continue;
-    }
-
-    // Recently added client (fallback)
-    const nowMs = Date.now();
-    const createdMs = createdAt ? createdAt.seconds * 1000 : 0;
-    const isRecent = nowMs - createdMs < 7 * 24 * 3600 * 1000; // within 7 days
-    if (isRecent) {
-      items.push({
-        id: `new-${client.id}`,
-        icon: UserPlus,
-        iconColor: 'text-[#1a365d]',
-        iconBg: 'bg-[#ebf4ff]',
-        description: `New client ${name} added`,
-        time: formatRelativeTime(createdAt),
-      });
-      continue;
-    }
-
-    // Generic updated
-    items.push({
-      id: `updated-${client.id}`,
-      icon: FileText,
-      iconColor: 'text-[#2b6cb0]',
-      iconBg: 'bg-blue-50',
-      description: `${name} matter updated`,
-      time: formatRelativeTime(updatedAt),
-    });
-  }
-
-  return items;
-}
+// We no longer build activity items purely from clients.
+// This is now handled by the true activities collection in DashboardPage.
 
 // ── Page component ─────────────────────────────────────────────────────────────
 
@@ -273,6 +197,9 @@ export default function DashboardPage() {
     return userProfile?.recentActivityExpanded ?? false;
   });
 
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+
   const toggleExpanded = async () => {
     const nextState = !isExpanded;
     setIsExpanded(nextState);
@@ -284,7 +211,7 @@ export default function DashboardPage() {
 
   const firmId = userProfile?.firmId ?? '';
 
-  // Real-time collection queries
+  // Real-time collection queries for stats and tables
   const {
     data: recentClients,
     loading: clientsLoading,
@@ -293,13 +220,26 @@ export default function DashboardPage() {
     [orderBy('updatedAt', 'desc'), limit(10)],
   );
 
-  // Use a wider set for activity feed and stat computation
   const { data: allClients, loading: allLoading } = useCollection<Client>(
     firmId ? COLLECTIONS.CLIENTS(firmId) : null,
-    [orderBy('updatedAt', 'desc'), limit(20)],
+    [orderBy('createdAt', 'desc'), limit(50)], // Grab enough to count active users
   );
 
-  const loading = clientsLoading || allLoading;
+  interface RawActivityItem {
+    id: string;
+    description: string;
+    action: string;
+    userName?: string;
+    timestamp?: { seconds: number; nanoseconds: number };
+  }
+
+  // Real-time query for explict frontend activities
+  const { data: rawActivities, loading: activitiesLoading } = useCollection<RawActivityItem>(
+    firmId ? `firms/${firmId}/activities` : null,
+    [orderBy('timestamp', 'desc'), limit(40)],
+  );
+
+  const loading = clientsLoading || allLoading || activitiesLoading;
 
   // ── Computed stats ────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -311,53 +251,165 @@ export default function DashboardPage() {
   }, [allClients]);
 
   // ── Activity items ────────────────────────────────────────────────────────
-  const allActivityItems = useMemo(() => buildActivityItems(allClients), [allClients]);
-  const displayedActivityItems = isExpanded ? allActivityItems : allActivityItems.slice(0, 6);
+  const allActivityItems = useMemo(() => {
+    return rawActivities.map(a => {
+      // Determine icon based on action string
+      let icon = Activity;
+      let iconColor = 'text-[#2b6cb0]';
+      let iconBg = 'bg-blue-50';
 
-  // ── Client-side search filter ─────────────────────────────────────────────
-  const filteredClients = useMemo(() => {
-    let result = recentClients.filter(c => !c.isArchived);
-    if (!searchQuery.trim()) return result;
-    const q = searchQuery.toLowerCase();
-    return result.filter((c) => {
-      const name = clientDisplayName(c).toLowerCase();
-      const email = c.personalInfo?.email?.toLowerCase() ?? '';
-      return name.includes(q) || email.includes(q);
+      const action = a.action?.toLowerCase() || '';
+
+      if (action.includes('completing questionnaire') || action.includes('completing task')) {
+        icon = CheckCircle2;
+        iconColor = 'text-emerald-600';
+        iconBg = 'bg-emerald-50';
+      } else if (action.includes('editing questionnaire')) {
+        icon = ClipboardList;
+        iconColor = 'text-amber-600';
+        iconBg = 'bg-amber-50';
+      } else if (action.includes('scheduling appointment')) {
+        icon = Clock;
+        iconColor = 'text-purple-600';
+        iconBg = 'bg-purple-50';
+      } else if (action.includes('payment')) {
+        icon = AlertCircle;
+        iconColor = 'text-amber-600';
+        iconBg = 'bg-amber-50';
+      } else if (action.includes('adding client')) {
+        icon = UserPlus;
+        iconColor = 'text-[#1a365d]';
+        iconBg = 'bg-[#ebf4ff]';
+      } else if (action.includes('drafting documents') || action.includes('editing documents')) {
+        icon = FileText;
+        iconColor = 'text-indigo-600';
+        iconBg = 'bg-indigo-50';
+      }
+
+      const description = a.description || action;
+      // Append userName if it was not auto-included and it's useful
+      const finalDesc = (a.userName && !description.includes(a.userName!))
+        ? `${description} by ${a.userName}`
+        : description;
+
+      return {
+        id: a.id,
+        icon,
+        iconColor,
+        iconBg,
+        description: finalDesc,
+        time: formatDetailedTime(a.timestamp),
+      };
     });
-  }, [recentClients, searchQuery]);
+  }, [rawActivities]);
 
-  // ── Greeting ──────────────────────────────────────────────────────────────
-  const greeting = (() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  })();
+  const displayedActivityItems = isExpanded ? allActivityItems : allActivityItems.slice(0, 8);
 
-  const firstName = userProfile?.displayName?.split(' ')[0] ?? 'Counselor';
+  // ── Client-side  // ── Search filter handler ───────────────────────────────────────────────────
+  const filteredClients = useMemo(() => {
+    if (!searchQuery) return recentClients;
+    const q = searchQuery.toLowerCase();
+    return allClients.filter((c) => {
+      const { firstName = '', lastName = '', email = '', phone = '' } = c.personalInfo;
+      return (
+        firstName.toLowerCase().includes(q) ||
+        lastName.toLowerCase().includes(q) ||
+        email.toLowerCase().includes(q) ||
+        phone.includes(q)
+      );
+    });
+  }, [recentClients, allClients, searchQuery]);
+
+  const showEmptyState = !clientsLoading && filteredClients.length === 0 && !searchQuery && allClients.length === 0;
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const handleSaveAudioNote = async (data: any) => {
+    if (!user?.uid || !firmId || !data.clientId) return;
+    setIsSavingRecord(true);
+    try {
+      const collPath = COLLECTIONS.NOTES(firmId, data.clientId);
+      const docRef = doc(collection(db, collPath));
+      const activeNoteId = docRef.id;
+
+      let audioUrl = null;
+      let storagePath = null;
+      let status = null;
+
+      if (data.audioBlob) {
+        const upload = await uploadAudioToStorage(data.audioBlob, firmId, data.clientId, activeNoteId);
+        audioUrl = upload.url;
+        storagePath = upload.fullPath;
+        status = 'processing';
+      }
+
+      const newNote = {
+        title: data.title || (data.audioBlob ? 'Audio Note' : 'Manual Note'),
+        noteType: data.noteType,
+        content: data.content,
+        isPinned: false,
+        isPrivate: false,
+        audioUrl,
+        audioStoragePath: storagePath,
+        audioFileName: data.audioFileName,
+        audioDurationSeconds: data.durationSeconds || undefined,
+        transcriptionStatus: status,
+        firmId,
+        clientId: data.clientId,
+        source: 'manual',
+        createdBy: user.uid,
+        updatedBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(docRef, newNote);
+
+      if (storagePath) {
+        requestTranscription(firmId, data.clientId, activeNoteId, storagePath);
+        toast.success('Note saved. Audio uploading and transcription started.');
+      } else {
+        toast.success('Note saved successfully.');
+      }
+    } catch (err) {
+      console.error('Failed to save audio note', err);
+      toast.error('Failed to save note.');
+    } finally {
+      setIsSavingRecord(false);
+    }
+  };
+
 
   // ── Empty state ───────────────────────────────────────────────────────────
-  const showEmptyState = !loading && recentClients.length === 0;
+  // const showEmptyState = !loading && recentClients.length === 0; // Replaced by new showEmptyState above
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
+    <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+      {/* Header row */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[#1a365d]">
-            {greeting}, {firstName}
-          </h2>
-          <p className="mt-0.5 text-sm text-gray-500">
-            Here&apos;s an overview of your practice today.
+          <h1 className="text-2xl font-bold tracking-tight text-[#1a365d]">Overview</h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+            Welcome back, {userProfile?.displayName?.split(' ')[0] ?? 'Counselor'}
+            {firmId && <span className="text-gray-300">•</span>}
+            {firmId && <span>Firm ID: {firmId}</span>}
           </p>
         </div>
-        <button
-          onClick={() => navigate(ROUTES.CLIENT_NEW)}
-          className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e407a] transition-colors"
-        >
-          <UserPlus className="h-4 w-4" />
-          New Client
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsRecordModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg border border-[#2b6cb0] bg-white px-4 py-2 text-sm font-semibold text-[#2b6cb0] shadow-sm hover:bg-[#ebf4ff] transition-colors"
+          >
+            <Mic className="h-4 w-4" />
+            Record Note
+          </button>
+          <button
+            onClick={() => navigate(ROUTES.CLIENT_NEW)}
+            className="flex items-center gap-2 rounded-lg bg-[#2b6cb0] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#1e407a] transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            New Client
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -621,6 +673,16 @@ export default function DashboardPage() {
         <UpcomingAppointments />
       </div>
 
+      <AudioRecorderModal
+        open={isRecordModalOpen}
+        onOpenChange={setIsRecordModalOpen}
+        onSave={handleSaveAudioNote}
+        isSaving={isSavingRecord}
+        clients={allClients.map((c) => ({
+          id: c.id,
+          name: clientDisplayName(c),
+        }))}
+      />
     </div>
   );
 }

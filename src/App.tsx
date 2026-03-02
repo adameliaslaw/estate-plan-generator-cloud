@@ -21,6 +21,7 @@ const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
 const DocumentEditorPage = lazy(() => import('@/pages/admin/DocumentEditorPage'));
 const QuestionnairePage = lazy(() => import('@/pages/client/QuestionnairePage'));
 const PrintableQuestionnaire = lazy(() => import('@/components/questionnaire/PrintableQuestionnaire'));
+const PrintableQuestionnairePage = lazy(() => import('@/pages/client/PrintableQuestionnairePage'));
 const TermsOfServicePage = lazy(() => import('@/pages/legal/TermsOfServicePage'));
 const PrivacyPolicyPage = lazy(() => import('@/pages/legal/PrivacyPolicyPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
@@ -175,6 +176,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <PrintableQuestionnaire />
+                </AppLayout>
+              }
+            />
+            <Route
+              path="/questionnaire/:firmId/:clientId/print"
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <PrintableQuestionnairePage />
                 </AppLayout>
               }
             />

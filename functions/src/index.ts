@@ -27,6 +27,10 @@ export {
   sendPaymentReceivedNotification,
   sendAppointmentReminder,
   sendFollowUpReminder,
+  onClientCreatedSendEmail,
 } from './email-notifications';
 export { logAccess, onDocumentStatusChanged, onPaymentCreated } from './audit-trail';
 export { chatAi } from './chat-ai';
+export { syncClientToLevitate } from './levitate-sync';
+export { sendForSignature } from './esign-service';
+export { processQuestionnaireScan } from './process-ocr';

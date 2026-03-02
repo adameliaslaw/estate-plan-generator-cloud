@@ -105,6 +105,19 @@ export interface ExportBatchResponse {
   format: 'pdf' | 'docx' | 'both';
 }
 
+export interface SendForSignatureRequest {
+  firmId: string;
+  clientId: string;
+  documentId: string;
+  signerName: string;
+  signerEmail: string;
+}
+
+export interface SendForSignatureResponse {
+  success: boolean;
+  signatureRequestId: string;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export const documentService = {
@@ -204,6 +217,22 @@ export const documentService = {
     const fn = httpsCallable<ExportBatchRequest, ExportBatchResponse>(
       functions,
       'exportBatchDocuments',
+    );
+    const result = await fn(params);
+    return result.data;
+  },
+
+  // ── Phase 5: E-Signature ──────────────────────────────────────────────────
+
+  /**
+   * Send a document out for e-signature via Dropbox Sign (HelloSign) or similar provider.
+   */
+  async sendForSignature(
+    params: SendForSignatureRequest,
+  ): Promise<SendForSignatureResponse> {
+    const fn = httpsCallable<SendForSignatureRequest, SendForSignatureResponse>(
+      functions,
+      'sendForSignature',
     );
     const result = await fn(params);
     return result.data;

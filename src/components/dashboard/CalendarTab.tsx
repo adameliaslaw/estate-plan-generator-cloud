@@ -61,6 +61,8 @@ import { COLLECTIONS } from '@/config/constants';
 import { sanitizeInput } from '@/utils/sanitize';
 import { useAuth } from '@/hooks/useAuth';
 import type { CalendarEvent, EventType } from '@/types';
+import { documentService } from '@/services/document-service';
+import { logSystemActivity } from '@/utils/activity-logger';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -847,6 +849,14 @@ function EventDetailDialog({
         notes: sanitizeInput(form.notes.trim()) || null,
         updatedBy: userProfile?.uid ?? '',
       });
+
+      // Attempt to immediately sync changes to Google Calendar
+      try {
+        await documentService.pushEventToGoogleCalendar({ firmId, eventId: event.id });
+      } catch (gcalErr) {
+        console.warn('[CalendarTab] Google Calendar sync failed:', gcalErr);
+      }
+
       toast.success('Event updated.');
       setEditMode(false);
       onUpdated();
@@ -1022,53 +1032,55 @@ function EventDetailDialog({
 
             {/* Action buttons */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex gap-2">
-                {!event.cancelledAt && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-gray-600"
-                    onClick={() => setEditMode(true)}
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                )}
+              {userProfile?.role !== 'client' && (
+                <div className="flex gap-2">
+                  {!event.cancelledAt && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-gray-600"
+                      onClick={() => setEditMode(true)}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  )}
 
-                {confirmDelete ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-red-600 font-medium">
-                      Confirm delete?
-                    </span>
+                  {confirmDelete ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-600 font-medium">
+                        Confirm delete?
+                      </span>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDelete}
+                        disabled={deleting}
+                      >
+                        {deleting ? 'Deleting…' : 'Yes, delete'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={deleting}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
-                      variant="destructive"
+                      variant="outline"
                       size="sm"
-                      onClick={handleDelete}
-                      disabled={deleting}
+                      className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50"
+                      onClick={() => setConfirmDelete(true)}
                     >
-                      {deleting ? 'Deleting…' : 'Yes, delete'}
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmDelete(false)}
-                      disabled={deleting}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50"
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Button>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               <Button variant="ghost" size="sm" onClick={onClose}>
                 Close
@@ -1151,7 +1163,20 @@ function NewEventDialog({
         updatedBy: userProfile?.uid ?? '',
       };
 
-      await createDoc(collectionPath, payload);
+      const eventId = await createDoc(collectionPath, payload);
+
+      await logSystemActivity(firmId, userProfile, 'scheduling appointment', {
+        clientName,
+        appointmentTitle: form.title.trim()
+      });
+
+      // Attempt to immediately push the new event to Google Calendar
+      try {
+        await documentService.pushEventToGoogleCalendar({ firmId, eventId });
+      } catch (gcalErr) {
+        console.warn('[CalendarTab] Google Calendar sync failed:', gcalErr);
+      }
+
       toast.success('Appointment scheduled.');
       onCreated();
       onClose();
@@ -1254,6 +1279,7 @@ export default function CalendarTab({
   clientName,
   autoOpenNewEvent = false,
 }: CalendarTabProps) {
+  const { userProfile } = useAuth();
   const [currentDate, setCurrentDate] = useState(startOfDay(new Date()));
   const [view, setView] = useState<CalendarView>('month');
   const [newEventOpen, setNewEventOpen] = useState(false);
@@ -1428,14 +1454,16 @@ export default function CalendarTab({
             ))}
           </div>
 
-          <Button
-            size="sm"
-            className="gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white h-8"
-            onClick={handleOpenNewEvent}
-          >
-            <CalendarPlus className="h-3.5 w-3.5" />
-            New Appointment
-          </Button>
+          {userProfile?.role !== 'client' && (
+            <Button
+              size="sm"
+              className="gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white h-8"
+              onClick={handleOpenNewEvent}
+            >
+              <CalendarPlus className="h-3.5 w-3.5" />
+              New Appointment
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1450,14 +1478,16 @@ export default function CalendarTab({
             Click &ldquo;New Appointment&rdquo; to schedule a consultation, signing, or follow-up for{' '}
             {clientName}.
           </p>
-          <Button
-            size="sm"
-            className="mt-5 gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white"
-            onClick={handleOpenNewEvent}
-          >
-            <CalendarPlus className="h-3.5 w-3.5" />
-            New Appointment
-          </Button>
+          {userProfile?.role !== 'client' && (
+            <Button
+              size="sm"
+              className="mt-5 gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white"
+              onClick={handleOpenNewEvent}
+            >
+              <CalendarPlus className="h-3.5 w-3.5" />
+              New Appointment
+            </Button>
+          )}
         </div>
       )}
 

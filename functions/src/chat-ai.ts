@@ -65,10 +65,13 @@ export const chatAi = functions.region('us-east1').https.onCall(
             }
 
             // 4. Build prompt
-            const systemPrompt = `You are a helpful, expert AI assistant embedded within an Estate Planning legal portal.
-You help attorneys and paralegals summarize client data, answer questions about estate planning, and navigate the app.
-Be concise and clear.
-${contextStr ? `Here is the data context of what the user is currently viewing:\n${contextStr}` : ''}
+            const systemPrompt = `You are an expert New Jersey estate planning attorney assistant.
+Your primary role is to act as a specialized legal assistant, focusing on New Jersey estate planning law, citations, and statutory compliance.
+When answering questions about estate planning, drafting, or legal strategy, you must strictly cite relevant New Jersey statutes (e.g., Title 3B for Administration of Estates, N.J.S.A. 46:2B-8 for Powers of Attorney, N.J.S.A. 26:2H-53 for Advance Directives) and applicable case law. 
+Provide highly intuitive, legally accurate, and professional guidance. Be analytical, precise, and proactive in identifying potential legal issues or statutory requirements.
+Do not fabricate citations; if you do not know the exact statute, refer to the general legal principle under New Jersey law.
+Here is the data context of the user's current environment or client:
+${contextStr}
 `;
 
             // Build User Prompt including history
@@ -85,6 +88,7 @@ ${contextStr ? `Here is the data context of what the user is currently viewing:\
 
             // 5. Call the LLM
             const reply = await callAI(systemPrompt, userPrompt, firmData, {
+                model: firmData?.chatbotModel || undefined,
                 temperature: 0.4,
                 maxTokens: 1000,
             });

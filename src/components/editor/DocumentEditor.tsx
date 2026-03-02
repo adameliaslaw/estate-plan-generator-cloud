@@ -80,6 +80,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { COLLECTIONS } from '@/config/constants';
 import { type Document, type DocStatus } from '@/types';
 import { serverTimestamp } from 'firebase/firestore';
+import { logSystemActivity } from '@/utils/activity-logger';
 
 // Editor subcomponents
 import EditorToolbar from './EditorToolbar';
@@ -309,6 +310,11 @@ export default function DocumentEditor({
         await updateDoc(docPath, {
           currentVersion: newVersionNum,
           updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
+        });
+
+        // Log the activity
+        await logSystemActivity(firmId, userProfile, 'editing document', {
+          documentName: document?.displayName ?? 'Document'
         });
       } catch (err) {
         console.error('[DocumentEditor] Save version error:', err);

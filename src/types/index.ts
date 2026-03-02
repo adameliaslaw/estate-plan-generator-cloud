@@ -186,6 +186,9 @@ export interface FirmSettings {
   anthropicApiKey?: string;
   geminiApiKey?: string;
   activeAiProvider?: 'openai' | 'anthropic' | 'gemini';
+  // Levitate Contacts
+  levitateApiKey?: string;
+  levitateWebhookUrl?: string;
 }
 
 export interface Firm {
@@ -200,6 +203,34 @@ export interface Firm {
   settings: FirmSettings;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+// ============================================================================
+// Email Templates — /firms/{firmId}/emailTemplates/{templateId}
+// ============================================================================
+
+export type EmailTrigger =
+  | 'client_created'
+  | 'questionnaire_completed'
+  | 'payment_received'
+  | 'appointment_scheduled'
+  | 'questionnaire_invitation'
+  | 'payment_request'
+  | 'appointment_confirmation'
+  | 'general_manual';
+
+export interface EmailTemplate {
+  id: string;
+  firmId: string;
+  name: string;
+  trigger: EmailTrigger;
+  isActive: boolean;
+  subject: string;
+  content: string; // HTML or Text supporting Handlebars-like variables
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy: string;
+  updatedBy: string;
 }
 
 // ============================================================================

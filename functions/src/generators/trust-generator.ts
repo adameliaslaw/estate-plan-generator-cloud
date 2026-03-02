@@ -237,7 +237,7 @@ Generate the complete ${trustType} now. Include all standard articles, comprehen
 `.trim();
 
   const raw = await callAI(TRUST_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: 'gpt-4.1',
+    model: safeFirm?.documentDraftingModel || 'gpt-4.1',
     temperature: 0.15,
     maxTokens: 8192,
     jsonMode: true,

@@ -43,6 +43,7 @@ import { QuestionnaireComplete } from './QuestionnaireComplete';
 import { QuestionnaireUploader } from './QuestionnaireUploader';
 import { cn } from '@/lib/utils';
 import type { PackageType } from '@/types';
+import { logSystemActivity } from '@/utils/activity-logger';
 
 // ============================================================================
 // Phase type
@@ -286,18 +287,27 @@ export function QuestionnaireShell() {
         'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
       });
 
-      // Send the firm notification
-      const attorneyEmail = userProfile?.role === 'attorney'
-        ? userProfile.email
-        : 'admin@firm.com'; // fallback if no specific attorney mapping exists yet
-
+      // Send the firm notification (wrap in try/catch to prevent blocking if email fails)
       const clientName = `${data.personalInfo?.firstName || 'Client'} ${data.personalInfo?.lastName || ''}`.trim() || 'A Client';
 
-      await documentService.sendQuestionnaireCompleteNotification({
-        firmId,
-        clientId,
-        clientName,
-        attorneyEmail,
+      try {
+        const attorneyEmail = userProfile?.role === 'attorney'
+          ? userProfile.email
+          : 'info@adameliaslaw.com'; // fallback to firm email
+
+        await documentService.sendQuestionnaireCompleteNotification({
+          firmId,
+          clientId,
+          clientName,
+          attorneyEmail,
+        });
+      } catch (notifyErr) {
+        console.warn('Failed to send complete notification, but questionnaire was saved.', notifyErr);
+        // We still want to show the success screen even if the email notification fails.
+      }
+
+      await logSystemActivity(firmId, userProfile, 'completing questionnaire', {
+        clientName
       });
 
       setSubmitted(true);

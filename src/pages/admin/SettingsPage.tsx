@@ -57,18 +57,30 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 import { storage, auth } from '@/config/firebase';
 import { COLLECTIONS, FIRM_DEFAULTS } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
-import { updateDoc, useDocument } from '@/hooks/useFirestore';
+import { useCollection, updateDoc, useDocument } from '@/hooks/useFirestore';
 import { cn } from '@/lib/utils';
 import { sanitizeInput } from '@/utils/sanitize';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Timestamp, addDoc, collection } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import type { EmailTemplate, EmailTrigger } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Firebase MFA imports — TOTP
-import { multiFactor, TotpMultiFactorGenerator, TotpSecret } from 'firebase/auth';
+import { multiFactor, TotpMultiFactorGenerator } from 'firebase/auth';
+import type { TotpSecret } from 'firebase/auth';
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -94,10 +106,15 @@ interface FirmSettings {
   openAiApiKey?: string;
   anthropicApiKey?: string;
   geminiApiKey?: string;
-  activeAiProvider?: 'openai' | 'anthropic' | 'gemini';
+  perplexityApiKey?: string;
+  activeAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
+  chatbotModel?: string;
+  documentDraftingModel?: string;
   lawPayApiKey?: string;
   lawPayMerchantId?: string;
   sendGridApiKey?: string;
+  levitateApiKey?: string;
+  levitateWebhookUrl?: string;
 
   // Google Calendar OAuth
   googleCalendar?: {
@@ -106,13 +123,6 @@ interface FirmSettings {
     accessToken?: string;
     refreshToken?: string;
     tokenExpiry?: number;
-  };
-
-  // Email Templates
-  emailTemplates?: {
-    questionnaireInvitation?: string;
-    paymentRequest?: string;
-    appointmentConfirmation?: string;
   };
 
   // Security
@@ -145,46 +155,6 @@ const TABS: TabDef[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Default email templates
-// ---------------------------------------------------------------------------
-
-const DEFAULT_TEMPLATES = {
-  questionnaireInvitation: `Dear {{clientName}},
-
-We're excited to begin your estate planning journey with {{firmName}}.
-
-Please complete your questionnaire using the link below — it should take about 20 minutes:
-{{link}}
-
-If you have any questions, don't hesitate to reach out.
-
-Warm regards,
-{{firmName}}`,
-
-  paymentRequest: `Dear {{clientName}},
-
-Your estate plan is ready! Please complete your payment of {{amount}} to receive your final documents.
-
-Pay securely here: {{link}}
-
-Thank you for choosing {{firmName}}.
-
-Best regards,
-{{firmName}}`,
-
-  appointmentConfirmation: `Dear {{clientName}},
-
-Your appointment with {{firmName}} has been confirmed for {{date}}.
-
-Please reply to this email if you need to reschedule.
-
-We look forward to meeting with you.
-
-Best regards,
-{{firmName}}`,
-};
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -200,7 +170,7 @@ function getInitialTab(): TabId {
 /** Mask an API key showing only the last 4 characters. */
 function maskApiKey(key: string | undefined): string {
   if (!key || key.length < 4) return '';
-  return `••••••••${key.slice(-4)}`;
+  return `••••••••${key.slice(-4)} `;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,10 +293,10 @@ function ColorPickerRow({
         className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-gray-200 shadow-sm"
         style={{ backgroundColor: value }}
         title="Click to pick color"
-        onClick={() => document.getElementById(`cp-${label}`)?.click()}
+        onClick={() => document.getElementById(`cp - ${label} `)?.click()}
       />
       <input
-        id={`cp-${label}`}
+        id={`cp - ${label} `}
         type="color"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -356,6 +326,10 @@ export default function SettingsPage() {
 
   const firmPath = firmId ? `${COLLECTIONS.FIRMS}/${firmId}` : null;
   const { data: firmDoc, loading } = useDocument<FirmSettings>(firmPath);
+
+  // Load custom templates subcollection
+  const templatesPath = firmId ? `${COLLECTIONS.FIRMS}/${firmId}/emailTemplates` : null;
+  const { data: emailTemplates } = useCollection<EmailTemplate>(templatesPath);
 
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
 
@@ -387,18 +361,29 @@ export default function SettingsPage() {
   const [openAiKey, setOpenAiKey] = useState('');
   const [anthropicKey, setAnthropicKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
-  const [activeAiProvider, setActiveAiProvider] = useState<'openai' | 'anthropic' | 'gemini'>('openai');
+  const [perplexityKey, setPerplexityKey] = useState('');
+  const [activeAiProvider, setActiveAiProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'perplexity'>('openai');
+
+  const [chatbotModel, setChatbotModel] = useState('');
+  const [documentDraftingModel, setDocumentDraftingModel] = useState('');
 
   const [lawPayKey, setLawPayKey] = useState('');
   const [lawPayMerchantId, setLawPayMerchantId] = useState('');
   const [sendGridKey, setSendGridKey] = useState('');
+  const [levitateKey, setLevitateKey] = useState('');
+  const [levitateWebhook, setLevitateWebhook] = useState('');
 
   const [savingOpenAi, setSavingOpenAi] = useState(false);
   const [savingAnthropic, setSavingAnthropic] = useState(false);
   const [savingGemini, setSavingGemini] = useState(false);
+  const [savingPerplexity, setSavingPerplexity] = useState(false);
   const [savingActiveAi, setSavingActiveAi] = useState(false);
+  const [savingChatbotModel, setSavingChatbotModel] = useState(false);
+  const [savingDocumentDraftingModel, setSavingDocumentDraftingModel] = useState(false);
   const [savingLawPay, setSavingLawPay] = useState(false);
   const [savingSendGrid, setSavingSendGrid] = useState(false);
+  const [savingLevitate, setSavingLevitate] = useState(false);
+  const [savingLevitateWebhook, setSavingLevitateWebhook] = useState(false);
   const [testingLawPay, setTestingLawPay] = useState(false);
   const [testingSendGrid, setTestingSendGrid] = useState(false);
 
@@ -415,12 +400,10 @@ export default function SettingsPage() {
   const [enrollingMfa, setEnrollingMfa] = useState(false);
 
   // ── Tab 5: Email Templates ───────────────────────────────────────────────
-  const [templates, setTemplates] = useState({
-    questionnaireInvitation: DEFAULT_TEMPLATES.questionnaireInvitation,
-    paymentRequest: DEFAULT_TEMPLATES.paymentRequest,
-    appointmentConfirmation: DEFAULT_TEMPLATES.appointmentConfirmation,
-  });
-  const [savingTemplates, setSavingTemplates] = useState(false);
+  // ── Tab 5: Email Templates ───────────────────────────────────────────────
+  const [editingTemplate, setEditingTemplate] = useState<Partial<EmailTemplate> | null>(null);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [savingTemplateForm, setSavingTemplateForm] = useState(false);
 
   // ── Populate state from Firestore ────────────────────────────────────────
 
@@ -444,23 +427,15 @@ export default function SettingsPage() {
     setAccentColor(firmDoc.accentColor ?? FIRM_DEFAULTS.accentColor);
 
     setActiveAiProvider(firmDoc.activeAiProvider ?? 'openai');
+    setChatbotModel(firmDoc.chatbotModel ?? '');
+    setDocumentDraftingModel(firmDoc.documentDraftingModel ?? '');
 
     setSessionTimeout(firmDoc.sessionTimeoutMinutes ?? 30);
     setRequireMfa(firmDoc.requireMfa ?? false);
     setDataRetention(firmDoc.dataRetentionYears ?? 7);
 
-    if (firmDoc.emailTemplates) {
-      setTemplates({
-        questionnaireInvitation:
-          firmDoc.emailTemplates.questionnaireInvitation ??
-          DEFAULT_TEMPLATES.questionnaireInvitation,
-        paymentRequest:
-          firmDoc.emailTemplates.paymentRequest ?? DEFAULT_TEMPLATES.paymentRequest,
-        appointmentConfirmation:
-          firmDoc.emailTemplates.appointmentConfirmation ??
-          DEFAULT_TEMPLATES.appointmentConfirmation,
-      });
-    }
+    if (firmDoc.levitateApiKey) setLevitateKey(firmDoc.levitateApiKey);
+    if (firmDoc.levitateWebhookUrl) setLevitateWebhook(firmDoc.levitateWebhookUrl);
   }, [firmDoc]);
 
   // ── Save helpers ─────────────────────────────────────────────────────────
@@ -524,7 +499,7 @@ export default function SettingsPage() {
 
       if (logoFile) {
         setUploadingLogo(true);
-        const storageRef = ref(storage, `firms/${firmId}/logo`);
+        const storageRef = ref(storage, `firms/${firmId}/branding/logo`);
         const snapshot = await uploadBytes(storageRef, logoFile);
         logoUrl = await getDownloadURL(snapshot.ref);
         setUploadingLogo(false);
@@ -551,7 +526,15 @@ export default function SettingsPage() {
     async (
       field: keyof Pick<
         FirmSettings,
-        'openAiApiKey' | 'anthropicApiKey' | 'geminiApiKey' | 'lawPayApiKey' | 'sendGridApiKey' | 'lawPayMerchantId'
+        | 'openAiApiKey'
+        | 'anthropicApiKey'
+        | 'geminiApiKey'
+        | 'perplexityApiKey'
+        | 'lawPayApiKey'
+        | 'sendGridApiKey'
+        | 'lawPayMerchantId'
+        | 'levitateApiKey'
+        | 'levitateWebhookUrl'
       >,
       value: string,
       setLoading: (v: boolean) => void,
@@ -577,7 +560,7 @@ export default function SettingsPage() {
   );
 
   const handleSaveActiveAiProvider = useCallback(
-    async (provider: 'openai' | 'anthropic' | 'gemini') => {
+    async (provider: 'openai' | 'anthropic' | 'gemini' | 'perplexity') => {
       if (!firmDocPath) return;
       setSavingActiveAi(true);
       setActiveAiProvider(provider);
@@ -592,6 +575,29 @@ export default function SettingsPage() {
         toast.error('Failed to update active AI provider.');
       } finally {
         setSavingActiveAi(false);
+      }
+    },
+    [firmDocPath, userProfile]
+  );
+
+  const handleSaveModel = useCallback(
+    async (field: 'chatbotModel' | 'documentDraftingModel', model: string, setSaving: (v: boolean) => void) => {
+      if (!firmDocPath) return;
+      setSaving(true);
+      if (field === 'chatbotModel') setChatbotModel(model);
+      else setDocumentDraftingModel(model);
+
+      try {
+        await updateDoc(firmDocPath, {
+          [field]: model,
+          updatedBy: userProfile?.uid ?? '',
+        });
+        toast.success(`Active ${field === 'chatbotModel' ? 'chatbot' : 'document drafting'} model updated.`);
+      } catch (err) {
+        console.error(err);
+        toast.error(`Failed to update ${field === 'chatbotModel' ? 'chatbot' : 'document drafting'} model.`);
+      } finally {
+        setSaving(false);
       }
     },
     [firmDocPath, userProfile]
@@ -722,26 +728,42 @@ export default function SettingsPage() {
     }
   }, [mfaCode, totpSecret]);
 
-  const handleSaveTemplates = useCallback(async () => {
-    if (!firmDocPath) return;
-    setSavingTemplates(true);
+  // ── Handlers: Email Templates ────────────────────────────────────────────
+
+  const handleSaveTemplate = async () => {
+    if (!editingTemplate || !firmId || !editingTemplate.name || !editingTemplate.subject) return;
+    setSavingTemplateForm(true);
     try {
-      await updateDoc(firmDocPath, {
-        emailTemplates: {
-          questionnaireInvitation: sanitizeInput(templates.questionnaireInvitation),
-          paymentRequest: sanitizeInput(templates.paymentRequest),
-          appointmentConfirmation: sanitizeInput(templates.appointmentConfirmation),
-        },
-        updatedBy: userProfile?.uid ?? '',
-      });
-      toast.success('Email templates saved.');
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to save email templates.');
+      const templateData: Partial<EmailTemplate> = {
+        name: editingTemplate.name,
+        trigger: editingTemplate.trigger || 'general_manual',
+        isActive: editingTemplate.isActive ?? true,
+        subject: editingTemplate.subject,
+        content: editingTemplate.content || '',
+        updatedAt: Timestamp.now(),
+        updatedBy: userProfile?.uid || 'unknown',
+      };
+
+      if (editingTemplate.id) {
+        // Update existing (using string path for our custom updateDoc hook)
+        await updateDoc(`${COLLECTIONS.FIRMS}/${firmId}/emailTemplates/${editingTemplate.id}`, templateData);
+        toast.success('Template updated successfully');
+      } else {
+        // Create new
+        templateData.firmId = firmId;
+        templateData.createdAt = Timestamp.now();
+        templateData.createdBy = userProfile?.uid || 'unknown';
+        await addDoc(collection(db, `firms/${firmId}/emailTemplates`), templateData);
+        toast.success('Template created successfully');
+      }
+      setIsTemplateDialogOpen(false);
+      setEditingTemplate(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save template');
     } finally {
-      setSavingTemplates(false);
+      setSavingTemplateForm(false);
     }
-  }, [firmDocPath, templates, userProfile]);
+  };
 
   // ── Drag-over state ───────────────────────────────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -1128,7 +1150,7 @@ export default function SettingsPage() {
                           Powers AI document drafting and analysis.
                         </CardDescription>
                       </div>
-                      <StatusBadge connected={Boolean(firmDoc?.openAiApiKey || firmDoc?.anthropicApiKey || firmDoc?.geminiApiKey)} />
+                      <StatusBadge connected={Boolean(firmDoc?.openAiApiKey || firmDoc?.anthropicApiKey || firmDoc?.geminiApiKey || firmDoc?.perplexityApiKey)} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -1139,7 +1161,7 @@ export default function SettingsPage() {
                         Choose which language model powers document drafting and chat features.
                       </p>
 
-                      <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="radio"
@@ -1173,8 +1195,59 @@ export default function SettingsPage() {
                           />
                           <span className="text-sm">Google (Gemini 2.5 Pro)</span>
                         </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="activeAi"
+                            className="h-4 w-4 text-[#2b6cb0]"
+                            checked={activeAiProvider === 'perplexity'}
+                            onChange={() => handleSaveActiveAiProvider('perplexity')}
+                            disabled={savingActiveAi}
+                          />
+                          <span className="text-sm">Perplexity (Sonar)</span>
+                        </label>
                       </div>
                     </div>
+
+                    <Separator className="my-2" />
+
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+                        <Label className="text-sm font-medium text-[#1a365d]">Chatbot Model</Label>
+                        <p className="text-xs text-gray-500 mb-3">Model for the legal AI assistant.</p>
+                        <div className="flex gap-2">
+                          <Input
+                            value={chatbotModel}
+                            onChange={(e) => setChatbotModel(e.target.value)}
+                            placeholder="e.g. gpt-4o, claude-3-5-sonnet-20241022"
+                            className="text-sm"
+                          />
+                          <Button size="sm" onClick={() => handleSaveModel('chatbotModel', chatbotModel, setSavingChatbotModel)} disabled={savingChatbotModel} className="bg-[#2b6cb0] hover:bg-[#1a365d]">
+                            {savingChatbotModel ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Save'}
+                          </Button>
+                        </div>
+                        {firmDoc?.chatbotModel && <p className="text-xs text-green-600 mt-2">Saved: {firmDoc.chatbotModel}</p>}
+                      </div>
+
+                      <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+                        <Label className="text-sm font-medium text-[#1a365d]">Document Drafting Model</Label>
+                        <p className="text-xs text-gray-500 mb-3">Model for generating legal documents.</p>
+                        <div className="flex gap-2">
+                          <Input
+                            value={documentDraftingModel}
+                            onChange={(e) => setDocumentDraftingModel(e.target.value)}
+                            placeholder="e.g. gpt-4o, claude-3-5-sonnet-20241022"
+                            className="text-sm"
+                          />
+                          <Button size="sm" onClick={() => handleSaveModel('documentDraftingModel', documentDraftingModel, setSavingDocumentDraftingModel)} disabled={savingDocumentDraftingModel} className="bg-[#2b6cb0] hover:bg-[#1a365d]">
+                            {savingDocumentDraftingModel ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Save'}
+                          </Button>
+                        </div>
+                        {firmDoc?.documentDraftingModel && <p className="text-xs text-green-600 mt-2">Saved: {firmDoc.documentDraftingModel}</p>}
+                      </div>
+                    </div>
+
+                    <Separator className="my-2" />
 
                     <div className="grid gap-6">
                       <ApiKeyField
@@ -1230,6 +1303,25 @@ export default function SettingsPage() {
                         }
                         saving={savingGemini}
                         description="Find your key at aistudio.google.com/app/apikey"
+                      />
+
+                      <Separator />
+
+                      <ApiKeyField
+                        label="Perplexity API Key"
+                        storedKey={firmDoc?.perplexityApiKey}
+                        pendingKey={perplexityKey}
+                        onPendingChange={setPerplexityKey}
+                        onSave={() =>
+                          handleSaveApiKey(
+                            'perplexityApiKey',
+                            perplexityKey,
+                            setSavingPerplexity,
+                            () => setPerplexityKey(''),
+                          )
+                        }
+                        saving={savingPerplexity}
+                        description="Find your key at perplexity.ai/settings/api"
                       />
                     </div>
                   </CardContent>
@@ -1360,6 +1452,59 @@ export default function SettingsPage() {
                       )}
                       Test Connection
                     </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Levitate Contacts */}
+                <Card className="border-gray-200 shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-[#1a365d]">
+                          <Zap className="h-5 w-5" />
+                          Levitate Contacts
+                        </CardTitle>
+                        <CardDescription>
+                          Automatically sync your clients to Levitate.
+                        </CardDescription>
+                      </div>
+                      <StatusBadge connected={Boolean(firmDoc?.levitateApiKey || firmDoc?.levitateWebhookUrl)} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <ApiKeyField
+                      label="API Key"
+                      storedKey={firmDoc?.levitateApiKey}
+                      pendingKey={levitateKey}
+                      onPendingChange={setLevitateKey}
+                      onSave={() =>
+                        handleSaveApiKey(
+                          'levitateApiKey',
+                          levitateKey,
+                          setSavingLevitate,
+                          () => setLevitateKey(''),
+                        )
+                      }
+                      saving={savingLevitate}
+                      description="Used for direct Levitate integrations"
+                    />
+                    <Separator />
+                    <ApiKeyField
+                      label="Webhook URL (Zapier/Make)"
+                      storedKey={firmDoc?.levitateWebhookUrl}
+                      pendingKey={levitateWebhook}
+                      onPendingChange={setLevitateWebhook}
+                      onSave={() =>
+                        handleSaveApiKey(
+                          'levitateWebhookUrl',
+                          levitateWebhook,
+                          setSavingLevitateWebhook,
+                          () => setLevitateWebhook(''),
+                        )
+                      }
+                      saving={savingLevitateWebhook}
+                      description="Alternative: webhook to push new clients to Zapier/Make"
+                    />
                   </CardContent>
                 </Card>
 
@@ -1647,168 +1792,194 @@ export default function SettingsPage() {
                 TAB 5 — EMAIL TEMPLATES
             ════════════════════════════════════════════════════════════ */}
             {activeTab === 'templates' && (
-              <Card className="border-gray-200 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-[#1a365d]">
-                    <Mail className="h-5 w-5" />
-                    Email Templates
-                  </CardTitle>
-                  <CardDescription>
-                    Customize the emails sent to clients. Use the placeholders below.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Variable reference */}
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-xs text-gray-500">Available variables:</span>
-                    {[
-                      '{{clientName}}',
-                      '{{firmName}}',
-                      '{{link}}',
-                      '{{amount}}',
-                      '{{date}}',
-                    ].map((v) => (
-                      <Tooltip key={v}>
-                        <TooltipTrigger asChild>
-                          <code className="cursor-default rounded bg-[#ebf4ff] px-2 py-0.5 text-xs font-mono text-[#2b6cb0]">
-                            {v}
-                          </code>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">Will be replaced at send time</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </div>
+              <div className="space-y-5">
+                <div className="flex justify-end">
+                  <Button
+                    className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]"
+                    onClick={() => {
+                      setEditingTemplate({
+                        name: '',
+                        trigger: 'client_created',
+                        isActive: true,
+                        subject: '',
+                        content: '',
+                      });
+                      setIsTemplateDialogOpen(true);
+                    }}
+                  >
+                    Add Custom Template
+                  </Button>
+                </div>
 
-                  <Separator />
-
-                  {/* Questionnaire Invitation */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-[#1a365d]">
-                        Questionnaire Invitation
-                      </Label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-gray-500 hover:text-[#2b6cb0]"
-                        onClick={() =>
-                          setTemplates((t) => ({
-                            ...t,
-                            questionnaireInvitation: DEFAULT_TEMPLATES.questionnaireInvitation,
-                          }))
-                        }
-                      >
-                        <RefreshCw className="mr-1 h-3 w-3" />
-                        Reset to default
-                      </Button>
+                <Card className="border-gray-200 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-[#1a365d]">
+                      <Mail className="h-5 w-5" />
+                      Email Templates & Automations
+                    </CardTitle>
+                    <CardDescription>
+                      Customize the emails sent to clients. Use the placeholders below inside your content.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Variable reference */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="text-xs text-gray-500">Available variables:</span>
+                      {[
+                        '{{clientName}}',
+                        '{{firmName}}',
+                        '{{link}}',
+                        '{{amount}}',
+                        '{{date}}',
+                      ].map((v) => (
+                        <Tooltip key={v}>
+                          <TooltipTrigger asChild>
+                            <code className="cursor-default rounded bg-[#ebf4ff] px-2 py-0.5 text-xs font-mono text-[#2b6cb0]">
+                              {v}
+                            </code>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Will be replaced at send time</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
                     </div>
-                    <Textarea
-                      rows={10}
-                      value={templates.questionnaireInvitation}
-                      onChange={(e) =>
-                        setTemplates((t) => ({
-                          ...t,
-                          questionnaireInvitation: e.target.value,
-                        }))
-                      }
-                      className="resize-y font-mono text-sm"
-                    />
-                  </div>
 
-                  <Separator />
+                    <Separator />
 
-                  {/* Payment Request */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-[#1a365d]">
-                        Payment Request
-                      </Label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-gray-500 hover:text-[#2b6cb0]"
-                        onClick={() =>
-                          setTemplates((t) => ({
-                            ...t,
-                            paymentRequest: DEFAULT_TEMPLATES.paymentRequest,
-                          }))
-                        }
-                      >
-                        <RefreshCw className="mr-1 h-3 w-3" />
-                        Reset to default
-                      </Button>
-                    </div>
-                    <Textarea
-                      rows={10}
-                      value={templates.paymentRequest}
-                      onChange={(e) =>
-                        setTemplates((t) => ({
-                          ...t,
-                          paymentRequest: e.target.value,
-                        }))
-                      }
-                      className="resize-y font-mono text-sm"
-                    />
-                  </div>
+                    {/* Template List */}
+                    {emailTemplates?.length === 0 ? (
+                      <div className="py-8 text-center text-gray-500 text-sm">
+                        No custom templates configured. Using system defaults.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {emailTemplates?.map((template) => (
+                          <div
+                            key={template.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-blue-200 hover:shadow-sm"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-[#1a365d]">{template.name}</h4>
+                                <span className={cn(
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                  template.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                                )}>
+                                  {template.isActive ? "Active" : "Inactive"}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-500">Trigger: {template.trigger}</p>
+                              <p className="text-xs text-gray-400 mt-1 line-clamp-1">Subject: {template.subject}</p>
+                            </div>
 
-                  <Separator />
-
-                  {/* Appointment Confirmation */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-[#1a365d]">
-                        Appointment Confirmation
-                      </Label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-gray-500 hover:text-[#2b6cb0]"
-                        onClick={() =>
-                          setTemplates((t) => ({
-                            ...t,
-                            appointmentConfirmation: DEFAULT_TEMPLATES.appointmentConfirmation,
-                          }))
-                        }
-                      >
-                        <RefreshCw className="mr-1 h-3 w-3" />
-                        Reset to default
-                      </Button>
-                    </div>
-                    <Textarea
-                      rows={10}
-                      value={templates.appointmentConfirmation}
-                      onChange={(e) =>
-                        setTemplates((t) => ({
-                          ...t,
-                          appointmentConfirmation: e.target.value,
-                        }))
-                      }
-                      className="resize-y font-mono text-sm"
-                    />
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      onClick={handleSaveTemplates}
-                      disabled={savingTemplates}
-                      className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]"
-                    >
-                      {savingTemplates ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                      Save Templates
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                              onClick={() => {
+                                setEditingTemplate(template);
+                                setIsTemplateDialogOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* ── Template Editor Dialog ────────────────────────────────────────────── */}
+      <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-[700px] h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{editingTemplate?.id ? 'Edit Template' : 'Add New Template'}</DialogTitle>
+            <DialogDescription>Configure the automation trigger and content for this email.</DialogDescription>
+          </DialogHeader>
+
+          {editingTemplate && (
+            <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Template Name</Label>
+                  <Input
+                    value={editingTemplate.name || ''}
+                    onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                    placeholder="e.g. Welcome Email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Automation Trigger</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={editingTemplate.trigger || 'manual'}
+                    onChange={(e) => setEditingTemplate({ ...editingTemplate, trigger: e.target.value as EmailTrigger })}
+                  >
+                    <option value="general_manual">General Manual</option>
+                    <option value="questionnaire_invitation">Manual: Questionnaire Invitation</option>
+                    <option value="payment_request">Manual: Payment Request</option>
+                    <option value="appointment_confirmation">Manual: Appointment Confirmation</option>
+                    <option value="client_created">Auto: On Client Created</option>
+                    <option value="questionnaire_completed">Auto: On Questionnaire Completed</option>
+                    <option value="payment_received">Auto: On Payment Received</option>
+                    <option value="appointment_scheduled">Auto: On Appointment Scheduled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2 pb-2">
+                <Checkbox
+                  id="isActive"
+                  checked={editingTemplate.isActive ?? true}
+                  onCheckedChange={(c) => setEditingTemplate({ ...editingTemplate, isActive: Boolean(c) })}
+                />
+                <Label htmlFor="isActive" className="cursor-pointer">Active (Enable Automation)</Label>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2 pt-2">
+                <Label>Email Subject Line</Label>
+                <Input
+                  value={editingTemplate.subject || ''}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate, subject: e.target.value })}
+                  placeholder="e.g. Action Required: Your Estate Planning Questionnaire"
+                />
+              </div>
+
+              <div className="space-y-2 flex-1 flex flex-col">
+                <Label>Email Content (HTML allowed)</Label>
+                <p className="text-xs text-muted-foreground">Variables: {'{{clientName}}, {{firmName}}, {{link}}, {{amount}}, {{date}}'}</p>
+                <Textarea
+                  value={editingTemplate.content || ''}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate, content: e.target.value })}
+                  className="flex-1 min-h-[250px] font-mono whitespace-pre-wrap"
+                  placeholder="<p>Dear {{clientName}},</p><p>Welcome to {{firmName}}...</p>"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-auto pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsTemplateDialogOpen(false)} disabled={savingTemplateForm}>Cancel</Button>
+            <Button
+              className="bg-[#2b6cb0] hover:bg-[#1a365d]"
+              onClick={handleSaveTemplate}
+              disabled={savingTemplateForm || !editingTemplate?.name || !editingTemplate?.subject}
+            >
+              {savingTemplateForm && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+              Save Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
