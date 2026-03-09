@@ -13,7 +13,8 @@
  *  6. Update client record with generation metadata
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
+const { HttpsError } = functions.https;
 import * as admin from 'firebase-admin';
 
 import { generateWill } from './generators/will-generator';
@@ -302,18 +303,14 @@ function requiresNotarization(docType: string): boolean {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const generateDocuments = onCall(
-  {
-    timeoutSeconds: 540, // 9 minutes — spec says ≤10 min total
-    memory: '1GiB',
-    region: 'us-east1',
-    invoker: 'public', // Required to prevent CORS / Cloud Run auth errors
-  },
-  async (request: any /* CallableRequest */) => {
+export const generateDocuments = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .region('us-east1')
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
     // 1. Authentication & authorization
     // ------------------------------------------------------------------
-    const auth = request.auth;
+    const auth = context.auth;
     if (!auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to generate documents.');
     }
@@ -326,8 +323,7 @@ export const generateDocuments = onCall(
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes } =
-      request.data as GenerateRequest;
+    const { firmId, clientId, packageType, trustTypes } = data as GenerateRequest;
 
     if (!firmId || !clientId || !packageType) {
       throw new HttpsError(
@@ -456,4 +452,4 @@ export const generateDocuments = onCall(
       })),
     };
   },
-);
+  );
