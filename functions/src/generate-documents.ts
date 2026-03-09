@@ -226,21 +226,21 @@ async function saveDocument(
     mimeType: 'text/html',
     versions: existing.exists
       ? admin.firestore.FieldValue.arrayUnion({
-          versionNumber: currentVersion,
+        versionNumber: currentVersion,
+        storagePath: '',
+        createdAt: now,
+        createdBy,
+        changeNotes: 'AI regeneration',
+      })
+      : [
+        {
+          versionNumber: 1,
           storagePath: '',
           createdAt: now,
           createdBy,
-          changeNotes: 'AI regeneration',
-        })
-      : [
-          {
-            versionNumber: 1,
-            storagePath: '',
-            createdAt: now,
-            createdBy,
-            changeNotes: 'Initial AI generation',
-          },
-        ],
+          changeNotes: 'Initial AI generation',
+        },
+      ],
     currentVersion,
     generatedByAI: true,
     aiModel: 'gpt-4.1',
@@ -307,6 +307,7 @@ export const generateDocuments = onCall(
     timeoutSeconds: 540, // 9 minutes — spec says ≤10 min total
     memory: '1GiB',
     region: 'us-east1',
+    invoker: 'public', // Required to prevent CORS / Cloud Run auth errors
   },
   async (request: any /* CallableRequest */) => {
     // ------------------------------------------------------------------
