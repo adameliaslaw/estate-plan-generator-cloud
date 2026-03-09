@@ -1,0 +1,48 @@
+{"users": [
+{
+  "localId": "K5RutuuYBwgoXut5jO21S1WQLXE2",
+  "email": "info@adameliaslaw.com",
+  "emailVerified": true,
+  "displayName": "Elias Counsel LLC",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocIpiwBjW0gRqZjF5clEZoSjYAk-2I13fRpVNnXn_lK_4UG9mw=s96-c",
+  "lastSignedInAt": "1772406152189",
+  "createdAt": "1772406152188",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "101114533305217138998",
+      "email": "info@adameliaslaw.com",
+      "displayName": "Elias Counsel LLC",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocIpiwBjW0gRqZjF5clEZoSjYAk-2I13fRpVNnXn_lK_4UG9mw=s96-c"
+    }
+  ]
+},
+{
+  "localId": "OJa0WEBMuPhQ7ZQ8e28uSQxeEv02",
+  "email": "adamelias66@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "i3Cgmx7BoWd5IEKgok07oYMzRcwzO1eQPA+RhpXve7Su/cXaqcXgq+4DMgvYSnboEUeIX1qTSQeuMh2PZyqUIw==",
+  "salt": "ILIEcFHvVon4Og==",
+  "createdAt": "1772406341015",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "r8fhcvRtFjetn6EaGnJDuScJZ0V2",
+  "email": "adam@adameliaslaw.com",
+  "emailVerified": true,
+  "displayName": "Adam J. Elias",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocLySfo_lSs-VZXmlPO5FVbQ5dNHgeVqg6HDmCb8iZ1zcAp3v_o=s96-c",
+  "lastSignedInAt": "1772492269017",
+  "createdAt": "1772405995803",
+  "customAttributes": "{\"role\":\"admin\",\"firmId\":\"elias-counsel\"}",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "103150917060163587794",
+      "email": "adam@adameliaslaw.com",
+      "displayName": "Adam J. Elias",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocLySfo_lSs-VZXmlPO5FVbQ5dNHgeVqg6HDmCb8iZ1zcAp3v_o=s96-c"
+    }
+  ]
+}]}
