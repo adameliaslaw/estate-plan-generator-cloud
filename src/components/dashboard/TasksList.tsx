@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     CheckCircle2,
     Circle,
@@ -35,7 +35,7 @@ export function TasksList({ clientId, clientName, activeClientIds }: TasksListPr
 
     const { data: tasks, loading } = useCollection<AppTask>(
         firmId ? COLLECTIONS.TASKS(firmId) : null,
-        [orderBy('createdAt', 'desc')]
+        useMemo(() => [orderBy('createdAt', 'desc')], [])
     );
 
     const [newTaskTitle, setNewTaskTitle] = useState('');

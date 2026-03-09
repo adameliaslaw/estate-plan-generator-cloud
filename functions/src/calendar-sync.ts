@@ -233,6 +233,8 @@ async function refreshAccessTokenIfNeeded(
 
   if (!response.ok) {
     const err = (await response.json()) as any;
+    console.error('[refreshAccessTokenIfNeeded] Detailed Google API Error Payload:', JSON.stringify(err, null, 2));
+
     if (err.error === 'invalid_grant') {
       throw new HttpsError(
         'unauthenticated',
@@ -240,7 +242,7 @@ async function refreshAccessTokenIfNeeded(
         'Please reconnect via Settings → Integrations → Google Calendar.',
       );
     }
-    throw new HttpsError('internal', `Token refresh failed: ${err.error}`);
+    throw new HttpsError('internal', `Token refresh failed: ${err.error} - ${err.error_description || 'No description'}`);
   }
 
   const { access_token, expires_in } = (await response.json()) as any;
@@ -287,11 +289,13 @@ function timestampToISO(ts: admin.firestore.Timestamp | undefined): string {
  * Input:  { firmId, eventId }
  * Output: { success: true, googleCalendarEventId: string, htmlLink: string }
  */
-export const pushEventToGoogleCalendar = onCall(
+export const pushEventToGoogleCalendarV2 = onCall(
   {
     region: 'us-east1',
     timeoutSeconds: 60,
     memory: '256MiB',
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    invoker: 'public',
   },
   async (request: any /* CallableRequest */) => {
     // ------------------------------------------------------------------
@@ -375,9 +379,8 @@ export const pushEventToGoogleCalendar = onCall(
     const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
     let gcalResponse: GoogleCalendarEvent;
+    let response: Response | undefined;
     try {
-      let response: Response;
-
       if (eventDoc.googleCalendarEventId) {
         // Update existing event
         const updateUrl = `${baseUrl}/${encodeURIComponent(eventDoc.googleCalendarEventId)}`;
@@ -419,7 +422,7 @@ export const pushEventToGoogleCalendar = onCall(
 
         throw new HttpsError(
           'internal',
-          `Google Calendar API returned ${response.status}. Please try again.`,
+          `Google Calendar API returned ${response.status}: ${errorBody}.`,
         );
       }
 
@@ -474,11 +477,13 @@ export const pushEventToGoogleCalendar = onCall(
  * Input:  { firmId, clientName, timeMin?, timeMax? }
  * Output: { imported: number, skipped: number, events: Array<{ eventId, title }> }
  */
-export const pullGoogleCalendarEvents = onCall(
+export const pullGoogleCalendarEventsV2 = onCall(
   {
     region: 'us-east1',
     timeoutSeconds: 60,
     memory: '256MiB',
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    invoker: 'public',
   },
   async (request: any /* CallableRequest */) => {
     // ------------------------------------------------------------------
@@ -678,6 +683,7 @@ export const syncGoogleCalendar = onSchedule(
     region: 'us-east1',
     timeoutSeconds: 540,  // 9 minutes max (Cloud Scheduler allows up to 10)
     memory: '512MiB',
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   },
   async (_event) => {
     console.log('[syncGoogleCalendar] Starting scheduled sync...');

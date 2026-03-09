@@ -34,8 +34,10 @@ export function useAudioRecorder() {
             };
 
             mr.onstop = () => {
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-                const fileName = `recording-${Date.now()}.webm`;
+                const mimeType = mr.mimeType || (chunksRef.current[0]?.type || 'audio/webm');
+                const blob = new Blob(chunksRef.current, { type: mimeType });
+                const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('wav') ? 'wav' : 'webm';
+                const fileName = `recording-${Date.now()}.${ext}`;
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     setState((prev) => ({

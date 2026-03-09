@@ -307,7 +307,7 @@ export const documentService = {
   }): Promise<{ googleCalendarEventId: string }> {
     const fn = httpsCallable<typeof params, { googleCalendarEventId: string }>(
       functions,
-      'pushEventToGoogleCalendar',
+      'pushEventToGoogleCalendarV2',
     );
     const result = await fn(params);
     return result.data;

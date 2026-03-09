@@ -217,12 +217,12 @@ export default function DashboardPage() {
     loading: clientsLoading,
   } = useCollection<Client>(
     firmId ? COLLECTIONS.CLIENTS(firmId) : null,
-    [orderBy('updatedAt', 'desc'), limit(10)],
+    useMemo(() => [orderBy('updatedAt', 'desc'), limit(10)], [])
   );
 
   const { data: allClients, loading: allLoading } = useCollection<Client>(
     firmId ? COLLECTIONS.CLIENTS(firmId) : null,
-    [orderBy('createdAt', 'desc'), limit(50)], // Grab enough to count active users
+    useMemo(() => [orderBy('createdAt', 'desc'), limit(50)], []) // Grab enough to count active users
   );
 
   interface RawActivityItem {
@@ -236,7 +236,7 @@ export default function DashboardPage() {
   // Real-time query for explict frontend activities
   const { data: rawActivities, loading: activitiesLoading } = useCollection<RawActivityItem>(
     firmId ? `firms/${firmId}/activities` : null,
-    [orderBy('timestamp', 'desc'), limit(40)],
+    useMemo(() => [orderBy('timestamp', 'desc'), limit(40)], [])
   );
 
   const loading = clientsLoading || allLoading || activitiesLoading;
@@ -386,11 +386,13 @@ export default function DashboardPage() {
   // const showEmptyState = !loading && recentClients.length === 0; // Replaced by new showEmptyState above
 
   const audioModalClients = useMemo(() => {
-    return filteredClients.map((c) => ({
-      id: c.id,
-      name: clientDisplayName(c),
-    }));
-  }, [filteredClients]);
+    return allClients
+      .filter((c) => !c.isArchived)
+      .map((c) => ({
+        id: c.id,
+        name: clientDisplayName(c),
+      }));
+  }, [allClients]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">

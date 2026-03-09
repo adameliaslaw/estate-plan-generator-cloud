@@ -18,6 +18,7 @@ import {
   Calendar,
   CheckCircle2,
   ChevronRight,
+  AlertCircle,
   Eye,
   EyeOff,
   Image as ImageIcon,
@@ -73,7 +74,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { storage, auth } from '@/config/firebase';
+import { storage, auth, db, functions } from '@/config/firebase';
 import { COLLECTIONS, FIRM_DEFAULTS } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollection, updateDoc, useDocument } from '@/hooks/useFirestore';
@@ -81,8 +82,34 @@ import { cn } from '@/lib/utils';
 import { sanitizeInput } from '@/utils/sanitize';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Timestamp, addDoc, collection } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import type { EmailTemplate, EmailTrigger } from '@/types';
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
+
+// ---------------------------------------------------------------------------
+// Google OAuth Config
+// ---------------------------------------------------------------------------
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+
+function GoogleLoginButton({ onSuccess, onError, disabled }: { onSuccess: (code: string) => void, onError?: (error: any) => void, disabled?: boolean }) {
+  const login = useGoogleLogin({
+    flow: 'auth-code',
+    scope: 'https://www.googleapis.com/auth/calendar',
+    onSuccess: (codeResponse) => onSuccess(codeResponse.code),
+    onError: (error) => onError?.(error),
+  });
+
+  return (
+    <Button
+      onClick={() => login()}
+      disabled={disabled}
+      className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]"
+    >
+      {disabled ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+      Connect Google Calendar
+    </Button>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Firebase MFA imports — TOTP
@@ -628,22 +655,23 @@ export default function SettingsPage() {
     }
   }, [firmDocPath, lawPayKey, lawPayMerchantId, userProfile]);
 
-  const handleConnectGoogleCalendar = useCallback(async () => {
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+
+  const handleExchangeAuthCode = useCallback(async (code: string) => {
     if (!firmDocPath) return;
+    setConnectingGoogle(true);
     try {
-      await updateDoc(firmDocPath, {
-        googleCalendar: {
-          connected: true,
-          email: userProfile?.email || 'admin@elias-counsel.com',
-        },
-        updatedBy: userProfile?.uid ?? '',
-      });
+      const firmId = firmDocPath.split('/')[1];
+      const exchangeFn = httpsCallable(functions, 'exchangeGoogleAuthCode');
+      await exchangeFn({ code, redirectUri: 'postmessage', firmId });
       toast.success('Google Calendar connected successfully!');
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to connect Google Calendar.');
+    } catch (err: any) {
+      console.error('Google OAuth Exchange Error:', err);
+      toast.error(err.message || 'Failed to connect Google Calendar.');
+    } finally {
+      setConnectingGoogle(false);
     }
-  }, [firmDocPath, userProfile]);
+  }, [firmDocPath]);
 
   const handleDisconnectGoogleCalendar = useCallback(async () => {
     if (!firmDocPath) return;
@@ -1610,13 +1638,22 @@ export default function SettingsPage() {
                         <p className="text-sm text-gray-600">
                           Connect your Google account to sync calendar events automatically.
                         </p>
-                        <Button
-                          onClick={handleConnectGoogleCalendar}
-                          className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]"
-                        >
-                          <Calendar className="h-4 w-4" />
-                          Connect Google Calendar
-                        </Button>
+                        {GOOGLE_CLIENT_ID ? (
+                          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                            <GoogleLoginButton
+                              onSuccess={handleExchangeAuthCode}
+                              onError={() => toast.error('Google login popup failed.')}
+                              disabled={connectingGoogle}
+                            />
+                          </GoogleOAuthProvider>
+                        ) : (
+                          <Alert className="mt-2 text-sm border-red-200 bg-red-50 text-red-900 [&>svg]:text-red-900">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>
+                              Missing VITE_GOOGLE_CLIENT_ID in environment variables.
+                            </AlertDescription>
+                          </Alert>
+                        )}
                         <p className="text-xs text-gray-400">
                           Requires OAuth setup in Firebase Console → Authentication → Sign-in providers.
                         </p>

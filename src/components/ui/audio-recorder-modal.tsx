@@ -76,19 +76,23 @@ export function AudioRecorderModal({
     const audioRecorder = useAudioRecorder();
     const audioFileInputRef = useRef<HTMLInputElement>(null);
 
+    const { clearAudio, cancelRecording } = audioRecorder;
+
     useEffect(() => {
         if (open) {
             setTitle('');
             setNoteType('general');
             setContent('');
-            audioRecorder.clearAudio();
+            clearAudio();
             if (defaultClientId) {
                 setSelectedClientId(defaultClientId);
             } else {
                 setSelectedClientId('');
             }
+        } else {
+            cancelRecording();
         }
-    }, [open, defaultClientId, audioRecorder.clearAudio]);
+    }, [open, defaultClientId, clearAudio, cancelRecording]);
 
     const handleDone = async () => {
         if (!selectedClientId) {

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Calendar as CalendarIcon, MapPin, Video, Clock } from 'lucide-react';
 import { where, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { COLLECTIONS } from '@/config/constants';
@@ -15,13 +16,15 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
     const firmId = userProfile?.firmId;
 
     // Query events that haven't happened yet, ordered by start time
+    const queryConstraints = useMemo(() => [
+        where('startAt', '>=', Timestamp.now()),
+        orderBy('startAt', 'asc'),
+        limit(5)
+    ], []);
+
     const { data: upcomingEvents, loading } = useCollection<CalendarEvent>(
         firmId ? COLLECTIONS.CALENDAR_EVENTS(firmId) : null,
-        [
-            where('startAt', '>=', Timestamp.now()),
-            orderBy('startAt', 'asc'),
-            limit(5)
-        ]
+        queryConstraints
     );
 
     const formatEventTime = (timestamp: Timestamp, allDay: boolean) => {

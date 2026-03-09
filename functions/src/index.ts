@@ -17,7 +17,7 @@ export { exportDocumentDocx } from './export-docx';
 export { exportBatchDocuments } from './export-batch';
 export { transcribeAudio, summarizeTranscription } from './transcribe-audio';
 export { createPaymentRequest, lawpayWebhook } from './lawpay-integration';
-export { pushEventToGoogleCalendar, pullGoogleCalendarEvents, syncGoogleCalendar } from './calendar-sync';
+export { pushEventToGoogleCalendarV2, pullGoogleCalendarEventsV2, syncGoogleCalendar } from './calendar-sync';
 export { checkDocumentCompliance } from './ai-compliance-check';
 export {
   sendQuestionnaireInvitation,
@@ -35,3 +35,4 @@ export { syncClientToLevitate } from './levitate-sync';
 export { sendForSignature } from './esign-service';
 export { processQuestionnaireScan } from './process-ocr';
 export { getFirmBranding } from './branding';
+export { exchangeGoogleAuthCode } from './google-auth';

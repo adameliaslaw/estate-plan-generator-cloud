@@ -100,6 +100,7 @@ export const transcribeAudio = onCall(
     region: 'us-east1',
     timeoutSeconds: 300, // 5 minutes — large audio files can take time
     memory: '512MiB',
+    invoker: 'public',
   },
   async (request: any /* CallableRequest */) => {
     // ------------------------------------------------------------------
@@ -261,6 +262,7 @@ export const summarizeTranscription = onCall(
     region: 'us-east1',
     timeoutSeconds: 120,
     memory: '256MiB',
+    invoker: 'public',
   },
   async (request: any /* CallableRequest */) => {
     // ------------------------------------------------------------------
