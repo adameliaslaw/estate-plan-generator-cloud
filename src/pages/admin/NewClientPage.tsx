@@ -4,7 +4,7 @@
  * Form page for creating a new client record (route: /clients/new).
  *
  * Creates a Firestore document at firms/{firmId}/clients/{auto-id} with
- * initial status 'intake', then navigates to the new client's dashboard.
+ * initial status 'prospect', then navigates to the new client's dashboard.
  */
 
 import { useState } from 'react';
@@ -150,7 +150,7 @@ export default function NewClientPage() {
 
       const docRef = await addDoc(colRef, {
         firmId,
-        status: 'intake',
+        status: 'prospect',
         packageType: values.packageType || null,
         personalInfo: {
           firstName: values.firstName.trim(),

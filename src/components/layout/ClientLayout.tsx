@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Scale, Lock, LogOut } from 'lucide-react';
 import { FIRM_DEFAULTS, ROUTES } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
+import { useEffect } from 'react';
 
 interface ClientLayoutProps {
   children: ReactNode;
@@ -14,9 +15,18 @@ interface ClientLayoutProps {
  * with an attorney-client privilege notice.
  */
 export function ClientLayout({ children }: ClientLayoutProps) {
-  const { userProfile, signOut } = useAuth();
+  const { userProfile, signOut, loading, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const isClient = userProfile?.role === 'client';
+
+  useEffect(() => {
+    if (!loading && !user) {
+      // User is not logged in, redirect to login page and preserve the intended URL
+      const redirectUrl = encodeURIComponent(location.pathname + location.search);
+      navigate(`${ROUTES.LOGIN}?redirect=${redirectUrl}`, { replace: true });
+    }
+  }, [loading, user, navigate, location]);
 
   const handleSignOut = async () => {
     try {

@@ -7,16 +7,42 @@ import { Eye, EyeOff, Scale, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { ROUTES, FIRM_DEFAULTS } from '@/config/constants';
+import { ROUTES, FIRM_DEFAULTS, COLLECTIONS } from '@/config/constants';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 
-// ── Form schema ──────────────────────────────────────────────────────────────
-
-const loginSchema = z.object({
+const authSchema = z.object({
+  mode: z.enum(['sign-in', 'sign-up']),
   email: z.string().min(1, 'Email is required').email('Please enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.mode === 'sign-up') {
+    if (!data.firstName || data.firstName.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['firstName'],
+        message: 'First name is required for sign up',
+      });
+    }
+    if (!data.lastName || data.lastName.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lastName'],
+        message: 'Last name is required for sign up',
+      });
+    }
+  }
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type AuthFormValues = {
+  mode: 'sign-in' | 'sign-up';
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+};
 
 // ── Google icon SVG ──────────────────────────────────────────────────────────
 
@@ -46,20 +72,73 @@ function GoogleIcon({ className }: { className?: string }) {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
-  const { signInWithEmail, signInWithGoogle, user, userProfile } = useAuth();
+  const { signInWithEmail, signUp, signInWithGoogle, user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect') ?? ROUTES.DASHBOARD;
 
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Auto-redirect if user gets fully logged in and AuthContext updates with profile
   useEffect(() => {
-    if (user && userProfile) {
-      navigate(decodeURIComponent(redirectTo), { replace: true });
+    async function handleRouting() {
+      if (!user || !userProfile) return;
+
+      // If user is staff (admin/attorney/paralegal), go to dashboard (or requested route)
+      if (userProfile.role !== 'client') {
+        navigate(decodeURIComponent(redirectTo), { replace: true });
+        return;
+      }
+
+      // User is a client. We must find their client document to route them to their questionnaire.
+      try {
+        let firmId = userProfile.firmId || 'elias-counsel'; // Fallback to default
+
+        // Link the client first to ensure they have the proper claims and the DB is updated
+        try {
+          const linkClientFn = httpsCallable(functions, 'linkClient');
+          const result = await linkClientFn({ firmId });
+          const data = result.data as { success: boolean; clientId?: string };
+
+          if (data.success && data.clientId) {
+            // If linking was successful, we can use the returned clientId directly!
+            navigate(`/questionnaire/${firmId}/${data.clientId}`, { replace: true });
+            return; // We are done!
+          }
+        } catch (linkErr) {
+          console.warn('Failed to auto-link client via Cloud Function, falling back to manual query:', linkErr);
+        }
+
+        const clientsRef = collection(db, COLLECTIONS.CLIENTS(firmId));
+
+        // 1. First, check if there's a client document explicitly linked by auth UID
+        const qByUid = query(clientsRef, where('linkedUserId', '==', user.uid));
+        let snap = await getDocs(qByUid);
+
+        // 2. If not found by UID, try finding by email address
+        if (snap.empty && user.email) {
+          const qByEmail = query(clientsRef, where('personalInfo.email', '==', user.email));
+          snap = await getDocs(qByEmail);
+        }
+
+        if (!snap.empty) {
+          const clientId = snap.docs[0].id;
+          navigate(`/questionnaire/${firmId}/${clientId}`, { replace: true });
+        } else {
+          // Client has no associated record yet, send them to unauthorized or dashboard
+          // where they will see the default generic access denied message until linked
+          navigate(ROUTES.UNAUTHORIZED, { replace: true });
+        }
+      } catch (err) {
+        console.error('Failed to route client:', err);
+        navigate(ROUTES.UNAUTHORIZED, { replace: true });
+      }
     }
+
+    void handleRouting();
   }, [user, userProfile, navigate, redirectTo]);
 
   const [firmLogoUrl, setFirmLogoUrl] = useState<string | null>(null);
@@ -83,18 +162,46 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
+    clearErrors,
     formState: { errors, isSubmitting },
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<AuthFormValues>({
+    resolver: zodResolver(authSchema),
+    defaultValues: {
+      mode: 'sign-in',
+      email: '',
+      password: '',
+      firstName: '',
+      lastName: '',
+    }
   });
 
-  async function onSubmit(values: LoginFormValues) {
+  // When switching modes, clear errors
+  const toggleMode = (newMode: 'sign-in' | 'sign-up') => {
+    setMode(newMode);
+    setValue('mode', newMode);
+    clearErrors();
+    setErrorMessage(null);
+  };
+
+  async function onSubmit(values: AuthFormValues) {
     setErrorMessage(null);
     try {
-      await signInWithEmail(values.email, values.password);
+      if (mode === 'sign-in') {
+        await signInWithEmail(values.email, values.password);
+      } else {
+        const displayName = `${values.firstName?.trim()} ${values.lastName?.trim()}`;
+        await signUp(values.email, values.password, displayName);
+        // After signing up successfully, the onAuthStateChanged in AuthContext will trigger
+        // the client linking flow since it sees a new user but no profile.
+        // We will call the linkClient function here just to be safe before routing triggers.
+        let firmId = 'elias-counsel'; // Fallback
+        const linkClientFn = httpsCallable(functions, 'linkClient');
+        await linkClientFn({ firmId });
+      }
       // Navigation handled by useEffect on user state change
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Sign in failed. Please try again.');
+      setErrorMessage(err instanceof Error ? err.message : `${mode === 'sign-in' ? 'Sign in' : 'Sign up'} failed. Please try again.`);
     }
   }
 
@@ -141,8 +248,64 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* Mode Tabs */}
+          <div className="mb-6 flex rounded-lg bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => toggleMode('sign-in')}
+              className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === 'sign-in' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleMode('sign-up')}
+              className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === 'sign-up' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
           {/* Email/password form */}
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+            {mode === 'sign-up' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                    First Name
+                  </label>
+                  <input
+                    id="firstName"
+                    type="text"
+                    placeholder="Jane"
+                    disabled={isLoading}
+                    {...register('firstName')}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#2b6cb0] focus:outline-none focus:ring-2 focus:ring-[#2b6cb0]/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+                  />
+                  {errors.firstName && (
+                    <p className="text-xs text-red-600">{errors.firstName.message}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                    Last Name
+                  </label>
+                  <input
+                    id="lastName"
+                    type="text"
+                    placeholder="Doe"
+                    disabled={isLoading}
+                    {...register('lastName')}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#2b6cb0] focus:outline-none focus:ring-2 focus:ring-[#2b6cb0]/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+                  />
+                  {errors.lastName && (
+                    <p className="text-xs text-red-600">{errors.lastName.message}</p>
+                  )}
+                </div>
+              </div>
+            )}
             {/* Email */}
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -168,13 +331,15 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
-                <Link
-                  to={ROUTES.LOGIN.replace('/login', '/forgot-password')}
-                  className="text-xs font-medium text-[#2b6cb0] hover:text-[#1a365d] hover:underline"
-                  tabIndex={-1}
-                >
-                  Forgot password?
-                </Link>
+                {mode === 'sign-in' && (
+                  <Link
+                    to={ROUTES.LOGIN.replace('/login', '/forgot-password')}
+                    className="text-xs font-medium text-[#2b6cb0] hover:text-[#1a365d] hover:underline"
+                    tabIndex={-1}
+                  >
+                    Forgot password?
+                  </Link>
+                )}
               </div>
               <div className="relative">
                 <input
@@ -205,7 +370,7 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Sign In button */}
+            {/* Submit button */}
             <button
               type="submit"
               disabled={isLoading}
@@ -214,10 +379,10 @@ export default function LoginPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Signing in…
+                  {mode === 'sign-in' ? 'Signing in…' : 'Creating account…'}
                 </>
               ) : (
-                'Sign In'
+                mode === 'sign-in' ? 'Sign In' : 'Create Account'
               )}
             </button>
           </form>
@@ -244,7 +409,7 @@ export default function LoginPage() {
             ) : (
               <GoogleIcon className="h-4 w-4" />
             )}
-            Sign in with Google
+            {mode === 'sign-in' ? 'Sign in' : 'Sign up'} with Google
           </button>
 
           {/* Contact notice */}

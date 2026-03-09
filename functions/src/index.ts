@@ -36,3 +36,4 @@ export { sendForSignature } from './esign-service';
 export { processQuestionnaireScan } from './process-ocr';
 export { getFirmBranding } from './branding';
 export { exchangeGoogleAuthCode } from './google-auth';
+export { linkClient } from './link-client';
