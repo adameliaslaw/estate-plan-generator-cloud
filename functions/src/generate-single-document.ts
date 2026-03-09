@@ -240,21 +240,21 @@ export const generateSingleDocument = onCall(
       updatedBy: auth.uid,
       versions: existing.exists
         ? admin.firestore.FieldValue.arrayUnion({
-            versionNumber: currentVersion,
-            storagePath: '',
-            createdAt: now,
-            createdBy: auth.uid,
-            changeNotes: customInstructions
-              ? `Regenerated with custom instructions: ${sanitizeForPrompt(customInstructions).slice(0, 200)}`
-              : 'Regenerated',
-          })
+          versionNumber: currentVersion,
+          storagePath: '',
+          createdAt: admin.firestore.Timestamp.now(),
+          createdBy: auth.uid,
+          changeNotes: customInstructions
+            ? `Regenerated with custom instructions: ${sanitizeForPrompt(customInstructions).slice(0, 200)}`
+            : 'Regenerated',
+        })
         : [{
-            versionNumber: 1,
-            storagePath: '',
-            createdAt: now,
-            createdBy: auth.uid,
-            changeNotes: 'Initial AI generation',
-          }],
+          versionNumber: 1,
+          storagePath: '',
+          createdAt: admin.firestore.Timestamp.now(),
+          createdBy: auth.uid,
+          changeNotes: 'Initial AI generation',
+        }],
     };
 
     if (!existing.exists) {

@@ -464,7 +464,7 @@ Generate the complete document now.
       versions: [{
         versionNumber: 1,
         storagePath: '',
-        createdAt: now,
+        createdAt: admin.firestore.Timestamp.now(),
         createdBy: auth.uid,
         changeNotes: 'Initial AI generation',
       }],

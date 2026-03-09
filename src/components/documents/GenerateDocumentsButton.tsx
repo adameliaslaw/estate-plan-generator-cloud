@@ -413,6 +413,9 @@ export default function GenerateDocumentsButton({
               <AlertCircle className="h-5 w-5" />
               Generation Failed
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Details about why document generation failed.
+            </DialogDescription>
           </DialogHeader>
 
           <Alert className="border-red-200 bg-red-50">

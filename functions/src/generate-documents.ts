@@ -229,7 +229,7 @@ async function saveDocument(
       ? admin.firestore.FieldValue.arrayUnion({
         versionNumber: currentVersion,
         storagePath: '',
-        createdAt: now,
+        createdAt: admin.firestore.Timestamp.now(),
         createdBy,
         changeNotes: 'AI regeneration',
       })
@@ -237,7 +237,7 @@ async function saveDocument(
         {
           versionNumber: 1,
           storagePath: '',
-          createdAt: now,
+          createdAt: admin.firestore.Timestamp.now(),
           createdBy,
           changeNotes: 'Initial AI generation',
         },
