@@ -22,7 +22,7 @@
  *   Signature/notary text → preserved with underline tab stops
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {
   Document as DocxDocument,
@@ -708,14 +708,14 @@ export function buildDocxDocument(
                   }),
                   ...(isDraft
                     ? [
-                        new TextRun({
-                          text: ' — DRAFT',
-                          bold: true,
-                          color: 'CC0000',
-                          font: 'Times New Roman',
-                          size: 18,
-                        }),
-                      ]
+                      new TextRun({
+                        text: ' — DRAFT',
+                        bold: true,
+                        color: 'CC0000',
+                        font: 'Times New Roman',
+                        size: 18,
+                      }),
+                    ]
                     : []),
                 ],
                 alignment: AlignmentType.CENTER,
@@ -761,35 +761,35 @@ export function buildDocxDocument(
 
 // ── Cloud Function ────────────────────────────────────────────────────────────
 
-export const exportDocumentDocx = onCall(
-  {
+export const exportDocumentDocx = functions
+  .runWith({
     timeoutSeconds: 60,
-    memory: '512MiB',
-    region: 'us-east1',
-  },
-  async (request: any /* CallableRequest */) => {
+    memory: '512MB',
+  })
+  .region('us-east1')
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // ── 1. Auth check ────────────────────────────────────────────────────────
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Authentication required.');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    const { role } = request.auth.token as { role?: string };
+    const { role } = context.auth.token as { role?: string };
     if (!role || !['attorney', 'paralegal', 'admin'].includes(role)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'permission-denied',
         'Only attorneys, paralegals, and admins may export documents.',
       );
     }
 
     // ── 2. Validate input ────────────────────────────────────────────────────
-    const { firmId, clientId, documentId } = request.data as {
+    const { firmId, clientId, documentId } = data as {
       firmId?: string;
       clientId?: string;
       documentId?: string;
     };
 
     if (!firmId || !clientId || !documentId) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'invalid-argument',
         'firmId, clientId, and documentId are required.',
       );
@@ -803,7 +803,7 @@ export const exportDocumentDocx = onCall(
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
-      throw new HttpsError('not-found', 'Document not found.');
+      throw new functions.https.HttpsError('not-found', 'Document not found.');
     }
 
     const docData = docSnap.data()!;
@@ -853,7 +853,7 @@ export const exportDocumentDocx = onCall(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'DOCX generation failed.';
       console.error('[exportDocumentDocx] Error:', message, err);
-      throw new HttpsError('internal', `DOCX export failed: ${message}`);
+      throw new functions.https.HttpsError('internal', `DOCX export failed: ${message}`);
     }
   },
-);
+  );

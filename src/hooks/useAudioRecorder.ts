@@ -25,7 +25,17 @@ export function useAudioRecorder() {
     const startRecording = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mr = new MediaRecorder(stream);
+
+            // Explicitly request 128kbps to ensure high transcription quality
+            const options = { audioBitsPerSecond: 128000 };
+            let mr: MediaRecorder;
+            try {
+                mr = new MediaRecorder(stream, options);
+            } catch (err) {
+                // Fallback if the browser doesn't support specifying the bitrate this way
+                mr = new MediaRecorder(stream);
+            }
+
             mediaRecorderRef.current = mr;
             chunksRef.current = [];
 

@@ -15,7 +15,7 @@
  *                  "firms/abc/clients/xyz/notes/note123.m4a")
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import OpenAI, { toFile } from 'openai';
 import { callAI } from './ai-client';
@@ -95,26 +95,25 @@ function mimeTypeFromPath(storagePath: string): string {
  * Input:  { firmId, clientId, noteId, storagePath }
  * Output: { success: true, transcription: string }
  */
-export const transcribeAudio = onCall(
-  {
-    region: 'us-east1',
-    timeoutSeconds: 300, // 5 minutes — large audio files can take time
-    memory: '512MiB',
-    invoker: 'public',
-  },
-  async (request: any /* CallableRequest */) => {
+export const transcribeAudio = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '512MB',
+    secrets: ['OPENAI_API_KEY'],
+  })
+  .region('us-east1')
+  .https.onCall(async (data, context) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'You must be logged in to transcribe audio.');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to transcribe audio.');
     }
 
-    const { firmId, clientId, noteId, storagePath } =
-      request.data as TranscribeAudioRequest;
+    const { firmId, clientId, noteId, storagePath } = data as TranscribeAudioRequest;
 
     if (!firmId || !clientId || !noteId || !storagePath) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'invalid-argument',
         'firmId, clientId, noteId, and storagePath are all required.',
       );
@@ -133,7 +132,7 @@ export const transcribeAudio = onCall(
     // ------------------------------------------------------------------
     const noteSnap = await ref.get();
     if (!noteSnap.exists) {
-      throw new HttpsError('not-found', `Note ${noteId} not found.`);
+      throw new functions.https.HttpsError('not-found', `Note ${noteId} not found.`);
     }
 
     // ------------------------------------------------------------------
@@ -143,8 +142,16 @@ export const transcribeAudio = onCall(
       transcriptionStatus: 'processing',
       transcriptionStartedAt: now,
       updatedAt: now,
-      updatedBy: request.auth.uid,
+      updatedBy: context.auth.uid,
     });
+
+    // ------------------------------------------------------------------
+    // 3b. Fetch Firm Settings for API Key Overrides
+    // ------------------------------------------------------------------
+    const firmSnap = await db.collection('firms').doc(firmId).get();
+    const firmData = firmSnap.data() || {};
+    const customApiKey = firmData.openAiApiKey ?? firmData.settings?.openAiApiKey;
+
 
     try {
       // ----------------------------------------------------------------
@@ -155,7 +162,7 @@ export const transcribeAudio = onCall(
 
       const [fileExists] = await file.exists();
       if (!fileExists) {
-        throw new HttpsError('not-found', `Audio file not found at path: ${storagePath}`);
+        throw new functions.https.HttpsError('not-found', `Audio file not found at path: ${storagePath}`);
       }
 
       console.log(`[transcribeAudio] Downloading audio from gs://${bucket.name}/${storagePath}`);
@@ -168,11 +175,11 @@ export const transcribeAudio = onCall(
       //    We instantiate OpenAI directly here (same env var as ai-client.ts)
       //    because the Whisper API requires the raw client for file uploads.
       // ----------------------------------------------------------------
-      const apiKey = process.env.OPENAI_API_KEY;
+      const apiKey = customApiKey || process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           'internal',
-          'OPENAI_API_KEY environment variable is not set.',
+          'OpenAI API Key is missing. Configure it in Firm Settings or environment variables.',
         );
       }
       const openai = new OpenAI({ apiKey });
@@ -183,11 +190,14 @@ export const transcribeAudio = onCall(
       // object so Whisper can detect the format from the filename extension.
       const audioFile = await toFile(audioBuffer, filename, { type: mimeType });
 
+      const promptText = "This is a legal meeting or dictation for an estate planning attorney regarding a client's will, trust, beneficiaries, assets, taxes, probate, and health care directives. Please use proper punctuation, capitalization, and paragraph breaks. Accuracy is extremely important.";
+
       console.log(`[transcribeAudio] Sending to Whisper — model=whisper-1 mime=${mimeType}`);
       const transcriptionResponse = await openai.audio.transcriptions.create({
         model: 'whisper-1',
         file: audioFile,
         response_format: 'text',
+        prompt: promptText,
       });
 
       // response_format: 'text' returns a plain string, not an object
@@ -205,7 +215,7 @@ export const transcribeAudio = onCall(
         transcriptionStatus: 'completed',
         transcriptionCompletedAt: now,
         updatedAt: now,
-        updatedBy: request.auth.uid,
+        updatedBy: context.auth.uid,
       });
 
       console.log(`[transcribeAudio] Saved transcription to noteId=${noteId}`);
@@ -227,21 +237,21 @@ export const transcribeAudio = onCall(
         transcriptionError:
           error instanceof Error ? error.message : 'Unknown transcription error',
         updatedAt: now,
-        updatedBy: request.auth.uid,
+        updatedBy: context.auth.uid,
       }).catch((updateErr) => {
         // Don't mask the original error if the status update itself fails
         console.error('[transcribeAudio] Failed to write error status:', updateErr);
       });
 
       // Re-throw as HttpsError so the client gets a clean error code
-      if (error instanceof HttpsError) throw error;
-      throw new HttpsError(
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError(
         'internal',
         `Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   },
-);
+  );
 
 // ---------------------------------------------------------------------------
 // Function 2 — summarizeTranscription
@@ -257,26 +267,25 @@ export const transcribeAudio = onCall(
  * Input:  { firmId, clientId, noteId }
  * Output: { success: true, summary: string }
  */
-export const summarizeTranscription = onCall(
-  {
-    region: 'us-east1',
+export const summarizeTranscription = functions
+  .runWith({
     timeoutSeconds: 120,
-    memory: '256MiB',
-    invoker: 'public',
-  },
-  async (request: any /* CallableRequest */) => {
+    memory: '256MB',
+    secrets: ['OPENAI_API_KEY'],
+  })
+  .region('us-east1')
+  .https.onCall(async (data, context) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'You must be logged in to summarize transcriptions.');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to summarize transcriptions.');
     }
 
-    const { firmId, clientId, noteId } =
-      request.data as SummarizeTranscriptionRequest;
+    const { firmId, clientId, noteId } = data as SummarizeTranscriptionRequest;
 
     if (!firmId || !clientId || !noteId) {
-      throw new HttpsError('invalid-argument', 'firmId, clientId, and noteId are required.');
+      throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and noteId are required.');
     }
 
     console.log(
@@ -292,21 +301,21 @@ export const summarizeTranscription = onCall(
     // ------------------------------------------------------------------
     const noteSnap = await ref.get();
     if (!noteSnap.exists) {
-      throw new HttpsError('not-found', `Note ${noteId} not found.`);
+      throw new functions.https.HttpsError('not-found', `Note ${noteId} not found.`);
     }
 
     const noteData = noteSnap.data()!;
     const transcription = noteData.transcription as string | undefined;
 
     if (!transcription || transcription.trim().length === 0) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'failed-precondition',
         'No transcription found on this note. Run transcribeAudio first.',
       );
     }
 
     if (noteData.transcriptionStatus !== 'completed') {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'failed-precondition',
         `Transcription is not yet complete (status: ${noteData.transcriptionStatus ?? 'unknown'}).`,
       );
@@ -334,7 +343,7 @@ export const summarizeTranscription = onCall(
       });
     } catch (error) {
       console.error('[summarizeTranscription] GPT-4.1 error:', error);
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'internal',
         `Summary generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
@@ -349,7 +358,7 @@ export const summarizeTranscription = onCall(
       aiSummary,
       aiSummaryGeneratedAt: now,
       updatedAt: now,
-      updatedBy: request.auth.uid,
+      updatedBy: context.auth.uid,
     });
 
     console.log(`[summarizeTranscription] Saved summary to noteId=${noteId}`);
@@ -360,4 +369,4 @@ export const summarizeTranscription = onCall(
       summary: aiSummary,
     };
   },
-);
+  );

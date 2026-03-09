@@ -26,7 +26,7 @@ import { TasksList } from '@/components/dashboard/TasksList';
 import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
 import { AudioRecorderModal } from '@/components/ui/audio-recorder-modal';
 import { Mic } from 'lucide-react';
-import { collection, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, setDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
 
@@ -381,6 +381,47 @@ export default function DashboardPage() {
     }
   };
 
+  const handleCreateClient = async (data: { firstName: string; lastName: string; email: string }) => {
+    if (!firmId) {
+      toast.error('Unable to determine firm.');
+      return undefined;
+    }
+
+    try {
+      const colRef = collection(db, COLLECTIONS.CLIENTS(firmId));
+
+      const docRef = await addDoc(colRef, {
+        firmId,
+        status: 'prospect',
+        packageType: null,
+        personalInfo: {
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          email: data.email.trim().toLowerCase(),
+          phone: null,
+        },
+        questionnaire: {
+          status: 'not_started',
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: userProfile?.uid ?? null,
+      });
+
+      toast.success(`Client ${data.firstName} ${data.lastName} created successfully.`);
+
+      // Log activity
+      await logSystemActivity(firmId, userProfile, 'adding client', {
+        clientName: `${data.firstName} ${data.lastName}`.trim(),
+      });
+
+      return docRef.id;
+    } catch (err) {
+      console.error('[DashboardPage] handleCreateClient error:', err);
+      toast.error('Failed to create client.');
+      return undefined;
+    }
+  };
 
   // ── Empty state ───────────────────────────────────────────────────────────
   // const showEmptyState = !loading && recentClients.length === 0; // Replaced by new showEmptyState above
@@ -690,6 +731,7 @@ export default function DashboardPage() {
         onOpenChange={setIsRecordModalOpen}
         onSave={handleSaveAudioNote}
         isSaving={isSavingRecord}
+        onCreateClient={handleCreateClient}
         clients={audioModalClients}
       />
     </div>

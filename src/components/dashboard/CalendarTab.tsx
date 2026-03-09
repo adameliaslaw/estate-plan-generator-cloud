@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Timestamp, where, orderBy } from 'firebase/firestore';
+import { Timestamp, where, orderBy, type QueryConstraint } from 'firebase/firestore';
 import {
   addMonths,
   addWeeks,
@@ -95,8 +95,8 @@ type CalendarView = 'month' | 'week' | 'day';
 
 interface CalendarTabProps {
   firmId: string;
-  clientId: string;
-  clientName: string;
+  clientId?: string;
+  clientName?: string;
   autoOpenNewEvent?: boolean;
 }
 
@@ -1295,13 +1295,16 @@ export default function CalendarTab({
     }
   }, [autoOpenNewEvent, currentDate]);
 
-  // Firestore query: this client's events ordered by startAt
+  // Firestore query: this client's events ordered by startAt, or all events if no clientId
   const collectionPath = firmId ? COLLECTIONS.CALENDAR_EVENTS(firmId) : null;
   const constraints = useMemo(
-    () => [
-      where('clientId', '==', clientId),
-      orderBy('startAt', 'asc'),
-    ],
+    () => {
+      const base: QueryConstraint[] = [orderBy('startAt', 'asc')];
+      if (clientId) {
+        base.unshift(where('relatedClientId', '==', clientId));
+      }
+      return base;
+    },
     [clientId],
   );
 
@@ -1451,7 +1454,7 @@ export default function CalendarTab({
             ))}
           </div>
 
-          {userProfile?.role !== 'client' && (
+          {userProfile?.role !== 'client' && clientId && (
             <Button
               size="sm"
               className="gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white h-8"
@@ -1472,10 +1475,9 @@ export default function CalendarTab({
           </div>
           <h3 className="text-sm font-semibold text-[#1a365d]">No appointments scheduled</h3>
           <p className="mt-1 max-w-xs text-sm text-gray-400">
-            Click &ldquo;New Appointment&rdquo; to schedule a consultation, signing, or follow-up for{' '}
-            {clientName}.
+            Click &ldquo;New Appointment&rdquo; to schedule a consultation, signing, or follow-up{clientName ? ` for ${clientName}` : ''}.
           </p>
-          {userProfile?.role !== 'client' && (
+          {userProfile?.role !== 'client' && clientId && (
             <Button
               size="sm"
               className="mt-5 gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white"
@@ -1535,15 +1537,17 @@ export default function CalendarTab({
       )}
 
       {/* ── New Event Dialog ───────────────────────────────────────────────── */}
-      <NewEventDialog
-        open={newEventOpen}
-        onClose={() => setNewEventOpen(false)}
-        onCreated={() => {/* real-time listener auto-updates */ }}
-        firmId={firmId}
-        clientId={clientId}
-        clientName={clientName}
-        initialDate={newEventDate}
-      />
+      {clientId && clientName && (
+        <NewEventDialog
+          open={newEventOpen}
+          onClose={() => setNewEventOpen(false)}
+          onCreated={() => {/* real-time listener auto-updates */ }}
+          firmId={firmId}
+          clientId={clientId}
+          clientName={clientName}
+          initialDate={newEventDate}
+        />
+      )}
 
       {/* ── Event Detail / Edit Dialog ─────────────────────────────────────── */}
       <EventDetailDialog

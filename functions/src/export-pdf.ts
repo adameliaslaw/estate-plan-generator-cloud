@@ -8,9 +8,11 @@
  * Returns a signed download URL valid for 1 hour.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
+import * as path from 'path';
 
 // ── Helper: sanitize a display name for use in a file name ───────────────────
 
@@ -89,9 +91,8 @@ export function buildLegalDocumentHtml(
     }
 
     /* ── Draft banner (visible in content, not just watermark) ───────────── */
-    ${
-      isDraft
-        ? `
+    ${isDraft
+      ? `
       .draft-banner {
         display: block;
         text-align: center;
@@ -104,7 +105,7 @@ export function buildLegalDocumentHtml(
         letter-spacing: 1px;
       }
     `
-        : '.draft-banner { display: none; }'
+      : '.draft-banner { display: none; }'
     }
 
     /* ── Typography ───────────────────────────────────────────────────────── */
@@ -251,35 +252,35 @@ function escapeHtml(str: string): string {
 
 // ── Cloud Function ────────────────────────────────────────────────────────────
 
-export const exportDocumentPdf = onCall(
-  {
+export const exportDocumentPdf = functions
+  .runWith({
     timeoutSeconds: 120,
-    memory: '2GiB',
-    region: 'us-east1',
-  },
-  async (request: any /* CallableRequest */) => {
+    memory: '2GB',
+  })
+  .region('us-east1')
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // ── 1. Auth check ────────────────────────────────────────────────────────
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Authentication required.');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    const { role } = request.auth.token as { role?: string };
+    const { role } = context.auth.token as { role?: string };
     if (!role || !['attorney', 'paralegal', 'admin'].includes(role)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'permission-denied',
         'Only attorneys, paralegals, and admins may export documents.',
       );
     }
 
     // ── 2. Validate input ────────────────────────────────────────────────────
-    const { firmId, clientId, documentId } = request.data as {
+    const { firmId, clientId, documentId } = data as {
       firmId?: string;
       clientId?: string;
       documentId?: string;
     };
 
     if (!firmId || !clientId || !documentId) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'invalid-argument',
         'firmId, clientId, and documentId are required.',
       );
@@ -293,7 +294,7 @@ export const exportDocumentPdf = onCall(
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
-      throw new HttpsError('not-found', 'Document not found.');
+      throw new functions.https.HttpsError('not-found', 'Document not found.');
     }
 
     const docData = docSnap.data()!;
@@ -312,14 +313,8 @@ export const exportDocumentPdf = onCall(
     try {
       browser = await puppeteer.launch({
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--no-zygote',
-          '--single-process',
-        ],
+        executablePath: await chromium.executablePath(),
+        args: chromium.args,
       });
 
       const page = await browser.newPage();
@@ -417,7 +412,7 @@ export const exportDocumentPdf = onCall(
 
       const message = err instanceof Error ? err.message : 'PDF generation failed.';
       console.error('[exportDocumentPdf] Error:', message, err);
-      throw new HttpsError('internal', `PDF export failed: ${message}`);
+      throw new functions.https.HttpsError('internal', `PDF export failed: ${message}`);
     }
   },
-);
+  );

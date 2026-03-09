@@ -113,9 +113,9 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
                                         </p>
                                         <span className={cn(
                                             "shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                                            getEventBadgeColor(event.eventType)
+                                            getEventBadgeColor(event.eventType || 'calendar_event')
                                         )}>
-                                            {event.eventType.replace('_', ' ')}
+                                            {(event.eventType || 'calendar_event').replace('_', ' ')}
                                         </span>
                                     </div>
 

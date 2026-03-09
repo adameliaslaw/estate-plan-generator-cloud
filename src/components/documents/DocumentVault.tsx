@@ -15,6 +15,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Pencil,
   Trash2,
@@ -190,9 +191,10 @@ interface RowActionsProps {
   onApprove: (doc: Document) => void;
   onDelete: (doc: Document) => void;
   onSendSignature: (doc: Document) => void;
+  onEdit: (doc: Document) => void;
 }
 
-function RowActions({ doc, firmId, clientId, onReview, onApprove, onDelete, onSendSignature }: RowActionsProps) {
+function RowActions({ doc, firmId, clientId, onReview, onApprove, onDelete, onSendSignature, onEdit }: RowActionsProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex items-center gap-1">
@@ -203,9 +205,7 @@ function RowActions({ doc, firmId, clientId, onReview, onApprove, onDelete, onSe
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-gray-400 hover:text-[#2b6cb0]"
-              onClick={() => {
-                // Phase 4: open document editor
-              }}
+              onClick={() => onEdit(doc)}
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -330,6 +330,8 @@ export default function DocumentVault({
   const { data: documents, loading, error: loadError } = useCollection<Document>(
     COLLECTIONS.DOCUMENTS(firmId, clientId),
   );
+
+  const navigate = useNavigate();
 
   // ── Filter / sort state ──────────────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -699,6 +701,7 @@ export default function DocumentVault({
                         onApprove={(d) => setApproveDoc(d)}
                         onDelete={(d) => setDeleteTarget(d)}
                         onSendSignature={(d) => setSignDoc(d)}
+                        onEdit={(d) => navigate(`/clients/${clientId}/documents/${d.id}/edit`)}
                       />
                     </td>
                   </tr>

@@ -2,6 +2,7 @@ import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  Calendar,
   LogOut,
   X,
   Scale,
@@ -22,6 +23,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },
   { label: 'Clients', href: ROUTES.CLIENTS, icon: Users },
+  { label: 'Calendar', href: ROUTES.CALENDAR, icon: Calendar },
 ];
 
 interface AppSidebarProps {

@@ -111,6 +111,22 @@ function formatCurrency(cents: number | undefined): string {
   );
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatAddress(address?: string, city?: string, state?: string, zip?: string): string | undefined {
+  const parts = [];
+  if (address) parts.push(address);
+
+  const locParts = [];
+  if (city) locParts.push(city);
+  if (state) locParts.push(state + (zip ? ` ${zip}` : ''));
+  else if (zip) locParts.push(zip);
+
+  if (locParts.length > 0) parts.push(locParts.join(', '));
+
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
 // ── Info row component ────────────────────────────────────────────────────────
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -598,7 +614,7 @@ export default function ClientDashboardPage() {
               {info?.alternatePhone && (
                 <InfoRow label="Alt. Phone" value={info.alternatePhone} />
               )}
-              <InfoRow label="Address" value={info ? `${info.address}, ${info.city}, ${info.state} ${info.zip}` : undefined} />
+              <InfoRow label="Address" value={info ? formatAddress(info.address, info.city, info.state, info.zip) : undefined} />
               <InfoRow label="County" value={info?.county} />
               <InfoRow label="Marital Status" value={info?.maritalStatus} />
               <InfoRow label="Citizenship" value={info?.citizenship} />
@@ -618,7 +634,7 @@ export default function ClientDashboardPage() {
                 <InfoRow label="Date of Birth" value={formatDate(spouse.dob)} />
                 <InfoRow label="Email" value={spouse.email} />
                 <InfoRow label="Phone" value={spouse.phone} />
-                <InfoRow label="Address" value={`${spouse.address}, ${spouse.city}, ${spouse.state} ${spouse.zip}`} />
+                <InfoRow label="Address" value={formatAddress(spouse.address, spouse.city, spouse.state, spouse.zip)} />
                 <InfoRow label="Citizenship" value={spouse.citizenship} />
                 {spouse.separateRepresentation && (
                   <InfoRow label="Representation" value="Separate counsel" />

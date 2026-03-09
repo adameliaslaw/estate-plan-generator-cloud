@@ -58,6 +58,7 @@ export interface AudioRecorderModalProps {
     /** Pass available clients for the selector if no default is provided. */
     clients?: { id: string; name: string }[];
     isSaving?: boolean;
+    onAddClient?: () => void;
 }
 
 export function AudioRecorderModal({
@@ -67,6 +68,7 @@ export function AudioRecorderModal({
     defaultClientId,
     clients = [],
     isSaving = false,
+    onAddClient,
 }: AudioRecorderModalProps) {
     const [title, setTitle] = useState('');
     const [noteType, setNoteType] = useState<NoteType>('general');
@@ -143,9 +145,22 @@ export function AudioRecorderModal({
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    {!defaultClientId && clients.length > 0 && (
+                    {!defaultClientId && (
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-gray-600">Client <span className="text-red-500">*</span></Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-medium text-gray-600">
+                                    Client <span className="text-red-500">*</span>
+                                </Label>
+                                {onAddClient && (
+                                    <button
+                                        type="button"
+                                        onClick={onAddClient}
+                                        className="text-xs font-semibold text-[#2b6cb0] hover:text-[#1e407a] hover:underline"
+                                    >
+                                        + New Client
+                                    </button>
+                                )}
+                            </div>
                             <Select value={selectedClientId} onValueChange={setSelectedClientId}>
                                 <SelectTrigger className="border-gray-200">
                                     <SelectValue placeholder="Select a client..." />

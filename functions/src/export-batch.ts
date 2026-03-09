@@ -13,13 +13,15 @@
  *   'both' → each document exported as both PDF and DOCX, zipped together
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import archiver from 'archiver';
 import { Readable, PassThrough } from 'stream';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import { Packer } from 'docx';
 import { buildLegalDocumentHtml, sanitizeFileName } from './export-pdf';
+import * as path from 'path';
 import { buildDocxDocument } from './export-docx';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -145,21 +147,21 @@ async function uploadZipToStorage(
 
 // ── Cloud Function ────────────────────────────────────────────────────────────
 
-export const exportBatchDocuments = onCall(
-  {
+export const exportBatchDocuments = functions
+  .runWith({
     timeoutSeconds: 300,
-    memory: '2GiB',
-    region: 'us-east1',
-  },
-  async (request: any /* CallableRequest */) => {
+    memory: '2GB',
+  })
+  .region('us-east1')
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // ── 1. Auth check ────────────────────────────────────────────────────────
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Authentication required.');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    const { role } = request.auth.token as { role?: string };
+    const { role } = context.auth.token as { role?: string };
     if (!role || !['attorney', 'paralegal', 'admin'].includes(role)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'permission-denied',
         'Only attorneys, paralegals, and admins may export documents.',
       );
@@ -170,21 +172,21 @@ export const exportBatchDocuments = onCall(
       firmId,
       clientId,
       format = 'pdf',
-    } = request.data as {
+    } = data as {
       firmId?: string;
       clientId?: string;
       format?: ExportFormat;
     };
 
     if (!firmId || !clientId) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'invalid-argument',
         'firmId and clientId are required.',
       );
     }
 
     if (!['pdf', 'docx', 'both'].includes(format)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'invalid-argument',
         "format must be 'pdf', 'docx', or 'both'.",
       );
@@ -197,7 +199,7 @@ export const exportBatchDocuments = onCall(
       .get();
 
     if (docsSnap.empty) {
-      throw new HttpsError('not-found', 'No documents found for this client.');
+      throw new functions.https.HttpsError('not-found', 'No documents found for this client.');
     }
 
     const documents: DocumentRecord[] = docsSnap.docs.map((d) => ({
@@ -224,14 +226,8 @@ export const exportBatchDocuments = onCall(
       if (format === 'pdf' || format === 'both') {
         browser = await puppeteer.launch({
           headless: true,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--no-zygote',
-            '--single-process',
-          ],
+          executablePath: await chromium.executablePath(),
+          args: chromium.args,
         });
       }
 
@@ -335,10 +331,10 @@ export const exportBatchDocuments = onCall(
 
       const message = err instanceof Error ? err.message : 'Batch export failed.';
       console.error('[exportBatchDocuments] Error:', message, err);
-      throw new HttpsError('internal', `Batch export failed: ${message}`);
+      throw new functions.https.HttpsError('internal', `Batch export failed: ${message}`);
     }
   },
-);
+  );
 
 // ── Manifest builder ──────────────────────────────────────────────────────────
 

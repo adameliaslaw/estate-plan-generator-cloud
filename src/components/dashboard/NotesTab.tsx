@@ -39,6 +39,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  RefreshCw,
   Search,
   StickyNote,
   Trash2,
@@ -610,9 +611,27 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
   const [showTranscription, setShowTranscription] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pinning, setPinning] = useState(false);
+  const [retryingTranscription, setRetryingTranscription] = useState(false);
 
   const collPath = COLLECTIONS.NOTES(firmId, clientId);
   const docPath = `${collPath}/${note.id}`;
+
+  const handleRetryTranscription = async () => {
+    if (!note.audioStoragePath && !note.audioUrl) {
+      toast.error('No audio file found to transcribe.');
+      return;
+    }
+    setRetryingTranscription(true);
+    try {
+      const fullPath = note.audioStoragePath || `firms/${firmId}/clients/${clientId}/audio/${note.id}.m4a`;
+      await requestTranscription(firmId, clientId, note.id, fullPath);
+      toast.success('Transcription retry initiated.');
+    } catch (err: any) {
+      toast.error('Failed to retry transcription: ' + err.message);
+    } finally {
+      setRetryingTranscription(false);
+    }
+  };
 
   const handleTogglePin = async () => {
     setPinning(true);
@@ -768,6 +787,18 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
                     )}
                   </span>
                   <TranscriptionBadge status={note.transcriptionStatus} />
+                  {(note.transcriptionStatus === 'failed' || note.transcriptionStatus === 'processing' || !note.transcriptionStatus) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-6 gap-1 px-2 text-[10px] uppercase tracking-wider text-[#2b6cb0] hover:bg-blue-100/50"
+                      disabled={retryingTranscription}
+                      onClick={() => void handleRetryTranscription()}
+                    >
+                      <RefreshCw className={`h-3 w-3 ${retryingTranscription ? 'animate-spin' : ''}`} />
+                      {retryingTranscription ? 'Retrying...' : 'Retry'}
+                    </Button>
+                  )}
                 </div>
                 {/* Only render the audio element if it's a real URL (not a data URI too large to display) */}
                 {note.audioUrl && (

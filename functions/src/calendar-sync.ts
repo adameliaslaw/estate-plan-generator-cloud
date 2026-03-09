@@ -30,7 +30,7 @@
  *       for cleaner token handling.  See TODO comments for OAuth refresh flow.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 
@@ -113,14 +113,14 @@ async function getGoogleCalendarTokens(
 ): Promise<GoogleCalendarTokens> {
   const firmSnap = await db.doc(`firms/${firmId}`).get();
   if (!firmSnap.exists) {
-    throw new HttpsError('not-found', `Firm ${firmId} not found.`);
+    throw new functions.https.HttpsError('not-found', `Firm ${firmId} not found.`);
   }
 
   const firmData = firmSnap.data()!;
   const tokens = firmData.googleCalendar as GoogleCalendarTokens | undefined;
 
   if (!tokens?.accessToken || !tokens?.refreshToken) {
-    throw new HttpsError(
+    throw new functions.https.HttpsError(
       'failed-precondition',
       'Google Calendar not connected. Configure OAuth in Settings → Integrations.',
     );
@@ -214,7 +214,7 @@ async function refreshAccessTokenIfNeeded(
 
   if (!clientId || !clientSecret) {
     console.warn('[calendar-sync] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET, unable to refresh token. Add them via Firebase secret manager.');
-    throw new HttpsError(
+    throw new functions.https.HttpsError(
       'internal',
       'OAuth refresh is not fully configured. Missing client secrets in Cloud Functions.',
     );
@@ -236,13 +236,13 @@ async function refreshAccessTokenIfNeeded(
     console.error('[refreshAccessTokenIfNeeded] Detailed Google API Error Payload:', JSON.stringify(err, null, 2));
 
     if (err.error === 'invalid_grant') {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'unauthenticated',
         'Google Calendar authorisation has been revoked. ' +
         'Please reconnect via Settings → Integrations → Google Calendar.',
       );
     }
-    throw new HttpsError('internal', `Token refresh failed: ${err.error} - ${err.error_description || 'No description'}`);
+    throw new functions.https.HttpsError('internal', `Token refresh failed: ${err.error} - ${err.error_description || 'No description'}`);
   }
 
   const { access_token, expires_in } = (await response.json()) as any;
@@ -289,29 +289,28 @@ function timestampToISO(ts: admin.firestore.Timestamp | undefined): string {
  * Input:  { firmId, eventId }
  * Output: { success: true, googleCalendarEventId: string, htmlLink: string }
  */
-export const pushEventToGoogleCalendarV2 = onCall(
-  {
-    region: 'us-east1',
+export const pushEventToGoogleCalendar = functions
+  .region('us-east1')
+  .runWith({
     timeoutSeconds: 60,
-    memory: '256MiB',
+    memory: '256MB',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
-    invoker: 'public',
-  },
-  async (request: any /* CallableRequest */) => {
+  })
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
-    if (!request.auth) {
-      throw new HttpsError(
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
         'unauthenticated',
         'You must be logged in to sync calendar events.',
       );
     }
 
-    const { firmId, eventId } = request.data as PushEventRequest;
+    const { firmId, eventId } = data as PushEventRequest;
 
     if (!firmId || !eventId) {
-      throw new HttpsError('invalid-argument', 'firmId and eventId are required.');
+      throw new functions.https.HttpsError('invalid-argument', 'firmId and eventId are required.');
     }
 
     console.log(
@@ -328,7 +327,7 @@ export const pushEventToGoogleCalendarV2 = onCall(
     const eventSnap = await eventRef.get();
 
     if (!eventSnap.exists) {
-      throw new HttpsError('not-found', `CalendarEvent ${eventId} not found.`);
+      throw new functions.https.HttpsError('not-found', `CalendarEvent ${eventId} not found.`);
     }
 
     const eventDoc = eventSnap.data() as CalendarEventDoc;
@@ -414,13 +413,13 @@ export const pushEventToGoogleCalendarV2 = onCall(
 
         // 401 Unauthorized → tokens are invalid/expired
         if (response.status === 401) {
-          throw new HttpsError(
+          throw new functions.https.HttpsError(
             'unauthenticated',
             'Google Calendar authorization expired. Please reconnect Google Calendar in Settings.',
           );
         }
 
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           'internal',
           `Google Calendar API returned ${response.status}: ${errorBody}.`,
         );
@@ -428,9 +427,9 @@ export const pushEventToGoogleCalendarV2 = onCall(
 
       gcalResponse = (await response.json()) as GoogleCalendarEvent;
     } catch (error) {
-      if (error instanceof HttpsError) throw error;
+      if (error instanceof functions.https.HttpsError) throw error;
       console.error('[pushEventToGoogleCalendar] Fetch error:', error);
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'internal',
         `Failed to reach Google Calendar API: ${error instanceof Error ? error.message : 'Network error'}`,
       );
@@ -451,7 +450,7 @@ export const pushEventToGoogleCalendarV2 = onCall(
       googleCalendarHtmlLink: htmlLink,
       googleCalendarSyncedAt: now,
       updatedAt: now,
-      updatedBy: request.auth.uid,
+      updatedBy: context.auth.uid,
     });
 
     return {
@@ -461,7 +460,7 @@ export const pushEventToGoogleCalendarV2 = onCall(
       htmlLink,
     };
   },
-);
+  );
 
 // ---------------------------------------------------------------------------
 // Function 2 — pullGoogleCalendarEvents (onCall)
@@ -477,30 +476,29 @@ export const pushEventToGoogleCalendarV2 = onCall(
  * Input:  { firmId, clientName, timeMin?, timeMax? }
  * Output: { imported: number, skipped: number, events: Array<{ eventId, title }> }
  */
-export const pullGoogleCalendarEventsV2 = onCall(
-  {
-    region: 'us-east1',
+export const pullGoogleCalendarEvents = functions
+  .region('us-east1')
+  .runWith({
     timeoutSeconds: 60,
-    memory: '256MiB',
+    memory: '256MB',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
-    invoker: 'public',
-  },
-  async (request: any /* CallableRequest */) => {
+  })
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
-    if (!request.auth) {
-      throw new HttpsError(
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
         'unauthenticated',
         'You must be logged in to pull calendar events.',
       );
     }
 
     const { firmId, clientName, timeMin, timeMax } =
-      request.data as PullEventsRequest;
+      data as PullEventsRequest;
 
     if (!firmId || !clientName?.trim()) {
-      throw new HttpsError('invalid-argument', 'firmId and clientName are required.');
+      throw new functions.https.HttpsError('invalid-argument', 'firmId and clientName are required.');
     }
 
     console.log(
@@ -550,12 +548,12 @@ export const pullGoogleCalendarEventsV2 = onCall(
           `[pullGoogleCalendarEvents] Google API error ${response.status}: ${errorBody}`,
         );
         if (response.status === 401) {
-          throw new HttpsError(
+          throw new functions.https.HttpsError(
             'unauthenticated',
             'Google Calendar authorization expired. Please reconnect in Settings.',
           );
         }
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           'internal',
           `Google Calendar API returned ${response.status}.`,
         );
@@ -564,9 +562,9 @@ export const pullGoogleCalendarEventsV2 = onCall(
       const listResponse = (await response.json()) as GoogleCalendarEventsListResponse;
       gcalEvents = listResponse.items ?? [];
     } catch (error) {
-      if (error instanceof HttpsError) throw error;
+      if (error instanceof functions.https.HttpsError) throw error;
       console.error('[pullGoogleCalendarEvents] Fetch error:', error);
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'internal',
         `Failed to reach Google Calendar API: ${error instanceof Error ? error.message : 'Network error'}`,
       );
@@ -638,7 +636,7 @@ export const pullGoogleCalendarEventsV2 = onCall(
         source: 'google_calendar_pull',
         createdAt: now,
         updatedAt: now,
-        createdBy: request.auth.uid,
+        createdBy: context.auth.uid,
       };
 
       // Capture first attendee that is NOT the firm (best-effort)
@@ -671,7 +669,7 @@ export const pullGoogleCalendarEventsV2 = onCall(
       events: imported,
     };
   },
-);
+  );
 
 // ---------------------------------------------------------------------------
 // Function 3 — syncGoogleCalendar (scheduled)
@@ -707,33 +705,215 @@ export const syncGoogleCalendar = onSchedule(
         const lastSync = (data.googleCalendarLastSyncAt as admin.firestore.Timestamp)?.toDate?.()?.toISOString()
           ?? new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-        // Fetch events updated since last sync
+        // Fetch events updated since last sync (with pagination support)
+        let pageToken: string | undefined = undefined;
+        let totalItemsProcessed = 0;
+
+        do {
+          const params = new URLSearchParams({
+            updatedMin: lastSync,
+            showDeleted: 'true',
+            singleEvents: 'true',
+            maxResults: '250',
+          });
+          if (pageToken) {
+            params.append('pageToken', pageToken);
+          }
+
+          const response = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+
+          if (!response.ok) {
+            console.error(`[syncGoogleCalendar] API error for firm ${firmId}: ${response.status} ${await response.text()}`);
+            break;
+          }
+
+          const listData = await response.json() as GoogleCalendarEventsListResponse;
+          const items = listData.items ?? [];
+          pageToken = listData.nextPageToken;
+
+          // Process each updated event (update/insert/cancel in Firestore)
+          if (items.length > 0) {
+            let batch = db.batch();
+            let operationsCount = 0;
+
+            for (const gcalEvent of items) {
+              if (!gcalEvent.id) continue;
+
+              // Find existing Firestore doc
+              const eventQuery = await db.collection('firms').doc(firmId).collection('calendarEvents')
+                .where('googleCalendarEventId', '==', gcalEvent.id).limit(1).get();
+
+              if (!eventQuery.empty) {
+                // UPDATE / DELETE existing
+                const docRef = eventQuery.docs[0].ref;
+                if (gcalEvent.status === 'cancelled') {
+                  batch.delete(docRef);
+                } else {
+                  const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
+                  const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
+                  batch.update(docRef, {
+                    title: gcalEvent.summary ?? '(No Title)',
+                    description: gcalEvent.description ?? '',
+                    location: gcalEvent.location ?? '',
+                    startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
+                    endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
+                    updatedAt: now,
+                    googleCalendarSyncedAt: now,
+                  });
+                }
+              } else if (gcalEvent.status !== 'cancelled') {
+                // INSERT new
+                const newRef = db.collection('firms').doc(firmId).collection('calendarEvents').doc();
+                const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
+                const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
+                batch.set(newRef, {
+                  id: newRef.id,
+                  firmId,
+                  title: gcalEvent.summary ?? '(No Title)',
+                  description: gcalEvent.description ?? '',
+                  location: gcalEvent.location ?? '',
+                  startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
+                  endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
+                  googleCalendarEventId: gcalEvent.id,
+                  googleCalendarHtmlLink: gcalEvent.htmlLink ?? '',
+                  googleCalendarSyncedAt: now,
+                  createdAt: now,
+                  updatedAt: now,
+                  source: 'google_calendar_auto_sync'
+                });
+              }
+
+              operationsCount++;
+
+              // Firestore batches max out at 500 operations
+              if (operationsCount === 450) {
+                await batch.commit();
+                batch = db.batch();
+                operationsCount = 0;
+              }
+            }
+
+            if (operationsCount > 0) {
+              await batch.commit();
+            }
+          }
+
+          totalItemsProcessed += items.length;
+
+        } while (pageToken);
+
+        eventsUpdated += totalItemsProcessed;
+
+        // Update last sync watermark
+        await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
+        firmsProcessed++;
+      } catch (err) {
+        console.error(`[syncGoogleCalendar] Error for firmId=${firmId}:`, err);
+      }
+    }
+
+    console.log(`[syncGoogleCalendar] Done — firmsProcessed=${firmsProcessed} eventsUpdated=${eventsUpdated}`);
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Function 4 — triggerFirmCalendarSync (onCall)
+// ---------------------------------------------------------------------------
+
+/**
+ * triggerFirmCalendarSync
+ *
+ * Exposes the exact same firm-wide pulling mechanism as the scheduled function,
+ * but allows a user to initiate it immediately on-demand from the UI.
+ * This is incredibly useful for instantly pulling thousands of historical events
+ * without waiting for the 5-minute background tick or when first setting up the integration.
+ */
+export const triggerFirmCalendarSync = functions
+  .region('us-east1')
+  .runWith({
+    timeoutSeconds: 540,
+    memory: '512MB',
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+  })
+  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+    // 1. Auth check
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to trigger a sync.');
+    }
+
+    const firmId = context.auth.token.firmId as string;
+    if (!firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'No firm ID associated with user.');
+    }
+
+    console.log(`[triggerFirmCalendarSync] Manual sync started for firmId=${firmId}`);
+
+    const db = admin.firestore();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    let eventsUpdated = 0;
+
+    const firmDoc = await db.collection('firms').doc(firmId).get();
+    if (!firmDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Firm document not found.');
+    }
+
+    const firmData = firmDoc.data()!;
+    if (!firmData.googleCalendar || !firmData.googleCalendar.accessToken) {
+      throw new functions.https.HttpsError('failed-precondition', 'Google Calendar not connected.');
+    }
+
+    try {
+      const tokens = firmData.googleCalendar as GoogleCalendarTokens;
+      const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
+
+      // For a manual forced sync, we intentionally ignore the incremental watermark and pull 
+      // everything modified in the last 2 years to ensure native Google Calendar events are captured.
+      const forceSyncDate = new Date();
+      forceSyncDate.setFullYear(forceSyncDate.getFullYear() - 2);
+      const forceSyncIso = forceSyncDate.toISOString();
+
+      const futureSyncDate = new Date();
+      futureSyncDate.setFullYear(futureSyncDate.getFullYear() + 1);
+      const futureSyncIso = futureSyncDate.toISOString();
+
+      let pageToken: string | undefined = undefined;
+      let totalItemsProcessed = 0;
+
+      do {
         const params = new URLSearchParams({
-          updatedMin: lastSync,
+          timeMin: forceSyncIso,
+          timeMax: futureSyncIso,
           showDeleted: 'true',
           singleEvents: 'true',
-          maxResults: '100',
+          maxResults: '250',
         });
+        if (pageToken) {
+          params.append('pageToken', pageToken);
+        }
+
         const response = await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
 
         if (!response.ok) {
-          console.error(`[syncGoogleCalendar] API error for firm ${firmId}: ${response.status} ${await response.text()}`);
-          continue;
+          throw new functions.https.HttpsError('internal', `Google API error: ${response.status} ${await response.text()}`);
         }
 
         const listData = await response.json() as GoogleCalendarEventsListResponse;
         const items = listData.items ?? [];
+        pageToken = listData.nextPageToken;
 
-        // Process each updated event (update/insert/cancel in Firestore)
         if (items.length > 0) {
-          const batch = db.batch();
+          let batch = db.batch();
+          let operationsCount = 0;
+
           for (const gcalEvent of items) {
             if (!gcalEvent.id) continue;
 
-            // Find existing Firestore doc
             const eventQuery = await db.collection('firms').doc(firmId).collection('calendarEvents')
               .where('googleCalendarEventId', '==', gcalEvent.id).limit(1).get();
 
@@ -754,21 +934,55 @@ export const syncGoogleCalendar = onSchedule(
                   googleCalendarSyncedAt: now,
                 });
               }
+            } else if (gcalEvent.status !== 'cancelled') {
+              const newRef = db.collection('firms').doc(firmId).collection('calendarEvents').doc();
+              const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
+              const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
+              batch.set(newRef, {
+                id: newRef.id,
+                firmId,
+                title: gcalEvent.summary ?? '(No Title)',
+                description: gcalEvent.description ?? '',
+                location: gcalEvent.location ?? '',
+                startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
+                endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
+                googleCalendarEventId: gcalEvent.id,
+                googleCalendarHtmlLink: gcalEvent.htmlLink ?? '',
+                googleCalendarSyncedAt: now,
+                createdAt: now,
+                updatedAt: now,
+                source: 'google_calendar_auto_sync'
+              });
+            }
+
+            operationsCount++;
+
+            if (operationsCount === 450) {
+              await batch.commit();
+              batch = db.batch();
+              operationsCount = 0;
             }
           }
-          await batch.commit();
+
+          if (operationsCount > 0) {
+            await batch.commit();
+          }
         }
 
-        eventsUpdated += items.length;
+        totalItemsProcessed += items.length;
 
-        // Update last sync watermark
-        await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
-        firmsProcessed++;
-      } catch (err) {
-        console.error(`[syncGoogleCalendar] Error for firmId=${firmId}:`, err);
-      }
+      } while (pageToken);
+
+      eventsUpdated += totalItemsProcessed;
+      await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
+
+    } catch (err) {
+      console.error(`[triggerFirmCalendarSync] Error:`, err);
+      if (err instanceof functions.https.HttpsError) throw err;
+      throw new functions.https.HttpsError('internal', 'An unexpected error occurred during manual sync.');
     }
 
-    console.log(`[syncGoogleCalendar] Done — firmsProcessed=${firmsProcessed} eventsUpdated=${eventsUpdated}`);
+    console.log(`[triggerFirmCalendarSync] Manual sync done — eventsUpdated=${eventsUpdated}`);
+    return { success: true, eventsUpdated };
   },
-);
+  );

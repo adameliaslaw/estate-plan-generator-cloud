@@ -17,7 +17,7 @@ export { exportDocumentDocx } from './export-docx';
 export { exportBatchDocuments } from './export-batch';
 export { transcribeAudio, summarizeTranscription } from './transcribe-audio';
 export { createPaymentRequest, lawpayWebhook } from './lawpay-integration';
-export { pushEventToGoogleCalendarV2, pullGoogleCalendarEventsV2, syncGoogleCalendar } from './calendar-sync';
+export { pushEventToGoogleCalendar, pullGoogleCalendarEvents, syncGoogleCalendar, triggerFirmCalendarSync } from './calendar-sync';
 export { checkDocumentCompliance } from './ai-compliance-check';
 export {
   sendQuestionnaireInvitation,
