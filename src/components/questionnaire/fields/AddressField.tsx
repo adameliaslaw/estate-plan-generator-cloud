@@ -15,9 +15,7 @@
 import { cn } from '@/lib/utils';
 import { NJ_COUNTIES, US_STATES } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
-import { useDocument } from '@/hooks/useFirestore';
-import { COLLECTIONS } from '@/config/constants';
-import type { Firm } from '@/types';
+import { useFirmBranding } from '@/hooks/useFirmBranding';
 import { useGooglePlacesAutocomplete } from '@/hooks/useGooglePlacesAutocomplete';
 import { useRef, useCallback } from 'react';
 
@@ -48,9 +46,7 @@ function labelClass() {
 export function AddressField({ value, onChange, required }: AddressFieldProps) {
   const current = value ?? {};
   const { userProfile } = useAuth();
-  const { data: firmDoc } = useDocument<Firm>(
-    userProfile?.firmId ? `${COLLECTIONS.FIRMS}/${userProfile.firmId}` : null
-  );
+  const { data: firmBranding } = useFirmBranding(userProfile?.firmId);
 
   function update(field: string, val: unknown) {
     onChange({ ...current, [field]: val });
@@ -69,7 +65,7 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
     });
   }, [current, onChange]);
 
-  useGooglePlacesAutocomplete(firmDoc?.settings?.googleMapsApiKey, inputRef, handlePlaceSelect);
+  useGooglePlacesAutocomplete(firmBranding?.googleMapsApiKey ?? undefined, inputRef, handlePlaceSelect);
 
   const state = (current['state'] as string) ?? 'NJ';
   const isNJ = state === 'NJ';

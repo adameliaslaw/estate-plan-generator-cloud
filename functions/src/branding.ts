@@ -6,16 +6,20 @@ import * as admin from 'firebase-admin';
  * (logoUrl and firmName) for the login page without compromising security.
  */
 export const getFirmBranding = functions.region('us-east1').https.onCall(
-    async () => {
+    async (data) => {
         try {
-            const firmsSnapshot = await admin.firestore().collection('firms').limit(1).get();
-            if (firmsSnapshot.empty) {
+            // Default to 'elias-counsel' or use provided firmId
+            const targetFirmId = data?.firmId || 'elias-counsel';
+            const firmDoc = await admin.firestore().collection('firms').doc(targetFirmId).get();
+
+            if (!firmDoc.exists) {
                 return null;
             }
-            const firmData = firmsSnapshot.docs[0].data();
+            const firmData = firmDoc.data()!;
             return {
                 logoUrl: firmData.logoUrl || null,
                 firmName: firmData.firmName || null,
+                googleMapsApiKey: firmData.settings?.googleMapsApiKey || null,
             };
         } catch (error) {
             console.error('[getFirmBranding] Error fetching branding:', error);

@@ -10,7 +10,7 @@ import * as logger from 'firebase-functions/logger';
  * If a match is found and the client is not already linked, it updates the
  * client document with `linkedUserId` and sets custom claims on the user.
  */
-export const linkClient = onCall(async (request) => {
+export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
     // Ensure the user is authenticated
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'User must be logged in to link their account.');
