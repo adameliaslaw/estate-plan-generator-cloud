@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import type { Client } from '@/types';
 import { TasksList } from '@/components/dashboard/TasksList';
 import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
-import { RecentNotes } from '@/components/dashboard/RecentNotes';
+import { DashboardPayments } from '@/components/dashboard/DashboardPayments';
 import { AudioRecorderModal } from '@/components/ui/audio-recorder-modal';
 import { Mic } from 'lucide-react';
 import { collection, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -200,6 +200,7 @@ export default function DashboardPage() {
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [bottomTab, setBottomTab] = useState<'calendar' | 'payments'>('calendar');
 
   const toggleExpanded = async () => {
     const nextState = !isExpanded;
@@ -218,7 +219,7 @@ export default function DashboardPage() {
     loading: clientsLoading,
   } = useCollection<Client>(
     firmId ? COLLECTIONS.CLIENTS(firmId) : null,
-    useMemo(() => [orderBy('updatedAt', 'desc'), limit(10)], [])
+    useMemo(() => [orderBy('updatedAt', 'desc'), limit(5)], [])
   );
 
   const { data: allClients, loading: allLoading } = useCollection<Client>(
@@ -640,7 +641,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Activity — 1/3 */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h3 className="text-base font-semibold text-[#1a365d]">Recent Activity</h3>
             <Clock className="h-4 w-4 text-gray-400" />
@@ -664,7 +665,7 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-400">No recent activity</p>
             </div>
           ) : (
-            <div className={cn("flex flex-col", isExpanded && "max-h-[600px] overflow-y-auto")}>
+            <div className={cn("flex flex-col flex-1 min-h-0", isExpanded && "overflow-y-auto")}>
               <ul className="divide-y divide-gray-100">
                 {displayedActivityItems.map((item) => {
                   const Icon = item.icon;
@@ -713,11 +714,44 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Task, Calendar, & Notes Row */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 h-[500px]">
+      {/* Task & Calendar/Payments Row */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 h-[520px]">
         <TasksList activeClientIds={filteredClients.map(c => c.id)} />
-        <UpcomingAppointments activeClientIds={filteredClients.map(c => c.id)} />
-        <RecentNotes clients={allClients} activeClientIds={filteredClients.map(c => c.id)} />
+        <div className="xl:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
+          {/* Tab header */}
+          <div className="flex items-center border-b border-gray-100 px-5">
+            <button
+              onClick={() => setBottomTab('calendar')}
+              className={cn(
+                'px-4 py-3.5 text-sm font-semibold transition-colors border-b-2 -mb-px',
+                bottomTab === 'calendar'
+                  ? 'border-[#2b6cb0] text-[#1a365d]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700',
+              )}
+            >
+              Upcoming Appointments
+            </button>
+            <button
+              onClick={() => setBottomTab('payments')}
+              className={cn(
+                'px-4 py-3.5 text-sm font-semibold transition-colors border-b-2 -mb-px',
+                bottomTab === 'payments'
+                  ? 'border-[#2b6cb0] text-[#1a365d]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700',
+              )}
+            >
+              Payments
+            </button>
+          </div>
+          {/* Tab content */}
+          <div className="flex-1 overflow-y-auto">
+            {bottomTab === 'calendar' ? (
+              <UpcomingAppointments activeClientIds={filteredClients.map(c => c.id)} />
+            ) : (
+              <DashboardPayments clients={allClients} />
+            )}
+          </div>
+        </div>
       </div>
 
       <AudioRecorderModal
