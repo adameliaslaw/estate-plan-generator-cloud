@@ -19,7 +19,8 @@
  *                  LAWPAY_WEBHOOK_SECRET (for signature verification)
  */
 
-import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onRequest, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -202,23 +203,23 @@ function paymentRef(
  *           clientEmail, clientName }
  * Output: { paymentUrl, transactionId, paymentDocId }
  */
-export const createPaymentRequest = onCall(
-  {
-    region: 'us-east1',
+export const createPaymentRequest = functions
+  .region('us-east1')
+  .runWith({
     timeoutSeconds: 60,
-    memory: '256MiB',
+    memory: '256MB',
     secrets: [
       'LAWPAY_API_KEY',
       'LAWPAY_ECHECK_ACCOUNT_ID',
       'LAWPAY_CARD_ACCOUNT_ID',
     ],
-  },
-  async (request: any /* CallableRequest */) => {
+  })
+  .https.onCall(async (data: CreatePaymentRequestData, context) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'You must be logged in to create payment requests.');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to create payment requests.');
     }
 
     const {
@@ -230,28 +231,27 @@ export const createPaymentRequest = onCall(
       paymentMethod,
       clientEmail,
       clientName,
-    } = request.data as CreatePaymentRequestData;
-
+    } = data;
     // ------------------------------------------------------------------
     // 2. Validate input
     // ------------------------------------------------------------------
     if (!firmId || !clientId) {
-      throw new HttpsError('invalid-argument', 'firmId and clientId are required.');
+      throw new functions.https.HttpsError('invalid-argument', 'firmId and clientId are required.');
     }
     if (!amount || amount <= 0) {
-      throw new HttpsError('invalid-argument', 'amount must be a positive integer (in cents).');
+      throw new functions.https.HttpsError('invalid-argument', 'amount must be a positive integer (in cents).');
     }
     if (!description?.trim()) {
-      throw new HttpsError('invalid-argument', 'description is required.');
+      throw new functions.https.HttpsError('invalid-argument', 'description is required.');
     }
     if (!['operating', 'trust'].includes(accountDesignation)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'invalid-argument',
         'accountDesignation must be "operating" or "trust".',
       );
     }
     if (!clientEmail || !clientName) {
-      throw new HttpsError('invalid-argument', 'clientEmail and clientName are required.');
+      throw new functions.https.HttpsError('invalid-argument', 'clientEmail and clientName are required.');
     }
 
     console.log(
@@ -317,7 +317,7 @@ export const createPaymentRequest = onCall(
         console.error(
           `[createPaymentRequest] AffiniPay API error ${response.status}: ${errorBody}`,
         );
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           'internal',
           `LawPay API returned an error (${response.status}). ` +
           'Please check your API credentials and try again.',
@@ -326,9 +326,9 @@ export const createPaymentRequest = onCall(
 
       chargeResponse = (await response.json()) as AffiniPayChargeResponse;
     } catch (error) {
-      if (error instanceof HttpsError) throw error;
+      if (error instanceof functions.https.HttpsError) throw error;
       console.error('[createPaymentRequest] Fetch error:', error);
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         'internal',
         `Failed to reach the LawPay API: ${error instanceof Error ? error.message : 'Network error'}`,
       );
@@ -375,9 +375,9 @@ export const createPaymentRequest = onCall(
       paidAt: null,
       // Metadata
       createdAt: now,
-      createdBy: request.auth.uid,
+      createdBy: context.auth.uid,
       updatedAt: now,
-      updatedBy: request.auth.uid,
+      updatedBy: context.auth.uid,
     });
 
     // Clean up the temp doc if it was actually persisted (it was just for ID generation)
@@ -391,7 +391,7 @@ export const createPaymentRequest = onCall(
       paymentDocId: transactionId,
     };
   },
-);
+  );
 
 // ---------------------------------------------------------------------------
 // Function 2 — lawpayWebhook (onRequest)
