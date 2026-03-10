@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Paperclip, X, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Mic, MicOff, Paperclip, X, Trash2, UserPlus, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -28,7 +28,7 @@ import type { NoteType } from '@/types';
 function formatDuration(seconds: number): string {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')} `;
 }
 
 const NOTE_TYPE_OPTIONS: { value: NoteType; label: string }[] = [
@@ -52,6 +52,7 @@ export interface AudioRecorderModalProps {
         audioFileName: string;
         durationSeconds: number;
         clientId?: string;
+        newClientName?: string;
     }) => Promise<void>;
     /** If provided, locks the note to this client. Otherwise shows client selector. */
     defaultClientId?: string;
@@ -68,23 +69,53 @@ export function AudioRecorderModal({
     defaultClientId,
     clients = [],
     isSaving = false,
-    onAddClient,
+    onAddClient: _onAddClient,
 }: AudioRecorderModalProps) {
     const [title, setTitle] = useState('');
     const [noteType, setNoteType] = useState<NoteType>('general');
     const [content, setContent] = useState('');
     const [selectedClientId, setSelectedClientId] = useState<string>(defaultClientId || '');
+    const [clientSearch, setClientSearch] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const clientInputRef = useRef<HTMLInputElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     const audioRecorder = useAudioRecorder();
     const audioFileInputRef = useRef<HTMLInputElement>(null);
 
     const { clearAudio, cancelRecording } = audioRecorder;
 
+    // Filter clients based on search
+    const filteredClients = useMemo(() => {
+        if (!clientSearch.trim()) return clients;
+        const q = clientSearch.toLowerCase();
+        return clients.filter(c => c.name.toLowerCase().includes(q));
+    }, [clients, clientSearch]);
+
+    // Check if the search matches an existing client exactly
+    const exactMatch = useMemo(() => {
+        return clients.find(c => c.name.toLowerCase() === clientSearch.trim().toLowerCase());
+    }, [clients, clientSearch]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+                clientInputRef.current && !clientInputRef.current.contains(e.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     useEffect(() => {
         if (open) {
             setTitle('');
             setNoteType('general');
             setContent('');
+            setClientSearch('');
+            setIsDropdownOpen(false);
             clearAudio();
             if (defaultClientId) {
                 setSelectedClientId(defaultClientId);
@@ -96,9 +127,22 @@ export function AudioRecorderModal({
         }
     }, [open, defaultClientId, clearAudio, cancelRecording]);
 
+    const handleSelectClient = (id: string, name: string) => {
+        setSelectedClientId(id);
+        setClientSearch(name);
+        setIsDropdownOpen(false);
+    };
+
+    const handleCreateAndSelect = () => {
+        // Mark as "new client" — the parent will create it
+        setSelectedClientId('__new__');
+        setIsDropdownOpen(false);
+    };
+
     const handleDone = async () => {
-        if (!selectedClientId) {
-            toast.error('Please select a client to save this note to.');
+        const isNewClient = selectedClientId === '__new__' && clientSearch.trim();
+        if (!selectedClientId && !isNewClient) {
+            toast.error('Please select or enter a client name.');
             return;
         }
 
@@ -110,7 +154,8 @@ export function AudioRecorderModal({
                 audioBlob: audioRecorder.audioBlob,
                 audioFileName: audioRecorder.audioFileName,
                 durationSeconds: audioRecorder.durationSeconds,
-                clientId: selectedClientId,
+                clientId: isNewClient ? undefined : selectedClientId,
+                newClientName: isNewClient ? clientSearch.trim() : undefined,
             });
             onOpenChange(false);
         } catch (err) {
@@ -146,31 +191,66 @@ export function AudioRecorderModal({
 
                 <div className="space-y-4 py-4">
                     {!defaultClientId && (
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-xs font-medium text-gray-600">
-                                    Client <span className="text-red-500">*</span>
-                                </Label>
-                                {onAddClient && (
-                                    <button
-                                        type="button"
-                                        onClick={onAddClient}
-                                        className="text-xs font-semibold text-[#2b6cb0] hover:text-[#1e407a] hover:underline"
-                                    >
-                                        + New Client
-                                    </button>
-                                )}
-                            </div>
-                            <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                                <SelectTrigger className="border-gray-200">
-                                    <SelectValue placeholder="Select a client..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {clients.map(c => (
-                                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        <div className="space-y-1.5 relative">
+                            <Label className="text-xs font-medium text-gray-600">
+                                Client <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                ref={clientInputRef}
+                                placeholder="Search or type a new client name…"
+                                value={clientSearch}
+                                onChange={(e) => {
+                                    setClientSearch(e.target.value);
+                                    setIsDropdownOpen(true);
+                                    if (!e.target.value.trim()) {
+                                        setSelectedClientId('');
+                                    }
+                                }}
+                                onFocus={() => setIsDropdownOpen(true)}
+                                className="border-gray-200 bg-white text-sm"
+                            />
+                            {selectedClientId && selectedClientId !== '__new__' && (
+                                <div className="absolute right-3 top-[30px] text-emerald-500">
+                                    <Check className="h-4 w-4" />
+                                </div>
+                            )}
+                            {selectedClientId === '__new__' && (
+                                <div className="absolute right-3 top-[30px] text-blue-500">
+                                    <UserPlus className="h-4 w-4" />
+                                </div>
+                            )}
+                            {isDropdownOpen && (
+                                <div
+                                    ref={dropdownRef}
+                                    className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-48 overflow-y-auto"
+                                >
+                                    {filteredClients.map(c => (
+                                        <button
+                                            key={c.id}
+                                            type="button"
+                                            onClick={() => handleSelectClient(c.id, c.name)}
+                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-[#ebf4ff] transition-colors ${selectedClientId === c.id ? 'bg-[#ebf4ff] font-medium text-[#1a365d]' : 'text-gray-700'}`}
+                                        >
+                                            {c.name}
+                                        </button>
                                     ))}
-                                </SelectContent>
-                            </Select>
+                                    {clientSearch.trim() && !exactMatch && (
+                                        <button
+                                            type="button"
+                                            onClick={handleCreateAndSelect}
+                                            className="w-full text-left px-3 py-2 text-sm border-t border-gray-100 text-[#2b6cb0] font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
+                                        >
+                                            <UserPlus className="h-3.5 w-3.5" />
+                                            Create "{clientSearch.trim()}"
+                                        </button>
+                                    )}
+                                    {!filteredClients.length && !clientSearch.trim() && (
+                                        <div className="px-3 py-4 text-center text-sm text-gray-400">
+                                            No clients yet. Type a name to create one.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 

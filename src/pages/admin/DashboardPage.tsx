@@ -328,10 +328,44 @@ export default function DashboardPage() {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleSaveAudioNote = async (data: any) => {
-    if (!user?.uid || !firmId || !data.clientId) return;
+    if (!user?.uid || !firmId) return;
+
+    // If a new client name was typed, create the client first
+    let clientId = data.clientId;
+    if (!clientId && data.newClientName) {
+      try {
+        const nameParts = data.newClientName.trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        const clientsCol = collection(db, COLLECTIONS.CLIENTS(firmId));
+        const newClientRef = doc(clientsCol);
+        await setDoc(newClientRef, {
+          firstName,
+          lastName,
+          personalInfo: { firstName, lastName },
+          status: 'active',
+          isArchived: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: user.uid,
+        });
+        clientId = newClientRef.id;
+        toast.success(`Client "${data.newClientName}" created.`);
+      } catch (err) {
+        console.error('Failed to create new client', err);
+        toast.error('Failed to create new client.');
+        return;
+      }
+    }
+
+    if (!clientId) {
+      toast.error('Please select or create a client.');
+      return;
+    }
+
     setIsSavingRecord(true);
     try {
-      const collPath = COLLECTIONS.NOTES(firmId, data.clientId);
+      const collPath = COLLECTIONS.NOTES(firmId, clientId);
       const docRef = doc(collection(db, collPath));
       const activeNoteId = docRef.id;
 
@@ -340,7 +374,7 @@ export default function DashboardPage() {
       let status = null;
 
       if (data.audioBlob) {
-        const upload = await uploadAudioToStorage(data.audioBlob, firmId, data.clientId, activeNoteId);
+        const upload = await uploadAudioToStorage(data.audioBlob, firmId, clientId, activeNoteId);
         audioUrl = upload.url;
         storagePath = upload.fullPath;
         status = 'processing';
@@ -358,7 +392,7 @@ export default function DashboardPage() {
         audioDurationSeconds: data.durationSeconds ?? null,
         transcriptionStatus: status,
         firmId,
-        clientId: data.clientId,
+        clientId,
         source: 'manual',
         createdBy: user.uid,
         updatedBy: user.uid,
@@ -369,7 +403,7 @@ export default function DashboardPage() {
       await setDoc(docRef, newNote);
 
       if (storagePath) {
-        requestTranscription(firmId, data.clientId, activeNoteId, storagePath);
+        requestTranscription(firmId, clientId, activeNoteId, storagePath);
         toast.success('Note saved. Audio uploading and transcription started.');
       } else {
         toast.success('Note saved successfully.');
