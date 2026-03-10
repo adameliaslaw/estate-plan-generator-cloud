@@ -818,18 +818,6 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
                       {retryingTranscription ? 'Retrying...' : 'Retry'}
                     </Button>
                   )}
-                  {note.transcriptionStatus === 'completed' && !note.aiSummary && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-auto h-6 gap-1 px-2 text-[10px] uppercase tracking-wider text-[#2b6cb0] hover:bg-blue-100/50"
-                      disabled={isSummarizing}
-                      onClick={() => void handleSummarize()}
-                    >
-                      <Bot className={`h-3 w-3 ${isSummarizing ? 'animate-pulse' : ''}`} />
-                      {isSummarizing ? 'Summarizing...' : 'Summarize'}
-                    </Button>
-                  )}
                 </div>
                 {/* Only render the audio element if it's a real URL (not a data URI too large to display) */}
                 {note.audioUrl && (
@@ -839,6 +827,22 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
                     className="h-8 w-full"
                   />
                 )}
+              </div>
+            )}
+
+            {/* AI Summarization Controls (Always visible when transcription is ready) */}
+            {note.transcriptionStatus === 'completed' && !note.aiSummary && (
+              <div className="flex justify-start">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 px-3 text-xs uppercase tracking-wider text-[#2b6cb0] border-blue-100 hover:bg-blue-50"
+                  disabled={isSummarizing}
+                  onClick={() => void handleSummarize()}
+                >
+                  <Bot className={`h-3.5 w-3.5 ${isSummarizing ? 'animate-pulse' : ''}`} />
+                  {isSummarizing ? 'Summarizing...' : 'Summarize Audio Note'}
+                </Button>
               </div>
             )}
 
