@@ -1,15 +1,17 @@
 import { useParams } from 'react-router-dom';
 import { QuestionnaireProvider } from '@/contexts/QuestionnaireContext';
 import { QuestionnaireShell } from '@/components/questionnaire/QuestionnaireShell';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function QuestionnairePage() {
   const { clientId, firmId: urlFirmId } = useParams<{ clientId: string; firmId?: string }>();
+  const { userProfile } = useAuth();
+
   // firmId is extracted from URL context; for the client-facing route
   // (/questionnaire/:firmId/:clientId) it will be present.
-  // For the staff route (/clients/:clientId/questionnaire) the staff are
-  // authenticated, but the route currently doesn't have firmId. We use a fallback
-  // if needed, though in the future we should read firmId from auth context.
-  const firmId = urlFirmId || 'default-firm'; // placeholder until real firm auth is set
+  // For the staff route (/clients/:clientId/questionnaire) we fall back
+  // to the authenticated user's firmId from their profile.
+  const firmId = urlFirmId || userProfile?.firmId || '';
 
   if (!clientId || !firmId) {
     return (

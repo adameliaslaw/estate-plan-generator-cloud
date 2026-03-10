@@ -367,8 +367,32 @@ export function QuestionnaireProvider({
           ? 'Client'
           : `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
 
+        // Compute progress fields for dashboard display
+        const visibleStepCount = QUESTIONNAIRE_STEPS.filter((step) => {
+          if (!step.condition) return true;
+          return evaluateCondition(step.condition, data);
+        }).length;
+        const percentComplete = visibleStepCount > 0
+          ? Math.round((data.completedSteps.length / visibleStepCount) * 100)
+          : 0;
+
+        // Determine which sections have all visible steps completed
+        const sectionsCompleted: string[] = [];
+        for (const section of SECTION_META) {
+          const sectionSteps = QUESTIONNAIRE_STEPS.filter((s) => {
+            if (s.section !== section.id) return false;
+            if (!s.condition) return true;
+            return evaluateCondition(s.condition, data);
+          });
+          if (sectionSteps.length > 0 && sectionSteps.every((s) => data.completedSteps.includes(s.id))) {
+            sectionsCompleted.push(section.id);
+          }
+        }
+
         await updateDoc(doc(db, docPath), {
           'questionnaireProgress.status': 'in_progress',
+          'questionnaireProgress.percentComplete': percentComplete,
+          'questionnaireProgress.sectionsCompleted': sectionsCompleted,
           'questionnaireProgress.lastUpdatedBy': updaterName,
           'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
         });
