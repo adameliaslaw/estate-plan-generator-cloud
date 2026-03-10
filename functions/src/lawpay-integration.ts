@@ -79,9 +79,9 @@ function getLawPayCredentials(): {
   echeckAccountId: string;
   cardAccountId: string;
 } {
-  const apiKey = process.env.LAWPAY_API_KEY;
-  const echeckAccountId = process.env.LAWPAY_ECHECK_ACCOUNT_ID;
-  const cardAccountId = process.env.LAWPAY_CARD_ACCOUNT_ID;
+  const apiKey = (process.env.LAWPAY_API_KEY || '').trim();
+  const echeckAccountId = (process.env.LAWPAY_ECHECK_ACCOUNT_ID || '').trim();
+  const cardAccountId = (process.env.LAWPAY_CARD_ACCOUNT_ID || '').trim();
   // Fallback to legacy single LAWPAY_MERCHANT_ID if new vars not set
   const legacyMerchantId = process.env.LAWPAY_MERCHANT_ID;
 
@@ -195,24 +195,26 @@ function paymentRef(
 /**
  * createPaymentRequest
  *
- * Creates a LawPay / AffiniPay charge and stores the resulting Payment doc in
- * Firestore.  Returns the payment URL so the frontend can open it in a new tab
- * or embed it.
+ * Creates a pre-filled LawPay payment page URL and stores the resulting
+ * Payment doc in Firestore. Returns the payment URL so the frontend can
+ * copy it or open it in a new tab.
+ *
+ * The LawPay Payment Page URL supports query parameters:
+ *   ?amount=15000&description=Estate%20Plan&readOnlyFields=amount,description
  *
  * Input:  { firmId, clientId, amount, description, accountDesignation,
- *           clientEmail, clientName }
- * Output: { paymentUrl, transactionId, paymentDocId }
+ *           paymentMethod, clientEmail, clientName }
+ * Output: { paymentUrl, paymentDocId }
  */
+
+// LawPay Payment Page base URL (configured in LawPay dashboard → Payment Pages)
+const LAWPAY_PAYMENT_PAGE_URL = 'https://secure.lawpay.com/pages/bolsterbrudereliasllc/operating';
+
 export const createPaymentRequest = functions
   .region('us-east1')
   .runWith({
-    timeoutSeconds: 60,
+    timeoutSeconds: 30,
     memory: '256MB',
-    secrets: [
-      'LAWPAY_API_KEY',
-      'LAWPAY_ECHECK_ACCOUNT_ID',
-      'LAWPAY_CARD_ACCOUNT_ID',
-    ],
   })
   .https.onCall(async (data: CreatePaymentRequestData, context) => {
     // ------------------------------------------------------------------
@@ -228,10 +230,10 @@ export const createPaymentRequest = functions
       amount,
       description,
       accountDesignation,
-      paymentMethod,
       clientEmail,
       clientName,
     } = data;
+
     // ------------------------------------------------------------------
     // 2. Validate input
     // ------------------------------------------------------------------
@@ -250,9 +252,6 @@ export const createPaymentRequest = functions
         'accountDesignation must be "operating" or "trust".',
       );
     }
-    if (!clientEmail || !clientName) {
-      throw new functions.https.HttpsError('invalid-argument', 'clientEmail and clientName are required.');
-    }
 
     console.log(
       `[createPaymentRequest] firmId=${firmId} clientId=${clientId} ` +
@@ -260,110 +259,46 @@ export const createPaymentRequest = functions
     );
 
     // ------------------------------------------------------------------
-    // 3. Verify credentials are configured
+    // 3. Construct pre-filled LawPay Payment Page URL
+    //    Docs: https://developers.8am.com (Payment Pages → URL Parameters)
     // ------------------------------------------------------------------
-    const { apiKey, echeckAccountId, cardAccountId } = getLawPayCredentials();
-    const accountId = paymentMethod === 'echeck' ? echeckAccountId : cardAccountId;
+    const params = new URLSearchParams({
+      amount: amount.toString(),
+      description: description.trim(),
+      reference: `${firmId}-${clientId}`,
+      readOnlyFields: 'amount,description',
+    });
 
-    if (!accountId) {
-      throw new HttpsError(
-        'failed-precondition',
-        `No LawPay account ID configured for payment method: ${paymentMethod}. ` +
-        'Please contact your administrator.',
-      );
+    // Add optional email if provided
+    if (clientEmail) {
+      params.set('email', clientEmail);
     }
 
-    // ------------------------------------------------------------------
-    // 4. Create charge via AffiniPay REST API
-    //
-    //    POST https://api.affinipay.com/v1/charges
-    //    Docs: https://developer.affinipay.com/reference/charge-object
-    // ------------------------------------------------------------------
+    const paymentUrl = `${LAWPAY_PAYMENT_PAGE_URL}?${params.toString()}`;
 
-    // We use a temporary Firestore ID in the reference so the webhook can
-    // later look up the right firm + client documents.
+    console.log(`[createPaymentRequest] Generated payment URL: ${paymentUrl}`);
+
+    // ------------------------------------------------------------------
+    // 4. Persist Payment document in Firestore
+    // ------------------------------------------------------------------
     const db = admin.firestore();
-    const tempPaymentRef = db
+    const paymentDocRef = db
       .collection('firms')
       .doc(firmId)
       .collection('clients')
       .doc(clientId)
       .collection('payments')
-      .doc(); // auto-ID — will be updated once we have the transaction ID
+      .doc(); // auto-generated ID
 
-    const chargePayload = {
-      amount,              // in cents
-      currency: 'USD',
-      account_id: accountId,
-      description: description.trim(),
-      reference: `${firmId}-${clientId}-${tempPaymentRef.id}`,
-      email: clientEmail,
-      account_designation: accountDesignation,
-    };
-
-    console.log(
-      `[createPaymentRequest] Using API key (length=${apiKey.length}) with accountId=${accountId}`,
-    );
-
-    let chargeResponse: AffiniPayChargeResponse;
-    try {
-      const response = await fetch('https://api.8am.com/v1/charges', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // AffiniPay uses HTTP Basic Auth: base64(secretKey + ':')
-          'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
-        },
-        body: JSON.stringify(chargePayload),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error(
-          `[createPaymentRequest] AffiniPay API error ${response.status}: ${errorBody}`,
-        );
-        throw new functions.https.HttpsError(
-          'internal',
-          `LawPay API returned an error (${response.status}). ` +
-          'Please check your API credentials and try again.',
-        );
-      }
-
-      chargeResponse = (await response.json()) as AffiniPayChargeResponse;
-    } catch (error) {
-      if (error instanceof functions.https.HttpsError) throw error;
-      console.error('[createPaymentRequest] Fetch error:', error);
-      throw new functions.https.HttpsError(
-        'internal',
-        `Failed to reach the LawPay API: ${error instanceof Error ? error.message : 'Network error'}`,
-      );
-    }
-
-    const transactionId = chargeResponse.id;
-    const paymentUrl =
-      chargeResponse.payment_page_url ??
-      `https://secure.lawpay.com/pay/${transactionId}`;
-
-    console.log(
-      `[createPaymentRequest] Charge created — transactionId=${transactionId} url=${paymentUrl}`,
-    );
-
-    // ------------------------------------------------------------------
-    // 5. Persist Payment document in Firestore
-    //    Use the AffiniPay transaction ID as the document ID so the
-    //    webhook handler can do a direct doc lookup.
-    // ------------------------------------------------------------------
     const now = admin.firestore.FieldValue.serverTimestamp();
-    const finalPaymentRef = paymentRef(db, firmId, clientId, transactionId);
 
-    await finalPaymentRef.set({
-      id: transactionId,
+    await paymentDocRef.set({
+      id: paymentDocRef.id,
       firmId,
       clientId,
-      // LawPay / AffiniPay fields
-      lawPayTransactionId: transactionId,
+      // LawPay fields
       lawPayPaymentUrl: paymentUrl,
-      lawPayReference: chargePayload.reference,
+      lawPayReference: `${firmId}-${clientId}`,
       // Financial details
       amount,                  // in cents
       amountFormatted: (amount / 100).toFixed(2),
@@ -371,8 +306,8 @@ export const createPaymentRequest = functions
       description: description.trim(),
       accountDesignation,
       // Client info
-      clientEmail,
-      clientName,
+      clientEmail: clientEmail || '',
+      clientName: clientName || '',
       // Status
       status: 'pending',
       amountPaid: 0,
@@ -385,15 +320,11 @@ export const createPaymentRequest = functions
       updatedBy: context.auth.uid,
     });
 
-    // Clean up the temp doc if it was actually persisted (it was just for ID generation)
-    // In practice, Firestore doesn't persist the ref until .set() is called, so this is a no-op.
-
-    console.log(`[createPaymentRequest] Saved Payment doc — id=${transactionId}`);
+    console.log(`[createPaymentRequest] Saved Payment doc — id=${paymentDocRef.id}`);
 
     return {
       paymentUrl,
-      transactionId,
-      paymentDocId: transactionId,
+      paymentDocId: paymentDocRef.id,
     };
   },
   );
