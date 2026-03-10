@@ -34,6 +34,8 @@ interface CreatePaymentRequestData {
   description: string;
   /** Whether to route funds to the operating or trust account */
   accountDesignation: 'operating' | 'trust';
+  /** Payment method determines which LawPay account ID to use */
+  paymentMethod: 'echeck' | 'card';
   clientEmail: string;
   clientName: string;
 }
@@ -71,19 +73,37 @@ interface LawPayWebhookEvent {
  * Read LawPay credentials from environment variables.
  * Throws a `failed-precondition` HttpsError if either value is absent.
  */
-function getLawPayCredentials(): { apiKey: string; merchantId: string } {
+function getLawPayCredentials(): {
+  apiKey: string;
+  echeckAccountId: string;
+  cardAccountId: string;
+} {
   const apiKey = process.env.LAWPAY_API_KEY;
-  const merchantId = process.env.LAWPAY_MERCHANT_ID;
+  const echeckAccountId = process.env.LAWPAY_ECHECK_ACCOUNT_ID;
+  const cardAccountId = process.env.LAWPAY_CARD_ACCOUNT_ID;
+  // Fallback to legacy single LAWPAY_MERCHANT_ID if new vars not set
+  const legacyMerchantId = process.env.LAWPAY_MERCHANT_ID;
 
-  if (!apiKey || !merchantId) {
+  if (!apiKey) {
     throw new HttpsError(
       'failed-precondition',
-      'LawPay integration not configured. Set LAWPAY_API_KEY and LAWPAY_MERCHANT_ID ' +
-      'as Cloud Function environment variables (see Settings → Integrations).',
+      'LawPay integration not configured. Set LAWPAY_API_KEY ' +
+      'as a Cloud Function secret (see Settings → Integrations).',
     );
   }
 
-  return { apiKey, merchantId };
+  const finalEcheck = echeckAccountId || legacyMerchantId || '';
+  const finalCard = cardAccountId || legacyMerchantId || '';
+
+  if (!finalEcheck && !finalCard) {
+    throw new HttpsError(
+      'failed-precondition',
+      'LawPay account IDs not configured. Set LAWPAY_ECHECK_ACCOUNT_ID and/or ' +
+      'LAWPAY_CARD_ACCOUNT_ID as Cloud Function secrets.',
+    );
+  }
+
+  return { apiKey, echeckAccountId: finalEcheck, cardAccountId: finalCard };
 }
 
 /**
@@ -187,6 +207,11 @@ export const createPaymentRequest = onCall(
     region: 'us-east1',
     timeoutSeconds: 60,
     memory: '256MiB',
+    secrets: [
+      'LAWPAY_API_KEY',
+      'LAWPAY_ECHECK_ACCOUNT_ID',
+      'LAWPAY_CARD_ACCOUNT_ID',
+    ],
   },
   async (request: any /* CallableRequest */) => {
     // ------------------------------------------------------------------
@@ -202,6 +227,7 @@ export const createPaymentRequest = onCall(
       amount,
       description,
       accountDesignation,
+      paymentMethod,
       clientEmail,
       clientName,
     } = request.data as CreatePaymentRequestData;
@@ -236,7 +262,16 @@ export const createPaymentRequest = onCall(
     // ------------------------------------------------------------------
     // 3. Verify credentials are configured
     // ------------------------------------------------------------------
-    const { apiKey, merchantId } = getLawPayCredentials();
+    const { apiKey, echeckAccountId, cardAccountId } = getLawPayCredentials();
+    const accountId = paymentMethod === 'echeck' ? echeckAccountId : cardAccountId;
+
+    if (!accountId) {
+      throw new HttpsError(
+        'failed-precondition',
+        `No LawPay account ID configured for payment method: ${paymentMethod}. ` +
+        'Please contact your administrator.',
+      );
+    }
 
     // ------------------------------------------------------------------
     // 4. Create charge via AffiniPay REST API
@@ -259,15 +294,10 @@ export const createPaymentRequest = onCall(
     const chargePayload = {
       amount,              // in cents
       currency: 'USD',
-      account_id: merchantId,
+      account_id: accountId,
       description: description.trim(),
-      // reference encodes firmId + clientId + our Firestore doc ID so the webhook
-      // can resolve the right document without a full-table scan.
       reference: `${firmId}-${clientId}-${tempPaymentRef.id}`,
       email: clientEmail,
-      // account_designation tells AffiniPay which merchant account to credit.
-      // "operating" → general operating account
-      // "trust"     → IOLTA/trust account
       account_designation: accountDesignation,
     };
 

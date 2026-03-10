@@ -17,6 +17,7 @@
 
 import { useMemo, useState } from 'react';
 import { orderBy } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import {
   DollarSign,
   Plus,
@@ -70,6 +71,7 @@ import { sanitizeInput } from '@/utils/sanitize';
 import type { Payment, PaymentMethod, PaymentStatus, AccountDesignation } from '@/types';
 import { cn } from '@/lib/utils';
 import { logSystemActivity } from '@/utils/activity-logger';
+import { functions } from '@/config/firebase';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -186,27 +188,21 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
   );
 }
 
-// ── LawPay placeholder ────────────────────────────────────────────────────────
+// ── LawPay Cloud Function call ────────────────────────────────────────────────
 
-async function sendLawPayRequest(
-  firmId: string,
-  clientId: string,
-  amount: number,
-  description: string,
-  accountDesignation: AccountDesignation,
-): Promise<void> {
-  if (import.meta.env.DEV) console.info('[LawPay] sendLawPayRequest called', {
-    firmId,
-    clientId,
-    amount,
-    description,
-    accountDesignation,
-  });
-  toast.info(
-    'Payment request will be sent via LawPay. Integration pending setup in Settings.',
-    { duration: 6000 },
-  );
-}
+const callCreatePaymentRequest = httpsCallable<
+  {
+    firmId: string;
+    clientId: string;
+    amount: number;
+    description: string;
+    accountDesignation: 'operating' | 'trust';
+    paymentMethod: 'echeck' | 'card';
+    clientEmail: string;
+    clientName: string;
+  },
+  { paymentUrl: string; transactionId: string; paymentDocId: string }
+>(functions, 'createPaymentRequest');
 
 // ── Summary card ─────────────────────────────────────────────────────────────
 
@@ -537,21 +533,26 @@ function SendRequestDialog({
   onClose,
   firmId,
   clientId,
+  clientEmail,
   clientName,
-  createdBy,
+  createdBy: _createdBy,
 }: SendRequestDialogProps) {
   const { userProfile } = useAuth();
   const [description, setDescription] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
   const [accountDesignation, setAccountDesignation] = useState<AccountDesignation>('operating');
+  const [paymentMethodType, setPaymentMethodType] = useState<'echeck' | 'card'>('card');
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
 
   function resetForm() {
     setDescription('');
     setAmountDollars('');
     setAccountDesignation('operating');
+    setPaymentMethodType('card');
     setDueDate('');
+    setResultUrl(null);
   }
 
   function handleClose() {
@@ -576,34 +577,25 @@ function SendRequestDialog({
 
     setSaving(true);
     try {
-      const payload: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'> = {
+      // Call the Cloud Function to create a LawPay charge
+      const result = await callCreatePaymentRequest({
         firmId,
         clientId,
-        description: cleanDescription,
         amount: amountCents,
-        amountPaid: 0,
-        balanceDue: amountCents,
-        status: 'pending',
+        description: cleanDescription,
         accountDesignation,
-        dueDate: dueDate || '',
-        createdBy,
-        updatedBy: createdBy,
-      };
+        paymentMethod: paymentMethodType,
+        clientEmail: clientEmail ?? '',
+        clientName: clientName ?? '',
+      });
 
-      const clean = Object.fromEntries(
-        Object.entries(payload).filter(([, v]) => v !== undefined),
-      );
+      const { paymentUrl } = result.data;
+      setResultUrl(paymentUrl);
 
-      await createDoc(COLLECTIONS.PAYMENTS(firmId, clientId), clean);
+      // Copy to clipboard
+      try { await navigator.clipboard.writeText(paymentUrl); } catch { /* ignore */ }
 
-      // LawPay placeholder
-      await sendLawPayRequest(
-        firmId,
-        clientId,
-        amountCents,
-        cleanDescription,
-        accountDesignation,
-      );
+      toast.success('Payment request created! Link copied to clipboard.', { duration: 6000 });
 
       await logSystemActivity(firmId, userProfile, 'sending payment request', {
         clientName,
@@ -631,7 +623,7 @@ function SendRequestDialog({
             {clientName
               ? `Create a payment request for ${clientName}.`
               : 'Create a payment request for this client.'}{' '}
-            The request will be sent via LawPay once the integration is configured in Settings.
+            A LawPay payment link will be generated.
           </p>
         </div>
 
@@ -685,6 +677,23 @@ function SendRequestDialog({
             </Select>
           </div>
 
+          {/* Payment Method Type */}
+          <div className="space-y-1.5">
+            <Label htmlFor="sr-paymethod">Payment Method</Label>
+            <Select
+              value={paymentMethodType}
+              onValueChange={(v) => setPaymentMethodType(v as 'echeck' | 'card')}
+            >
+              <SelectTrigger id="sr-paymethod">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="card">Credit / Debit Card</SelectItem>
+                <SelectItem value="echeck">eCheck (Bank Transfer)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Due Date */}
           <div className="space-y-1.5">
             <Label htmlFor="sr-due">Due Date (optional)</Label>
@@ -697,13 +706,23 @@ function SendRequestDialog({
           </div>
         </div>
 
-        <Alert className="border-blue-200 bg-blue-50">
-          <ExternalLink className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-xs text-blue-800">
-            LawPay integration is pending setup. Configure your API keys in{' '}
-            <span className="font-semibold">Settings → Billing</span> to activate payment links.
-          </AlertDescription>
-        </Alert>
+        {resultUrl ? (
+          <Alert className="border-emerald-200 bg-emerald-50">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-xs text-emerald-800">
+              Payment link created!{' '}
+              <a
+                href={resultUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+              >
+                Open payment page
+              </a>
+              {' '}(link also copied to clipboard)
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={saving}>
