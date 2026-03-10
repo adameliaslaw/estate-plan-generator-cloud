@@ -263,7 +263,7 @@ function NoteForm({
         const docRef = doc(db, collPath, activeNoteId);
 
         const partialNote: Partial<Note> = {
-          title: sanitizeInput(form.title.trim()) || undefined,
+          title: sanitizeInput(form.title.trim()) || '',
           noteType: form.noteType,
           content: sanitizeInput(form.content.trim()),
           isPinned: form.isPinned,
@@ -312,7 +312,7 @@ function NoteForm({
             audioUrl: url,
             audioStoragePath: fullPath,
             audioFileName: audioRecorder.audioFileName,
-            audioDurationSeconds: audioRecorder.durationSeconds || undefined,
+            audioDurationSeconds: audioRecorder.durationSeconds ?? null,
             transcriptionStatus: 'processing',
             updatedBy: authorUid,
             updatedAt: serverTimestamp() as any,
@@ -355,7 +355,7 @@ function NoteForm({
       if (isEditing || form.content.trim() || form.title.trim()) {
         const collPath = COLLECTIONS.NOTES(firmId, clientId);
         setDoc(doc(db, collPath, activeNoteId), {
-          title: sanitizeInput(form.title.trim()) || undefined,
+          title: sanitizeInput(form.title.trim()) || null,
           noteType: form.noteType,
           content: sanitizeInput(form.content.trim()),
           isPinned: form.isPinned,

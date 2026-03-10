@@ -179,7 +179,7 @@ export default function FlexDocumentGenerator({
         firmId,
         clientId,
         docType: selected.docType,
-        customPrompt: customPrompt.trim() || undefined,
+        customPrompt: customPrompt.trim() || '',
       });
       setResult(response);
       setPhase('success');

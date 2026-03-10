@@ -289,7 +289,7 @@ export default function ClientDashboardPage() {
         audioUrl,
         audioStoragePath: storagePath,
         audioFileName: data.audioFileName,
-        audioDurationSeconds: data.durationSeconds || undefined,
+        audioDurationSeconds: data.durationSeconds ?? null,
         transcriptionStatus: status,
         firmId,
         clientId,

@@ -359,8 +359,8 @@ function RecordPaymentDialog({
         status: 'paid',
         accountDesignation,
         checkNumber: method === 'Check' ? sanitizeInput(checkNumber.trim()) : undefined,
-        dueDate: date || undefined,
-        notes: cleanNotes || undefined,
+        dueDate: date || '',
+        notes: cleanNotes || '',
         createdBy,
         updatedBy: createdBy,
       };
@@ -585,7 +585,7 @@ function SendRequestDialog({
         balanceDue: amountCents,
         status: 'pending',
         accountDesignation,
-        dueDate: dueDate || undefined,
+        dueDate: dueDate || '',
         createdBy,
         updatedBy: createdBy,
       };
