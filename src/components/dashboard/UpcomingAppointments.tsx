@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, MapPin, Video, Clock } from 'lucide-react';
 import { where, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { COLLECTIONS } from '@/config/constants';
@@ -14,6 +15,7 @@ export interface UpcomingAppointmentsProps {
 export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsProps = {}) {
     const { userProfile } = useAuth();
     const firmId = userProfile?.firmId;
+    const navigate = useNavigate();
 
     // Query events that haven't happened yet, ordered by start time
     const queryConstraints = useMemo(() => [
@@ -126,7 +128,17 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
 
                                     {event.clientName && (
                                         <p className="mt-1 truncate text-sm text-gray-600">
-                                            <span className="font-medium">Client:</span> {event.clientName}
+                                            <span className="font-medium">Client:</span>{' '}
+                                            {event.clientId ? (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); navigate(`/clients/${event.clientId}`); }}
+                                                    className="text-[#2b6cb0] hover:underline font-medium"
+                                                >
+                                                    {event.clientName}
+                                                </button>
+                                            ) : (
+                                                event.clientName
+                                            )}
                                         </p>
                                     )}
 

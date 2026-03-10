@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     DollarSign,
     CheckCircle2,
@@ -72,6 +73,7 @@ interface DashboardPaymentsProps {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function DashboardPayments({ clients = [] }: DashboardPaymentsProps) {
+    const navigate = useNavigate();
     const { userProfile } = useAuth();
     const firmId = userProfile?.firmId ?? '';
 
@@ -228,9 +230,12 @@ export function DashboardPayments({ clients = [] }: DashboardPaymentsProps) {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center justify-between gap-2">
-                                            <p className="truncate text-sm font-medium text-gray-800">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/clients/${p.clientId}`); }}
+                                                className="truncate text-sm font-medium text-[#2b6cb0] hover:underline text-left"
+                                            >
                                                 {clientName}
-                                            </p>
+                                            </button>
                                             <span className="shrink-0 text-sm font-semibold text-gray-900">
                                                 {formatCents(p.amount)}
                                             </span>

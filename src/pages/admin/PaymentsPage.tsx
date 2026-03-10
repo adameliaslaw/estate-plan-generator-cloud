@@ -6,6 +6,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     DollarSign,
     CheckCircle2,
@@ -553,6 +554,7 @@ function RecordPaymentDialog({
 
 export default function PaymentsPage() {
     const { userProfile } = useAuth();
+    const navigate = useNavigate();
     const firmId = userProfile?.firmId ?? '';
 
     const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -779,7 +781,12 @@ export default function PaymentsPage() {
                                     return (
                                         <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                                             <td className="whitespace-nowrap px-5 py-3.5 text-sm font-medium text-gray-900">
-                                                {clientName}
+                                                <button
+                                                    onClick={() => navigate(`/clients/${p.clientId}`)}
+                                                    className="text-[#2b6cb0] hover:underline font-medium text-left"
+                                                >
+                                                    {clientName}
+                                                </button>
                                             </td>
                                             <td className="px-5 py-3.5 text-sm text-gray-600">
                                                 {p.description || '—'}

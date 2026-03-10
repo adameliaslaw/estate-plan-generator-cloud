@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bot, FileText, Phone, Mail, Users, StickyNote, CheckSquare, Settings } from 'lucide-react';
 import { where, orderBy, limit } from 'firebase/firestore';
 
@@ -29,6 +30,7 @@ function NoteTypeIcon({ type }: { type: string }) {
 export function RecentNotes({ clients = [], activeClientIds = [] }: RecentNotesProps) {
     const { userProfile } = useAuth();
     const firmId = userProfile?.firmId;
+    const navigate = useNavigate();
 
     // Query constraints for latest notes across the firm.
     // We cannot filter on isPrivate here because old notes might not have the field,
@@ -153,7 +155,17 @@ export function RecentNotes({ clients = [], activeClientIds = [] }: RecentNotesP
                                     </div>
 
                                     <p className="text-xs text-gray-600 truncate">
-                                        <span className="font-medium text-gray-700">Client:</span> {clientName}
+                                        <span className="font-medium text-gray-700">Client:</span>{' '}
+                                        {note.clientId ? (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/clients/${note.clientId}`); }}
+                                                className="text-[#2b6cb0] hover:underline font-medium"
+                                            >
+                                                {clientName}
+                                            </button>
+                                        ) : (
+                                            clientName
+                                        )}
                                     </p>
 
                                     <p className="text-sm text-gray-600 line-clamp-2 mt-1">
