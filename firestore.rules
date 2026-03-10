@@ -433,6 +433,19 @@ service cloud.firestore {
     } // end /firms/{firmId}
 
     // ==========================================================
+    // COLLECTION GROUP QUERIES
+    // Used for dashboard widgets like "Recent Notes"
+    // ==========================================================
+    match /{path=**}/notes/{noteId} {
+      // Allow read if the user belongs to the firm specified in the document
+      // Note: This relies on the document having a 'firmId' field, which we query on
+      allow read: if isAdmin() 
+                  || ((isAttorney() || isParalegal()) 
+                      && isAuthenticated() 
+                      && request.auth.token.firmId == resource.data.firmId);
+    }
+
+    // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
     // This is Firestore's built-in behaviour, but calling it out
