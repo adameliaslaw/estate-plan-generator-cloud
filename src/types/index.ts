@@ -676,6 +676,12 @@ export interface QuestionnaireProgress {
   status: QuestionnaireStatus;
   percentComplete: number;
   sectionsCompleted: string[];
+  currentStepIndex?: number;
+  currentStepTitle?: string;
+  currentSectionId?: string;
+  currentSectionTitle?: string;
+  totalSteps?: number;
+  lastUpdatedBy?: string;
   lastUpdatedAt?: Timestamp;
   startedAt?: Timestamp;
   completedAt?: Timestamp;

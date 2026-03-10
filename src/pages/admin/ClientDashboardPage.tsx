@@ -40,6 +40,12 @@ import {
   Mic,
   Printer,
   UploadCloud,
+  Shield,
+  Gift,
+  HeartPulse,
+  Info,
+  CreditCard,
+  Circle,
 } from 'lucide-react';
 import { collection, setDoc, serverTimestamp, doc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -55,6 +61,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { type Client } from '@/types';
 import { cn } from '@/lib/utils';
+import { SECTION_META } from '@/types/questionnaire';
 
 import DocumentVault from '@/components/documents/DocumentVault';
 import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsButton';
@@ -88,6 +95,32 @@ const Q_STATUS_CONFIG = {
   in_progress: { label: 'In Progress', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
   completed: { label: 'Complete', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
 };
+
+const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  aboutYou: User,
+  spouse: Heart,
+  children: Users,
+  assets: Building2,
+  liabilities: CreditCard,
+  fiduciaries: Shield,
+  wishes: Gift,
+  healthcare: HeartPulse,
+  additional: Info,
+};
+
+function formatRelativeTime(timestamp: any): string {
+  if (!timestamp) return '';
+  const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  return `${diffDays}d ago`;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -754,9 +787,10 @@ export default function ClientDashboardPage() {
               </InfoCard>
             )}
 
-            {/* Questionnaire progress */}
+            {/* Questionnaire progress — enhanced real-time tracker */}
             <InfoCard title="Questionnaire Progress" icon={Sparkles} iconColor="text-[#2b6cb0]">
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Status + percentage header */}
                 <div className="flex items-center justify-between">
                   <span
                     className={cn(
@@ -768,28 +802,105 @@ export default function ClientDashboardPage() {
                     <QIcon className="h-3.5 w-3.5" />
                     {qStatusCfg.label}
                   </span>
-                  <span className="text-sm font-semibold text-gray-700">
-                    {qProgress?.percentComplete ?? 0}%
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {qProgress?.totalSteps && (
+                      <span className="text-xs text-gray-400">
+                        Step {(qProgress.currentStepIndex ?? 0) + 1} of {qProgress.totalSteps}
+                      </span>
+                    )}
+                    <span className="text-sm font-semibold text-gray-700">
+                      {qProgress?.percentComplete ?? 0}%
+                    </span>
+                  </div>
                 </div>
                 <Progress value={qProgress?.percentComplete ?? 0} className="h-2" />
-                {qProgress?.sectionsCompleted?.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-gray-500">
-                      Sections completed ({qProgress.sectionsCompleted.length})
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {qProgress.sectionsCompleted.map((section) => (
-                        <span
-                          key={section}
-                          className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
-                        >
-                          {section}
-                        </span>
-                      ))}
+
+                {/* Current step — live indicator */}
+                {qProgress?.status === 'in_progress' && qProgress.currentStepTitle && (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+                    <div className="flex items-start gap-2">
+                      <span className="relative mt-1 flex h-2.5 w-2.5 shrink-0">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-blue-800">Currently viewing</p>
+                        <p className="mt-0.5 text-sm font-semibold text-blue-900 truncate">
+                          {qProgress.currentStepTitle}
+                        </p>
+                        {qProgress.currentSectionTitle && (
+                          <p className="text-xs text-blue-600 mt-0.5">
+                            Section: {qProgress.currentSectionTitle}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                    {qProgress.lastUpdatedAt && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-blue-500">
+                        <Clock className="h-3 w-3" />
+                        Last active: {formatRelativeTime(qProgress.lastUpdatedAt)}
+                        {qProgress.lastUpdatedBy && (
+                          <span className="text-blue-400"> · {qProgress.lastUpdatedBy}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* Section-by-section breakdown */}
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-400">
+                    Sections
+                  </p>
+                  <div className="space-y-1.5">
+                    {SECTION_META.map((section) => {
+                      const isCompleted = qProgress?.sectionsCompleted?.includes(section.id);
+                      const isActive = qProgress?.currentSectionId === section.id && qProgress?.status === 'in_progress';
+                      const SectionIcon = SECTION_ICONS[section.id] || Info;
+
+                      return (
+                        <div
+                          key={section.id}
+                          className={cn(
+                            'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+                            isCompleted && 'bg-emerald-50',
+                            isActive && !isCompleted && 'bg-blue-50 ring-1 ring-blue-200',
+                            !isCompleted && !isActive && 'bg-gray-50',
+                          )}
+                        >
+                          {/* Status indicator */}
+                          {isCompleted ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                          ) : isActive ? (
+                            <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                              <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-blue-400 opacity-40" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                            </span>
+                          ) : (
+                            <Circle className="h-4 w-4 shrink-0 text-gray-300" />
+                          )}
+
+                          {/* Section icon + name */}
+                          <SectionIcon className={cn(
+                            'h-3.5 w-3.5 shrink-0',
+                            isCompleted ? 'text-emerald-500' : isActive ? 'text-blue-500' : 'text-gray-400',
+                          )} />
+                          <span className={cn(
+                            'text-xs font-medium truncate',
+                            isCompleted ? 'text-emerald-700' : isActive ? 'text-blue-700' : 'text-gray-500',
+                          )}>
+                            {section.title}
+                          </span>
+
+                          {/* Time estimate */}
+                          <span className="ml-auto text-[10px] text-gray-400 shrink-0">
+                            ~{section.estimatedMinutes}min
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </InfoCard>
           </div>

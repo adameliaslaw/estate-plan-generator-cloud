@@ -389,10 +389,25 @@ export function QuestionnaireProvider({
           }
         }
 
+        // Determine the current visible step info for dashboard display
+        const visibleSteps = QUESTIONNAIRE_STEPS.filter((step) => {
+          if (!step.condition) return true;
+          return evaluateCondition(step.condition, data);
+        });
+        const currentVisibleStep = visibleSteps[stepIndex] ?? null;
+        const currentSectionMeta = currentVisibleStep
+          ? SECTION_META.find((s) => s.id === currentVisibleStep.section)
+          : null;
+
         await updateDoc(doc(db, docPath), {
           'questionnaireProgress.status': 'in_progress',
           'questionnaireProgress.percentComplete': percentComplete,
           'questionnaireProgress.sectionsCompleted': sectionsCompleted,
+          'questionnaireProgress.currentStepIndex': stepIndex,
+          'questionnaireProgress.currentStepTitle': currentVisibleStep?.title ?? '',
+          'questionnaireProgress.currentSectionId': currentVisibleStep?.section ?? '',
+          'questionnaireProgress.currentSectionTitle': currentSectionMeta?.title ?? '',
+          'questionnaireProgress.totalSteps': visibleSteps.length,
           'questionnaireProgress.lastUpdatedBy': updaterName,
           'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
         });
