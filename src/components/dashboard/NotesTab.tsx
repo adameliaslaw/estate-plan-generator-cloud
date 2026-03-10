@@ -78,6 +78,7 @@ import type { Note, NoteType } from '@/types';
 import { sanitizeInput } from '@/utils/sanitize';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
+import { documentService } from '@/services/document-service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -612,9 +613,27 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
   const [deleting, setDeleting] = useState(false);
   const [pinning, setPinning] = useState(false);
   const [retryingTranscription, setRetryingTranscription] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   const collPath = COLLECTIONS.NOTES(firmId, clientId);
   const docPath = `${collPath}/${note.id}`;
+
+  const handleSummarize = async () => {
+    setIsSummarizing(true);
+    try {
+      await documentService.summarizeTranscription({
+        firmId,
+        clientId,
+        noteId: note.id,
+      });
+      toast.success('Note summary generated successfully.');
+    } catch (err: any) {
+      console.error('Summarize error:', err);
+      toast.error(err.message || 'Failed to summarize transcription.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
 
   const handleRetryTranscription = async () => {
     if (!note.audioStoragePath && !note.audioUrl) {
@@ -799,6 +818,18 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
                       {retryingTranscription ? 'Retrying...' : 'Retry'}
                     </Button>
                   )}
+                  {note.transcriptionStatus === 'completed' && !note.aiSummary && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-6 gap-1 px-2 text-[10px] uppercase tracking-wider text-[#2b6cb0] hover:bg-blue-100/50"
+                      disabled={isSummarizing}
+                      onClick={() => void handleSummarize()}
+                    >
+                      <Bot className={`h-3 w-3 ${isSummarizing ? 'animate-pulse' : ''}`} />
+                      {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                    </Button>
+                  )}
                 </div>
                 {/* Only render the audio element if it's a real URL (not a data URI too large to display) */}
                 {note.audioUrl && (
@@ -841,12 +872,26 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
 
             {/* AI summary */}
             {note.aiSummary && (
-              <Alert className="border-purple-200 bg-purple-50">
-                <Bot className="h-4 w-4 text-purple-600" />
-                <AlertDescription className="text-sm text-purple-800">
-                  <span className="font-semibold">AI Summary: </span>
-                  {note.aiSummary}
-                </AlertDescription>
+              <Alert className="group border-purple-200 bg-purple-50">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex gap-2">
+                    <Bot className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
+                    <AlertDescription className="text-sm text-purple-800">
+                      <span className="mb-1 block font-semibold">AI Summary</span>
+                      {note.aiSummary}
+                    </AlertDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-purple-600 opacity-0 transition-opacity hover:bg-purple-100 hover:text-purple-700 group-hover:opacity-100 disabled:opacity-50"
+                    title="Regenerate Summary"
+                    disabled={isSummarizing}
+                    onClick={() => void handleSummarize()}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isSummarizing ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
               </Alert>
             )}
           </div>

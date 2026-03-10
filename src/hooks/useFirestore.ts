@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   addDoc,
   collection,
+  collectionGroup,
   deleteDoc as firestoreDeleteDoc,
   doc,
   getDoc,
@@ -165,6 +166,63 @@ export function useCollection<T extends DocumentData>(
     return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, constraintKey]);
+
+  return state;
+}
+
+// ---------------------------------------------------------------------------
+// useCollectionGroup<T>
+// ---------------------------------------------------------------------------
+
+/**
+ * Real-time listener for a Firestore collection group (with optional query constraints).
+ *
+ * @param collectionId      - Collection ID (e.g. "notes").
+ * @param queryConstraints  - Optional Firestore query constraints (where, orderBy, limit…).
+ */
+export function useCollectionGroup<T extends DocumentData>(
+  collectionId: string | null | undefined,
+  queryConstraints: QueryConstraint[] = [],
+): CollectionState<T & { id: string }> {
+  const [state, setState] = useState<CollectionState<T & { id: string }>>({
+    data: [],
+    loading: !!collectionId,
+    error: null,
+  });
+
+  const constraintKey = JSON.stringify(
+    queryConstraints.map((c) => c.toString()),
+  );
+
+  useEffect(() => {
+    if (!collectionId) {
+      setState({ data: [], loading: false, error: null });
+      return;
+    }
+
+    setState((prev) => ({ ...prev, loading: true }));
+
+    const collGroupRef = collectionGroup(db, collectionId);
+    const q =
+      queryConstraints.length > 0 ? query(collGroupRef, ...queryConstraints) : collGroupRef;
+
+    const mapSnapshot = (snap: QuerySnapshot<DocumentData>) =>
+      snap.docs.map((d) => ({ ...(d.data() as T), id: d.id }));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setState({ data: mapSnapshot(snap), loading: false, error: null });
+      },
+      (err) => {
+        console.error(`[useCollectionGroup] Error listening to ${collectionId}:`, err);
+        setState({ data: [], loading: false, error: err });
+      },
+    );
+
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionId, constraintKey]);
 
   return state;
 }
