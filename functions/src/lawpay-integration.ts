@@ -307,7 +307,8 @@ export const createPaymentRequest = functions
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          // AffiniPay uses HTTP Basic Auth: base64(secretKey + ':')
+          'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
         },
         body: JSON.stringify(chargePayload),
       });
