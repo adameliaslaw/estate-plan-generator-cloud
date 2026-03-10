@@ -26,6 +26,7 @@ const TermsOfServicePage = lazy(() => import('@/pages/legal/TermsOfServicePage')
 const PrivacyPolicyPage = lazy(() => import('@/pages/legal/PrivacyPolicyPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const CalendarPage = lazy(() => import('@/pages/admin/CalendarPage'));
+const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 
 // Constants
@@ -156,6 +157,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <CalendarPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.PAYMENTS}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <PaymentsPage />
                 </AppLayout>
               }
             />

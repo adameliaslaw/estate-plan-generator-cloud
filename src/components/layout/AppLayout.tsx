@@ -17,6 +17,7 @@ function usePageTitle(): string {
     [ROUTES.DASHBOARD]: 'Dashboard',
     [ROUTES.CLIENTS]: 'Clients',
     [ROUTES.CALENDAR]: 'Calendar',
+    [ROUTES.PAYMENTS]: 'Payments',
     [ROUTES.SETTINGS]: 'Settings',
     [ROUTES.SETTINGS_FIRM]: 'Firm Settings',
     [ROUTES.SETTINGS_USERS]: 'User Management',

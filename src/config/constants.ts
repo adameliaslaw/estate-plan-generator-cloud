@@ -447,6 +447,7 @@ export const ROUTES = {
   CLIENT_DOCUMENT_EDIT: (clientId: string, documentId: string) =>
     `/clients/${clientId}/documents/${documentId}/edit`,
   CALENDAR: '/calendar',
+  PAYMENTS: '/payments',
   SETTINGS: '/settings',
   SETTINGS_FIRM: '/settings/firm',
   SETTINGS_USERS: '/settings/users',

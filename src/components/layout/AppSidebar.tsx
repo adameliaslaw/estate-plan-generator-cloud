@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   Calendar,
+  DollarSign,
   LogOut,
   X,
   Scale,
@@ -24,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },
   { label: 'Clients', href: ROUTES.CLIENTS, icon: Users },
   { label: 'Calendar', href: ROUTES.CALENDAR, icon: Calendar },
+  { label: 'Payments', href: ROUTES.PAYMENTS, icon: DollarSign },
 ];
 
 interface AppSidebarProps {
