@@ -445,6 +445,14 @@ service cloud.firestore {
                       && request.auth.token.firmId == resource.data.firmId);
     }
 
+    // Collection group query for dashboard Payments panel
+    match /{path=**}/payments/{paymentId} {
+      allow read: if isAdmin() 
+                  || ((isAttorney() || isParalegal()) 
+                      && isAuthenticated() 
+                      && request.auth.token.firmId == resource.data.firmId);
+    }
+
     // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
