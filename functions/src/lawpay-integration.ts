@@ -246,12 +246,7 @@ export const createPaymentRequest = functions
     if (!description?.trim()) {
       throw new functions.https.HttpsError('invalid-argument', 'description is required.');
     }
-    if (!['operating', 'trust'].includes(accountDesignation)) {
-      throw new functions.https.HttpsError(
-        'invalid-argument',
-        'accountDesignation must be "operating" or "trust".',
-      );
-    }
+
 
     console.log(
       `[createPaymentRequest] firmId=${firmId} clientId=${clientId} ` +

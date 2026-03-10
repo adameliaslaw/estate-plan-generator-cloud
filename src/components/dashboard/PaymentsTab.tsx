@@ -68,7 +68,7 @@ import { useCollection, createDoc, deleteDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
 import { COLLECTIONS } from '@/config/constants';
 import { sanitizeInput } from '@/utils/sanitize';
-import type { Payment, PaymentMethod, PaymentStatus, AccountDesignation } from '@/types';
+import type { Payment, PaymentMethod, PaymentStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { logSystemActivity } from '@/utils/activity-logger';
 import { functions } from '@/config/firebase';
@@ -196,12 +196,11 @@ const callCreatePaymentRequest = httpsCallable<
     clientId: string;
     amount: number;
     description: string;
-    accountDesignation: 'operating' | 'trust';
-    paymentMethod: 'echeck' | 'card';
+    accountDesignation: 'operating';
     clientEmail: string;
     clientName: string;
   },
-  { paymentUrl: string; transactionId: string; paymentDocId: string }
+  { paymentUrl: string; paymentDocId: string }
 >(functions, 'createPaymentRequest');
 
 // ── Summary card ─────────────────────────────────────────────────────────────
@@ -301,7 +300,6 @@ function RecordPaymentDialog({
   const [description, setDescription] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
   const [method, setMethod] = useState<PaymentMethod | ''>('');
-  const [accountDesignation, setAccountDesignation] = useState<AccountDesignation>('operating');
   const [checkNumber, setCheckNumber] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
@@ -311,7 +309,6 @@ function RecordPaymentDialog({
     setDescription('');
     setAmountDollars('');
     setMethod('');
-    setAccountDesignation('operating');
     setCheckNumber('');
     setDate(new Date().toISOString().slice(0, 10));
     setNotes('');
@@ -353,7 +350,7 @@ function RecordPaymentDialog({
         balanceDue: 0,
         paymentMethod: method as PaymentMethod,
         status: 'paid',
-        accountDesignation,
+        accountDesignation: 'operating',
         checkNumber: method === 'Check' ? sanitizeInput(checkNumber.trim()) : undefined,
         dueDate: date || '',
         notes: cleanNotes || '',
@@ -454,25 +451,7 @@ function RecordPaymentDialog({
             </div>
           )}
 
-          {/* Account Designation (IOLTA) */}
-          <div className="space-y-1.5">
-            <Label htmlFor="rp-account">Account Designation</Label>
-            <Select
-              value={accountDesignation}
-              onValueChange={(v) => setAccountDesignation(v as AccountDesignation)}
-            >
-              <SelectTrigger id="rp-account">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="operating">Operating Account</SelectItem>
-                <SelectItem value="trust">Trust Account (IOLTA)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-gray-400">
-              Select Trust Account for client funds held in escrow (IOLTA compliance).
-            </p>
-          </div>
+
 
           {/* Date */}
           <div className="space-y-1.5">
@@ -540,8 +519,6 @@ function SendRequestDialog({
   const { userProfile } = useAuth();
   const [description, setDescription] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
-  const [accountDesignation, setAccountDesignation] = useState<AccountDesignation>('operating');
-  const [paymentMethodType, setPaymentMethodType] = useState<'echeck' | 'card'>('card');
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
@@ -549,8 +526,6 @@ function SendRequestDialog({
   function resetForm() {
     setDescription('');
     setAmountDollars('');
-    setAccountDesignation('operating');
-    setPaymentMethodType('card');
     setDueDate('');
     setResultUrl(null);
   }
@@ -583,8 +558,7 @@ function SendRequestDialog({
         clientId,
         amount: amountCents,
         description: cleanDescription,
-        accountDesignation,
-        paymentMethod: paymentMethodType,
+        accountDesignation: 'operating',
         clientEmail: clientEmail ?? '',
         clientName: clientName ?? '',
       });
@@ -660,39 +634,7 @@ function SendRequestDialog({
             </div>
           </div>
 
-          {/* Account Designation */}
-          <div className="space-y-1.5">
-            <Label htmlFor="sr-account">Account Designation</Label>
-            <Select
-              value={accountDesignation}
-              onValueChange={(v) => setAccountDesignation(v as AccountDesignation)}
-            >
-              <SelectTrigger id="sr-account">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="operating">Operating Account</SelectItem>
-                <SelectItem value="trust">Trust Account (IOLTA)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
-          {/* Payment Method Type */}
-          <div className="space-y-1.5">
-            <Label htmlFor="sr-paymethod">Payment Method</Label>
-            <Select
-              value={paymentMethodType}
-              onValueChange={(v) => setPaymentMethodType(v as 'echeck' | 'card')}
-            >
-              <SelectTrigger id="sr-paymethod">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="card">Credit / Debit Card</SelectItem>
-                <SelectItem value="echeck">eCheck (Bank Transfer)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Due Date */}
           <div className="space-y-1.5">
@@ -1008,14 +950,9 @@ export default function PaymentsTab({
                       {/* Account */}
                       <td className="whitespace-nowrap px-4 py-3.5">
                         <span
-                          className={cn(
-                            'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                            payment.accountDesignation === 'trust'
-                              ? 'bg-indigo-50 text-indigo-700'
-                              : 'bg-gray-100 text-gray-600',
-                          )}
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600"
                         >
-                          {payment.accountDesignation === 'trust' ? 'Trust' : 'Operating'}
+                          Operating
                         </span>
                       </td>
 

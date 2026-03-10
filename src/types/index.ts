@@ -859,7 +859,7 @@ export interface Note {
 // Payment — /firms/{firmId}/clients/{clientId}/payments/{paymentId}
 // ============================================================================
 
-export type AccountDesignation = 'operating' | 'trust';  // IOLTA compliance
+export type AccountDesignation = 'operating';  // Only operating account used
 
 export interface Payment {
   id: string;
@@ -875,7 +875,7 @@ export interface Payment {
   paidAt?: Timestamp;
   dueDate?: string;              // ISO 8601
   receiptUrl?: string;
-  accountDesignation: AccountDesignation; // IOLTA: trust vs. operating
+  accountDesignation: AccountDesignation; // Always 'operating'
   checkNumber?: string;          // for check payments
   // LawPay / AffiniPay integration
   lawPayTransactionId?: string;

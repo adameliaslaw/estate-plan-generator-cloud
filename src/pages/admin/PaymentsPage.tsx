@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { functions } from '@/config/firebase';
 import { sanitizeInput } from '@/utils/sanitize';
 import { logSystemActivity } from '@/utils/activity-logger';
-import type { Payment, Client, AccountDesignation } from '@/types';
+import type { Payment, Client } from '@/types';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -55,12 +55,11 @@ const callCreatePaymentRequest = httpsCallable<
         clientId: string;
         amount: number;
         description: string;
-        accountDesignation: 'operating' | 'trust';
-        paymentMethod: 'echeck' | 'card';
+        accountDesignation: 'operating';
         clientEmail: string;
         clientName: string;
     },
-    { paymentUrl: string; transactionId: string; paymentDocId: string }
+    { paymentUrl: string; paymentDocId: string }
 >(functions, 'createPaymentRequest');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -119,8 +118,6 @@ function SendPaymentDialog({
     const [selectedClientId, setSelectedClientId] = useState('');
     const [description, setDescription] = useState('');
     const [amountDollars, setAmountDollars] = useState('');
-    const [accountDesignation, setAccountDesignation] = useState<AccountDesignation>('operating');
-    const [paymentMethodType, setPaymentMethodType] = useState<'echeck' | 'card'>('card');
     const [dueDate, setDueDate] = useState('');
     const [saving, setSaving] = useState(false);
     const [resultUrl, setResultUrl] = useState<string | null>(null);
@@ -129,8 +126,6 @@ function SendPaymentDialog({
         setSelectedClientId('');
         setDescription('');
         setAmountDollars('');
-        setAccountDesignation('operating');
-        setPaymentMethodType('card');
         setDueDate('');
         setResultUrl(null);
     }
@@ -178,8 +173,7 @@ function SendPaymentDialog({
                 clientId: selectedClientId,
                 amount: amountCents,
                 description: cleanDescription,
-                accountDesignation,
-                paymentMethod: paymentMethodType,
+                accountDesignation: 'operating',
                 clientEmail,
                 clientName: cName,
             });
@@ -260,39 +254,7 @@ function SendPaymentDialog({
                         </div>
                     </div>
 
-                    {/* Account Designation */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="sp-account">Account Designation</Label>
-                        <Select
-                            value={accountDesignation}
-                            onValueChange={(v) => setAccountDesignation(v as AccountDesignation)}
-                        >
-                            <SelectTrigger id="sp-account">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="operating">Operating Account</SelectItem>
-                                <SelectItem value="trust">Trust Account (IOLTA)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
 
-                    {/* Payment Method */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="sp-paymethod">Payment Method</Label>
-                        <Select
-                            value={paymentMethodType}
-                            onValueChange={(v) => setPaymentMethodType(v as 'echeck' | 'card')}
-                        >
-                            <SelectTrigger id="sp-paymethod">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="card">Credit / Debit Card</SelectItem>
-                                <SelectItem value="echeck">eCheck (Bank Transfer)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
 
                     {/* Due Date */}
                     <div className="space-y-1.5">
