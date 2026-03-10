@@ -306,9 +306,13 @@ export function QuestionnaireShell() {
         // We still want to show the success screen even if the email notification fails.
       }
 
-      await logSystemActivity(firmId, userProfile, 'completing questionnaire', {
-        clientName
-      });
+      try {
+        await logSystemActivity(firmId, userProfile, 'completing questionnaire', {
+          clientName
+        });
+      } catch (logErr) {
+        console.warn('Failed to log activity, but questionnaire was saved.', logErr);
+      }
 
       setSubmitted(true);
       toast.success('Questionnaire submitted successfully');
