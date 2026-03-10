@@ -30,12 +30,13 @@ export function RecentNotes({ clients = [], activeClientIds = [] }: RecentNotesP
     const { userProfile } = useAuth();
     const firmId = userProfile?.firmId;
 
-    // Query constraints for latest non-private notes across the firm
+    // Query constraints for latest notes across the firm.
+    // We cannot filter on isPrivate here because old notes might not have the field,
+    // which causes Firestore to omit them entirely from the results.
     const queryConstraints = useMemo(() => [
         where('firmId', '==', firmId),
-        where('isPrivate', '==', false),
         orderBy('createdAt', 'desc'),
-        limit(10)
+        limit(20) // Fetch a bit more to accommodate client-side filtering
     ], [firmId]);
 
     const { data: recentNotes, loading } = useCollectionGroup<Note>(
@@ -124,8 +125,10 @@ export function RecentNotes({ clients = [], activeClientIds = [] }: RecentNotesP
                 ) : (
                     <div className="space-y-3 p-3">
                         {recentNotes?.filter(note =>
-                            !activeClientIds.length || (note.clientId && activeClientIds.includes(note.clientId))
-                        ).map(note => {
+                            // Client-side filtering
+                            note.isPrivate !== true &&
+                            (!activeClientIds.length || (note.clientId && activeClientIds.includes(note.clientId)))
+                        ).slice(0, 10).map(note => {
                             const isSummarizing = summarizingNoteIds[note.id] || false;
                             const title = note.title || (note.content ? note.content.slice(0, 40) + '...' : 'Untitled Note');
                             const clientName = (note.clientId ? clientMap.get(note.clientId) : '') || 'Unknown Client';
