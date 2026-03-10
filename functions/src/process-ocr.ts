@@ -1,13 +1,10 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { OpenAI } from 'openai';
-import { defineSecret } from 'firebase-functions/params';
 
-const openAiKey = defineSecret('OPENAI_API_KEY');
 
 export const processQuestionnaireScan = functions
     .runWith({
-        secrets: [openAiKey],
         timeoutSeconds: 300,
         memory: '1GB',
     })
@@ -26,9 +23,12 @@ export const processQuestionnaireScan = functions
         const bucket = storage.bucket();
 
         try {
-            const apiKey = openAiKey.value();
+            // Get API key from firm settings in Firestore
+            const firmDoc = await db.doc(`firms/${firmId}`).get();
+            const firmData = firmDoc.data();
+            const apiKey = firmData?.openAiApiKey ?? firmData?.settings?.openAiApiKey ?? process.env.OPENAI_API_KEY;
             if (!apiKey) {
-                throw new functions.https.HttpsError('failed-precondition', 'OpenAI API key not configured.');
+                throw new functions.https.HttpsError('failed-precondition', 'OpenAI API key not configured. Set it in Firm Settings.');
             }
 
             const openai = new OpenAI({ apiKey });

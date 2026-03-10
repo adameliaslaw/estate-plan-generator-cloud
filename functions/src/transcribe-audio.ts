@@ -99,7 +99,6 @@ export const transcribeAudio = functions
   .runWith({
     timeoutSeconds: 300,
     memory: '512MB',
-    secrets: ['OPENAI_API_KEY'],
   })
   .region('us-east1')
   .https.onCall(async (data, context) => {
@@ -271,7 +270,6 @@ export const summarizeTranscription = functions
   .runWith({
     timeoutSeconds: 120,
     memory: '256MB',
-    secrets: ['OPENAI_API_KEY'],
   })
   .region('us-east1')
   .https.onCall(async (data, context) => {
