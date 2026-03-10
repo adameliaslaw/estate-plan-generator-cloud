@@ -301,9 +301,13 @@ export const createPaymentRequest = functions
       account_designation: accountDesignation,
     };
 
+    console.log(
+      `[createPaymentRequest] Using API key (length=${apiKey.length}) with accountId=${accountId}`,
+    );
+
     let chargeResponse: AffiniPayChargeResponse;
     try {
-      const response = await fetch('https://api.affinipay.com/v1/charges', {
+      const response = await fetch('https://api.8am.com/v1/charges', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
