@@ -346,16 +346,16 @@ export default function DashboardPage() {
         status = 'processing';
       }
 
-      const newNote = {
+      const newNote: Record<string, any> = {
         title: data.title || (data.audioBlob ? 'Audio Note' : 'Manual Note'),
-        noteType: data.noteType,
-        content: data.content,
+        noteType: data.noteType || 'general',
+        content: data.content || '',
         isPinned: false,
         isPrivate: false,
-        audioUrl,
-        audioStoragePath: storagePath,
-        audioFileName: data.audioFileName,
-        audioDurationSeconds: data.durationSeconds || undefined,
+        audioUrl: audioUrl ?? null,
+        audioStoragePath: storagePath ?? null,
+        audioFileName: data.audioFileName ?? null,
+        audioDurationSeconds: data.durationSeconds ?? null,
         transcriptionStatus: status,
         firmId,
         clientId: data.clientId,
