@@ -1,0 +1,114 @@
+﻿
+C:\estate-plan-generator\functions\src\ai-client.ts
+   31:10  error  'getOpenAIClient' is defined but never used  @typescript-eslint/no-unused-vars
+   60:13  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+   85:53  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+  103:13  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+  138:13  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+  187:13  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+  203:22  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+  243:13  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\ai-compliance-check.ts
+  151:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\audit-trail.ts
+  138:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  203:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  284:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\calendar-auth.ts
+  90:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\calendar-sync.ts
+  235:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  248:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  299:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  486:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  686:10  error  '_event' is defined but never used        @typescript-eslint/no-unused-vars
+  841:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\chat-ai.ts
+  12:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\email-notifications.ts
+  309:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  412:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  499:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  605:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  625:9   error  'subject' is never reassigned. Use 'const' instead   prefer-const
+  633:9   error  'bodyHtml' is never reassigned. Use 'const' instead  prefer-const
+  724:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  824:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  975:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\export-batch.ts
+   19:20  error  'PassThrough' is defined but never used   @typescript-eslint/no-unused-vars
+   24:13  error  'path' is defined but never used          @typescript-eslint/no-unused-vars
+  156:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  327:18  error  '_' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\export-docx.ts
+   37:3   error  'NumberFormat' is defined but never used     @typescript-eslint/no-unused-vars
+   46:3   error  'TabStopType' is defined but never used      @typescript-eslint/no-unused-vars
+   47:3   error  'TabStopPosition' is defined but never used  @typescript-eslint/no-unused-vars
+  168:23  error  Unnecessary escape character: \-             no-useless-escape
+  770:30  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\export-pdf.ts
+   15:13  error  'path' is defined but never used          @typescript-eslint/no-unused-vars
+  261:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  408:18  error  '_' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\generate-documents.ts
+  309:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\generate-flex-document.ts
+  290:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\generate-single-document.ts
+  116:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\generators\action-steps-generator.ts
+  264:3  error  'trustTypes' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\generators\advance-directive-generator.ts
+  110:3  error  '_packageType' is defined but never used  @typescript-eslint/no-unused-vars
+  111:3  error  '_trustTypes' is defined but never used   @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\generators\poa-generator.ts
+  89:3  error  'packageType' is defined but never used  @typescript-eslint/no-unused-vars
+  90:3  error  '_trustTypes' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\generators\trust-generator.ts
+  121:9  error  'hasMinors' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\generators\will-generator.ts
+  83:3  error  'packageType' is defined but never used  @typescript-eslint/no-unused-vars
+  84:3  error  'trustTypes' is defined but never used   @typescript-eslint/no-unused-vars
+
+C:\estate-plan-generator\functions\src\google-auth.ts
+  11:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\lawpay-integration.ts
+  126:18  error  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  191:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\levitate-sync.ts
+  83:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\process-ocr.ts
+  102:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:22  error  'err' is defined but never used           @typescript-eslint/no-unused-vars
+  115:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\estate-plan-generator\functions\src\review-document.ts
+  278:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Γ£û 64 problems (64 errors, 0 warnings)
+  2 errors and 0 warnings potentially fixable with the `--fix` option.
+

@@ -176,6 +176,7 @@ async function _callAnthropic(
     throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = await response.json() as any;
   return data.content[0]?.text ?? '';
 }
@@ -231,6 +232,7 @@ async function _callGemini(
     throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = await response.json() as any;
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
@@ -270,6 +272,7 @@ async function _callPerplexity(
     throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = await response.json() as any;
   return data.choices?.[0]?.message?.content ?? '';
 }

@@ -322,8 +322,11 @@ export const summarizeTranscription = functions
     }
 
     // ------------------------------------------------------------------
-    // 3. Generate AI summary via GPT-4.1
+    // 3. Generate AI summary via GPT-4o
     // ------------------------------------------------------------------
+    const firmSnap = await db.collection('firms').doc(firmId).get();
+    const firmData = firmSnap.data() || {};
+
     const systemPrompt =
       'You are a legal assistant. Summarize the following transcription of a client ' +
       'meeting/call for an estate planning attorney. Be concise, highlight key decisions, ' +
@@ -332,12 +335,12 @@ export const summarizeTranscription = functions
     const userPrompt =
       `Please summarize the following transcription:\n\n---\n${transcription.slice(0, 30000)}\n---`;
 
-    console.log(`[summarizeTranscription] Calling GPT-4.1 — transcription length=${transcription.length}`);
+    console.log(`[summarizeTranscription] Calling GPT-4o — transcription length=${transcription.length}`);
 
     let aiSummary: string;
     try {
-      aiSummary = await callAI(systemPrompt, userPrompt, {
-        model: 'gpt-4.1',
+      aiSummary = await callAI(systemPrompt, userPrompt, firmData, {
+        model: 'gpt-4o',
         temperature: 0.2,
         maxTokens: 1024,
       });
