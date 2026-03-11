@@ -1307,20 +1307,28 @@ function BulkImportDialog({
 
   // ── File handlers ──
   const handleFileSelect = (newFiles: FileList | null) => {
-    if (!newFiles) return;
+    console.log('[BulkImport] handleFileSelect called, files:', newFiles?.length ?? 'null');
+    if (!newFiles) { console.log('[BulkImport] newFiles is null, returning'); return; }
+    if (newFiles.length === 0) { console.log('[BulkImport] newFiles is empty, returning'); return; }
     const validFiles: File[] = [];
     for (let i = 0; i < newFiles.length; i++) {
       const file = newFiles[i];
       const ext = file.name.toLowerCase().split('.').pop();
-      if (!ext || !['docx', 'pdf'].includes(ext)) continue;
-      if (file.size > 50 * 1024 * 1024) continue; // 50MB max
+      console.log(`[BulkImport] File ${i}: "${file.name}", ext: "${ext}", size: ${file.size}`);
+      if (!ext || !['docx', 'pdf'].includes(ext)) { console.log(`[BulkImport] Skipping "${file.name}" - invalid extension`); continue; }
+      if (file.size > 50 * 1024 * 1024) { console.log(`[BulkImport] Skipping "${file.name}" - too large`); continue; }
       validFiles.push(file);
     }
+    console.log('[BulkImport] validFiles count:', validFiles.length);
     if (validFiles.length > 100) {
       toast.error('Maximum 100 files per batch.');
       return;
     }
-    setSelectedFiles((prev) => [...prev, ...validFiles].slice(0, 100));
+    setSelectedFiles((prev) => {
+      const next = [...prev, ...validFiles].slice(0, 100);
+      console.log('[BulkImport] setSelectedFiles: prev:', prev.length, 'next:', next.length);
+      return next;
+    });
     setUploadResults(null);
   };
 
@@ -1479,7 +1487,7 @@ function BulkImportDialog({
                     title="Upload knowledge base files"
                     aria-label="Upload knowledge base files"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    onChange={(e) => { handleFileSelect(e.target.files); e.target.value = ''; }}
+                    onChange={(e) => { console.log('[BulkImport] onChange fired, files:', e.target.files?.length); handleFileSelect(e.target.files); e.target.value = ''; }}
                   />
                   <Upload className="mx-auto h-10 w-10 text-gray-300" />
                   <p className="mt-2 text-sm font-medium text-gray-600">
