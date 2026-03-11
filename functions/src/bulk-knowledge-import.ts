@@ -70,8 +70,6 @@ async function extractFileText(
   fileName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   firmData: Record<string, any>,
-  ocrPageStart?: number,
-  ocrPageEnd?: number,
 ): Promise<{ text: string; html: string; ocrPagesCount: number }> {
   const ext = fileName.toLowerCase().split('.').pop();
   let text = '';
@@ -94,65 +92,54 @@ async function extractFileText(
     const avgCharsPerPage = text.length / pageCount;
 
     if (avgCharsPerPage < MIN_CHARS_PER_PAGE_THRESHOLD && firmData) {
-      // Likely a scanned PDF — OCR individual pages using getScreenshot + Gemini Vision
-      console.log(`[bulkKnowledgeImport] "${fileName}" appears scanned (${Math.round(avgCharsPerPage)} chars/page avg). Running page-by-page OCR...`);
+      // Likely a scanned PDF — use Gemini's native PDF processing
+      console.log(`[bulkKnowledgeImport] "${fileName}" appears scanned (${Math.round(avgCharsPerPage)} chars/page avg). Running Gemini PDF OCR...`);
 
-      // Determine page range for OCR (user-specified or auto, max 150 pages)
-      const hasUserRange = ocrPageStart != null && ocrPageEnd != null;
-      const effectiveStart = hasUserRange ? Math.max(1, Math.min(ocrPageStart, pageCount)) : 1;
-      const effectiveEnd = hasUserRange ? Math.max(1, Math.min(ocrPageEnd, pageCount)) : Math.min(pageCount, 150);
-      const pagesToOcr = effectiveEnd - effectiveStart + 1;
-
-      if (pagesToOcr > 150) {
-        console.warn(`[bulkKnowledgeImport] OCR range ${effectiveStart}-${effectiveEnd} exceeds 150 pages, clamping.`);
-      }
-      const clampedEnd = Math.min(effectiveEnd, effectiveStart + 149);
-      const clampedCount = clampedEnd - effectiveStart + 1;
-
-      // Build page list for partial rendering
-      const pageList: number[] = [];
-      for (let p = effectiveStart; p <= clampedEnd; p++) pageList.push(p);
-
-      console.log(`[bulkKnowledgeImport] OCR pages ${effectiveStart}-${clampedEnd} (${clampedCount} pages) of "${fileName}"`);
       const ocrTexts: string[] = [];
 
       try {
-        // Render specific pages as PNG images using pdf-parse v2's getScreenshot
-        const screenshots = await parser.getScreenshot({
-          partial: pageList,
-          scale: 1.5,
-          imageBuffer: true,
-          imageDataUrl: false,
-        });
+        // Gemini inline data limit is ~20MB. Split large PDFs into chunks.
+        const MAX_CHUNK_BYTES = 15 * 1024 * 1024; // 15MB per chunk (safe margin)
+        const totalChunks = Math.ceil(buffer.length / MAX_CHUNK_BYTES);
 
-        for (let i = 0; i < screenshots.pages.length; i++) {
-          const page = screenshots.pages[i];
-          if (!page?.data) continue;
+        console.log(`[bulkKnowledgeImport] PDF is ${(buffer.length / 1024 / 1024).toFixed(1)}MB, splitting into ${totalChunks} chunk(s) for Gemini OCR`);
+
+        for (let chunk = 0; chunk < totalChunks; chunk++) {
+          const start = chunk * MAX_CHUNK_BYTES;
+          const end = Math.min(start + MAX_CHUNK_BYTES, buffer.length);
+          const chunkBuffer = buffer.subarray(start, end);
+
+          // Only the first chunk is a valid PDF (others are partial data).
+          // For multi-chunk PDFs, we only OCR the first chunk to stay reliable.
+          if (chunk > 0) {
+            console.log(`[bulkKnowledgeImport] Skipping chunk ${chunk + 1}/${totalChunks} (partial PDF not sendable to Gemini). Use page range to target later pages.`);
+            break;
+          }
 
           try {
-            const base64Img = Buffer.from(page.data).toString('base64');
-            const pageOcrText = await callAIWithVision(
-              base64Img,
-              'image/png',
+            const base64Chunk = chunkBuffer.toString('base64');
+            const chunkOcrText = await callAIWithVision(
+              base64Chunk,
+              'application/pdf',
               OCR_PROMPT,
               firmData,
+              { maxTokens: 32000 },
             );
-            ocrTexts.push(pageOcrText || '');
-            console.log(`[bulkKnowledgeImport] OCR page ${pageList[i]}/${clampedEnd}: ${pageOcrText?.length || 0} chars`);
+            ocrTexts.push(chunkOcrText || '');
+            console.log(`[bulkKnowledgeImport] Gemini PDF OCR chunk ${chunk + 1}: ${chunkOcrText?.length || 0} chars`);
           } catch (err) {
-            console.error(`[bulkKnowledgeImport] OCR failed for page ${pageList[i]} of "${fileName}":`, err);
-            ocrTexts.push('');
+            console.error(`[bulkKnowledgeImport] Gemini PDF OCR chunk ${chunk + 1} failed:`, err);
           }
         }
 
         const ocrFullText = ocrTexts.join('\n\n');
         if (ocrFullText.length > text.length) {
           text = ocrFullText;
-          ocrPagesCount = clampedCount;
-          console.log(`[bulkKnowledgeImport] Page-by-page OCR extracted ${ocrFullText.length} chars from ${pagesToOcr} pages of "${fileName}"`);
+          ocrPagesCount = pageCount;
+          console.log(`[bulkKnowledgeImport] Gemini PDF OCR extracted ${ocrFullText.length} chars from "${fileName}"`);
         }
       } catch (err) {
-        console.error(`[bulkKnowledgeImport] Screenshot/OCR failed for "${fileName}":`, err);
+        console.error(`[bulkKnowledgeImport] Gemini PDF OCR failed for "${fileName}":`, err);
         // Continue with whatever pdf-parse extracted
       }
     }
@@ -299,7 +286,7 @@ export const bulkProcessKnowledgeFiles = onCall(
         console.log(`[bulkKnowledgeImport] Downloaded "${file.fileName}" (${buffer.length} bytes)`);
 
         // 2. Extract text
-        const { text, html, ocrPagesCount } = await extractFileText(buffer, file.fileName, firmData, file.ocrPageStart, file.ocrPageEnd);
+        const { text, html, ocrPagesCount } = await extractFileText(buffer, file.fileName, firmData);
 
         if (!text.trim() && !html.trim()) {
           results.push({
