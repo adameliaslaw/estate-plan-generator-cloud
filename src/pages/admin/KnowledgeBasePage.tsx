@@ -100,8 +100,8 @@ export default function KnowledgeBasePage() {
       const cat = activeCategory === 'all' ? undefined : activeCategory;
       const result = await knowledgeBaseService.searchResources({ firmId, category: cat });
       setResources(result.resources);
-    } catch (err) {
-      console.error('Failed to fetch resources:', err);
+    } catch {
+      console.error('Failed to fetch resources');
       toast.error('Failed to load knowledge base resources.');
     } finally {
       setLoading(false);
@@ -114,8 +114,8 @@ export default function KnowledgeBasePage() {
     try {
       const result = await templateService.listTemplates(firmId);
       setTemplates(result.templates);
-    } catch (err) {
-      console.error('Failed to fetch templates:', err);
+    } catch {
+      console.error('Failed to fetch templates');
       toast.error('Failed to load templates.');
     } finally {
       setLoading(false);
@@ -149,7 +149,7 @@ export default function KnowledgeBasePage() {
       await knowledgeBaseService.deleteResource(firmId, id);
       toast.success('Resource deactivated.');
       fetchResources();
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete resource.');
     }
   };
@@ -161,7 +161,7 @@ export default function KnowledgeBasePage() {
       await templateService.deleteTemplate(firmId, id);
       toast.success('Template deactivated.');
       fetchTemplates();
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete template.');
     }
   };
@@ -171,7 +171,7 @@ export default function KnowledgeBasePage() {
     try {
       const full = await templateService.getTemplateContent(firmId, templateId);
       setPreviewTemplate({ content: full.content, name });
-    } catch (err) {
+    } catch {
       toast.error('Failed to load template content.');
     }
   };
@@ -183,8 +183,8 @@ export default function KnowledgeBasePage() {
       const result = await knowledgeBaseService.seedKnowledgeBase(firmId);
       toast.success(`Seeded ${result.inserted} resources (${result.skipped} already existed).`);
       fetchResources();
-    } catch (err) {
-      console.error('Failed to seed knowledge base:', err);
+    } catch {
+      console.error('Failed to seed knowledge base');
       toast.error('Failed to seed knowledge base.');
     } finally {
       setSeeding(false);
@@ -598,7 +598,7 @@ function AddResourceDialog({
         toast.success('Resource added to knowledge base.');
       }
       onSaved();
-    } catch (err) {
+    } catch {
       toast.error('Failed to save resource.');
     } finally {
       setSaving(false);
@@ -672,7 +672,7 @@ function AddResourceDialog({
                       setTags(suggestion.tags?.join(', ') || tags);
                       setDocTypes(suggestion.docTypes || docTypes);
                       toast.success('AI analysis complete — fields auto-filled.');
-                    } catch (err) {
+                    } catch {
                       toast.error('AI analysis failed. Please fill fields manually.');
                     } finally {
                       setAnalyzing(false);
@@ -884,8 +884,8 @@ function AddTemplateDialog({
       if (result.learningStats) setLearningStats(result.learningStats);
 
       toast.success(`File processed — ${result.detectedVariables?.length || 0} variables detected.`);
-    } catch (err) {
-      console.error('File upload/process error:', err);
+    } catch {
+      console.error('File upload/process error');
       toast.error('Failed to process template file.');
     } finally {
       setUploading(false);
