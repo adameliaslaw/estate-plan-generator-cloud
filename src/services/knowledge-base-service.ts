@@ -196,6 +196,11 @@ export const templateService = {
     }[];
     suggestedDocType: string;
     documentSummary: string;
+    learningStats: {
+      totalCorrections: number;
+      totalTemplatesLearned: number;
+      dictionarySize: number;
+    };
   }> {
     const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 120000 });
     const res = await fn({ firmId, storagePath, fileName });
@@ -213,6 +218,43 @@ export const templateService = {
       }[];
       suggestedDocType: string;
       documentSummary: string;
+      learningStats: {
+        totalCorrections: number;
+        totalTemplatesLearned: number;
+        dictionarySize: number;
+      };
     };
+  },
+
+  async recordTemplateCorrection(
+    firmId: string,
+    corrections: {
+      originalText: string;
+      aiSuggestedVariable: string;
+      userCorrectedVariable: string;
+    }[],
+    templateName: string,
+    docType: string,
+  ): Promise<{ recorded: number }> {
+    const fn = httpsCallable(functions, 'recordTemplateCorrection');
+    const res = await fn({ firmId, corrections, templateName, docType });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return res.data as any;
+  },
+
+  async confirmTemplateVariables(
+    firmId: string,
+    templateName: string,
+    docType: string,
+    variables: {
+      originalText: string;
+      confirmedVariable: string;
+      fieldLabel: string;
+    }[],
+  ): Promise<{ confirmed: number }> {
+    const fn = httpsCallable(functions, 'confirmTemplateVariables');
+    const res = await fn({ firmId, templateName, docType, variables });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return res.data as any;
   },
 };

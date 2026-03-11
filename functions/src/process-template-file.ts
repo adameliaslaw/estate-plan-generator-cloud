@@ -13,6 +13,7 @@ import mammoth from 'mammoth';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
+import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
 
 // ---------------------------------------------------------------------------
 // Available questionnaire fields (for AI context)
@@ -149,6 +150,14 @@ export const processTemplateFile = onCall(
       }
     }
 
+    // Fetch firm data for LLM-agnostic routing
+    const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
+    const firmData = firmSnap.data() ?? {};
+
+    // Fetch learning context (corrections, dictionary, few-shot examples)
+    const learningCtx = await getLearningContext(firmId);
+    const learningPrompt = formatLearningPrompt(learningCtx);
+
     // Use AI to detect template variables and suggest mappings
     const analysisText = extractedText.slice(0, 8000);
 
@@ -187,7 +196,7 @@ For each detected variable, suggest the best matching questionnaire field from t
 - "low": Could be sample data but uncertain (e.g., appears only once with ambiguous context)
 
 ${AVAILABLE_FIELDS}
-
+${learningPrompt}
 Respond with a valid JSON object (no markdown fences):
 {
   "detectedVariables": [
@@ -216,8 +225,7 @@ Respond with a valid JSON object (no markdown fences):
     let documentSummary = '';
 
     try {
-      const raw = await callAI(systemPrompt, userPrompt, {}, {
-        model: 'gpt-4.1-mini',
+      const raw = await callAI(systemPrompt, userPrompt, firmData, {
         temperature: 0.1,
         maxTokens: 4096,
         jsonMode: true,
@@ -240,12 +248,91 @@ Respond with a valid JSON object (no markdown fences):
     return {
       success: true,
       extractedHtml,
-      extractedText: extractedText.slice(0, 5000), // Preview only
+      extractedText: extractedText.slice(0, 5000),
       detectedVariables,
       suggestedDocType,
       documentSummary,
       fileName,
       fileType: ext,
+      learningStats: learningCtx.stats,
     };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Record user corrections to AI-suggested variable mappings
+// ---------------------------------------------------------------------------
+
+export const recordTemplateCorrection = onCall(
+  { region: 'us-east1', memory: '256MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+    const { firmId, corrections, templateName, docType } = request.data as {
+      firmId: string;
+      corrections: {
+        originalText: string;
+        aiSuggestedVariable: string;
+        userCorrectedVariable: string;
+      }[];
+      templateName: string;
+      docType: string;
+    };
+
+    if (!firmId || !corrections?.length) {
+      throw new HttpsError('invalid-argument', 'firmId and corrections are required.');
+    }
+
+    const role = request.auth.token.role as string | undefined;
+    if (!role || !['admin', 'attorney'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only attorneys and administrators can record corrections.');
+    }
+
+    for (const correction of corrections) {
+      await recordCorrection(firmId, {
+        ...correction,
+        docType: docType ?? 'unknown',
+        templateName: templateName ?? 'Untitled',
+      });
+    }
+
+    console.log(`[recordTemplateCorrection] Recorded ${corrections.length} corrections for firm ${firmId}`);
+    return { success: true, recorded: corrections.length };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Confirm variables after saving a template (builds the learning data)
+// ---------------------------------------------------------------------------
+
+export const confirmTemplateVariables = onCall(
+  { region: 'us-east1', memory: '256MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+    const { firmId, templateName, docType, variables } = request.data as {
+      firmId: string;
+      templateName: string;
+      docType: string;
+      variables: {
+        originalText: string;
+        confirmedVariable: string;
+        fieldLabel: string;
+      }[];
+    };
+
+    if (!firmId || !variables?.length) {
+      throw new HttpsError('invalid-argument', 'firmId and variables are required.');
+    }
+
+    const role = request.auth.token.role as string | undefined;
+    if (!role || !['admin', 'attorney'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only attorneys and administrators can confirm variables.');
+    }
+
+    await recordConfirmedVariables(firmId, templateName, docType, variables);
+
+    console.log(`[confirmTemplateVariables] Confirmed ${variables.length} variables for "${templateName}"`);
+    return { success: true, confirmed: variables.length };
   },
 );

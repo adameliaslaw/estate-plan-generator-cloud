@@ -798,9 +798,11 @@ function AddTemplateDialog({
   const [processing, setProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [detectedVars, setDetectedVars] = useState<DetectedVariable[]>([]);
+  const [originalAiVars, setOriginalAiVars] = useState<DetectedVariable[]>([]); // Track original AI suggestions
   const [fileUrl, setFileUrl] = useState('');
   const [originalFileName, setOriginalFileName] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [learningStats, setLearningStats] = useState<{ totalCorrections: number; totalTemplatesLearned: number; dictionarySize: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (file: File) => {
@@ -876,7 +878,9 @@ function AddTemplateDialog({
       if (result.documentSummary) setDescription(result.documentSummary);
       if (result.detectedVariables?.length > 0) {
         setDetectedVars(result.detectedVariables);
+        setOriginalAiVars(result.detectedVariables.map(v => ({ ...v }))); // Deep copy for diff
       }
+      if (result.learningStats) setLearningStats(result.learningStats);
 
       toast.success(`File processed — ${result.detectedVariables?.length || 0} variables detected.`);
     } catch (err) {
@@ -907,6 +911,41 @@ function AddTemplateDialog({
         variables: detectedVars.map((v) => v.suggestedVariable),
         ...(fileUrl ? { fileUrl, originalFileName } : {}),
       });
+
+      // Record learning feedback (fire-and-forget)
+      if (detectedVars.length > 0) {
+        // 1. Find corrections (where user changed the AI suggestion)
+        const corrections = detectedVars
+          .map((v, i) => {
+            const original = originalAiVars[i];
+            if (original && original.suggestedVariable !== v.suggestedVariable) {
+              return {
+                originalText: v.originalText,
+                aiSuggestedVariable: original.suggestedVariable,
+                userCorrectedVariable: v.suggestedVariable,
+              };
+            }
+            return null;
+          })
+          .filter((c): c is NonNullable<typeof c> => c !== null);
+
+        if (corrections.length > 0) {
+          templateService.recordTemplateCorrection(firmId, corrections, name.trim(), docType).catch(console.error);
+        }
+
+        // 2. Confirm all variables to build the learning dictionary
+        templateService.confirmTemplateVariables(
+          firmId,
+          name.trim(),
+          docType,
+          detectedVars.map((v) => ({
+            originalText: v.originalText,
+            confirmedVariable: v.suggestedVariable,
+            fieldLabel: v.fieldLabel,
+          })),
+        ).catch(console.error);
+      }
+
       toast.success('Template uploaded successfully.');
       // Reset form
       setName('');
@@ -917,8 +956,10 @@ function AddTemplateDialog({
       setIsDefault(false);
       setSelectedFile(null);
       setDetectedVars([]);
+      setOriginalAiVars([]);
       setFileUrl('');
       setOriginalFileName('');
+      setLearningStats(null);
       onSaved();
     } catch {
       toast.error('Failed to upload template.');
@@ -1038,13 +1079,21 @@ function AddTemplateDialog({
           {/* Detected Variables Table */}
           {detectedVars.length > 0 && (
             <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4 text-purple-600" />
-                <span className="text-sm font-semibold text-purple-800">
-                  {detectedVars.length} Variable{detectedVars.length === 1 ? '' : 's'} Detected
-                </span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-semibold text-purple-800">
+                    {detectedVars.length} Variable{detectedVars.length === 1 ? '' : 's'} Detected
+                  </span>
+                </div>
+                {learningStats && (learningStats.totalTemplatesLearned > 0 || learningStats.totalCorrections > 0) && (
+                  <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                    🧠 Learned from {learningStats.totalTemplatesLearned} template{learningStats.totalTemplatesLearned === 1 ? '' : 's'}, {learningStats.totalCorrections} correction{learningStats.totalCorrections === 1 ? '' : 's'}
+                  </span>
+                )}
               </div>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-purple-200 bg-white">
+              <p className="text-[10px] text-purple-600 mb-2">Click any mapping to edit it. Your changes train the AI for future uploads.</p>
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-purple-200 bg-white">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-purple-100 bg-purple-50 text-purple-700">
@@ -1060,8 +1109,22 @@ function AddTemplateDialog({
                         <td className="px-3 py-1.5 font-mono text-gray-600 truncate max-w-[160px]" title={v.originalText}>
                           {v.originalText}
                         </td>
-                        <td className="px-3 py-1.5 font-mono text-[#2b6cb0]">
-                          {`{{${v.suggestedVariable}}}`}
+                        <td className="px-3 py-1.5">
+                          <input
+                            type="text"
+                            value={v.suggestedVariable}
+                            onChange={(e) => {
+                              const updated = [...detectedVars];
+                              updated[i] = { ...updated[i], suggestedVariable: e.target.value };
+                              setDetectedVars(updated);
+                            }}
+                            className={`w-full font-mono text-xs px-1.5 py-0.5 rounded border focus:border-[#2b6cb0] focus:outline-none ${
+                              originalAiVars[i] && originalAiVars[i].suggestedVariable !== v.suggestedVariable
+                                ? 'border-amber-400 bg-amber-50 text-amber-800'
+                                : 'border-gray-200 text-[#2b6cb0]'
+                            }`}
+                            title="Edit to correct the AI mapping — your change trains the engine"
+                          />
                         </td>
                         <td className="px-3 py-1.5 text-gray-700">{v.fieldLabel}</td>
                         <td className="px-3 py-1.5 text-center">
