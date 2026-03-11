@@ -154,18 +154,37 @@ export const processTemplateFile = onCall(
 
     const systemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
 
-Analyze the following document text extracted from a ${ext.toUpperCase()} file and identify ALL placeholders, fill-in fields, and variable locations that would need to be replaced with client-specific data when generating a document from this template.
+Analyze the following document text extracted from a ${ext.toUpperCase()} file. Your job is to identify EVERY piece of client-specific data that would need to be replaced when using this document as a template for a different client.
 
-Look for these patterns:
-1. Handlebars variables: {{variableName}} or {{path.to.field}}
-2. Bracket placeholders: [CLIENT NAME], [DATE], [ADDRESS], etc.
-3. Underline fill-ins: _______________ (blank lines for writing in data)
-4. ALL-CAPS placeholders: FULL LEGAL NAME, CLIENT ADDRESS
-5. Angle-bracket placeholders: <name>, <date>
-6. Word merge fields: «FieldName»
-7. Any other obvious placeholder patterns
+DETECTION STRATEGIES (use ALL of these):
 
-For each detected variable, suggest the best matching questionnaire field from the available fields list.
+1. **Explicit Placeholders** — formatted as fill-in fields:
+   - Handlebars variables: {{variableName}} or {{path.to.field}}
+   - Bracket placeholders: [CLIENT NAME], [DATE], [ADDRESS]
+   - Underline fill-ins: _______________ (blank lines)
+   - ALL-CAPS placeholders: FULL LEGAL NAME, CLIENT ADDRESS
+   - Angle-bracket placeholders: <name>, <date>
+   - Word merge fields: «FieldName»
+
+2. **Contextual / Semantic Detection** (CRITICAL — most attorney templates are filled-in examples):
+   - **Repeated proper names**: If a specific person's name (e.g., "John A. Smith") appears multiple times throughout the document, it is almost certainly the client's name used as sample data. Detect it.
+   - **Legal preamble patterns**: Phrases like "I, [Full Name], residing at [Address], County of [County], State of [State]" — even when filled with real values like "I, Jane Doe, residing at 456 Oak Avenue" — should be detected. The name, address, county, and state are all template variables.
+   - **Named roles**: People named as executor, trustee, agent, guardian, beneficiary, witness, etc. These are all client-specific data, even if written as real names like "my son, Michael Smith."
+   - **Dates**: Specific dates like "March 15, 2024" or "03/15/2024" in the document header, execution lines, or signature blocks are template variables.
+   - **Addresses**: Full street addresses, cities, ZIP codes that appear in the document body (not in statutory citations) are client data.
+   - **Financial amounts**: Specific dollar amounts in bequests, trust funding, etc.
+   - **Relationship references**: "my wife, [Name]", "my daughter, [Name]" — the names are variables.
+   - **Cross-referencing**: If you see "John Smith" in the preamble AND later as "Mr. Smith" or "the Grantor," these all refer to the same template variable (clientFullName).
+
+3. **Structural Detection**:
+   - Signature blocks with names, dates, notary sections
+   - Witness name fields
+   - Acknowledgment/notarization sections with county, state, date blanks
+
+For each detected variable, suggest the best matching questionnaire field from the available fields list. Set "confidence" based on:
+- "high": Explicit placeholder OR clear legal context (e.g., name in "I, [Name], hereby declare")
+- "medium": Likely sample data based on context (e.g., a name after "appointed [Name] as Executor")
+- "low": Could be sample data but uncertain (e.g., appears only once with ambiguous context)
 
 ${AVAILABLE_FIELDS}
 
