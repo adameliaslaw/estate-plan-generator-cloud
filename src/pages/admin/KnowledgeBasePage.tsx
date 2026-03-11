@@ -309,24 +309,39 @@ export default function KnowledgeBasePage() {
       ) : activeTab === 'resources' ? (
         /* Resources List */
         filteredResources.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
-            <BookOpen className="mx-auto h-12 w-12 text-gray-300" />
-            <p className="mt-3 text-sm font-medium text-gray-600">No resources found</p>
-            <p className="mt-1 text-xs text-gray-400">Add statutes, case law, CLE materials, and more.</p>
-            <div className="mt-4 flex justify-center gap-3">
-              <Button
-                onClick={handleSeedKnowledgeBase}
-                disabled={seeding}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <Database className="mr-2 h-4 w-4" />
-                {seeding ? 'Seeding...' : 'Seed with NJ Statutes'}
-              </Button>
-              <Button onClick={() => setShowAddResource(true)} className="bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
+          resources.length === 0 ? (
+            /* KB is truly empty — show seed option */
+            <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
+              <BookOpen className="mx-auto h-12 w-12 text-gray-300" />
+              <p className="mt-3 text-sm font-medium text-gray-600">No resources found</p>
+              <p className="mt-1 text-xs text-gray-400">Add statutes, case law, CLE materials, and more.</p>
+              <div className="mt-4 flex justify-center gap-3">
+                <Button
+                  onClick={handleSeedKnowledgeBase}
+                  disabled={seeding}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Database className="mr-2 h-4 w-4" />
+                  {seeding ? 'Seeding...' : 'Seed with NJ Statutes'}
+                </Button>
+                <Button onClick={() => setShowAddResource(true)} className="bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
+                  <Plus className="mr-2 h-4 w-4" /> Add Resource
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* KB has resources but no matches for the current filter */
+            <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
+              <Search className="mx-auto h-12 w-12 text-gray-300" />
+              <p className="mt-3 text-sm font-medium text-gray-600">No matching resources</p>
+              <p className="mt-1 text-xs text-gray-400">
+                {searchTerm ? 'Try a different search term.' : 'No resources in this category yet.'}
+              </p>
+              <Button onClick={() => setShowAddResource(true)} className="mt-4 bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
                 <Plus className="mr-2 h-4 w-4" /> Add Resource
               </Button>
             </div>
-          </div>
+          )
         ) : (
           <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             {filteredResources.map((r) => {
