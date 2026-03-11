@@ -280,7 +280,10 @@ function parseDraftResponse(raw: string): ChatAiResponse {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const chatAi = functions.region('us-east1').https.onCall(
+export const chatAi = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .region('us-east1')
+  .https.onCall(
   async (data: ChatAiRequest, context: functions.https.CallableContext) => {
     // 1. Authenticate user
     if (!context.auth) {
