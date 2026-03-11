@@ -337,7 +337,7 @@ export const chatAi = functions.region('us-east1').https.onCall(
       const raw = await callAI(systemPrompt, userPrompt, firmData, {
         model: firmData?.chatbotModel || undefined,
         temperature: mode === 'draft' ? 0.2 : 0.4,
-        maxTokens: mode === 'draft' ? 8000 : 4000,
+        maxTokens: mode === 'draft' ? 16000 : 8000,
       });
 
       // 7. Parse response (check for draft content in draft mode)
