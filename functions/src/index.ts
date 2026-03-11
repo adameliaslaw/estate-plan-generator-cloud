@@ -37,3 +37,7 @@ export { processQuestionnaireScan } from './process-ocr';
 export { getFirmBranding } from './branding';
 export { exchangeGoogleAuthCode } from './google-auth';
 export { linkClient } from './link-client';
+
+// Phase 7: Knowledge Base & Template Engine
+export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources } from './knowledge-base';
+export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';

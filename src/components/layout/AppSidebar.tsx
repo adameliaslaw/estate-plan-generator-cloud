@@ -7,6 +7,7 @@ import {
   LogOut,
   X,
   Scale,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Clients', href: ROUTES.CLIENTS, icon: Users },
   { label: 'Calendar', href: ROUTES.CALENDAR, icon: Calendar },
   { label: 'Payments', href: ROUTES.PAYMENTS, icon: DollarSign },
+  { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
 ];
 
 interface AppSidebarProps {

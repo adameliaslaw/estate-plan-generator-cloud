@@ -24,6 +24,8 @@ import { generateEstatePlanSummary } from './generators/summary-generator';
 import { generateActionSteps } from './generators/action-steps-generator';
 import { sanitizeForPrompt } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
+import { generateFromTemplate, GenerationMode } from './template-engine';
+import { aggregateClientContext } from './client-context-aggregator';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,6 +40,10 @@ interface GenerateSingleRequest {
   /** Optional custom instructions appended to the AI prompt */
   customInstructions?: string;
   trustTypes?: string[];
+  /** Generation mode: template, ai, or hybrid */
+  generationMode?: GenerationMode;
+  /** Specific template variant ID to use */
+  templateId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +136,7 @@ export const generateSingleDocument = onCall(
       );
     }
 
-    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes } =
+    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'ai', templateId } =
       request.data as GenerateSingleRequest;
 
     if (!firmId || !clientId || !docType) {
@@ -182,14 +188,30 @@ export const generateSingleDocument = onCall(
 
     let generatedDoc: GeneratedDoc;
     try {
-      generatedDoc = await dispatchGenerator(
-        docType,
-        clientData,
-        firmData,
-        packageType,
-        trustTypes ?? [],
-        propertyIndex,
-      );
+      // Route based on generationMode
+      if (generationMode !== 'ai') {
+        // Template or hybrid mode — use template engine with full context
+        const clientContext = await aggregateClientContext(firmId, clientId, docType);
+        const aiGenFn = () => dispatchGenerator(docType, clientData, firmData, packageType, trustTypes ?? [], propertyIndex);
+        generatedDoc = await generateFromTemplate(
+          clientContext,
+          docType,
+          generationMode,
+          templateId,
+          undefined,
+          aiGenFn,
+        );
+      } else {
+        // AI mode — existing behavior
+        generatedDoc = await dispatchGenerator(
+          docType,
+          clientData,
+          firmData,
+          packageType,
+          trustTypes ?? [],
+          propertyIndex,
+        );
+      }
     } catch (error) {
       console.error(`[generateSingleDocument] Generation error for ${docType}:`, error);
       throw new HttpsError(

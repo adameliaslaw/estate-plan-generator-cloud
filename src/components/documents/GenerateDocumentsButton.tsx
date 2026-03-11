@@ -40,6 +40,7 @@ import { documentService, type GenerateDocumentsResponse } from '@/services/docu
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { logSystemActivity } from '@/utils/activity-logger';
+import type { GenerationMode } from '@/services/knowledge-base-service';
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -122,6 +123,7 @@ export default function GenerateDocumentsButton({
   const [currentDoc, setCurrentDoc] = useState('');
   const [result, setResult] = useState<GenerateDocumentsResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('template');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const packageDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -154,6 +156,7 @@ export default function GenerateDocumentsButton({
         clientId,
         packageType,
         trustTypes,
+        generationMode,
       });
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
@@ -276,6 +279,50 @@ export default function GenerateDocumentsButton({
                   </li>
                 )}
               </ul>
+            </div>
+
+            {/* Generation Mode Selector */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Generation Mode
+              </p>
+              <div className="space-y-2">
+                {[
+                  { value: 'template' as GenerationMode, label: 'Template', desc: 'Fast, consistent. Uses your uploaded templates with client data.', badge: 'Recommended' },
+                  { value: 'ai' as GenerationMode, label: 'AI', desc: 'Full AI generation from scratch (current behavior).', badge: '' },
+                  { value: 'hybrid' as GenerationMode, label: 'Hybrid', desc: 'Template base, enhanced by AI using Knowledge Base resources.', badge: '' },
+                ].map((mode) => (
+                  <label
+                    key={mode.value}
+                    className={cn(
+                      'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                      generationMode === mode.value
+                        ? 'border-[#2b6cb0] bg-blue-50/50'
+                        : 'border-gray-200 hover:bg-gray-50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="generationMode"
+                      value={mode.value}
+                      checked={generationMode === mode.value}
+                      onChange={() => setGenerationMode(mode.value)}
+                      className="mt-0.5 text-[#2b6cb0] focus:ring-[#2b6cb0]"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{mode.label}</span>
+                        {mode.badge && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            {mode.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">{mode.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <Alert className="border-amber-200 bg-amber-50">

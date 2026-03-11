@@ -27,6 +27,8 @@ import { generateAffidavitOfConsideration } from './generators/affidavit-generat
 import { generateGitRep3 } from './generators/git-rep3-generator';
 import { generateEstatePlanSummary } from './generators/summary-generator';
 import { generateActionSteps } from './generators/action-steps-generator';
+import { generateFromTemplate, GenerationMode } from './template-engine';
+import { aggregateClientContext } from './client-context-aggregator';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +39,7 @@ interface GenerateRequest {
   clientId: string;
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
+  generationMode?: GenerationMode;
 }
 
 export interface GeneratedDoc {
@@ -323,7 +326,7 @@ export const generateDocuments = functions
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes } = data as GenerateRequest;
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'ai' } = data as GenerateRequest;
 
     if (!firmId || !clientId || !packageType) {
       throw new HttpsError(
@@ -370,9 +373,19 @@ export const generateDocuments = functions
     const documentsToGenerate = getDocumentsForPackage(packageType);
 
     console.log(
-      `[generateDocuments] Starting generation for client=${clientId} package=${packageType}`,
+      `[generateDocuments] Starting generation for client=${clientId} package=${packageType} mode=${generationMode}`,
       `documents=[${documentsToGenerate.join(', ')}]`,
     );
+
+    // Aggregate client context for template/hybrid modes
+    let clientContext: Awaited<ReturnType<typeof aggregateClientContext>> | null = null;
+    if (generationMode !== 'ai') {
+      try {
+        clientContext = await aggregateClientContext(firmId, clientId);
+      } catch (ctxErr) {
+        console.warn('[generateDocuments] Context aggregation failed, falling back to AI:', ctxErr);
+      }
+    }
 
     // ------------------------------------------------------------------
     // 5. Generate each document
@@ -383,13 +396,29 @@ export const generateDocuments = functions
     for (const docType of documentsToGenerate) {
       let docsForType: GeneratedDoc[];
       try {
-        docsForType = await generateDocument(
-          docType,
-          clientData,
-          firmData,
-          packageType,
-          trustTypes,
-        );
+        // Route based on generationMode
+        if (generationMode !== 'ai' && clientContext) {
+          // Template or hybrid mode — use template engine
+          const PER_PROPERTY_DOCS = ['deed', 'affidavitOfConsideration', 'gitRep3'];
+          if (PER_PROPERTY_DOCS.includes(docType)) {
+            // Per-property docs still go through AI for now (complex property-specific logic)
+            docsForType = await generateDocument(docType, clientData, firmData, packageType, trustTypes);
+          } else {
+            const aiGenFn = () => generateDocument(docType, clientData, firmData, packageType, trustTypes).then(docs => docs[0]);
+            const doc = await generateFromTemplate(
+              clientContext,
+              docType,
+              generationMode,
+              undefined, // templateId
+              undefined, // variant
+              aiGenFn,
+            );
+            docsForType = [doc];
+          }
+        } else {
+          // AI mode — existing behavior
+          docsForType = await generateDocument(docType, clientData, firmData, packageType, trustTypes);
+        }
       } catch (error) {
         console.error(`[generateDocuments] Fatal error generating ${docType}:`, error);
         docsForType = [

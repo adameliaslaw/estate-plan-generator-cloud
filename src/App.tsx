@@ -28,6 +28,7 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const CalendarPage = lazy(() => import('@/pages/admin/CalendarPage'));
 const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
+const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 
 // Constants
 import { ROUTES } from '@/config/constants';
@@ -165,6 +166,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <PaymentsPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.KNOWLEDGE_BASE}
+              element={
+                <AppLayout allowedRoles={['admin', 'attorney']}>
+                  <KnowledgeBasePage />
                 </AppLayout>
               }
             />

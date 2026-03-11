@@ -15,6 +15,7 @@ export interface GenerateDocumentsRequest {
   clientId: string;
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
+  generationMode?: 'template' | 'ai' | 'hybrid';
 }
 
 export interface GenerateDocumentsResponse {

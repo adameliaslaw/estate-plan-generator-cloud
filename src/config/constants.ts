@@ -379,6 +379,8 @@ export const COLLECTIONS = {
     `firms/${firmId}/clients/${clientId}/payments`,
   CALENDAR_EVENTS: (firmId: string) => `firms/${firmId}/calendarEvents`,
   TASKS: (firmId: string) => `firms/${firmId}/tasks`,
+  KNOWLEDGE_BASE: (firmId: string) => `firms/${firmId}/knowledgeBase`,
+  DOCUMENT_TEMPLATES: (firmId: string) => `firms/${firmId}/documentTemplates`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -448,6 +450,7 @@ export const ROUTES = {
     `/clients/${clientId}/documents/${documentId}/edit`,
   CALENDAR: '/calendar',
   PAYMENTS: '/payments',
+  KNOWLEDGE_BASE: '/knowledge-base',
   SETTINGS: '/settings',
   SETTINGS_FIRM: '/settings/firm',
   SETTINGS_USERS: '/settings/users',
