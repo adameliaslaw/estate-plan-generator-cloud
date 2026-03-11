@@ -18,7 +18,6 @@ import {
   createContext,
   useCallback,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -34,7 +33,7 @@ import {
   signInWithEmailLink,
   signInWithPopup,
   signOut as firebaseSignOut,
-  updateEmail,
+  verifyBeforeUpdateEmail,
   updatePassword,
   updateProfile,
   type User,
@@ -49,7 +48,7 @@ import {
 } from 'firebase/firestore';
 
 import { auth, db } from '@/config/firebase';
-import { AUTH_ERRORS, SESSION_TIMEOUT_MS, SESSION_WARNING_MS, COLLECTIONS } from '@/config/constants';
+import { AUTH_ERRORS, COLLECTIONS } from '@/config/constants';
 import type { UserProfile as AppUserProfile, UserRole } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -144,12 +143,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [userProfile, setUserProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Refs for the session timeout timers so we can clear/reset them.
-  const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track whether a user is currently signed in (for activity callbacks).
-  const isAuthenticatedRef = useRef(false);
-
   // ---------------------------------------------------------------------------
   // Helpers used inside the provider
   // ---------------------------------------------------------------------------
@@ -179,95 +172,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   // ---------------------------------------------------------------------------
-  // Session timeout logic
-  // ---------------------------------------------------------------------------
-
-  const clearTimers = useCallback(() => {
-    if (warningTimerRef.current !== null) {
-      clearTimeout(warningTimerRef.current);
-      warningTimerRef.current = null;
-    }
-    if (logoutTimerRef.current !== null) {
-      clearTimeout(logoutTimerRef.current);
-      logoutTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleTimers = useCallback(() => {
-    if (!isAuthenticatedRef.current) return;
-
-    clearTimers();
-
-    // Warning timer: fires 2 minutes before logout
-    warningTimerRef.current = setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('session-warning'));
-    }, SESSION_WARNING_MS);
-
-    // Logout timer: fires after full inactivity window
-    logoutTimerRef.current = setTimeout(() => {
-      void firebaseSignOut(auth);
-    }, SESSION_TIMEOUT_MS);
-  }, [clearTimers]);
-
-  // Reset timers whenever the user is active.
-  const handleActivity = useCallback(() => {
-    if (isAuthenticatedRef.current) {
-      scheduleTimers();
-    }
-  }, [scheduleTimers]);
-
-  // ---------------------------------------------------------------------------
-  // Register / unregister activity listeners
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    const events: (keyof WindowEventMap)[] = [
-      'mousemove',
-      'mousedown',
-      'keydown',
-      'touchstart',
-      'scroll',
-    ];
-
-    events.forEach((e) => window.addEventListener(e, handleActivity, { passive: true }));
-
-    return () => {
-      events.forEach((e) => window.removeEventListener(e, handleActivity));
-    };
-  }, [handleActivity]);
-
-  // ---------------------------------------------------------------------------
   // Firebase auth state listener
+  // NOTE: Session timeout is handled by useSessionTimeout hook in the layout.
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        isAuthenticatedRef.current = true;
         try {
           const profile = await buildProfile(firebaseUser);
           setUser(firebaseUser);
           setUserProfile(profile);
-          scheduleTimers();
         } catch (err) {
           console.error('[AuthContext] Failed to build user profile:', err);
           setUser(firebaseUser);
           setUserProfile(null);
         }
       } else {
-        isAuthenticatedRef.current = false;
-        clearTimers();
         setUser(null);
         setUserProfile(null);
       }
       setLoading(false);
     });
 
-    return () => {
-      unsubscribe();
-      clearTimers();
-    };
-  }, [buildProfile, clearTimers, scheduleTimers]);
+    return () => unsubscribe();
+  }, [buildProfile]);
 
   // ---------------------------------------------------------------------------
   // Auth actions
@@ -361,12 +290,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signOutAction = useCallback(async (): Promise<void> => {
     try {
-      clearTimers();
       await firebaseSignOut(auth);
     } catch (err) {
       throw new Error(mapAuthError(err));
     }
-  }, [clearTimers]);
+  }, []);
 
   const resetPassword = useCallback(async (email: string): Promise<void> => {
     try {
@@ -398,9 +326,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           await updateProfile(user, authUpdates);
         }
 
-        // Update email if requested.
+        // Update email if requested — sends a verification email first.
         if (newEmail && newEmail !== user.email) {
-          await updateEmail(user, newEmail);
+          await verifyBeforeUpdateEmail(user, newEmail);
         }
 
         // Update password if requested.

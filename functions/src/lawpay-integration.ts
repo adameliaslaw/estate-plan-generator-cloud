@@ -131,11 +131,18 @@ function verifyWebhookSignature(
 ): boolean {
   const webhookSecret = process.env.LAWPAY_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    console.warn(
-      '[lawpayWebhook] LAWPAY_WEBHOOK_SECRET not set — skipping signature verification. ' +
-      'Set this variable before going to production.',
+    // Only allow bypass in the Firebase emulator — reject in production
+    if (process.env.FUNCTIONS_EMULATOR === 'true') {
+      console.warn(
+        '[lawpayWebhook] LAWPAY_WEBHOOK_SECRET not set — skipping signature verification (emulator only).',
+      );
+      return true;
+    }
+    console.error(
+      '[lawpayWebhook] LAWPAY_WEBHOOK_SECRET not set — rejecting request. ' +
+      'Set this secret before deploying to production.',
     );
-    return true; // Allow in dev; reject in prod once secret is configured
+    return false;
   }
 
   const signature = req.headers['x-affinipay-signature'] as string | undefined;
@@ -260,7 +267,7 @@ export const createPaymentRequest = functions
     const params = new URLSearchParams({
       amount: amount.toString(),
       description: description.trim(),
-      reference: `${firmId}-${clientId}`,
+      reference: `${firmId}::${clientId}`,
       readOnlyFields: 'amount,description',
     });
 
@@ -526,15 +533,12 @@ export const lawpayWebhook = onRequest(
     try {
       // Prefer a direct lookup if reference is available (fast path)
       const reference: string = (data.reference as string) ?? '';
-      const refParts = reference.split('-');
+      const refParts = reference.split('::');
 
       let paymentDocRef: admin.firestore.DocumentReference | null = null;
 
-      if (refParts.length >= 3) {
-        // reference = "firmId-clientId-paymentDocId"
-        // firmId and clientId may themselves contain hyphens, so extract
-        // only the last segment as paymentDocId and reconstruct the path
-        // using the transaction ID (which is the docId).
+      if (refParts.length >= 2) {
+        // reference = "firmId::clientId"
         const firmId = refParts[0];
         const clientId = refParts[1];
         paymentDocRef = paymentRef(db, firmId, clientId, transactionId);

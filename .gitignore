@@ -11,6 +11,13 @@ functions/lib/
 .env.local
 .env.*.local
 
+# Sensitive credentials — NEVER commit these
+service-account.json
+accounts.json
+secret.txt
+clientid.txt
+firebase-config.json
+
 # Firebase
 .firebase/
 firebase-debug.log
@@ -31,6 +38,25 @@ Thumbs.db
 # Test
 coverage/
 
-# Logs
+# Logs & debug artifacts
 *.log
 npm-debug.log*
+dump*.txt
+*_errors*.txt
+*_errors*.log
+cors_logs.txt
+deploy_logs.txt
+deploy_err*.txt
+functions-log.txt
+generate_logs*.txt
+full_logs.txt
+full_errors.txt
+last_logs.txt
+logs.txt
+logs_json.txt
+build_debug.txt
+build_errors.*
+ts_out.txt
+tsc_errors*
+ts_build_error.log
+dev_output.log

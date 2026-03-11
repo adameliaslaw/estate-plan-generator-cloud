@@ -16,6 +16,16 @@ import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
 
 // ---------------------------------------------------------------------------
+// Helper: truncate text at a word boundary
+// ---------------------------------------------------------------------------
+function truncateAtWordBoundary(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const truncated = text.slice(0, maxLen);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return lastSpace > maxLen * 0.8 ? truncated.slice(0, lastSpace) + '…' : truncated + '…';
+}
+
+// ---------------------------------------------------------------------------
 // Available questionnaire fields (for AI context)
 // ---------------------------------------------------------------------------
 
@@ -159,7 +169,7 @@ export const processTemplateFile = onCall(
     const learningPrompt = formatLearningPrompt(learningCtx);
 
     // Use AI to detect template variables and suggest mappings
-    const analysisText = extractedText.slice(0, 8000);
+    const analysisText = truncateAtWordBoundary(extractedText, 8000);
 
     const systemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
 
@@ -248,7 +258,7 @@ Respond with a valid JSON object (no markdown fences):
     return {
       success: true,
       extractedHtml,
-      extractedText: extractedText.slice(0, 5000),
+      extractedText: truncateAtWordBoundary(extractedText, 5000),
       detectedVariables,
       suggestedDocType,
       documentSummary,

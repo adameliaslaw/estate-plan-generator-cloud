@@ -198,7 +198,7 @@ async function _callGemini(
   // Gemini requires system prompt to be passed inside 'system_instruction'
   // But standard system instruction text is expected. 
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const requestBody: any = {
     system_instruction: {
@@ -223,6 +223,7 @@ async function _callGemini(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
     },
     body: JSON.stringify(requestBody)
   });
@@ -282,27 +283,73 @@ async function _callPerplexity(
 // ---------------------------------------------------------------------------
 
 /**
+ * Patterns that may indicate a prompt-injection attempt.
+ * Sorted by severity; each entry is a regex that will be stripped.
+ * This must be kept in sync with the frontend sanitize.ts version.
+ */
+const INJECTION_PATTERNS: RegExp[] = [
+  // Role override markers
+  /\b(system|user|assistant)\s*:\s*/gi,
+  // Direct instructions to change behaviour
+  /ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|context)/gi,
+  /forget\s+(everything|all|prior|previous)/gi,
+  /\byou\s+are\s+now\b/gi,
+  /\bact\s+as\b/gi,
+  /\bpretend\s+(to\s+be|you\s+are)\b/gi,
+  /\bnew\s+(instruction|role|persona|context|prompt)\b/gi,
+  /\boverride\s+(your|all)?\s*(instructions?|rules?|constraints?)/gi,
+  // Jailbreak keywords
+  /\bdan\s+mode\b/gi,
+  /\bjailbreak\b/gi,
+  /\bdo\s+anything\s+now\b/gi,
+  // Delimiters commonly used to inject synthetic messages
+  /<<<|>>>/g,
+  /---\s*(system|user|assistant)\s*---/gi,
+  /\[INST\]/gi,
+  /\[\/INST\]/gi,
+  /<\|im_start\|>/gi,
+  /<\|im_end\|>/gi,
+  // Template literal injection
+  /\{\{[^}]*\}\}/g,
+  // Null byte / control characters
+  // eslint-disable-next-line no-control-regex
+  /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
+];
+
+/**
  * Strip prompt-injection patterns from user-supplied free-text fields
  * before embedding them in AI prompts.
  *
- * - Removes triple-backtick fences (common injection vector)
+ * - Applies all injection-stripping patterns (see INJECTION_PATTERNS)
  * - Strips role prefixes ("system:", "user:", "assistant:")
- * - Removes "ignore previous instructions" / "forget previous" phrases
- * - Hard-caps the string at 5,000 characters
+ * - Escapes backticks so the value can't break a markdown fence
+ * - Hard-caps the string at 5,000 characters at a word boundary
  */
 export function sanitizeForPrompt(text: string | undefined | null): string {
   if (!text) return '';
 
-  return text
-    .replace(/```/g, '')
-    .replace(/\bsystem\b\s*:/gi, '[system]')
-    .replace(/\bassistant\b\s*:/gi, '[assistant]')
-    .replace(/\buser\b\s*:/gi, '[user]')
-    .replace(/\bignore\b.{0,50}\binstructions\b/gi, '[removed]')
-    .replace(/\bforget\b.{0,50}\bprevious\b/gi, '[removed]')
-    .replace(/\bdisregard\b.{0,50}\babove\b/gi, '[removed]')
-    .replace(/\bact\s+as\b/gi, '[removed]')
-    .slice(0, 5000);
+  let result = text;
+
+  // Apply all injection-stripping patterns.
+  for (const pattern of INJECTION_PATTERNS) {
+    result = result.replace(pattern, ' ');
+  }
+
+  // Escape backticks so the value can't break a markdown fence.
+  result = result.replace(/`/g, "'");
+
+  // Collapse runs of whitespace introduced by the stripping.
+  result = result.replace(/\s{3,}/g, '  ').trim();
+
+  // Hard length cap — do NOT silently truncate in the middle of a word;
+  // find the last whitespace before the limit.
+  if (result.length > 5000) {
+    const truncated = result.slice(0, 5000);
+    const lastSpace = truncated.lastIndexOf(' ');
+    result = (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + '…';
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

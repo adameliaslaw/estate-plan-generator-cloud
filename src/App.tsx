@@ -39,21 +39,20 @@ const STAFF_ROLES = ['admin', 'attorney', 'paralegal'] as const;
 export default function App() {
   return (
     <BrowserRouter>
-      {/* Sonner toast notifications — positioned top-right */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          classNames: {
-            toast:
-              'rounded-lg border border-gray-200 bg-white text-gray-900 shadow-lg text-sm font-medium',
-            success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-            error: 'border-red-200 bg-red-50 text-red-900',
-            warning: 'border-amber-200 bg-amber-50 text-amber-900',
-          },
-        }}
-      />
-
       <ErrorBoundary>
+        {/* Sonner toast notifications — positioned top-right */}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            classNames: {
+              toast:
+                'rounded-lg border border-gray-200 bg-white text-gray-900 shadow-lg text-sm font-medium',
+              success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+              error: 'border-red-200 bg-red-50 text-red-900',
+              warning: 'border-amber-200 bg-amber-50 text-amber-900',
+            },
+          }}
+        />
         <Suspense fallback={<LoadingSpinner fullScreen />}>
           <Routes>
             {/* ── Root redirect ── */}

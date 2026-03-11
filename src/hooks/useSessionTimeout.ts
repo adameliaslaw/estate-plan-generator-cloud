@@ -61,6 +61,9 @@ export function useSessionTimeout({
   // every render when the callback identity changes.
   const onTimeoutRef = useRef(onTimeout);
   onTimeoutRef.current = onTimeout;
+  // Throttle: track the last time we reset the timers
+  const lastResetRef = useRef(0);
+  const THROTTLE_MS = 30_000; // Only reset timers once per 30 seconds
 
   const clearTimers = useCallback(() => {
     if (warningTimerRef.current !== null) {
@@ -88,11 +91,13 @@ export function useSessionTimeout({
       window.dispatchEvent(new CustomEvent(SESSION_TIMEOUT_EVENT));
       void Promise.resolve(onTimeoutRef.current());
     }, SESSION_TIMEOUT_MS);
+
+    lastResetRef.current = Date.now();
   }, [enabled, clearTimers]);
 
-  // Reset the timers on any user activity.
+  // Reset the timers on any user activity — throttled to avoid excessive timer churn.
   const handleActivity = useCallback(() => {
-    if (enabled) {
+    if (enabled && Date.now() - lastResetRef.current >= THROTTLE_MS) {
       scheduleTimers();
     }
   }, [enabled, scheduleTimers]);

@@ -367,60 +367,76 @@ export function QuestionnaireProvider({
           ? 'Client'
           : `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
 
-        // Compute progress fields for dashboard display
-        const visibleStepCount = QUESTIONNAIRE_STEPS.filter((step) => {
-          if (!step.condition) return true;
-          return evaluateCondition(step.condition, data);
-        }).length;
-        const percentComplete = visibleStepCount > 0
-          ? Math.round((data.completedSteps.length / visibleStepCount) * 100)
-          : 0;
+        // Retry with exponential backoff for transient Firestore/network errors
+        const MAX_RETRIES = 3;
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          try {
+            // Compute progress fields for dashboard display
+            const visibleStepCount = QUESTIONNAIRE_STEPS.filter((step) => {
+              if (!step.condition) return true;
+              return evaluateCondition(step.condition, data);
+            }).length;
+            const percentComplete = visibleStepCount > 0
+              ? Math.round((data.completedSteps.length / visibleStepCount) * 100)
+              : 0;
 
-        // Determine which sections have all visible steps completed
-        const sectionsCompleted: string[] = [];
-        for (const section of SECTION_META) {
-          const sectionSteps = QUESTIONNAIRE_STEPS.filter((s) => {
-            if (s.section !== section.id) return false;
-            if (!s.condition) return true;
-            return evaluateCondition(s.condition, data);
-          });
-          if (sectionSteps.length > 0 && sectionSteps.every((s) => data.completedSteps.includes(s.id))) {
-            sectionsCompleted.push(section.id);
+            // Determine which sections have all visible steps completed
+            const sectionsCompleted: string[] = [];
+            for (const section of SECTION_META) {
+              const sectionSteps = QUESTIONNAIRE_STEPS.filter((s) => {
+                if (s.section !== section.id) return false;
+                if (!s.condition) return true;
+                return evaluateCondition(s.condition, data);
+              });
+              if (sectionSteps.length > 0 && sectionSteps.every((s) => data.completedSteps.includes(s.id))) {
+                sectionsCompleted.push(section.id);
+              }
+            }
+
+            // Determine the current visible step info for dashboard display
+            const visibleSteps = QUESTIONNAIRE_STEPS.filter((step) => {
+              if (!step.condition) return true;
+              return evaluateCondition(step.condition, data);
+            });
+            const currentVisibleStep = visibleSteps[stepIndex] ?? null;
+            const currentSectionMeta = currentVisibleStep
+              ? SECTION_META.find((s) => s.id === currentVisibleStep.section)
+              : null;
+
+            await updateDoc(doc(db, docPath), {
+              'questionnaireProgress.status': 'in_progress',
+              'questionnaireProgress.percentComplete': percentComplete,
+              'questionnaireProgress.sectionsCompleted': sectionsCompleted,
+              'questionnaireProgress.currentStepIndex': stepIndex,
+              'questionnaireProgress.currentStepTitle': currentVisibleStep?.title ?? '',
+              'questionnaireProgress.currentSectionId': currentVisibleStep?.section ?? '',
+              'questionnaireProgress.currentSectionTitle': currentSectionMeta?.title ?? '',
+              'questionnaireProgress.totalSteps': visibleSteps.length,
+              'questionnaireProgress.lastUpdatedBy': updaterName,
+              'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
+            });
+
+            pendingSaveRef.current = false;
+            lastError = null;
+            break; // Success — exit retry loop
+          } catch (retryErr) {
+            lastError = retryErr;
+            if (attempt < MAX_RETRIES - 1) {
+              // Exponential backoff: 1s, 2s, 4s
+              await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
+            }
           }
         }
-
-        // Determine the current visible step info for dashboard display
-        const visibleSteps = QUESTIONNAIRE_STEPS.filter((step) => {
-          if (!step.condition) return true;
-          return evaluateCondition(step.condition, data);
-        });
-        const currentVisibleStep = visibleSteps[stepIndex] ?? null;
-        const currentSectionMeta = currentVisibleStep
-          ? SECTION_META.find((s) => s.id === currentVisibleStep.section)
-          : null;
-
-        await updateDoc(doc(db, docPath), {
-          'questionnaireProgress.status': 'in_progress',
-          'questionnaireProgress.percentComplete': percentComplete,
-          'questionnaireProgress.sectionsCompleted': sectionsCompleted,
-          'questionnaireProgress.currentStepIndex': stepIndex,
-          'questionnaireProgress.currentStepTitle': currentVisibleStep?.title ?? '',
-          'questionnaireProgress.currentSectionId': currentVisibleStep?.section ?? '',
-          'questionnaireProgress.currentSectionTitle': currentSectionMeta?.title ?? '',
-          'questionnaireProgress.totalSteps': visibleSteps.length,
-          'questionnaireProgress.lastUpdatedBy': updaterName,
-          'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
-        });
-
-        pendingSaveRef.current = false;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to save progress';
-        dispatch({ type: 'SET_ERROR', message });
+        if (lastError) {
+          const message = lastError instanceof Error ? lastError.message : 'Failed to save progress after retries';
+          dispatch({ type: 'SET_ERROR', message });
+        }
       } finally {
         dispatch({ type: 'SET_SAVING', value: false });
       }
     },
-    [docPath],
+    [docPath, userProfile],
   );
 
   // ── Manual save ──────────────────────────────────────────────────────────

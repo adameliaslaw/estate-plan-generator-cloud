@@ -498,27 +498,47 @@ export async function getTemplate(
   const db = admin.firestore();
   const col = db.collection('firms').doc(firmId).collection('documentTemplates');
 
+  let rawData: FirebaseFirestore.DocumentData | undefined;
+
   // If specific template ID provided, fetch directly
   if (templateId) {
     const snap = await col.doc(templateId).get();
-    if (snap.exists) return snap.data() as DocumentTemplate;
+    if (!snap.exists) return null;
+    rawData = snap.data();
+  } else {
+    // Otherwise query by docType + variant or default
+    let query = col
+      .where('docType', '==', docType)
+      .where('isActive', '==', true);
+
+    if (variant) {
+      query = query.where('variant', '==', variant);
+    } else {
+      query = query.where('isDefault', '==', true);
+    }
+
+    const snap = await query.limit(1).get();
+    if (snap.empty) return null;
+    rawData = snap.docs[0].data();
+  }
+
+  // Runtime validation: ensure required fields exist
+  if (!rawData || typeof rawData.content !== 'string' || !rawData.content.trim()) {
+    console.error(
+      `[getTemplate] Template for docType="${docType}" is missing required "content" field. ` +
+      `firmId=${firmId}, templateId=${templateId ?? '(query)'}`,
+    );
+    return null;
+  }
+  if (!rawData.docType || typeof rawData.docType !== 'string') {
+    console.error(
+      `[getTemplate] Template is missing required "docType" field. ` +
+      `firmId=${firmId}, templateId=${templateId ?? '(query)'}`,
+    );
     return null;
   }
 
-  // Otherwise query by docType + variant or default
-  let query = col
-    .where('docType', '==', docType)
-    .where('isActive', '==', true);
-
-  if (variant) {
-    query = query.where('variant', '==', variant);
-  } else {
-    query = query.where('isDefault', '==', true);
-  }
-
-  const snap = await query.limit(1).get();
-  if (snap.empty) return null;
-  return snap.docs[0].data() as DocumentTemplate;
+  return rawData as DocumentTemplate;
 }
 
 /**

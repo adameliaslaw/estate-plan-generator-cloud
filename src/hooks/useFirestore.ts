@@ -133,9 +133,8 @@ export function useCollection<T extends DocumentData>(
 
   // Serialise constraints into a stable key so the effect re-runs only when
   // the actual constraint values change (not on every render).
-  const constraintKey = JSON.stringify(
-    queryConstraints.map((c) => c.toString()),
-  );
+  // Note: Callers should memoize their queryConstraints array to avoid unnecessary re-subscriptions.
+  const constraintKey = JSON.stringify(queryConstraints);
 
   useEffect(() => {
     if (!path) {
