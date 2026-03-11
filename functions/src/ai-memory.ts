@@ -346,6 +346,30 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
     }
 
     console.log(`[ai-memory] Extracted ${deduped.length} key facts for client ${clientId}`);
+
+    // Also create a note in the client's Notes subcollection
+    // so key facts are visible in the Notes tab
+    try {
+      const noteContent = deduped
+        .map((f) => `• [${f.category.toUpperCase()}] ${f.fact}`)
+        .join('\n');
+
+      const noteRef = db().collection(`firms/${firmId}/clients/${clientId}/notes`).doc();
+      await noteRef.set({
+        id: noteRef.id,
+        title: `AI Conversation Insights — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+        content: noteContent,
+        noteType: 'ai-memory',
+        aiSummary: `${deduped.length} key fact${deduped.length === 1 ? '' : 's'} extracted from AI conversation.`,
+        conversationId,
+        source: 'chatbot',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`[ai-memory] Created note ${noteRef.id} for client ${clientId}`);
+    } catch (noteErr) {
+      console.warn('[ai-memory] Failed to create note from key facts:', noteErr);
+    }
   } catch (err) {
     console.warn('[ai-memory] Key fact extraction failed:', err);
     // Non-critical — don't throw
