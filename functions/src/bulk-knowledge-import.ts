@@ -13,8 +13,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import mammoth from 'mammoth';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParseModule = require('pdf-parse');
-const pdfParse = pdfParseModule.default || pdfParseModule;
+const { PDFParse } = require('pdf-parse');
 import { callAI, callAIWithVision, parseAIJson } from './ai-client';
 
 // ---------------------------------------------------------------------------
@@ -80,12 +79,26 @@ async function extractFileText(
     const textResult = await mammoth.extractRawText({ buffer });
     text = textResult.value;
   } else if (ext === 'pdf') {
-    // First pass: standard text extraction
-    const pdfData = await pdfParse(buffer);
-    text = pdfData.text || '';
+    // First pass: standard text extraction using pdf-parse v2 class API
+    const parser = new PDFParse();
+    await parser.load(buffer);
+    const info = await parser.getInfo();
+    const pageCount = info?.numPages || 1;
+
+    // Extract text from all pages
+    const pageTexts: string[] = [];
+    for (let pg = 1; pg <= pageCount; pg++) {
+      try {
+        const pageText = await parser.getText(pg);
+        pageTexts.push(pageText || '');
+      } catch {
+        pageTexts.push('');
+      }
+    }
+    text = pageTexts.join('\n\n');
+    parser.destroy();
 
     // Check if this looks like a scanned PDF (very little text)
-    const pageCount = pdfData.numpages || 1;
     const avgCharsPerPage = text.length / pageCount;
 
     if (avgCharsPerPage < MIN_CHARS_PER_PAGE_THRESHOLD && firmData) {

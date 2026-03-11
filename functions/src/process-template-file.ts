@@ -11,7 +11,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import mammoth from 'mammoth';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
 
@@ -146,8 +146,21 @@ export const processTemplateFile = onCall(
       }
     } else if (ext === 'pdf') {
       try {
-        const pdfData = await pdfParse(buffer);
-        extractedText = pdfData.text;
+        const parser = new PDFParse();
+        await parser.load(buffer);
+        const info = await parser.getInfo();
+        const pageCount = info?.numPages || 1;
+        const pageTexts: string[] = [];
+        for (let pg = 1; pg <= pageCount; pg++) {
+          try {
+            const pageText = await parser.getText(pg);
+            pageTexts.push(pageText || '');
+          } catch {
+            pageTexts.push('');
+          }
+        }
+        extractedText = pageTexts.join('\n\n');
+        parser.destroy();
         // Convert plain text to basic HTML
         extractedHtml = extractedText
           .split('\n\n')
