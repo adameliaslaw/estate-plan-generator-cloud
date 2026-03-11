@@ -299,6 +299,7 @@ export default function NewClientPage() {
               <select
                 id="packageType"
                 name="packageType"
+                title="Estate Plan Package"
                 value={values.packageType}
                 onChange={handleChange}
                 disabled={submitting}

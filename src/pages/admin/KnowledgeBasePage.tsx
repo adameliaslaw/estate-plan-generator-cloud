@@ -1075,6 +1075,8 @@ function AddTemplateDialog({
                 ref={fileInputRef}
                 type="file"
                 accept=".docx,.pdf"
+                title="Upload template file"
+                aria-label="Upload template file"
                 className="hidden"
                 onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
               />
