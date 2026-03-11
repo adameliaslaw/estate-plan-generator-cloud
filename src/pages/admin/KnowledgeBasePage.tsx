@@ -1460,16 +1460,12 @@ function BulkImportDialog({
             <>
               {/* Drop zone */}
               {!uploadResults && (
-                <div
+                <label
+                  htmlFor="bulk-file-input"
                   onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                   onDragLeave={() => setDragActive(false)}
                   onDrop={handleDrop}
-                  onClick={() => !uploading && fileInputRef.current?.click()}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
-                  aria-label="Drop files or click to upload"
-                  className={`rounded-xl border-2 border-dashed py-8 text-center cursor-pointer transition-colors ${
+                  className={`block rounded-xl border-2 border-dashed py-8 text-center cursor-pointer transition-colors ${
                     dragActive
                       ? 'border-[#2b6cb0] bg-blue-50'
                       : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
@@ -1482,16 +1478,17 @@ function BulkImportDialog({
                   <p className="text-xs text-gray-400 mt-1">
                     Up to 100 files • 50MB each • AI auto-enriches metadata
                   </p>
-                </div>
+                </label>
               )}
               <input
+                id="bulk-file-input"
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf,.docx"
                 multiple
                 title="Upload knowledge base files"
                 aria-label="Upload knowledge base files"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => { handleFileSelect(e.target.files); e.target.value = ''; }}
               />
 
