@@ -69,7 +69,7 @@ export function AudioRecorderModal({
     defaultClientId,
     clients = [],
     isSaving = false,
-    onAddClient,
+    onAddClient: _onAddClient,
 }: AudioRecorderModalProps) {
     const [title, setTitle] = useState('');
     const [noteType, setNoteType] = useState<NoteType>('general');
@@ -251,9 +251,12 @@ export function AudioRecorderModal({
                                             if (clientSearch.trim() && !exactMatch) {
                                                 // If they've typed a name, create inline
                                                 handleCreateAndSelect();
-                                            } else if (onAddClient) {
-                                                // Navigate to full client creation page
-                                                onAddClient();
+                                            } else {
+                                                // Focus input so user can type a new client name inline
+                                                setSelectedClientId('');
+                                                setClientSearch('');
+                                                setIsDropdownOpen(false);
+                                                setTimeout(() => clientInputRef.current?.focus(), 50);
                                             }
                                         }}
                                         className="w-full text-left px-3 py-2.5 text-sm border-t border-gray-100 text-[#1a365d] font-semibold hover:bg-[#ebf4ff] transition-colors flex items-center gap-2"
@@ -345,6 +348,8 @@ export function AudioRecorderModal({
                                     accept={AUDIO_ACCEPT}
                                     className="hidden"
                                     onChange={handleAudioFileChange}
+                                    aria-label="Upload audio file"
+                                    title="Upload audio file"
                                 />
                             </div>
                         )}
