@@ -10,7 +10,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import { DocumentTemplate } from './template-engine';
+import { DocumentTemplate, extractTemplateVariables } from './template-engine';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +63,12 @@ export const uploadTemplate = onCall(
     const now = admin.firestore.FieldValue.serverTimestamp();
     const col = templateCollection(firmId);
 
+    // Auto-extract variables from template content
+    const autoExtracted = extractTemplateVariables(content);
+    // Merge auto-extracted with any manually provided; auto-extracted take precedence
+    const manualVars: string[] = variables ?? [];
+    const mergedVariables = Array.from(new Set([...autoExtracted, ...manualVars])).sort();
+
     // If setting as default, unset other defaults for this docType
     if (isDefault) {
       const existingDefaults = await col
@@ -94,7 +100,7 @@ export const uploadTemplate = onCall(
         content,
         version: currentVersion,
         isDefault: isDefault ?? false,
-        variables: variables ?? [],
+        variables: mergedVariables,
         updatedAt: now,
         updatedBy: request.auth.uid,
       });
@@ -116,7 +122,7 @@ export const uploadTemplate = onCall(
         content,
         isDefault: isDefault ?? false,
         isActive: true,
-        variables: variables ?? [],
+        variables: mergedVariables,
         createdAt: now,
         updatedAt: now,
         createdBy: request.auth.uid,

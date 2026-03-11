@@ -7,6 +7,8 @@
  *  - Compile and render Handlebars templates with client context
  *  - Register custom helpers for legal document formatting
  *  - Fetch the appropriate template from Firestore (by docType + variant)
+ *  - Extract template variables and map them to questionnaire fields
+ *  - Validate client data against template requirements before rendering
  *  - Optional AI enhancement pass for hybrid mode
  */
 
@@ -40,6 +42,339 @@ export interface DocumentTemplate {
 }
 
 export type GenerationMode = 'template' | 'ai' | 'hybrid';
+
+export interface VariableMapping {
+  /** The variable path used in templates, e.g. 'personalInfo.firstName' */
+  variable: string;
+  /** Questionnaire section name, e.g. 'About You' */
+  section: string;
+  /** Human-readable field label, e.g. 'First Name' */
+  label: string;
+  /** Dot-path into QuestionnaireData or 'computed' */
+  fieldPath: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  missing: Array<{ variable: string; label: string; section: string }>;
+  available: Array<{ variable: string; label: string; value: unknown }>;
+}
+
+// ---------------------------------------------------------------------------
+// Variable extraction — parse Handlebars templates to discover variables
+// ---------------------------------------------------------------------------
+
+/**
+ * Known Handlebars helpers (built-in + custom).
+ * These are NOT template variables and should be excluded from extraction.
+ */
+const KNOWN_HELPERS = new Set([
+  // Built-in Handlebars
+  'if', 'unless', 'each', 'with', 'lookup', 'log', 'else',
+  // Special Handlebars keywords
+  'this',
+  // Custom helpers registered in registerHelpers()
+  'formatDate', 'fullName', 'currency', 'upper', 'eq', 'gt', 'inc',
+  'roman', 'ordinal', 'fillOrBlank', 'hasItems', 'join',
+]);
+
+/**
+ * Extract all unique template variable paths from Handlebars template content.
+ *
+ * Handles:
+ *  - Simple variables: `{{personalInfo.firstName}}`
+ *  - Helper calls: `{{fullName fiduciaries.powerOfAttorney.agent}}`
+ *  - Block helpers: `{{#if hasSpouse}}`, `{{#each children}}`
+ *  - Nested sub-expressions: `{{#if (eq fiduciaries.powerOfAttorney.effectiveDate 'immediate')}}`
+ *  - Ignores comments `{{!-- ... --}}` and `{{! ... }}`
+ *  - Ignores string literals ('...' and "...")
+ *  - Ignores closing tags `{{/if}}`, `{{/each}}`
+ */
+export function extractTemplateVariables(content: string): string[] {
+  const variables = new Set<string>();
+
+  // Strip comments first: {{!-- ... --}} and {{! ... }}
+  const noComments = content
+    .replace(/\{\{!--[\s\S]*?--\}\}/g, '')
+    .replace(/\{\{![\s\S]*?\}\}/g, '');
+
+  // Match all Handlebars expressions: {{ ... }}
+  const expressionRegex = /\{\{(#|\/)?([^}]+)\}\}/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = expressionRegex.exec(noComments)) !== null) {
+    const prefix = match[1]; // '#' for block open, '/' for block close, undefined for simple
+    const body = match[2].trim();
+
+    // Skip closing tags
+    if (prefix === '/') continue;
+
+    // Recursively extract variables from the body (handles sub-expressions)
+    extractFromExpression(body, variables);
+  }
+
+  return Array.from(variables).sort();
+}
+
+/**
+ * Extract variable paths from a single expression body.
+ * Handles: `fullName person`, `eq a 'literal'`, `(eq a b)`, nested.
+ */
+function extractFromExpression(expr: string, variables: Set<string>): void {
+  // First, recursively handle sub-expressions: (helperName arg1 arg2)
+  // Replace them and process the inner content
+  let processedExpr = expr;
+  const subExprRegex = /\(([^()]+)\)/g;
+  let subMatch: RegExpExecArray | null;
+  while ((subMatch = subExprRegex.exec(expr)) !== null) {
+    extractFromExpression(subMatch[1].trim(), variables);
+    processedExpr = processedExpr.replace(subMatch[0], '');
+  }
+
+  // Tokenize the remaining expression (split by whitespace, respecting quotes)
+  const tokens = tokenize(processedExpr);
+  if (tokens.length === 0) return;
+
+  const first = tokens[0];
+
+  // If the first token is a known helper, remaining tokens are arguments
+  if (KNOWN_HELPERS.has(first)) {
+    for (let i = 1; i < tokens.length; i++) {
+      addIfVariable(tokens[i], variables);
+    }
+  } else {
+    // First token is itself a variable (simple expression like {{personalInfo.firstName}})
+    // or a helper not in KNOWN_HELPERS (treat first as variable too)
+    for (const token of tokens) {
+      addIfVariable(token, variables);
+    }
+  }
+}
+
+/**
+ * Tokenize an expression body, splitting on whitespace but preserving quoted strings.
+ */
+function tokenize(expr: string): string[] {
+  const tokens: string[] = [];
+  const regex = /(?:"[^"]*"|'[^']*'|\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(expr)) !== null) {
+    tokens.push(m[0]);
+  }
+  return tokens;
+}
+
+/**
+ * Add a token to the variables set if it looks like a variable path.
+ * Excludes: string literals, numbers, booleans, @data variables, known helpers.
+ */
+function addIfVariable(token: string, variables: Set<string>): void {
+  // Skip string literals
+  if ((token.startsWith("'") && token.endsWith("'")) ||
+      (token.startsWith('"') && token.endsWith('"'))) {
+    return;
+  }
+  // Skip numbers and booleans
+  if (/^-?\d+(\.\d+)?$/.test(token)) return;
+  if (token === 'true' || token === 'false' || token === 'null' || token === 'undefined') return;
+  // Skip @data variables (@index, @key, etc.)
+  if (token.startsWith('@')) return;
+  // Skip known helpers
+  if (KNOWN_HELPERS.has(token)) return;
+  // Skip hash arguments (key=value)
+  if (token.includes('=')) return;
+  // Skip empty
+  if (!token.trim()) return;
+
+  variables.add(token);
+}
+
+// ---------------------------------------------------------------------------
+// Variable → Questionnaire field mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps template variable paths to their questionnaire section + label.
+ * Built from the questionnaire step definitions + computed fields from
+ * client-context-aggregator.ts.
+ */
+export const VARIABLE_TO_QUESTIONNAIRE_MAP: Record<string, VariableMapping> = {
+  // ------ Section: About You (personalInfo) ------
+  'personalInfo.firstName':     { variable: 'personalInfo.firstName',     section: 'About You',     label: 'First Name',           fieldPath: 'personalInfo.firstName' },
+  'personalInfo.middleName':    { variable: 'personalInfo.middleName',    section: 'About You',     label: 'Middle Name',          fieldPath: 'personalInfo.middleName' },
+  'personalInfo.lastName':      { variable: 'personalInfo.lastName',      section: 'About You',     label: 'Last Name',            fieldPath: 'personalInfo.lastName' },
+  'personalInfo.suffix':        { variable: 'personalInfo.suffix',        section: 'About You',     label: 'Suffix',               fieldPath: 'personalInfo.suffix' },
+  'personalInfo.dob':           { variable: 'personalInfo.dob',           section: 'About You',     label: 'Date of Birth',        fieldPath: 'personalInfo.dob' },
+  'personalInfo.ssnLast4':      { variable: 'personalInfo.ssnLast4',      section: 'About You',     label: 'SSN Last 4',           fieldPath: 'personalInfo.ssnLast4' },
+  'personalInfo.address':       { variable: 'personalInfo.address',       section: 'About You',     label: 'Street Address',       fieldPath: 'personalInfo.address' },
+  'personalInfo.city':          { variable: 'personalInfo.city',          section: 'About You',     label: 'City',                 fieldPath: 'personalInfo.city' },
+  'personalInfo.state':         { variable: 'personalInfo.state',         section: 'About You',     label: 'State',                fieldPath: 'personalInfo.state' },
+  'personalInfo.zip':           { variable: 'personalInfo.zip',           section: 'About You',     label: 'ZIP Code',             fieldPath: 'personalInfo.zip' },
+  'personalInfo.county':        { variable: 'personalInfo.county',        section: 'About You',     label: 'County',               fieldPath: 'personalInfo.county' },
+  'personalInfo.email':         { variable: 'personalInfo.email',         section: 'About You',     label: 'Email Address',        fieldPath: 'personalInfo.email' },
+  'personalInfo.phone':         { variable: 'personalInfo.phone',         section: 'About You',     label: 'Phone Number',         fieldPath: 'personalInfo.phone' },
+  'personalInfo.maritalStatus': { variable: 'personalInfo.maritalStatus', section: 'About You',     label: 'Marital Status',       fieldPath: 'personalInfo.maritalStatus' },
+  'personalInfo.citizenship':   { variable: 'personalInfo.citizenship',   section: 'About You',     label: 'Citizenship',          fieldPath: 'personalInfo.citizenship' },
+  'personalInfo.occupation':    { variable: 'personalInfo.occupation',    section: 'About You',     label: 'Occupation',           fieldPath: 'personalInfo.occupation' },
+  'personalInfo.employer':      { variable: 'personalInfo.employer',      section: 'About You',     label: 'Employer',             fieldPath: 'personalInfo.employer' },
+
+  // ------ Section: Your Spouse ------
+  'spouseInfo':                 { variable: 'spouseInfo',                 section: 'Your Spouse',   label: 'Spouse Information',   fieldPath: 'spouseInfo' },
+  'spouseInfo.firstName':       { variable: 'spouseInfo.firstName',       section: 'Your Spouse',   label: 'Spouse First Name',    fieldPath: 'spouseInfo.firstName' },
+  'spouseInfo.middleName':      { variable: 'spouseInfo.middleName',      section: 'Your Spouse',   label: 'Spouse Middle Name',   fieldPath: 'spouseInfo.middleName' },
+  'spouseInfo.lastName':        { variable: 'spouseInfo.lastName',        section: 'Your Spouse',   label: 'Spouse Last Name',     fieldPath: 'spouseInfo.lastName' },
+  'spouseInfo.dob':             { variable: 'spouseInfo.dob',             section: 'Your Spouse',   label: 'Spouse Date of Birth', fieldPath: 'spouseInfo.dob' },
+  'spouseInfo.email':           { variable: 'spouseInfo.email',           section: 'Your Spouse',   label: 'Spouse Email',         fieldPath: 'spouseInfo.email' },
+  'spouseInfo.phone':           { variable: 'spouseInfo.phone',           section: 'Your Spouse',   label: 'Spouse Phone',         fieldPath: 'spouseInfo.phone' },
+
+  // ------ Section: Children & Dependents ------
+  'children':                   { variable: 'children',                   section: 'Children',      label: 'Children List',        fieldPath: 'children' },
+  'hasChildren':                { variable: 'hasChildren',                section: 'Children',      label: 'Has Children',         fieldPath: 'hasChildren' },
+  'hasOtherDependents':         { variable: 'hasOtherDependents',         section: 'Children',      label: 'Has Other Dependents', fieldPath: 'hasOtherDependents' },
+  'otherDependents':            { variable: 'otherDependents',            section: 'Children',      label: 'Other Dependents',     fieldPath: 'otherDependents' },
+  'guardianPrimary':            { variable: 'guardianPrimary',            section: 'Children',      label: 'Primary Guardian',     fieldPath: 'guardianPrimary' },
+  'guardianPrimary.name':       { variable: 'guardianPrimary.name',       section: 'Children',      label: 'Primary Guardian Name', fieldPath: 'guardianPrimary.name' },
+  'guardianAlternate':          { variable: 'guardianAlternate',          section: 'Children',      label: 'Alternate Guardian',   fieldPath: 'guardianAlternate' },
+  'guardianAlternate.name':     { variable: 'guardianAlternate.name',     section: 'Children',      label: 'Alternate Guardian Name', fieldPath: 'guardianAlternate.name' },
+
+  // ------ Section: Fiduciaries ------
+  'fiduciaries':                                        { variable: 'fiduciaries',                                        section: 'Fiduciaries', label: 'Fiduciaries',                  fieldPath: 'fiduciaries' },
+  'fiduciaries.powerOfAttorney.agent':                  { variable: 'fiduciaries.powerOfAttorney.agent',                  section: 'Fiduciaries', label: 'POA Primary Agent',            fieldPath: 'fiduciaries.powerOfAttorney.agent' },
+  'fiduciaries.powerOfAttorney.agent.address':          { variable: 'fiduciaries.powerOfAttorney.agent.address',          section: 'Fiduciaries', label: 'POA Agent Address',            fieldPath: 'fiduciaries.powerOfAttorney.agent.address' },
+  'fiduciaries.powerOfAttorney.agent.city':             { variable: 'fiduciaries.powerOfAttorney.agent.city',             section: 'Fiduciaries', label: 'POA Agent City',               fieldPath: 'fiduciaries.powerOfAttorney.agent.city' },
+  'fiduciaries.powerOfAttorney.agent.state':            { variable: 'fiduciaries.powerOfAttorney.agent.state',            section: 'Fiduciaries', label: 'POA Agent State',              fieldPath: 'fiduciaries.powerOfAttorney.agent.state' },
+  'fiduciaries.powerOfAttorney.agent.zip':              { variable: 'fiduciaries.powerOfAttorney.agent.zip',              section: 'Fiduciaries', label: 'POA Agent ZIP',                fieldPath: 'fiduciaries.powerOfAttorney.agent.zip' },
+  'fiduciaries.powerOfAttorney.agent.relationship':     { variable: 'fiduciaries.powerOfAttorney.agent.relationship',     section: 'Fiduciaries', label: 'POA Agent Relationship',       fieldPath: 'fiduciaries.powerOfAttorney.agent.relationship' },
+  'fiduciaries.powerOfAttorney.alternateAgent':         { variable: 'fiduciaries.powerOfAttorney.alternateAgent',         section: 'Fiduciaries', label: 'POA Alternate Agent',          fieldPath: 'fiduciaries.powerOfAttorney.alternateAgent' },
+  'fiduciaries.powerOfAttorney.alternateAgent.relationship': { variable: 'fiduciaries.powerOfAttorney.alternateAgent.relationship', section: 'Fiduciaries', label: 'POA Alternate Agent Relationship', fieldPath: 'fiduciaries.powerOfAttorney.alternateAgent.relationship' },
+  'fiduciaries.powerOfAttorney.successorAgent':         { variable: 'fiduciaries.powerOfAttorney.successorAgent',         section: 'Fiduciaries', label: 'POA Successor Agent',          fieldPath: 'fiduciaries.powerOfAttorney.successorAgent' },
+  'fiduciaries.powerOfAttorney.successorAgent.relationship': { variable: 'fiduciaries.powerOfAttorney.successorAgent.relationship', section: 'Fiduciaries', label: 'POA Successor Agent Relationship', fieldPath: 'fiduciaries.powerOfAttorney.successorAgent.relationship' },
+  'fiduciaries.powerOfAttorney.effectiveDate':          { variable: 'fiduciaries.powerOfAttorney.effectiveDate',          section: 'Fiduciaries', label: 'POA Effective Date',           fieldPath: 'fiduciaries.powerOfAttorney.effectiveDate' },
+  'fiduciaries.powerOfAttorney.giftingPower':           { variable: 'fiduciaries.powerOfAttorney.giftingPower',           section: 'Fiduciaries', label: 'POA Gifting Power',            fieldPath: 'fiduciaries.powerOfAttorney.giftingPower' },
+  'fiduciaries.powerOfAttorney.selfDealingPower':       { variable: 'fiduciaries.powerOfAttorney.selfDealingPower',       section: 'Fiduciaries', label: 'POA Self-Dealing Power',       fieldPath: 'fiduciaries.powerOfAttorney.selfDealingPower' },
+  'fiduciaries.powerOfAttorney.limitations':            { variable: 'fiduciaries.powerOfAttorney.limitations',            section: 'Fiduciaries', label: 'POA Limitations',              fieldPath: 'fiduciaries.powerOfAttorney.limitations' },
+  'fiduciaries.executor.primary':                       { variable: 'fiduciaries.executor.primary',                       section: 'Fiduciaries', label: 'Primary Executor',             fieldPath: 'fiduciaries.executor.primary' },
+  'fiduciaries.executor.alternate':                     { variable: 'fiduciaries.executor.alternate',                     section: 'Fiduciaries', label: 'Alternate Executor',           fieldPath: 'fiduciaries.executor.alternate' },
+  'fiduciaries.trustee.primary':                        { variable: 'fiduciaries.trustee.primary',                        section: 'Fiduciaries', label: 'Primary Trustee',              fieldPath: 'fiduciaries.trustee.primary' },
+  'fiduciaries.trustee.alternate':                      { variable: 'fiduciaries.trustee.alternate',                      section: 'Fiduciaries', label: 'Alternate Trustee',            fieldPath: 'fiduciaries.trustee.alternate' },
+  'fiduciaries.guardian.primary':                       { variable: 'fiduciaries.guardian.primary',                       section: 'Fiduciaries', label: 'Primary Guardian (Fiduciary)', fieldPath: 'fiduciaries.guardian.primary' },
+  'fiduciaries.guardian.alternate':                     { variable: 'fiduciaries.guardian.alternate',                     section: 'Fiduciaries', label: 'Alternate Guardian (Fiduciary)', fieldPath: 'fiduciaries.guardian.alternate' },
+  'fiduciaries.healthcareProxy.primary':                { variable: 'fiduciaries.healthcareProxy.primary',                section: 'Fiduciaries', label: 'Primary Healthcare Proxy',     fieldPath: 'fiduciaries.healthcareProxy.primary' },
+  'fiduciaries.healthcareProxy.alternate':              { variable: 'fiduciaries.healthcareProxy.alternate',              section: 'Fiduciaries', label: 'Alternate Healthcare Proxy',   fieldPath: 'fiduciaries.healthcareProxy.alternate' },
+
+  // ------ Section: Assets ------
+  'assets':                     { variable: 'assets',                     section: 'Assets',        label: 'Assets Overview',      fieldPath: 'assets' },
+  'assets.realEstate':          { variable: 'assets.realEstate',          section: 'Assets',        label: 'Real Estate',          fieldPath: 'assets.realEstate' },
+  'assets.bankAccounts':        { variable: 'assets.bankAccounts',        section: 'Assets',        label: 'Bank Accounts',        fieldPath: 'assets.bankAccounts' },
+  'assets.investmentAccounts':  { variable: 'assets.investmentAccounts',  section: 'Assets',        label: 'Investment Accounts',  fieldPath: 'assets.investmentAccounts' },
+  'assets.retirementAccounts':  { variable: 'assets.retirementAccounts',  section: 'Assets',        label: 'Retirement Accounts',  fieldPath: 'assets.retirementAccounts' },
+  'assets.lifeInsurance':       { variable: 'assets.lifeInsurance',       section: 'Assets',        label: 'Life Insurance',       fieldPath: 'assets.lifeInsurance' },
+  'assets.businessInterests':   { variable: 'assets.businessInterests',   section: 'Assets',        label: 'Business Interests',   fieldPath: 'assets.businessInterests' },
+  'assets.personalProperty':    { variable: 'assets.personalProperty',    section: 'Assets',        label: 'Personal Property',    fieldPath: 'assets.personalProperty' },
+  'liabilities':                { variable: 'liabilities',                section: 'Assets',        label: 'Liabilities',          fieldPath: 'liabilities' },
+
+  // ------ Section: Distribution ------
+  'distribution':               { variable: 'distribution',               section: 'Distribution',  label: 'Distribution Plan',    fieldPath: 'distribution' },
+  'distributionPlan':           { variable: 'distributionPlan',           section: 'Distribution',  label: 'Distribution Plan Text', fieldPath: 'distributionPlan' },
+
+  // ------ Section: Healthcare Preferences ------
+  'healthcarePreferences':      { variable: 'healthcarePreferences',      section: 'Healthcare',    label: 'Healthcare Preferences', fieldPath: 'healthcarePreferences' },
+  'burialPreference':           { variable: 'burialPreference',           section: 'Healthcare',    label: 'Burial Preference',    fieldPath: 'burialPreference' },
+  'burialDetails':              { variable: 'burialDetails',              section: 'Healthcare',    label: 'Burial Details',       fieldPath: 'burialDetails' },
+
+  // ------ Section: Trusts ------
+  'trusts':                     { variable: 'trusts',                     section: 'Trusts',        label: 'Trust Information',    fieldPath: 'trusts' },
+
+  // ------ Section: Special Considerations ------
+  'specialConsiderations':      { variable: 'specialConsiderations',      section: 'Special Considerations', label: 'Special Considerations', fieldPath: 'specialConsiderations' },
+
+  // ------ Section: Package Details ------
+  'packageDetails':             { variable: 'packageDetails',             section: 'Package',       label: 'Package Details',      fieldPath: 'packageDetails' },
+
+  // ------ Computed fields (auto-derived, not direct questionnaire input) ------
+  'clientFullName':             { variable: 'clientFullName',             section: 'computed',      label: 'Client Full Name (auto)',        fieldPath: 'computed' },
+  'spouseFullName':             { variable: 'spouseFullName',             section: 'computed',      label: 'Spouse Full Name (auto)',        fieldPath: 'computed' },
+  'hasSpouse':                  { variable: 'hasSpouse',                  section: 'computed',      label: 'Has Spouse (auto)',              fieldPath: 'computed' },
+  'hasMinorChildren':           { variable: 'hasMinorChildren',           section: 'computed',      label: 'Has Minor Children (auto)',      fieldPath: 'computed' },
+  'hasSpecialNeedsChild':       { variable: 'hasSpecialNeedsChild',       section: 'computed',      label: 'Has Special Needs Child (auto)', fieldPath: 'computed' },
+  'childCount':                 { variable: 'childCount',                 section: 'computed',      label: 'Number of Children (auto)',      fieldPath: 'computed' },
+  'minorChildren':              { variable: 'minorChildren',              section: 'computed',      label: 'Minor Children List (auto)',     fieldPath: 'computed' },
+  'adultChildren':              { variable: 'adultChildren',              section: 'computed',      label: 'Adult Children List (auto)',     fieldPath: 'computed' },
+  'propertyCount':              { variable: 'propertyCount',              section: 'computed',      label: 'Property Count (auto)',          fieldPath: 'computed' },
+  'propertiesForTrust':         { variable: 'propertiesForTrust',         section: 'computed',      label: 'Properties for Trust (auto)',    fieldPath: 'computed' },
+  'estimatedTotalAssets':       { variable: 'estimatedTotalAssets',       section: 'computed',      label: 'Estimated Total Assets (auto)',  fieldPath: 'computed' },
+  'primaryTrustName':           { variable: 'primaryTrustName',           section: 'computed',      label: 'Primary Trust Name (auto)',      fieldPath: 'computed' },
+  'todayFormatted':             { variable: 'todayFormatted',             section: 'computed',      label: "Today's Date (auto)",            fieldPath: 'computed' },
+  'todayISO':                   { variable: 'todayISO',                   section: 'computed',      label: "Today's Date ISO (auto)",        fieldPath: 'computed' },
+  'packageType':                { variable: 'packageType',                section: 'computed',      label: 'Package Type (auto)',             fieldPath: 'computed' },
+  'packageLabel':               { variable: 'packageLabel',               section: 'computed',      label: 'Package Label (auto)',            fieldPath: 'computed' },
+  'isFemale':                   { variable: 'isFemale',                   section: 'computed',      label: 'Is Female (auto)',               fieldPath: 'computed' },
+
+  // ------ Firm data (from firm profile, not questionnaire) ------
+  'firm':                       { variable: 'firm',                       section: 'Firm',          label: 'Firm Data',            fieldPath: 'firm' },
+  'firmName':                   { variable: 'firmName',                   section: 'Firm',          label: 'Firm Name',            fieldPath: 'firm' },
+  'firmAddress':                { variable: 'firmAddress',                section: 'Firm',          label: 'Firm Address',         fieldPath: 'firm' },
+  'firmPhone':                  { variable: 'firmPhone',                  section: 'Firm',          label: 'Firm Phone',           fieldPath: 'firm' },
+  'firmEmail':                  { variable: 'firmEmail',                  section: 'Firm',          label: 'Firm Email',           fieldPath: 'firm' },
+  'firmWebsite':                { variable: 'firmWebsite',                section: 'Firm',          label: 'Firm Website',         fieldPath: 'firm' },
+  'barNumber':                  { variable: 'barNumber',                  section: 'Firm',          label: 'Bar Number',           fieldPath: 'firm' },
+  'notesSummary':               { variable: 'notesSummary',               section: 'Notes',         label: 'Notes Summary (auto)', fieldPath: 'notes' },
+};
+
+// ---------------------------------------------------------------------------
+// Template data validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that a client context has data for all the variables a template requires.
+ *
+ * @param variables - Array of variable paths extracted from a template
+ * @param ctx       - The client context to validate against
+ * @returns ValidationResult with missing and available fields
+ */
+export function validateTemplateData(
+  variables: string[],
+  ctx: ClientContext,
+): ValidationResult {
+  const templateData = buildTemplateData(ctx);
+  const missing: ValidationResult['missing'] = [];
+  const available: ValidationResult['available'] = [];
+
+  for (const variable of variables) {
+    const mapping = VARIABLE_TO_QUESTIONNAIRE_MAP[variable];
+    const label = mapping?.label ?? variable;
+    const section = mapping?.section ?? 'unknown';
+
+    // Resolve the value using dot-path traversal
+    const value = resolveDotPath(templateData, variable);
+
+    if (value === undefined || value === null || value === '') {
+      missing.push({ variable, label, section });
+    } else {
+      available.push({ variable, label, value });
+    }
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing,
+    available,
+  };
+}
+
+/**
+ * Resolve a dot-separated path against an object.
+ * e.g. resolveDotPath(obj, 'fiduciaries.powerOfAttorney.agent') → obj.fiduciaries.powerOfAttorney.agent
+ */
+function resolveDotPath(obj: Record<string, any>, path: string): any {
+  const parts = path.split('.');
+  let current: any = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = current[part];
+  }
+  return current;
+}
 
 // ---------------------------------------------------------------------------
 // Register custom Handlebars helpers
@@ -218,18 +553,11 @@ export async function listTemplateVariants(
 // ---------------------------------------------------------------------------
 
 /**
- * Render a Handlebars template with full client context.
+ * Build the flat template data object from a ClientContext.
+ * Extracted so it can be reused by both renderTemplate and validateTemplateData.
  */
-export function renderTemplate(
-  templateContent: string,
-  ctx: ClientContext,
-): string {
-  ensureHelpers();
-
-  const compiled = Handlebars.compile(templateContent);
-
-  // Build a flat-ish context for Handlebars
-  const templateData = {
+export function buildTemplateData(ctx: ClientContext): Record<string, any> {
+  return {
     // Client data (full)
     client: ctx.client,
     personalInfo: ctx.client.personalInfo ?? {},
@@ -243,6 +571,17 @@ export function renderTemplate(
     trusts: ctx.client.trusts ?? [],
     specialConsiderations: ctx.client.specialConsiderations ?? {},
     packageDetails: ctx.client.packageDetails ?? {},
+
+    // Questionnaire-only fields (not always on the client doc directly)
+    hasChildren: ctx.client.hasChildren ?? (ctx.client.children?.length > 0),
+    hasOtherDependents: ctx.client.hasOtherDependents ?? false,
+    otherDependents: ctx.client.otherDependents ?? [],
+    guardianPrimary: ctx.client.guardianPrimary ?? ctx.client.fiduciaries?.guardian?.primary ?? {},
+    guardianAlternate: ctx.client.guardianAlternate ?? ctx.client.fiduciaries?.guardian?.alternate ?? {},
+    distributionPlan: ctx.client.distributionPlan ?? '',
+    burialPreference: ctx.client.burialPreference ?? '',
+    burialDetails: ctx.client.burialDetails ?? '',
+    isFemale: ctx.client.isFemale,
 
     // Computed
     ...ctx.computed,
@@ -262,6 +601,19 @@ export function renderTemplate(
       .map((n) => `[${n.noteType}] ${n.title ?? ''}: ${(n.content ?? '').slice(0, 200)}`)
       .join('\n'),
   };
+}
+
+/**
+ * Render a Handlebars template with full client context.
+ */
+export function renderTemplate(
+  templateContent: string,
+  ctx: ClientContext,
+): string {
+  ensureHelpers();
+
+  const compiled = Handlebars.compile(templateContent);
+  const templateData = buildTemplateData(ctx);
 
   return compiled(templateData);
 }
