@@ -24,6 +24,7 @@ import {
   Database,
   Sparkles,
   FileJson,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -78,6 +79,7 @@ export default function KnowledgeBasePage() {
   const [activeTab, setActiveTab] = useState<'resources' | 'templates'>('resources');
   const [activeCategory, setActiveCategory] = useState<KnowledgeCategory | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
 
   // Data
   const [resources, setResources] = useState<KnowledgeResource[]>([]);
@@ -99,7 +101,7 @@ export default function KnowledgeBasePage() {
     setLoading(true);
     try {
       const cat = activeCategory === 'all' ? undefined : activeCategory;
-      const result = await knowledgeBaseService.searchResources({ firmId, category: cat });
+      const result = await knowledgeBaseService.searchResources({ firmId, category: cat, activeOnly: !showDeleted });
       setResources(result.resources);
     } catch {
       console.error('Failed to fetch resources');
@@ -107,7 +109,7 @@ export default function KnowledgeBasePage() {
     } finally {
       setLoading(false);
     }
-  }, [firmId, activeCategory]);
+  }, [firmId, activeCategory, showDeleted]);
 
   const fetchTemplates = useCallback(async () => {
     if (!firmId) return;
@@ -152,6 +154,17 @@ export default function KnowledgeBasePage() {
       fetchResources();
     } catch {
       toast.error('Failed to delete resource.');
+    }
+  };
+
+  const handleRestoreResource = async (id: string) => {
+    if (!firmId) return;
+    try {
+      await knowledgeBaseService.updateResource({ firmId, resourceId: id, isActive: true });
+      toast.success('Resource restored.');
+      fetchResources();
+    } catch {
+      toast.error('Failed to restore resource.');
     }
   };
 
@@ -342,6 +355,17 @@ export default function KnowledgeBasePage() {
                 {cat.label}
               </button>
             ))}
+            <button
+              onClick={() => setShowDeleted(!showDeleted)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                showDeleted
+                  ? 'bg-red-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Trash2 className="inline mr-1 h-3 w-3" />
+              Deleted
+            </button>
           </div>
         )}
       </div>
@@ -434,30 +458,44 @@ export default function KnowledgeBasePage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => handleConvertToTemplate(r)}
-                      className="rounded p-1.5 text-gray-400 hover:bg-blue-50 hover:text-[#2b6cb0] transition-colors"
-                      title="Use as Template"
-                      disabled={convertingId === r.id}
-                    >
-                      {convertingId === r.id
-                        ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#2b6cb0] border-t-transparent" />
-                        : <Layers className="h-4 w-4" />}
-                    </button>
-                    <button
-                      onClick={() => setEditingResource(r)}
-                      className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                      title="Edit"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteResource(r.id)}
-                      className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                      title="Remove"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {showDeleted ? (
+                      <>
+                        <button
+                          onClick={() => handleRestoreResource(r.id)}
+                          className="rounded p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                          title="Restore"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleConvertToTemplate(r)}
+                          className="rounded p-1.5 text-gray-400 hover:bg-blue-50 hover:text-[#2b6cb0] transition-colors"
+                          title="Use as Template"
+                          disabled={convertingId === r.id}
+                        >
+                          {convertingId === r.id
+                            ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#2b6cb0] border-t-transparent" />
+                            : <Layers className="h-4 w-4" />}
+                        </button>
+                        <button
+                          onClick={() => setEditingResource(r)}
+                          className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                          title="Edit"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteResource(r.id)}
+                          className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                          title="Remove"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );
