@@ -186,7 +186,7 @@ export function GlobalAiWidget() {
         },
         history: historyCtx,
         mode,
-        draftDocType: mode === 'draft' ? draftDocType : undefined,
+        ...(mode === 'draft' ? { draftDocType } : {}),
         conversationId,
       });
 

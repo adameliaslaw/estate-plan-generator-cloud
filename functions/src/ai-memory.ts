@@ -27,10 +27,10 @@ export interface ConversationMessage {
 export interface Conversation {
   id: string;
   firmId: string;
-  clientId?: string;
+  clientId: string | null;
   userId: string;
   mode: 'chat' | 'draft';
-  draftDocType?: string;
+  draftDocType: string | null;
   title: string;
   lastMessage: string;
   messages: ConversationMessage[];
@@ -124,10 +124,10 @@ export async function saveConversation(
     const data: Conversation = {
       id: ref.id,
       firmId,
-      clientId,
+      clientId: clientId ?? null,
       userId,
       mode,
-      draftDocType,
+      draftDocType: draftDocType ?? null,
       title,
       lastMessage,
       messages,
