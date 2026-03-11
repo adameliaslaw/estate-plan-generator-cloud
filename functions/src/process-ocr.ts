@@ -4,6 +4,7 @@ import { OpenAI } from 'openai';
 
 
 export const processQuestionnaireScan = functions
+    .region('us-east1')
     .runWith({
         timeoutSeconds: 300,
         memory: '1GB',
@@ -99,10 +100,10 @@ Schema:
 
             const jsonStr = response.choices[0]?.message?.content?.trim() || '{}';
 
-            let extractedData: Record<string, any>;
+            let extractedData: Record<string, unknown>;
             try {
                 extractedData = JSON.parse(jsonStr);
-            } catch (err) {
+            } catch {
                 throw new functions.https.HttpsError('internal', 'Failed to parse JSON from OpenAI.');
             }
 
@@ -112,8 +113,9 @@ Schema:
 
             return { success: true, extractedData };
 
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to process OCR.';
             console.error('OCR Error:', err);
-            throw new functions.https.HttpsError('internal', err.message || 'Failed to process OCR.');
+            throw new functions.https.HttpsError('internal', message);
         }
     });
