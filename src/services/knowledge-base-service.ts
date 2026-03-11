@@ -33,7 +33,9 @@ export interface KnowledgeResource {
   isActive: boolean;
   source?: string;
   sourceUrl?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createdAt: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updatedAt: any;
 }
 
@@ -52,6 +54,7 @@ export interface TemplateVariant {
   isDefault: boolean;
   contentPreview: string;
   variables: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updatedAt: any;
 }
 
@@ -138,6 +141,7 @@ export const knowledgeBaseService = {
   }> {
     const fn = httpsCallable(functions, 'analyzeKnowledgeContent', { timeout: 30000 });
     const res = await fn({ text });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = res.data as { suggestion: any };
     return data.suggestion;
   },

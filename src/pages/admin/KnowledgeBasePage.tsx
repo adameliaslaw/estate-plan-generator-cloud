@@ -620,6 +620,7 @@ function AddResourceDialog({
           <div>
             <label className="text-xs font-medium text-gray-700">Category</label>
             <select
+              title="Category"
               value={category}
               onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
@@ -1019,6 +1020,8 @@ function AddTemplateDialog({
               onDragLeave={() => setDragActive(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
+              role="button"
+              aria-label="Drop a file or click to upload"
               className={`rounded-xl border-2 border-dashed py-10 text-center cursor-pointer transition-colors ${
                 dragActive
                   ? 'border-[#2b6cb0] bg-blue-50'
