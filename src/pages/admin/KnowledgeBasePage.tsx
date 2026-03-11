@@ -1374,9 +1374,11 @@ function BulkImportDialog({
   const allUploaded = uploading && selectedFiles.length > 0 &&
     selectedFiles.every((_, i) => (fileProgress[i] ?? 0) >= 100);
 
-  if (allUploaded && !processing) {
-    setProcessing(true);
-  }
+  useEffect(() => {
+    if (allUploaded && !processing) {
+      setProcessing(true);
+    }
+  }, [allUploaded, processing]);
 
   // ── JSON handlers ──
   const handleParse = () => {
@@ -1490,7 +1492,7 @@ function BulkImportDialog({
                 title="Upload knowledge base files"
                 aria-label="Upload knowledge base files"
                 className="hidden"
-                onChange={(e) => handleFileSelect(e.target.files)}
+                onChange={(e) => { handleFileSelect(e.target.files); e.target.value = ''; }}
               />
 
               {/* Selected files list */}
