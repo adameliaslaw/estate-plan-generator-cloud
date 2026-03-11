@@ -177,6 +177,41 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  const handleConvertToTemplate = async (resource: KnowledgeResource) => {
+    if (!firmId) return;
+    setConvertingId(resource.id);
+    try {
+      const docType = resource.docTypes?.[0] || 'will';
+      const htmlContent = resource.content
+        .split('\n\n')
+        .filter((p) => p.trim())
+        .map((para) => `<p>${para.replace(/\n/g, '<br/>')}</p>`)
+        .join('\n');
+
+      await templateService.uploadTemplate({
+        firmId,
+        docType,
+        name: resource.title,
+        description: `Converted from Knowledge Base resource: ${resource.title}`,
+        variant: 'standard',
+        complexity: 2,
+        content: htmlContent,
+        isDefault: false,
+        variables: [],
+      });
+
+      toast.success(`"${resource.title}" added to Templates as ${docType}.`);
+      fetchTemplates();
+    } catch (err) {
+      console.error('Convert to template failed:', err);
+      toast.error('Failed to convert resource to template.');
+    } finally {
+      setConvertingId(null);
+    }
+  };
+
   const handleSeedKnowledgeBase = async () => {
     if (!firmId) return;
     setSeeding(true);
@@ -399,6 +434,16 @@ export default function KnowledgeBasePage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => handleConvertToTemplate(r)}
+                      className="rounded p-1.5 text-gray-400 hover:bg-blue-50 hover:text-[#2b6cb0] transition-colors"
+                      title="Use as Template"
+                      disabled={convertingId === r.id}
+                    >
+                      {convertingId === r.id
+                        ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#2b6cb0] border-t-transparent" />
+                        : <Layers className="h-4 w-4" />}
+                    </button>
                     <button
                       onClick={() => setEditingResource(r)}
                       className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
