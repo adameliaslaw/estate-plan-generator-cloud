@@ -69,7 +69,7 @@ export function AudioRecorderModal({
     defaultClientId,
     clients = [],
     isSaving = false,
-    onAddClient: _onAddClient,
+    onAddClient,
 }: AudioRecorderModalProps) {
     const [title, setTitle] = useState('');
     const [noteType, setNoteType] = useState<NoteType>('general');
@@ -241,12 +241,29 @@ export function AudioRecorderModal({
                                             className="w-full text-left px-3 py-2 text-sm border-t border-gray-100 text-[#2b6cb0] font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
                                         >
                                             <UserPlus className="h-3.5 w-3.5" />
-                                            Create "{clientSearch.trim()}"
+                                            Create &quot;{clientSearch.trim()}&quot;
                                         </button>
                                     )}
+                                    {/* Always-visible Add New Client option */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (clientSearch.trim() && !exactMatch) {
+                                                // If they've typed a name, create inline
+                                                handleCreateAndSelect();
+                                            } else if (onAddClient) {
+                                                // Navigate to full client creation page
+                                                onAddClient();
+                                            }
+                                        }}
+                                        className="w-full text-left px-3 py-2.5 text-sm border-t border-gray-100 text-[#1a365d] font-semibold hover:bg-[#ebf4ff] transition-colors flex items-center gap-2"
+                                    >
+                                        <UserPlus className="h-4 w-4 text-[#2b6cb0]" />
+                                        + Add New Client
+                                    </button>
                                     {!filteredClients.length && !clientSearch.trim() && (
-                                        <div className="px-3 py-4 text-center text-sm text-gray-400">
-                                            No clients yet. Type a name to create one.
+                                        <div className="px-3 py-2 text-center text-xs text-gray-400">
+                                            Or type a name above to create one quickly.
                                         </div>
                                     )}
                                 </div>
