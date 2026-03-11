@@ -108,6 +108,39 @@ export const knowledgeBaseService = {
     const res = await fn(data);
     return res.data as { resources: KnowledgeResource[]; count: number };
   },
+
+  async seedKnowledgeBase(firmId: string): Promise<{ inserted: number; skipped: number; total: number }> {
+    const fn = httpsCallable(functions, 'seedKnowledgeBase', { timeout: 120000 });
+    const res = await fn({ firmId });
+    return res.data as { inserted: number; skipped: number; total: number };
+  },
+
+  async bulkImportResources(firmId: string, resources: {
+    category: KnowledgeCategory;
+    title: string;
+    citation?: string;
+    content: string;
+    tags?: string[];
+    docTypes?: string[];
+  }[]): Promise<{ imported: number; errors: { index: number; reason: string }[]; total: number }> {
+    const fn = httpsCallable(functions, 'bulkImportKnowledgeResources', { timeout: 60000 });
+    const res = await fn({ firmId, resources });
+    return res.data as { imported: number; errors: { index: number; reason: string }[]; total: number };
+  },
+
+  async analyzeContent(text: string): Promise<{
+    title: string;
+    citation: string;
+    category: KnowledgeCategory;
+    tags: string[];
+    docTypes: string[];
+    content: string;
+  }> {
+    const fn = httpsCallable(functions, 'analyzeKnowledgeContent', { timeout: 30000 });
+    const res = await fn({ text });
+    const data = res.data as { suggestion: any };
+    return data.suggestion;
+  },
 };
 
 // ---------------------------------------------------------------------------

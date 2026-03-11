@@ -10,6 +10,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { callAI, parseAIJson } from './ai-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,5 +220,142 @@ export const searchKnowledgeResources = onCall(
     }
 
     return { success: true, resources: results, count: results.length };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// bulkImportKnowledgeResources
+// ---------------------------------------------------------------------------
+
+export const bulkImportKnowledgeResources = onCall(
+  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 60 },
+  async (request: any) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const { firmId, resources } = request.data;
+
+    if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
+    if (!Array.isArray(resources) || resources.length === 0) {
+      throw new HttpsError('invalid-argument', 'resources must be a non-empty array.');
+    }
+    if (resources.length > 200) {
+      throw new HttpsError('invalid-argument', 'Maximum 200 resources per import.');
+    }
+    assertFirmAccess(request.auth, firmId);
+
+    const db = admin.firestore();
+    const col = kbCollection(firmId);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    let batch = db.batch();
+    let batchCount = 0;
+    let imported = 0;
+    const errors: { index: number; reason: string }[] = [];
+
+    for (let i = 0; i < resources.length; i++) {
+      const r = resources[i];
+
+      // Validate required fields
+      if (!r.title || !r.content || !r.category) {
+        errors.push({ index: i, reason: 'title, content, and category are required.' });
+        continue;
+      }
+
+      const ref = col.doc();
+      batch.set(ref, {
+        id: ref.id,
+        firmId,
+        category: r.category,
+        title: r.title,
+        citation: r.citation ?? '',
+        content: r.content,
+        tags: r.tags ?? [],
+        docTypes: r.docTypes ?? [],
+        jurisdiction: r.jurisdiction ?? 'NJ',
+        isActive: true,
+        source: r.source ?? 'bulk-import',
+        sourceUrl: r.sourceUrl ?? '',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: request.auth.uid,
+        updatedBy: request.auth.uid,
+      });
+
+      imported++;
+      batchCount++;
+
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    console.log(`[bulkImportKnowledgeResources] Imported ${imported} resources for firm ${firmId}`);
+
+    return { success: true, imported, errors, total: resources.length };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// analyzeKnowledgeContent — AI-assisted resource metadata extraction
+// ---------------------------------------------------------------------------
+
+
+export const analyzeKnowledgeContent = onCall(
+  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30 },
+  async (request: any) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const { text } = request.data;
+
+    if (!text || typeof text !== 'string' || text.trim().length < 20) {
+      throw new HttpsError('invalid-argument', 'Please provide at least 20 characters of text to analyze.');
+    }
+
+    const systemPrompt = `You are a legal research assistant specializing in New Jersey estate planning law.
+Analyze the following text and extract structured metadata. Return a valid JSON object with these fields:
+{
+  "title": "concise descriptive title",
+  "citation": "legal citation if present (e.g., N.J.S.A. 3B:3-2), or empty string",
+  "category": one of "statute", "case_law", "cle_material", "checklist", "form_template", "practice_note", "custom",
+  "tags": ["array", "of", "relevant", "tags"],
+  "docTypes": ["array of applicable document types from: will, pourOverWill, poa, livingWill, trust, deed, affidavitOfConsideration, gitRep3, estatePlanSummary, actionSteps"],
+  "summary": "one paragraph summary of the content for the content field"
+}
+Respond with ONLY the JSON object, no markdown fences.`;
+
+    const userPrompt = `Analyze this text and extract metadata:\n\n${text.slice(0, 5000)}`;
+
+    // Use the firm's preferred AI provider or default
+    const raw = await callAI(systemPrompt, userPrompt, {}, {
+      model: 'gpt-4.1-mini',
+      temperature: 0.1,
+      maxTokens: 1024,
+      jsonMode: true,
+    });
+
+    const parsed = parseAIJson<{
+      title: string;
+      citation: string;
+      category: string;
+      tags: string[];
+      docTypes: string[];
+      summary: string;
+    }>(raw);
+
+    return {
+      success: true,
+      suggestion: {
+        title: parsed.title ?? '',
+        citation: parsed.citation ?? '',
+        category: parsed.category ?? 'custom',
+        tags: parsed.tags ?? [],
+        docTypes: parsed.docTypes ?? [],
+        content: parsed.summary ?? text.slice(0, 2000),
+      },
+    };
   },
 );

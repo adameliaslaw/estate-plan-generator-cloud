@@ -39,5 +39,6 @@ export { exchangeGoogleAuthCode } from './google-auth';
 export { linkClient } from './link-client';
 
 // Phase 7: Knowledge Base & Template Engine
-export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources } from './knowledge-base';
+export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources, bulkImportKnowledgeResources, analyzeKnowledgeContent } from './knowledge-base';
 export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';
+export { seedKnowledgeBase } from './seed-knowledge-base';

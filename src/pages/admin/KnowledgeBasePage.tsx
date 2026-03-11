@@ -21,6 +21,9 @@ import {
   Upload,
   Layers,
   Eye,
+  Database,
+  Sparkles,
+  FileJson,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -84,7 +87,9 @@ export default function KnowledgeBasePage() {
   // Dialogs
   const [showAddResource, setShowAddResource] = useState(false);
   const [showAddTemplate, setShowAddTemplate] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
+  const [seeding, setSeeding] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ content: string; name: string } | null>(null);
 
   // Fetch data
@@ -171,6 +176,21 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const handleSeedKnowledgeBase = async () => {
+    if (!firmId) return;
+    setSeeding(true);
+    try {
+      const result = await knowledgeBaseService.seedKnowledgeBase(firmId);
+      toast.success(`Seeded ${result.inserted} resources (${result.skipped} already existed).`);
+      fetchResources();
+    } catch (err) {
+      console.error('Failed to seed knowledge base:', err);
+      toast.error('Failed to seed knowledge base.');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6 md:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -186,12 +206,21 @@ export default function KnowledgeBasePage() {
         </div>
         <div className="flex gap-2">
           {activeTab === 'resources' ? (
-            <Button
-              onClick={() => setShowAddResource(true)}
-              className="bg-[#2b6cb0] hover:bg-[#1a365d] text-white"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Add Resource
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkImport(true)}
+                className="border-[#2b6cb0] text-[#2b6cb0] hover:bg-blue-50"
+              >
+                <FileJson className="mr-2 h-4 w-4" /> Bulk Import
+              </Button>
+              <Button
+                onClick={() => setShowAddResource(true)}
+                className="bg-[#2b6cb0] hover:bg-[#1a365d] text-white"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Add Resource
+              </Button>
+            </>
           ) : (
             <Button
               onClick={() => setShowAddTemplate(true)}
@@ -284,9 +313,19 @@ export default function KnowledgeBasePage() {
             <BookOpen className="mx-auto h-12 w-12 text-gray-300" />
             <p className="mt-3 text-sm font-medium text-gray-600">No resources found</p>
             <p className="mt-1 text-xs text-gray-400">Add statutes, case law, CLE materials, and more.</p>
-            <Button onClick={() => setShowAddResource(true)} className="mt-4 bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
-              <Plus className="mr-2 h-4 w-4" /> Add Resource
-            </Button>
+            <div className="mt-4 flex justify-center gap-3">
+              <Button
+                onClick={handleSeedKnowledgeBase}
+                disabled={seeding}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Database className="mr-2 h-4 w-4" />
+                {seeding ? 'Seeding...' : 'Seed with NJ Statutes'}
+              </Button>
+              <Button onClick={() => setShowAddResource(true)} className="bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
+                <Plus className="mr-2 h-4 w-4" /> Add Resource
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -432,6 +471,14 @@ export default function KnowledgeBasePage() {
         onSaved={() => { setShowAddTemplate(false); fetchTemplates(); }}
       />
 
+      {/* Bulk Import Dialog */}
+      <BulkImportDialog
+        open={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        firmId={firmId ?? ''}
+        onSaved={() => { setShowBulkImport(false); fetchResources(); }}
+      />
+
       {/* Template Preview Dialog */}
       {previewTemplate && (
         <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
@@ -479,6 +526,7 @@ function AddResourceDialog({
   const [docTypes, setDocTypes] = useState<string[]>(existing?.docTypes ?? []);
   const [source, setSource] = useState(existing?.source ?? '');
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     if (existing) {
@@ -593,7 +641,35 @@ function AddResourceDialog({
 
           {/* Content */}
           <div>
-            <label className="text-xs font-medium text-gray-700">Content *</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-gray-700">Content *</label>
+              {!existing && content.trim().length >= 20 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setAnalyzing(true);
+                    try {
+                      const suggestion = await knowledgeBaseService.analyzeContent(content);
+                      setTitle(suggestion.title || title);
+                      setCitation(suggestion.citation || citation);
+                      setCategory((suggestion.category as KnowledgeCategory) || category);
+                      setTags(suggestion.tags?.join(', ') || tags);
+                      setDocTypes(suggestion.docTypes || docTypes);
+                      toast.success('AI analysis complete — fields auto-filled.');
+                    } catch (err) {
+                      toast.error('AI analysis failed. Please fill fields manually.');
+                    } finally {
+                      setAnalyzing(false);
+                    }
+                  }}
+                  disabled={analyzing}
+                  className="flex items-center gap-1 rounded-md bg-purple-50 px-2.5 py-1 text-[11px] font-medium text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {analyzing ? 'Analyzing...' : 'AI Auto-Fill'}
+                </button>
+              )}
+            </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -837,6 +913,161 @@ function AddTemplateDialog({
           >
             {saving ? 'Uploading...' : 'Upload Template'}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Import Dialog
+// ---------------------------------------------------------------------------
+
+function BulkImportDialog({
+  open,
+  onClose,
+  firmId,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  firmId: string;
+  onSaved: () => void;
+}) {
+  const [jsonText, setJsonText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<{ category: string; title: string; content: string; citation?: string; tags?: string[]; docTypes?: string[] }[] | null>(null);
+  const [parseError, setParseError] = useState('');
+
+  const handleParse = () => {
+    setParseError('');
+    setPreview(null);
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) {
+        setParseError('Input must be a JSON array of objects.');
+        return;
+      }
+      if (parsed.length === 0) {
+        setParseError('Array is empty.');
+        return;
+      }
+      if (parsed.length > 200) {
+        setParseError('Maximum 200 resources per import.');
+        return;
+      }
+      const invalid = parsed.filter(
+        (r: { title?: string; content?: string; category?: string }) => !r.title || !r.content || !r.category,
+      );
+      if (invalid.length > 0) {
+        setParseError(
+          `${invalid.length} item(s) missing required fields (title, content, category).`,
+        );
+      }
+      setPreview(parsed);
+    } catch (e: unknown) {
+      setParseError(`Invalid JSON: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!preview || !firmId) return;
+    setImporting(true);
+    try {
+      const result = await knowledgeBaseService.bulkImportResources(firmId, preview as Parameters<typeof knowledgeBaseService.bulkImportResources>[1]);
+      toast.success(`Imported ${result.imported} of ${result.total} resources.`);
+      if (result.errors.length > 0) {
+        toast.warning(`${result.errors.length} item(s) had errors and were skipped.`);
+      }
+      setJsonText('');
+      setPreview(null);
+      onSaved();
+    } catch {
+      toast.error('Bulk import failed.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileJson className="h-5 w-5 text-[#2b6cb0]" />
+            Bulk Import Resources
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-4">
+          <div>
+            <label className="text-xs font-medium text-gray-700">
+              Paste JSON Array
+            </label>
+            <p className="mt-0.5 text-[10px] text-gray-400">
+              Each object needs: category, title, content. Optional: citation, tags[], docTypes[].
+            </p>
+            <textarea
+              value={jsonText}
+              onChange={(e) => {
+                setJsonText(e.target.value);
+                setPreview(null);
+                setParseError('');
+              }}
+              rows={12}
+              placeholder={'[\n  {\n    "category": "statute",\n    "title": "Example Statute",\n    "citation": "N.J.S.A. 1:2-3",\n    "content": "Full text of the statute...",\n    "tags": ["tag1", "tag2"],\n    "docTypes": ["will", "trust"]\n  }\n]'}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2b6cb0] focus:outline-none resize-y"
+            />
+          </div>
+
+          {parseError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+              {parseError}
+            </div>
+          )}
+
+          {preview && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <p className="text-sm font-medium text-emerald-800">
+                ✓ Parsed {preview.length} resource{preview.length === 1 ? '' : 's'} ready to import
+              </p>
+              <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
+                {preview.slice(0, 10).map((r, i) => (
+                  <p key={i} className="text-xs text-emerald-700 truncate">
+                    {i + 1}. [{r.category}] {r.title}
+                  </p>
+                ))}
+                {preview.length > 10 && (
+                  <p className="text-xs text-emerald-600 italic">
+                    ...and {preview.length - 10} more
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="mt-6">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          {!preview ? (
+            <Button
+              onClick={handleParse}
+              disabled={!jsonText.trim()}
+              className="bg-[#2b6cb0] hover:bg-[#1a365d] text-white"
+            >
+              Parse JSON
+            </Button>
+          ) : (
+            <Button
+              onClick={handleImport}
+              disabled={importing}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {importing ? 'Importing...' : `Import ${preview.length} Resource${preview.length === 1 ? '' : 's'}`}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
