@@ -155,6 +155,7 @@ export const knowledgeBaseService = {
     firmId: string,
     files: File[],
     onProgress?: (fileIndex: number, progress: number) => void,
+    ocrRanges?: Record<number, { start: number; end: number }>,
   ): Promise<{
     processed: number;
     failed: number;
@@ -172,7 +173,7 @@ export const knowledgeBaseService = {
     const { storage } = await import('@/config/firebase');
 
     // 1. Upload all files to Storage in parallel
-    const uploadResults: { storagePath: string; fileName: string }[] = [];
+    const uploadResults: { storagePath: string; fileName: string; ocrPageStart?: number; ocrPageEnd?: number }[] = [];
 
     const uploadPromises = files.map((file, index) => {
       return new Promise<void>((resolve, reject) => {
@@ -190,7 +191,12 @@ export const knowledgeBaseService = {
           },
           (error) => reject(error),
           () => {
-            uploadResults.push({ storagePath, fileName: file.name });
+            const range = ocrRanges?.[index];
+            uploadResults.push({
+              storagePath,
+              fileName: file.name,
+              ...(range ? { ocrPageStart: range.start, ocrPageEnd: range.end } : {}),
+            });
             resolve();
           },
         );
@@ -200,7 +206,7 @@ export const knowledgeBaseService = {
     await Promise.all(uploadPromises);
 
     // 2. Call Cloud Function to process all uploaded files
-    const fn = httpsCallable(functions, 'bulkProcessKnowledgeFiles', { timeout: 300000 });
+    const fn = httpsCallable(functions, 'bulkProcessKnowledgeFiles', { timeout: 540000 });
     const res = await fn({ firmId, files: uploadResults });
     return res.data as {
       processed: number;

@@ -23,6 +23,9 @@ import { callAI, callAIWithVision, parseAIJson } from './ai-client';
 interface FileInput {
   storagePath: string;
   fileName: string;
+  /** Optional OCR page range (1-indexed, inclusive). Max span = 150 pages. */
+  ocrPageStart?: number;
+  ocrPageEnd?: number;
 }
 
 interface ProcessedResult {
@@ -67,6 +70,8 @@ async function extractFileText(
   fileName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   firmData: Record<string, any>,
+  ocrPageStart?: number,
+  ocrPageEnd?: number,
 ): Promise<{ text: string; html: string; ocrPagesCount: number }> {
   const ext = fileName.toLowerCase().split('.').pop();
   let text = '';
@@ -92,14 +97,29 @@ async function extractFileText(
       // Likely a scanned PDF — OCR individual pages using getScreenshot + Gemini Vision
       console.log(`[bulkKnowledgeImport] "${fileName}" appears scanned (${Math.round(avgCharsPerPage)} chars/page avg). Running page-by-page OCR...`);
 
-      // Limit to first 50 pages to stay within Cloud Function timeout
-      const pagesToOcr = Math.min(pageCount, 50);
+      // Determine page range for OCR (user-specified or auto, max 150 pages)
+      const hasUserRange = ocrPageStart != null && ocrPageEnd != null;
+      const effectiveStart = hasUserRange ? Math.max(1, Math.min(ocrPageStart, pageCount)) : 1;
+      const effectiveEnd = hasUserRange ? Math.max(1, Math.min(ocrPageEnd, pageCount)) : Math.min(pageCount, 150);
+      const pagesToOcr = effectiveEnd - effectiveStart + 1;
+
+      if (pagesToOcr > 150) {
+        console.warn(`[bulkKnowledgeImport] OCR range ${effectiveStart}-${effectiveEnd} exceeds 150 pages, clamping.`);
+      }
+      const clampedEnd = Math.min(effectiveEnd, effectiveStart + 149);
+      const clampedCount = clampedEnd - effectiveStart + 1;
+
+      // Build page list for partial rendering
+      const pageList: number[] = [];
+      for (let p = effectiveStart; p <= clampedEnd; p++) pageList.push(p);
+
+      console.log(`[bulkKnowledgeImport] OCR pages ${effectiveStart}-${clampedEnd} (${clampedCount} pages) of "${fileName}"`);
       const ocrTexts: string[] = [];
 
       try {
-        // Render pages as PNG images using pdf-parse v2's getScreenshot
+        // Render specific pages as PNG images using pdf-parse v2's getScreenshot
         const screenshots = await parser.getScreenshot({
-          first: pagesToOcr,
+          partial: pageList,
           scale: 1.5,
           imageBuffer: true,
           imageDataUrl: false,
@@ -118,9 +138,9 @@ async function extractFileText(
               firmData,
             );
             ocrTexts.push(pageOcrText || '');
-            console.log(`[bulkKnowledgeImport] OCR page ${i + 1}/${pagesToOcr}: ${pageOcrText?.length || 0} chars`);
+            console.log(`[bulkKnowledgeImport] OCR page ${pageList[i]}/${clampedEnd}: ${pageOcrText?.length || 0} chars`);
           } catch (err) {
-            console.error(`[bulkKnowledgeImport] OCR failed for page ${i + 1} of "${fileName}":`, err);
+            console.error(`[bulkKnowledgeImport] OCR failed for page ${pageList[i]} of "${fileName}":`, err);
             ocrTexts.push('');
           }
         }
@@ -128,7 +148,7 @@ async function extractFileText(
         const ocrFullText = ocrTexts.join('\n\n');
         if (ocrFullText.length > text.length) {
           text = ocrFullText;
-          ocrPagesCount = pagesToOcr;
+          ocrPagesCount = clampedCount;
           console.log(`[bulkKnowledgeImport] Page-by-page OCR extracted ${ocrFullText.length} chars from ${pagesToOcr} pages of "${fileName}"`);
         }
       } catch (err) {
@@ -223,7 +243,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
 // ---------------------------------------------------------------------------
 
 export const bulkProcessKnowledgeFiles = onCall(
-  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 300 },
+  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 540 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -279,7 +299,7 @@ export const bulkProcessKnowledgeFiles = onCall(
         console.log(`[bulkKnowledgeImport] Downloaded "${file.fileName}" (${buffer.length} bytes)`);
 
         // 2. Extract text
-        const { text, html, ocrPagesCount } = await extractFileText(buffer, file.fileName, firmData);
+        const { text, html, ocrPagesCount } = await extractFileText(buffer, file.fileName, firmData, file.ocrPageStart, file.ocrPageEnd);
 
         if (!text.trim() && !html.trim()) {
           results.push({

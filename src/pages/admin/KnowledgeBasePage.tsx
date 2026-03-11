@@ -1307,6 +1307,9 @@ function BulkImportDialog({
     }[];
   } | null>(null);
 
+  // ── OCR page range state (per-file, keyed by file index) ──
+  const [ocrRanges, setOcrRanges] = useState<Record<number, { start: string; end: string }>>({}); 
+
   // ── JSON state ──
   const [jsonText, setJsonText] = useState('');
   const [importing, setImporting] = useState(false);
@@ -1351,12 +1354,23 @@ function BulkImportDialog({
     setUploadResults(null);
 
     try {
+      // Build validated OCR ranges from user input
+      const validRanges: Record<number, { start: number; end: number }> = {};
+      for (const [idx, range] of Object.entries(ocrRanges)) {
+        const s = parseInt(range.start, 10);
+        const e = parseInt(range.end, 10);
+        if (s > 0 && e > 0 && e >= s && (e - s + 1) <= 150) {
+          validRanges[Number(idx)] = { start: s, end: e };
+        }
+      }
+
       const result = await knowledgeBaseService.bulkUploadFiles(
         firmId,
         selectedFiles,
         (fileIndex, progress) => {
           setFileProgress((prev) => ({ ...prev, [fileIndex]: progress }));
         },
+        Object.keys(validRanges).length > 0 ? validRanges : undefined,
       );
 
       setUploading(false);
@@ -1503,11 +1517,19 @@ function BulkImportDialog({
               {/* Selected files list */}
               {selectedFiles.length > 0 && !uploadResults && (
                 <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                  {selectedFiles.map((file, i) => (
-                    <div key={`${file.name}-${i}`} className="flex items-center gap-3 px-3 py-2 text-sm">
-                      <FileText className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                      <span className="flex-1 truncate text-gray-700">{file.name}</span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{(file.size / 1024).toFixed(0)} KB</span>
+                {selectedFiles.map((file, i) => {
+                    const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                    const range = ocrRanges[i];
+                    const rangeSpan = range?.start && range?.end
+                      ? parseInt(range.end, 10) - parseInt(range.start, 10) + 1
+                      : 0;
+                    const rangeError = rangeSpan > 150;
+                    return (
+                    <div key={`${file.name}-${i}`} className="px-3 py-2">
+                      <div className="flex items-center gap-3 text-sm">
+                        <FileText className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                        <span className="flex-1 truncate text-gray-700">{file.name}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
                       {uploading ? (
                         <div className="w-16 flex-shrink-0">
                           <div className="h-1.5 w-full rounded-full bg-gray-200">
@@ -1526,8 +1548,41 @@ function BulkImportDialog({
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
+                      </div>
+                      {/* OCR page range inputs for PDFs */}
+                      {isPdf && !uploading && (
+                        <div className="mt-1.5 ml-7 flex items-center gap-2">
+                          <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">OCR pages:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="Start"
+                            value={range?.start ?? ''}
+                            onChange={(e) => setOcrRanges((prev) => ({ ...prev, [i]: { ...prev[i], start: e.target.value, end: prev[i]?.end ?? '' }})) }
+                            className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-600 placeholder:text-gray-300 focus:border-blue-400 focus:outline-none"
+                          />
+                          <span className="text-[10px] text-gray-400">–</span>
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="End"
+                            value={range?.end ?? ''}
+                            onChange={(e) => setOcrRanges((prev) => ({ ...prev, [i]: { ...prev[i], end: e.target.value, start: prev[i]?.start ?? '' }})) }
+                            className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-600 placeholder:text-gray-300 focus:border-blue-400 focus:outline-none"
+                          />
+                          {rangeSpan > 0 && (
+                            <span className={`text-[10px] font-medium ${rangeError ? 'text-red-500' : 'text-gray-400'}`}>
+                              {rangeSpan} pg{rangeSpan !== 1 ? 's' : ''}{rangeError ? ' (max 150)' : ''}
+                            </span>
+                          )}
+                          {!range?.start && !range?.end && (
+                            <span className="text-[10px] text-gray-400 italic">Leave blank for auto (first 150)</span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
