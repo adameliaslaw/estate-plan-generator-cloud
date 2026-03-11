@@ -53,6 +53,8 @@ export const uploadTemplate = onCall(
       isDefault,
       variables,
       templateId, // If provided, update existing
+      fileUrl,
+      originalFileName,
     } = request.data;
 
     if (!firmId || !docType || !name || !content) {
@@ -127,6 +129,7 @@ export const uploadTemplate = onCall(
         updatedAt: now,
         createdBy: request.auth.uid,
         updatedBy: request.auth.uid,
+        ...(fileUrl ? { fileUrl, originalFileName: originalFileName ?? '' } : {}),
       };
 
       await ref.set(template);

@@ -6,7 +6,7 @@
  * browsing, adding, editing, and deleting resources and templates.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BookOpen,
   Plus,
@@ -759,8 +759,16 @@ function AddResourceDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Upload Template Dialog
+// Upload Template Dialog (with File Upload + AI Variable Detection)
 // ---------------------------------------------------------------------------
+
+interface DetectedVariable {
+  originalText: string;
+  suggestedVariable: string;
+  fieldLabel: string;
+  confidence: string;
+  context: string;
+}
 
 function AddTemplateDialog({
   open,
@@ -773,6 +781,7 @@ function AddTemplateDialog({
   firmId: string;
   onSaved: () => void;
 }) {
+  // Form state
   const [docType, setDocType] = useState('will');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -781,6 +790,103 @@ function AddTemplateDialog({
   const [content, setContent] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // File upload state
+  const [uploadMode, setUploadMode] = useState<'file' | 'manual'>('file');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [detectedVars, setDetectedVars] = useState<DetectedVariable[]>([]);
+  const [fileUrl, setFileUrl] = useState('');
+  const [originalFileName, setOriginalFileName] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (file: File) => {
+    const ext = file.name.toLowerCase().split('.').pop();
+    if (!ext || !['docx', 'pdf'].includes(ext)) {
+      toast.error('Only .docx and .pdf files are supported.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) { // 20MB max
+      toast.error('File size must be under 20MB.');
+      return;
+    }
+    setSelectedFile(file);
+    setDetectedVars([]);
+    // Auto-set name from filename (without extension)
+    if (!name.trim()) {
+      const baseName = file.name.replace(/\.(docx|pdf)$/i, '').replace(/[_-]/g, ' ');
+      setName(baseName);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleUploadAndProcess = async () => {
+    if (!selectedFile || !firmId) return;
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // 1. Upload to Firebase Storage
+      const { ref: storageRef, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
+      const { storage } = await import('@/config/firebase');
+      const timestamp = Date.now();
+      const safeName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storagePath = `firms/${firmId}/templates/${timestamp}_${safeName}`;
+      const fileRef = storageRef(storage, storagePath);
+
+      const uploadTask = uploadBytesResumable(fileRef, selectedFile);
+
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            setUploadProgress(progress);
+          },
+          (error) => reject(error),
+          async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            setFileUrl(url);
+            setOriginalFileName(selectedFile.name);
+            resolve();
+          },
+        );
+      });
+
+      setUploading(false);
+      setProcessing(true);
+
+      // 2. Process the file (extract text + AI variable detection)
+      const result = await templateService.processTemplateFile(firmId, storagePath, selectedFile.name);
+
+      // Apply AI suggestions
+      setContent(result.extractedHtml || '');
+      if (result.suggestedDocType) setDocType(result.suggestedDocType);
+      if (result.documentSummary) setDescription(result.documentSummary);
+      if (result.detectedVariables?.length > 0) {
+        setDetectedVars(result.detectedVariables);
+      }
+
+      toast.success(`File processed — ${result.detectedVariables?.length || 0} variables detected.`);
+    } catch (err) {
+      console.error('File upload/process error:', err);
+      toast.error('Failed to process template file.');
+    } finally {
+      setUploading(false);
+      setProcessing(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim() || !content.trim()) {
@@ -798,6 +904,8 @@ function AddTemplateDialog({
         complexity,
         content: content.trim(),
         isDefault,
+        variables: detectedVars.map((v) => v.suggestedVariable),
+        ...(fileUrl ? { fileUrl, originalFileName } : {}),
       });
       toast.success('Template uploaded successfully.');
       // Reset form
@@ -807,17 +915,30 @@ function AddTemplateDialog({
       setVariant('standard');
       setComplexity(2);
       setIsDefault(false);
+      setSelectedFile(null);
+      setDetectedVars([]);
+      setFileUrl('');
+      setOriginalFileName('');
       onSaved();
-    } catch (err) {
+    } catch {
       toast.error('Failed to upload template.');
     } finally {
       setSaving(false);
     }
   };
 
+  const confidenceBadge = (confidence: string) => {
+    const colors = {
+      high: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      medium: 'bg-amber-100 text-amber-800 border-amber-200',
+      low: 'bg-red-100 text-red-800 border-red-200',
+    };
+    return colors[confidence as keyof typeof colors] || colors.low;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-[#2b6cb0]" />
@@ -826,11 +947,142 @@ function AddTemplateDialog({
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+            <button
+              onClick={() => setUploadMode('file')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                uploadMode === 'file'
+                  ? 'bg-white text-[#2b6cb0] shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              📄 Upload File
+            </button>
+            <button
+              onClick={() => setUploadMode('manual')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                uploadMode === 'manual'
+                  ? 'bg-white text-[#2b6cb0] shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              ✏️ Manual Entry
+            </button>
+          </div>
+
+          {/* File Upload Area */}
+          {uploadMode === 'file' && !content && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`rounded-xl border-2 border-dashed py-10 text-center cursor-pointer transition-colors ${
+                dragActive
+                  ? 'border-[#2b6cb0] bg-blue-50'
+                  : selectedFile
+                    ? 'border-emerald-300 bg-emerald-50'
+                    : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.pdf"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+              />
+              {selectedFile ? (
+                <div>
+                  <FileText className="mx-auto h-10 w-10 text-emerald-500" />
+                  <p className="mt-2 text-sm font-medium text-emerald-700">{selectedFile.name}</p>
+                  <p className="text-xs text-emerald-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                  {!uploading && !processing && (
+                    <Button
+                      onClick={(e) => { e.stopPropagation(); handleUploadAndProcess(); }}
+                      className="mt-3 bg-[#2b6cb0] hover:bg-[#1a365d] text-white"
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" /> Upload & Detect Variables
+                    </Button>
+                  )}
+                  {(uploading || processing) && (
+                    <div className="mt-3 mx-auto max-w-xs">
+                      <div className="flex items-center gap-2 text-sm text-[#2b6cb0]">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#2b6cb0] border-t-transparent" />
+                        {uploading ? `Uploading... ${uploadProgress}%` : 'AI analyzing document...'}
+                      </div>
+                      {uploading && (
+                        <div className="mt-1 h-1.5 w-full rounded-full bg-gray-200">
+                          <div
+                            className="h-1.5 rounded-full bg-[#2b6cb0] transition-all"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <Upload className="mx-auto h-10 w-10 text-gray-300" />
+                  <p className="mt-2 text-sm font-medium text-gray-600">
+                    Drop a .docx or .pdf file here, or click to browse
+                  </p>
+                  <p className="text-xs text-gray-400">Max 20MB. AI will auto-detect template variables.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Detected Variables Table */}
+          {detectedVars.length > 0 && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-purple-600" />
+                <span className="text-sm font-semibold text-purple-800">
+                  {detectedVars.length} Variable{detectedVars.length === 1 ? '' : 's'} Detected
+                </span>
+              </div>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-purple-200 bg-white">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-purple-100 bg-purple-50 text-purple-700">
+                      <th className="px-3 py-2 text-left font-medium">Found in Document</th>
+                      <th className="px-3 py-2 text-left font-medium">Maps to Field</th>
+                      <th className="px-3 py-2 text-left font-medium">Label</th>
+                      <th className="px-3 py-2 text-center font-medium">Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detectedVars.map((v, i) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="px-3 py-1.5 font-mono text-gray-600 truncate max-w-[160px]" title={v.originalText}>
+                          {v.originalText}
+                        </td>
+                        <td className="px-3 py-1.5 font-mono text-[#2b6cb0]">
+                          {`{{${v.suggestedVariable}}}`}
+                        </td>
+                        <td className="px-3 py-1.5 text-gray-700">{v.fieldLabel}</td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${confidenceBadge(v.confidence)}`}>
+                            {v.confidence}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* DocType & Name */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-medium text-gray-700">Document Type *</label>
               <select
+                title="Document Type"
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
@@ -867,6 +1119,7 @@ function AddTemplateDialog({
             <div>
               <label className="text-xs font-medium text-gray-700">Complexity</label>
               <select
+                title="Complexity Level"
                 value={complexity}
                 onChange={(e) => setComplexity(Number(e.target.value))}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
@@ -901,22 +1154,26 @@ function AddTemplateDialog({
             />
           </div>
 
-          {/* Template Content */}
-          <div>
-            <label className="text-xs font-medium text-gray-700">
-              Template Content (Handlebars HTML) *
-            </label>
-            <p className="mt-0.5 text-[10px] text-gray-400">
-              Use {'{{clientFullName}}'}, {'{{personalInfo.address}}'}, {'{{#if hasSpouse}}'} etc. for dynamic data.
-            </p>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={16}
-              placeholder={'<h1>DURABLE POWER OF ATTORNEY</h1>\n<p>I, {{clientFullName}}, residing at {{personalInfo.address}}...'}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2b6cb0] focus:outline-none resize-y"
-            />
-          </div>
+          {/* Template Content (manual mode or file-extracted preview) */}
+          {(uploadMode === 'manual' || content) && (
+            <div>
+              <label className="text-xs font-medium text-gray-700">
+                {uploadMode === 'file' ? 'Extracted Content (editable)' : 'Template Content (Handlebars HTML) *'}
+              </label>
+              {uploadMode === 'manual' && (
+                <p className="mt-0.5 text-[10px] text-gray-400">
+                  Use {'{{clientFullName}}'}, {'{{personalInfo.address}}'}, {'{{#if hasSpouse}}'} etc. for dynamic data.
+                </p>
+              )}
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={uploadMode === 'file' ? 10 : 16}
+                placeholder={'<h1>DURABLE POWER OF ATTORNEY</h1>\n<p>I, {{clientFullName}}, residing at {{personalInfo.address}}...'}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2b6cb0] focus:outline-none resize-y"
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter className="mt-6">

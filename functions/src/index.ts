@@ -42,3 +42,4 @@ export { linkClient } from './link-client';
 export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources, bulkImportKnowledgeResources, analyzeKnowledgeContent } from './knowledge-base';
 export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';
 export { seedKnowledgeBase } from './seed-knowledge-base';
+export { processTemplateFile } from './process-template-file';

@@ -158,7 +158,9 @@ export const templateService = {
     content: string;
     isDefault?: boolean;
     variables?: string[];
-    templateId?: string; // if updating existing
+    templateId?: string;
+    fileUrl?: string;
+    originalFileName?: string;
   }): Promise<{ templateId: string; version: number }> {
     const fn = httpsCallable(functions, 'uploadTemplate');
     const res = await fn(data);
@@ -180,5 +182,37 @@ export const templateService = {
     const fn = httpsCallable(functions, 'getTemplateContent');
     const res = await fn({ firmId, templateId });
     return (res.data as { template: FullTemplate }).template;
+  },
+
+  async processTemplateFile(firmId: string, storagePath: string, fileName: string): Promise<{
+    extractedHtml: string;
+    extractedText: string;
+    detectedVariables: {
+      originalText: string;
+      suggestedVariable: string;
+      fieldLabel: string;
+      confidence: string;
+      context: string;
+    }[];
+    suggestedDocType: string;
+    documentSummary: string;
+  }> {
+    const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 120000 });
+    const res = await fn({ firmId, storagePath, fileName });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = res.data as any;
+    return data as {
+      extractedHtml: string;
+      extractedText: string;
+      detectedVariables: {
+        originalText: string;
+        suggestedVariable: string;
+        fieldLabel: string;
+        confidence: string;
+        context: string;
+      }[];
+      suggestedDocType: string;
+      documentSummary: string;
+    };
   },
 };
