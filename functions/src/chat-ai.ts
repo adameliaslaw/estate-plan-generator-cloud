@@ -13,7 +13,7 @@
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import { callAI, sanitizeForPrompt } from './ai-client';
+import { callAI, sanitizeForPrompt, type FirmData } from './ai-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
 import {
@@ -320,7 +320,7 @@ export const chatAi = functions
       if (!firmDoc.exists) {
         throw new functions.https.HttpsError('not-found', 'Firm not found.');
       }
-      const firmData = firmDoc.data();
+      const firmData = firmDoc.data() as FirmData;
 
       // 3. Load existing conversation if resuming
       let resolvedHistory = history;

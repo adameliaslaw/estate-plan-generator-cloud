@@ -30,6 +30,7 @@ export interface FirmData {
   geminiApiKey?: string;
   perplexityApiKey?: string;
   documentDraftingModel?: string;
+  chatbotModel?: string;
   settings?: {
     activeAiProvider?: string;
     openAiApiKey?: string;
