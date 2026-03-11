@@ -1460,17 +1460,27 @@ function BulkImportDialog({
             <>
               {/* Drop zone */}
               {!uploadResults && (
-                <label
-                  htmlFor="bulk-file-input"
+                <div
                   onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                   onDragLeave={() => setDragActive(false)}
                   onDrop={handleDrop}
-                  className={`block rounded-xl border-2 border-dashed py-8 text-center cursor-pointer transition-colors ${
+                  className={`relative rounded-xl border-2 border-dashed py-8 text-center transition-colors ${
                     dragActive
                       ? 'border-[#2b6cb0] bg-blue-50'
                       : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                   } ${uploading ? 'pointer-events-none opacity-50' : ''}`}
                 >
+                  {/* Invisible file input covering the entire drop zone */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx"
+                    multiple
+                    title="Upload knowledge base files"
+                    aria-label="Upload knowledge base files"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    onChange={(e) => { handleFileSelect(e.target.files); e.target.value = ''; }}
+                  />
                   <Upload className="mx-auto h-10 w-10 text-gray-300" />
                   <p className="mt-2 text-sm font-medium text-gray-600">
                     Drop .pdf or .docx files here, or click to browse
@@ -1478,19 +1488,8 @@ function BulkImportDialog({
                   <p className="text-xs text-gray-400 mt-1">
                     Up to 100 files • 50MB each • AI auto-enriches metadata
                   </p>
-                </label>
+                </div>
               )}
-              <input
-                id="bulk-file-input"
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx"
-                multiple
-                title="Upload knowledge base files"
-                aria-label="Upload knowledge base files"
-                className="sr-only"
-                onChange={(e) => { handleFileSelect(e.target.files); e.target.value = ''; }}
-              />
 
               {/* Selected files list */}
               {selectedFiles.length > 0 && !uploadResults && (
