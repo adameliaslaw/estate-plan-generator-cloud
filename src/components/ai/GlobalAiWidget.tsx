@@ -469,9 +469,9 @@ export function GlobalAiWidget() {
             {isTyping && (
               <div className="flex w-full justify-start">
                 <div className="flex max-w-[85%] items-center gap-1.5 rounded-2xl rounded-tl-sm bg-white border border-gray-100 px-4 py-3.5 shadow-sm">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '0ms' }} />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '150ms' }} />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '300ms' }} />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400 animation-delay-0" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400 animation-delay-150" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400 animation-delay-300" />
                 </div>
               </div>
             )}

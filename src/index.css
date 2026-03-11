@@ -177,3 +177,8 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
+/* Animation delay utilities (avoid inline styles) */
+.animation-delay-0 { animation-delay: 0ms; }
+.animation-delay-150 { animation-delay: 150ms; }
+.animation-delay-300 { animation-delay: 300ms; }

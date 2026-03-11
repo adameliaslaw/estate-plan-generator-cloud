@@ -990,8 +990,9 @@ function AddTemplateDialog({
 
         <div className="space-y-4 mt-4">
           {/* Mode Toggle */}
-          <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+          <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg w-fit" role="group" aria-label="Upload mode selection">
             <button
+              type="button"
               onClick={() => setUploadMode('file')}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 uploadMode === 'file'
@@ -1002,6 +1003,7 @@ function AddTemplateDialog({
               📄 Upload File
             </button>
             <button
+              type="button"
               onClick={() => setUploadMode('manual')}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 uploadMode === 'manual'
@@ -1015,36 +1017,15 @@ function AddTemplateDialog({
 
           {/* File Upload Area */}
           {uploadMode === 'file' && !content && (
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              role="button"
-              aria-label="Drop a file or click to upload"
-              className={`rounded-xl border-2 border-dashed py-10 text-center cursor-pointer transition-colors ${
-                dragActive
-                  ? 'border-[#2b6cb0] bg-blue-50'
-                  : selectedFile
-                    ? 'border-emerald-300 bg-emerald-50'
-                    : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".docx,.pdf"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-              />
+            <div>
               {selectedFile ? (
-                <div>
+                <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 py-6 text-center">
                   <FileText className="mx-auto h-10 w-10 text-emerald-500" />
                   <p className="mt-2 text-sm font-medium text-emerald-700">{selectedFile.name}</p>
                   <p className="text-xs text-emerald-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
                   {!uploading && !processing && (
                     <Button
-                      onClick={(e) => { e.stopPropagation(); handleUploadAndProcess(); }}
+                      onClick={() => handleUploadAndProcess()}
                       className="mt-3 bg-[#2b6cb0] hover:bg-[#1a365d] text-white"
                     >
                       <Sparkles className="mr-2 h-4 w-4" /> Upload & Detect Variables
@@ -1068,7 +1049,21 @@ function AddTemplateDialog({
                   )}
                 </div>
               ) : (
-                <div>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+                  aria-label="Drop a file or click to upload"
+                  className={`rounded-xl border-2 border-dashed py-10 text-center cursor-pointer transition-colors ${
+                    dragActive
+                      ? 'border-[#2b6cb0] bg-blue-50'
+                      : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                  }`}
+                >
                   <Upload className="mx-auto h-10 w-10 text-gray-300" />
                   <p className="mt-2 text-sm font-medium text-gray-600">
                     Drop a .docx or .pdf file here, or click to browse
@@ -1076,6 +1071,13 @@ function AddTemplateDialog({
                   <p className="text-xs text-gray-400">Max 20MB. AI will auto-detect template variables.</p>
                 </div>
               )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.pdf"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+              />
             </div>
           )}
 
