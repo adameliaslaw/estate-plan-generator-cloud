@@ -26,6 +26,7 @@ import { sanitizeForPrompt } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext } from './client-context-aggregator';
+import { recordDraftHistory } from './ai-memory';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -294,6 +295,16 @@ export const generateSingleDocument = onCall(
     });
 
     console.log(`[generateSingleDocument] Saved ${docId} (version ${currentVersion})`);
+
+    // Record in client's persistent draft history (fire-and-forget)
+    recordDraftHistory(firmId, clientId, {
+      docType,
+      title: generatedDoc.title,
+      generatedAt: new Date().toISOString(),
+      customInstructions: customInstructions?.slice(0, 200),
+      templateUsed: templateId,
+      generationMode: generationMode ?? 'ai',
+    }).catch(console.error);
 
     return {
       success: true,

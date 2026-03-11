@@ -16,6 +16,14 @@ import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt } from './ai-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
+import {
+  saveConversation,
+  loadConversation,
+  buildMemoryPrompt,
+  extractAndSaveKeyFacts,
+  recordDraftHistory,
+  ConversationMessage,
+} from './ai-memory';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,6 +40,8 @@ interface ChatAiRequest {
   mode?: 'chat' | 'draft';
   /** When mode='draft', the document type being drafted */
   draftDocType?: string;
+  /** Resume an existing conversation */
+  conversationId?: string;
 }
 
 interface ChatAiResponse {
@@ -40,6 +50,8 @@ interface ChatAiResponse {
   draftContent?: string;
   /** Title for the draft document */
   draftTitle?: string;
+  /** Persistent conversation ID for resuming */
+  conversationId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +305,7 @@ export const chatAi = functions
       );
     }
 
-    const { firmId, clientId, message, contextParams, history = [], mode = 'chat', draftDocType } = data;
+    const { firmId, clientId, message, contextParams, history = [], mode = 'chat', draftDocType, conversationId: inConvId } = data;
 
     if (!firmId) {
       throw new functions.https.HttpsError('invalid-argument', 'firmId is required.');
@@ -310,25 +322,43 @@ export const chatAi = functions
       }
       const firmData = firmDoc.data();
 
-      // 3. Build context (full aggregation for both modes)
+      // 3. Load existing conversation if resuming
+      let resolvedHistory = history;
+      if (inConvId && history.length === 0) {
+        const existingConv = await loadConversation(firmId, inConvId);
+        if (existingConv) {
+          resolvedHistory = existingConv.messages
+            .filter((m) => m.role !== 'assistant' || !m.content.startsWith('Hello!'))
+            .map((m) => ({ role: m.role, content: m.content }));
+        }
+      }
+
+      // 4. Build context (full aggregation for both modes)
       const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, contextParams);
 
-      // 4. Fetch template awareness + learning context (parallel)
-      const [templateSummary, learningCtx] = await Promise.all([
+      // 5. Fetch template awareness, learning context, and memory (parallel)
+      const [templateSummary, learningCtx, memoryPromptStr] = await Promise.all([
         getTemplateSummary(firmId),
         getLearningContext(firmId).catch(() => null),
+        buildMemoryPrompt(firmId, clientId).catch(() => ''),
       ]);
 
       const learningPromptStr = learningCtx ? formatLearningPrompt(learningCtx) : '';
 
-      // 5. Build prompt
-      const systemPrompt = buildChatSystemPrompt(mode, draftDocType, contextStr, templateSummary, learningPromptStr);
+      // 6. Build prompt (now includes memory context)
+      const systemPrompt = buildChatSystemPrompt(
+        mode,
+        draftDocType,
+        contextStr + memoryPromptStr,
+        templateSummary,
+        learningPromptStr,
+      );
 
       // Build user prompt including history
       let userPrompt = '';
-      if (history.length > 0) {
+      if (resolvedHistory.length > 0) {
         userPrompt += 'Chat History:\n';
-        for (const msg of history) {
+        for (const msg of resolvedHistory) {
           userPrompt += `${msg.role.toUpperCase()}: ${msg.content}\n`;
         }
         userPrompt += `\nCURRENT USER MESSAGE: ${message}`;
@@ -336,18 +366,41 @@ export const chatAi = functions
         userPrompt = message;
       }
 
-      // 6. Call the LLM (uses firm's active provider)
+      // 7. Call the LLM (uses firm's active provider)
       const raw = await callAI(systemPrompt, userPrompt, firmData, {
         model: firmData?.chatbotModel || undefined,
         temperature: mode === 'draft' ? 0.2 : 0.4,
         maxTokens: mode === 'draft' ? 16000 : 8000,
       });
 
-      // 7. Parse response (check for draft content in draft mode)
-      if (mode === 'draft') {
-        const result = parseDraftResponse(raw);
+      // 8. Build the conversation messages for persistence
+      const allMessages: ConversationMessage[] = [
+        ...resolvedHistory.map((m) => ({
+          role: m.role,
+          content: m.content,
+          timestamp: new Date().toISOString(),
+        })),
+        {
+          role: 'user' as const,
+          content: message,
+          timestamp: new Date().toISOString(),
+        },
+      ];
 
-        // If a draft was produced, optionally save it
+      // 9. Parse response (check for draft content in draft mode)
+      if (mode === 'draft') {
+        const result: ChatAiResponse = parseDraftResponse(raw);
+
+        // Add AI reply to messages
+        allMessages.push({
+          role: 'assistant',
+          content: result.reply,
+          timestamp: new Date().toISOString(),
+          isDraft: !!result.draftContent,
+          draftTitle: result.draftTitle,
+        });
+
+        // If a draft was produced, save it + record in draft history
         if (result.draftContent && clientId) {
           const now = admin.firestore.FieldValue.serverTimestamp();
           const docId = `${draftDocType ?? 'custom'}_chat_${Date.now()}`;
@@ -388,12 +441,44 @@ export const chatAi = functions
           });
 
           result.reply += `\n\n✅ Draft saved to the client's Document Vault as "${result.draftTitle ?? docId}".`;
+
+          // Record draft history (fire-and-forget)
+          recordDraftHistory(firmId, clientId, {
+            docType: draftDocType ?? 'custom',
+            title: result.draftTitle ?? docId,
+            generatedAt: new Date().toISOString(),
+            generationMode: 'chat-draft',
+          }).catch(console.error);
+        }
+
+        // Save conversation (fire-and-forget)
+        const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
+        result.conversationId = convId;
+
+        // Extract key facts (fire-and-forget)
+        if (clientId && allMessages.length >= 4) {
+          extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch(console.error);
         }
 
         return result;
       }
 
-      return { reply: raw };
+      // Chat mode
+      allMessages.push({
+        role: 'assistant',
+        content: raw,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Save conversation
+      const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId);
+
+      // Extract key facts (fire-and-forget)
+      if (clientId && allMessages.length >= 4) {
+        extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch(console.error);
+      }
+
+      return { reply: raw, conversationId: convId };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('[chatAi] Error:', error);
@@ -404,3 +489,23 @@ export const chatAi = functions
     }
   },
 );
+
+// ---------------------------------------------------------------------------
+// List conversations (for conversation history sidebar)
+// ---------------------------------------------------------------------------
+
+export const listAiConversations = functions
+  .region('us-east1')
+  .https.onCall(
+    async (data: { firmId: string; clientId?: string; limit?: number }, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+      }
+      const { firmId, clientId, limit: lim = 20 } = data;
+      if (!firmId) {
+        throw new functions.https.HttpsError('invalid-argument', 'firmId is required.');
+      }
+      const { listConversations } = await import('./ai-memory');
+      return listConversations(firmId, clientId, lim);
+    },
+  );
