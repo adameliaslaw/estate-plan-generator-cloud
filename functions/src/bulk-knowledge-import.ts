@@ -84,34 +84,60 @@ async function extractFileText(
     const result = await parser.getText();
     text = result.text || '';
     const pageCount = result.total || 1;
-    await parser.destroy();
 
     // Check if this looks like a scanned PDF (very little text)
     const avgCharsPerPage = text.length / pageCount;
 
     if (avgCharsPerPage < MIN_CHARS_PER_PAGE_THRESHOLD && firmData) {
-      // Likely a scanned PDF — send the full PDF buffer to Gemini Vision for OCR
-      console.log(`[bulkKnowledgeImport] "${fileName}" appears scanned (${Math.round(avgCharsPerPage)} chars/page avg). Running Gemini Vision OCR...`);
+      // Likely a scanned PDF — OCR individual pages using getScreenshot + Gemini Vision
+      console.log(`[bulkKnowledgeImport] "${fileName}" appears scanned (${Math.round(avgCharsPerPage)} chars/page avg). Running page-by-page OCR...`);
+
+      // Limit to first 50 pages to stay within Cloud Function timeout
+      const pagesToOcr = Math.min(pageCount, 50);
+      const ocrTexts: string[] = [];
 
       try {
-        const base64Pdf = buffer.toString('base64');
-        const ocrText = await callAIWithVision(
-          base64Pdf,
-          'application/pdf',
-          OCR_PROMPT,
-          firmData,
-        );
+        // Render pages as PNG images using pdf-parse v2's getScreenshot
+        const screenshots = await parser.getScreenshot({
+          first: pagesToOcr,
+          scale: 1.5,
+          imageBuffer: true,
+          imageDataUrl: false,
+        });
 
-        if (ocrText && ocrText.length > text.length) {
-          text = ocrText;
-          ocrPagesCount = pageCount;
-          console.log(`[bulkKnowledgeImport] Gemini Vision OCR extracted ${ocrText.length} chars from "${fileName}"`);
+        for (let i = 0; i < screenshots.pages.length; i++) {
+          const page = screenshots.pages[i];
+          if (!page?.data) continue;
+
+          try {
+            const base64Img = Buffer.from(page.data).toString('base64');
+            const pageOcrText = await callAIWithVision(
+              base64Img,
+              'image/png',
+              OCR_PROMPT,
+              firmData,
+            );
+            ocrTexts.push(pageOcrText || '');
+            console.log(`[bulkKnowledgeImport] OCR page ${i + 1}/${pagesToOcr}: ${pageOcrText?.length || 0} chars`);
+          } catch (err) {
+            console.error(`[bulkKnowledgeImport] OCR failed for page ${i + 1} of "${fileName}":`, err);
+            ocrTexts.push('');
+          }
+        }
+
+        const ocrFullText = ocrTexts.join('\n\n');
+        if (ocrFullText.length > text.length) {
+          text = ocrFullText;
+          ocrPagesCount = pagesToOcr;
+          console.log(`[bulkKnowledgeImport] Page-by-page OCR extracted ${ocrFullText.length} chars from ${pagesToOcr} pages of "${fileName}"`);
         }
       } catch (err) {
-        console.error(`[bulkKnowledgeImport] Gemini Vision OCR failed for "${fileName}":`, err);
+        console.error(`[bulkKnowledgeImport] Screenshot/OCR failed for "${fileName}":`, err);
         // Continue with whatever pdf-parse extracted
       }
     }
+
+    await parser.destroy();
 
     // Convert to basic HTML
     html = text

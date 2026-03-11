@@ -362,6 +362,14 @@ export default function KnowledgeBasePage() {
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-gray-500 line-clamp-2">{r.content.slice(0, 200)}</p>
+                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-gray-400">
+                      {r.createdAt?.toDate && (
+                        <span>Added {r.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      )}
+                      {r.source === 'bulk-upload' && (
+                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600 font-medium">Bulk Upload</span>
+                      )}
+                    </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
                         {catConfig?.label ?? r.category}
