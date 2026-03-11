@@ -43,3 +43,4 @@ export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource,
 export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';
 export { seedKnowledgeBase } from './seed-knowledge-base';
 export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables } from './process-template-file';
+export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';

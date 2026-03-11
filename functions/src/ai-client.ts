@@ -379,6 +379,81 @@ export function sanitizeObject<T>(obj: T): T {
 }
 
 // ---------------------------------------------------------------------------
+// Vision API — Gemini for OCR of scanned documents
+// ---------------------------------------------------------------------------
+
+/**
+ * Send an image or PDF page to Gemini Vision API for OCR text extraction.
+ *
+ * @param imageBase64  Base64-encoded image or PDF page data.
+ * @param mimeType     MIME type (e.g., 'image/png', 'image/jpeg', 'application/pdf').
+ * @param prompt       Instructions for the model (what to extract).
+ * @param firmData     Firm object with API keys.
+ * @param options      Optional overrides.
+ */
+export async function callAIWithVision(
+  imageBase64: string,
+  mimeType: string,
+  prompt: string,
+  firmData: FirmData,
+  options: CallAIOptions = {},
+): Promise<string> {
+  const apiKey = firmData?.geminiApiKey ?? firmData?.settings?.geminiApiKey;
+  if (!apiKey) {
+    throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
+  }
+
+  const model = options.model ?? 'gemini-2.0-flash';
+  const temperature = options.temperature ?? 0.1;
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+  const requestBody: Record<string, unknown> = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              mimeType,
+              data: imageBase64,
+            },
+          },
+          { text: prompt },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature,
+      maxOutputTokens: options.maxTokens ?? 8192,
+    },
+  };
+
+  if (options.jsonMode) {
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
+  }
+
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[callAIWithVision] Gemini Vision error: ${response.status} - ${errorText}`);
+    return ''; // Non-blocking — return empty on failure
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await response.json() as any;
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+// ---------------------------------------------------------------------------
 // JSON response parser helper
 // ---------------------------------------------------------------------------
 

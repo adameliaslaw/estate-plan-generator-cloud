@@ -145,6 +145,77 @@ export const knowledgeBaseService = {
     const data = res.data as { suggestion: any };
     return data.suggestion;
   },
+
+  /**
+   * Bulk upload PDF/Word files to the Knowledge Base.
+   * 1. Uploads all files to Firebase Storage in parallel
+   * 2. Calls bulkProcessKnowledgeFiles to extract text, OCR, and AI-enrich
+   */
+  async bulkUploadFiles(
+    firmId: string,
+    files: File[],
+    onProgress?: (fileIndex: number, progress: number) => void,
+  ): Promise<{
+    processed: number;
+    failed: number;
+    total: number;
+    results: {
+      fileName: string;
+      resourceId: string;
+      status: 'success' | 'failed';
+      extractedChars: number;
+      ocrPagesCount: number;
+      error?: string;
+    }[];
+  }> {
+    const { ref: storageRef, uploadBytesResumable } = await import('firebase/storage');
+    const { storage } = await import('@/config/firebase');
+
+    // 1. Upload all files to Storage in parallel
+    const uploadResults: { storagePath: string; fileName: string }[] = [];
+
+    const uploadPromises = files.map((file, index) => {
+      return new Promise<void>((resolve, reject) => {
+        const timestamp = Date.now();
+        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `firms/${firmId}/knowledgeBase/uploads/${timestamp}_${index}_${safeName}`;
+        const fileRef = storageRef(storage, storagePath);
+        const uploadTask = uploadBytesResumable(fileRef, file);
+
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            onProgress?.(index, progress);
+          },
+          (error) => reject(error),
+          () => {
+            uploadResults.push({ storagePath, fileName: file.name });
+            resolve();
+          },
+        );
+      });
+    });
+
+    await Promise.all(uploadPromises);
+
+    // 2. Call Cloud Function to process all uploaded files
+    const fn = httpsCallable(functions, 'bulkProcessKnowledgeFiles', { timeout: 300000 });
+    const res = await fn({ firmId, files: uploadResults });
+    return res.data as {
+      processed: number;
+      failed: number;
+      total: number;
+      results: {
+        fileName: string;
+        resourceId: string;
+        status: 'success' | 'failed';
+        extractedChars: number;
+        ocrPagesCount: number;
+        error?: string;
+      }[];
+    };
+  },
 };
 
 // ---------------------------------------------------------------------------

@@ -143,12 +143,14 @@ function StatCard({ title, value, icon: Icon, subtitle, subtitleMuted, color, lo
 
 // ── Skeleton rows ──────────────────────────────────────────────────────────────
 
+const skeletonWidths = ['w-1/2', 'w-3/5', 'w-2/3', 'w-3/4', 'w-4/5', 'w-5/6'] as const;
+
 function SkeletonRow() {
   return (
     <tr>
-      {[1, 2, 3, 4, 5, 6].map((i) => (
+      {skeletonWidths.map((w, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-4 animate-pulse rounded bg-gray-200" style={{ width: `${40 + i * 10}%` }} />
+          <div className={cn('h-4 animate-pulse rounded bg-gray-200', w)} />
         </td>
       ))}
     </tr>
