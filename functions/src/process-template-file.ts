@@ -146,21 +146,11 @@ export const processTemplateFile = onCall(
       }
     } else if (ext === 'pdf') {
       try {
-        const parser = new PDFParse();
-        await parser.load(buffer);
-        const info = await parser.getInfo();
-        const pageCount = info?.numPages || 1;
-        const pageTexts: string[] = [];
-        for (let pg = 1; pg <= pageCount; pg++) {
-          try {
-            const pageText = await parser.getText(pg);
-            pageTexts.push(pageText || '');
-          } catch {
-            pageTexts.push('');
-          }
-        }
-        extractedText = pageTexts.join('\n\n');
-        parser.destroy();
+        // pdf-parse v2 API: constructor takes { data: buffer }, getText() returns { text, total }
+        const parser = new PDFParse({ data: buffer });
+        const result = await parser.getText();
+        extractedText = result.text || '';
+        await parser.destroy();
         // Convert plain text to basic HTML
         extractedHtml = extractedText
           .split('\n\n')

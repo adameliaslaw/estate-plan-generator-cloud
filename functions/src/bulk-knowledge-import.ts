@@ -79,24 +79,12 @@ async function extractFileText(
     const textResult = await mammoth.extractRawText({ buffer });
     text = textResult.value;
   } else if (ext === 'pdf') {
-    // First pass: standard text extraction using pdf-parse v2 class API
-    const parser = new PDFParse();
-    await parser.load(buffer);
-    const info = await parser.getInfo();
-    const pageCount = info?.numPages || 1;
-
-    // Extract text from all pages
-    const pageTexts: string[] = [];
-    for (let pg = 1; pg <= pageCount; pg++) {
-      try {
-        const pageText = await parser.getText(pg);
-        pageTexts.push(pageText || '');
-      } catch {
-        pageTexts.push('');
-      }
-    }
-    text = pageTexts.join('\n\n');
-    parser.destroy();
+    // pdf-parse v2 API: constructor takes { data: buffer }, getText() returns { text, total }
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    text = result.text || '';
+    const pageCount = result.total || 1;
+    await parser.destroy();
 
     // Check if this looks like a scanned PDF (very little text)
     const avgCharsPerPage = text.length / pageCount;
