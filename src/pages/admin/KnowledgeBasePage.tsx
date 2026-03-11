@@ -134,7 +134,7 @@ export default function KnowledgeBasePage() {
       r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (r.citation ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.content.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  ).sort((a, b) => a.title.localeCompare(b.title));
 
   const filteredTemplates = templates.filter(
     (t) =>
@@ -376,7 +376,7 @@ export default function KnowledgeBasePage() {
                       {r.createdAt && (() => {
                         const ts = r.createdAt;
                         const date = ts?.toDate ? ts.toDate() : ts?._seconds ? new Date(ts._seconds * 1000) : null;
-                        return date ? <span>Added {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span> : null;
+                        return date ? <span>Added {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span> : null;
                       })()}
                       {r.source === 'bulk-upload' && (
                         <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600 font-medium">Bulk Upload</span>
