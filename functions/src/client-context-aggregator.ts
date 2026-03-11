@@ -264,3 +264,52 @@ function computeFields(
     packageLabel: packageLabels[packageDetails.packageType] ?? 'Foundation',
   };
 }
+
+// ---------------------------------------------------------------------------
+// Minimal context (firm + KB only, no client required)
+// ---------------------------------------------------------------------------
+
+export interface MinimalContext {
+  firm: admin.firestore.DocumentData;
+  knowledgeResources: KBSnapshot[];
+}
+
+/**
+ * Lightweight context for scenarios without a specific client
+ * (e.g., chatbot in general Q&A mode). Returns firm data and
+ * up to 50 active knowledge base resources.
+ */
+export async function aggregateMinimalContext(
+  firmId: string,
+): Promise<MinimalContext> {
+  const db = admin.firestore();
+
+  const [firmSnap, kbSnap] = await Promise.all([
+    db.doc(`firms/${firmId}`).get(),
+    db.collection(`firms/${firmId}/knowledgeBase`)
+      .where('isActive', '==', true)
+      .limit(50)
+      .get(),
+  ]);
+
+  if (!firmSnap.exists) {
+    throw new Error(`Firm ${firmId} not found.`);
+  }
+
+  const knowledgeResources: KBSnapshot[] = kbSnap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      title: data.title,
+      citation: data.citation,
+      content: data.content,
+      category: data.category,
+      tags: data.tags ?? [],
+    };
+  });
+
+  return {
+    firm: firmSnap.data()!,
+    knowledgeResources,
+  };
+}

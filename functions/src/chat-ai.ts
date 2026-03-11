@@ -3,17 +3,19 @@
  *
  * Enhanced AI Chat — supports both general Q&A and document drafting mode.
  *
- * Modes:
- *  - 'chat' (default): General estate planning Q&A with optional client context
- *  - 'draft': Conversational document drafting assistant with full client context
- *    (questionnaire, notes, vault docs, knowledge base). Can produce a saveable
- *    document draft when the attorney asks for it.
+ * Intelligence features:
+ *  - Full client context aggregation (notes, vault docs, KB) in ALL modes
+ *  - Knowledge base search even without a client selected
+ *  - Template awareness (available templates + variable dictionary)
+ *  - Learning context from the template learning engine
+ *  - LLM-agnostic via callAI (routes based on firm's active provider)
  */
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt } from './ai-client';
-import { aggregateClientContext, ClientContext } from './client-context-aggregator';
+import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot } from './client-context-aggregator';
+import { getLearningContext, formatLearningPrompt } from './template-learning';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,6 +25,7 @@ interface ChatAiRequest {
   firmId: string;
   clientId?: string;
   message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contextParams?: Record<string, any>;
   history?: { role: 'user' | 'assistant'; content: string }[];
   /** 'chat' for general Q&A, 'draft' for document drafting */
@@ -40,6 +43,44 @@ interface ChatAiResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Fetch available templates summary
+// ---------------------------------------------------------------------------
+
+async function getTemplateSummary(firmId: string): Promise<string> {
+  try {
+    const snap = await admin.firestore()
+      .collection(`firms/${firmId}/templates`)
+      .where('isActive', '==', true)
+      .get();
+
+    if (snap.empty) return '';
+
+    const templates = snap.docs.map((d) => {
+      const data = d.data();
+      return `  - ${data.name} (${data.docType}, variant: ${data.variant}, v${data.version}) — ${data.variables?.length ?? 0} variables`;
+    });
+
+    return `\nAVAILABLE TEMPLATES (${templates.length}):\n${templates.join('\n')}`;
+  } catch {
+    return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Format KB resources for prompt
+// ---------------------------------------------------------------------------
+
+function formatKBForPrompt(resources: KBSnapshot[], limit: number = 15): string {
+  if (resources.length === 0) return '';
+
+  const lines = resources.slice(0, limit).map(
+    (r) => `  [${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}: ${r.content.slice(0, 300)}`,
+  );
+
+  return `\nKNOWLEDGE BASE (${resources.length} resources):\n${lines.join('\n')}`;
+}
+
+// ---------------------------------------------------------------------------
 // Build system prompt
 // ---------------------------------------------------------------------------
 
@@ -47,6 +88,8 @@ function buildChatSystemPrompt(
   mode: 'chat' | 'draft',
   draftDocType: string | undefined,
   contextStr: string,
+  templateSummary: string,
+  learningPromptStr: string,
 ): string {
   if (mode === 'draft') {
     return `You are an expert New Jersey estate planning attorney acting as a document drafting assistant.
@@ -66,21 +109,41 @@ LEGAL STANDARDS:
 • Do NOT fabricate citations. If uncertain, state the general legal principle.
 • Use proper legal formatting and execution blocks.
 
+TEMPLATE AWARENESS:
+• When drafting, align the document structure and variables with the firm's existing templates when possible.
+• Use Handlebars-style variables (e.g., {{personalInfo.firstName}}) that match the firm's variable dictionary.
+${templateSummary}
+
 CLIENT CONTEXT (use this data to populate the document):
 ${contextStr}
-
+${learningPromptStr}
 IMPORTANT: When generating a document draft, produce complete, execution-ready HTML with all client data filled in — never leave [NAME] or [DATE] placeholders when the data is available in the context.`;
   }
 
-  // Default chat system prompt
-  return `You are an expert New Jersey estate planning attorney assistant.
-Your primary role is to act as a specialized legal assistant, focusing on New Jersey estate planning law, citations, and statutory compliance.
-When answering questions about estate planning, drafting, or legal strategy, you must strictly cite relevant New Jersey statutes (e.g., Title 3B for Administration of Estates, N.J.S.A. 46:2B-8 for Powers of Attorney, N.J.S.A. 26:2H-53 for Advance Directives) and applicable case law. 
-Provide highly intuitive, legally accurate, and professional guidance. Be analytical, precise, and proactive in identifying potential legal issues or statutory requirements.
-Do not fabricate citations; if you do not know the exact statute, refer to the general legal principle under New Jersey law.
-Here is the data context of the user's current environment or client:
+  // Default chat system prompt — ENHANCED
+  return `You are an expert New Jersey estate planning attorney assistant with deep knowledge of:
+• New Jersey estate planning law, statutes, and case law
+• Document drafting best practices for wills, trusts, POAs, deeds, and related instruments
+• The firm's knowledge base, templates, and client data
+
+YOUR CAPABILITIES:
+• Answer complex legal questions with precise statutory citations (N.J.S.A. Title 3B, Title 46, etc.)
+• Analyze client situations and recommend strategies
+• Reference the firm's knowledge base resources, CLE materials, and statutes
+• Advise on document preparation using the firm's established templates
+• Explain how template variables map to client questionnaire data
+
+RULES:
+• Always cite New Jersey statutes when relevant. Do NOT fabricate citations.
+• When referencing knowledge base resources, mention the resource title and citation.
+• If uncertain about a specific statute, state the general legal principle.
+• Be analytical, precise, and proactive in identifying potential legal issues.
+• Give substantive, thorough answers — you are a first-chair estate planning attorney, not a FAQ bot.
+
+CONTEXT:
 ${contextStr}
-`;
+${templateSummary}
+${learningPromptStr}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,12 +155,13 @@ async function buildContextString(
   clientId: string | undefined,
   mode: 'chat' | 'draft',
   draftDocType: string | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contextParams: Record<string, any> | undefined,
 ): Promise<string> {
   let contextStr = '';
 
-  if (clientId && mode === 'draft') {
-    // Full context aggregation for drafting mode
+  if (clientId && (mode === 'draft' || mode === 'chat')) {
+    // Full context aggregation for BOTH modes when client is selected
     try {
       const ctx: ClientContext = await aggregateClientContext(firmId, clientId, draftDocType);
 
@@ -144,10 +208,7 @@ async function buildContextString(
 
       // Knowledge base
       if (ctx.knowledgeResources.length > 0) {
-        contextStr += `\n\nKNOWLEDGE BASE RESOURCES (${ctx.knowledgeResources.length}):`;
-        for (const r of ctx.knowledgeResources.slice(0, 10)) {
-          contextStr += `\n  [${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}: ${r.content.slice(0, 200)}`;
-        }
+        contextStr += formatKBForPrompt(ctx.knowledgeResources);
       }
 
       // Full client data as JSON for comprehensive context
@@ -163,12 +224,18 @@ async function buildContextString(
         contextStr += `\nViewing Client: ${JSON.stringify(clientDoc.data())}`;
       }
     }
-  } else if (clientId) {
-    // Basic client context for chat mode
-    const clientDoc = await admin.firestore()
-      .collection('firms').doc(firmId).collection('clients').doc(clientId).get();
-    if (clientDoc.exists) {
-      contextStr += `\nViewing Client: ${JSON.stringify(clientDoc.data())}`;
+  } else {
+    // No client selected — still fetch firm + KB
+    try {
+      const minCtx = await aggregateMinimalContext(firmId);
+      contextStr += `\nFIRM: ${minCtx.firm.firmName ?? ''}, ${minCtx.firm.firmAddress ?? ''}, ${minCtx.firm.firmPhone ?? ''}`;
+      contextStr += `\nBar Number: ${minCtx.firm.barNumber ?? ''}`;
+
+      if (minCtx.knowledgeResources.length > 0) {
+        contextStr += formatKBForPrompt(minCtx.knowledgeResources);
+      }
+    } catch (err) {
+      console.warn('[chatAi] Minimal context failed:', err);
     }
   }
 
@@ -240,11 +307,19 @@ export const chatAi = functions.region('us-east1').https.onCall(
       }
       const firmData = firmDoc.data();
 
-      // 3. Build context
+      // 3. Build context (full aggregation for both modes)
       const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, contextParams);
 
-      // 4. Build prompt
-      const systemPrompt = buildChatSystemPrompt(mode, draftDocType, contextStr);
+      // 4. Fetch template awareness + learning context (parallel)
+      const [templateSummary, learningCtx] = await Promise.all([
+        getTemplateSummary(firmId),
+        getLearningContext(firmId).catch(() => null),
+      ]);
+
+      const learningPromptStr = learningCtx ? formatLearningPrompt(learningCtx) : '';
+
+      // 5. Build prompt
+      const systemPrompt = buildChatSystemPrompt(mode, draftDocType, contextStr, templateSummary, learningPromptStr);
 
       // Build user prompt including history
       let userPrompt = '';
@@ -258,14 +333,14 @@ export const chatAi = functions.region('us-east1').https.onCall(
         userPrompt = message;
       }
 
-      // 5. Call the LLM
+      // 6. Call the LLM (uses firm's active provider)
       const raw = await callAI(systemPrompt, userPrompt, firmData, {
         model: firmData?.chatbotModel || undefined,
         temperature: mode === 'draft' ? 0.2 : 0.4,
-        maxTokens: mode === 'draft' ? 8000 : 1000,
+        maxTokens: mode === 'draft' ? 8000 : 4000,
       });
 
-      // 6. Parse response (check for draft content in draft mode)
+      // 7. Parse response (check for draft content in draft mode)
       if (mode === 'draft') {
         const result = parseDraftResponse(raw);
 
@@ -316,6 +391,7 @@ export const chatAi = functions.region('us-east1').https.onCall(
       }
 
       return { reply: raw };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('[chatAi] Error:', error);
       throw new functions.https.HttpsError(
