@@ -13,7 +13,8 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import mammoth from 'mammoth';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+const pdfParseModule = require('pdf-parse');
+const pdfParse = pdfParseModule.default || pdfParseModule;
 import { callAI, callAIWithVision, parseAIJson } from './ai-client';
 
 // ---------------------------------------------------------------------------
