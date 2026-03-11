@@ -13,7 +13,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft } from 'lucide-react';
+import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -129,6 +129,29 @@ export function GlobalAiWidget() {
     setMode(newMode);
     setConversationId(undefined);
     setMessages([WELCOME_MSG(newMode, clientId)]);
+  };
+
+  // Save a message as a client note
+  const handleSaveAsNote = async (msg: Message) => {
+    if (!firmId || !clientId) {
+      toast.error('Navigate to a client profile to save notes.');
+      return;
+    }
+    try {
+      const fn = httpsCallable(functions, 'saveMessageAsNote');
+      const res = await fn({
+        firmId,
+        clientId,
+        messageContent: msg.content,
+        messageRole: msg.role,
+        conversationId,
+      });
+      const data = res.data as { title: string };
+      toast.success(`Saved to Notes: ${data.title}`);
+    } catch (err) {
+      console.error('[GlobalAiWidget] Save as note error:', err);
+      toast.error('Failed to save as note.');
+    }
   };
 
   const handleSend = async () => {
@@ -330,6 +353,7 @@ export function GlobalAiWidget() {
             <button
               onClick={() => setShowHistory(false)}
               className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              aria-label="Close conversation history"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -421,6 +445,22 @@ export function GlobalAiWidget() {
                     >
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
+                    {/* Save as Note button — only when client is connected */}
+                    {clientId && !msg.id.startsWith('welcome-') && msg.id !== 'loading' && (
+                      <button
+                        onClick={() => handleSaveAsNote(msg)}
+                        className={cn(
+                          'mt-1 flex items-center gap-1 text-[10px] font-medium transition-colors',
+                          isUser
+                            ? 'text-purple-200 hover:text-white'
+                            : 'text-gray-400 hover:text-purple-600',
+                        )}
+                        title="Save this message as a client note"
+                      >
+                        <Bookmark className="h-3 w-3" />
+                        Save as Note
+                      </button>
+                    )}
                   </div>
                 </div>
               );

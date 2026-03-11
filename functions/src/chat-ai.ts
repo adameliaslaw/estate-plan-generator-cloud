@@ -509,3 +509,48 @@ export const listAiConversations = functions
       return listConversations(firmId, clientId, lim);
     },
   );
+
+// ---------------------------------------------------------------------------
+// Save a single message as a client note (manual integration)
+// ---------------------------------------------------------------------------
+
+export const saveMessageAsNote = functions
+  .region('us-east1')
+  .https.onCall(
+    async (
+      data: { firmId: string; clientId: string; messageContent: string; messageRole: 'user' | 'assistant'; conversationId?: string },
+      context,
+    ) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+      }
+      const { firmId, clientId, messageContent, messageRole, conversationId: convId } = data;
+      if (!firmId || !clientId || !messageContent) {
+        throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and messageContent are required.');
+      }
+
+      const noteRef = admin.firestore()
+        .collection(`firms/${firmId}/clients/${clientId}/notes`)
+        .doc();
+
+      const isAssistant = messageRole === 'assistant';
+      const title = isAssistant
+        ? `AI Assistant Response — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : `Chat Message — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      await noteRef.set({
+        id: noteRef.id,
+        title,
+        content: messageContent,
+        noteType: 'ai-chat',
+        source: 'chatbot',
+        conversationId: convId ?? null,
+        savedBy: context.auth.uid,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return { success: true, noteId: noteRef.id, title };
+    },
+  );
