@@ -22,6 +22,7 @@
 import { onRequest, HttpsError } from 'firebase-functions/v2/https';
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
+import * as crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +43,7 @@ interface CreatePaymentRequestData {
 }
 
 /** Shape of a successful AffiniPay charge response (relevant fields). */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface AffiniPayChargeResponse {
   id: string;
   status: string;
@@ -74,6 +76,7 @@ interface LawPayWebhookEvent {
  * Read LawPay credentials from environment variables.
  * Throws a `failed-precondition` HttpsError if either value is absent.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getLawPayCredentials(): {
   apiKey: string;
   echeckAccountId: string;
@@ -151,7 +154,7 @@ function verifyWebhookSignature(
     return false;
   }
 
-  const crypto = require('crypto');
+  // crypto is imported at the top of the file
   try {
     const expected = crypto
       .createHmac('sha256', webhookSecret)

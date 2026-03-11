@@ -60,7 +60,9 @@ export function useSessionTimeout({
   // Keep a stable ref to onTimeout so we don't re-register listeners on
   // every render when the callback identity changes.
   const onTimeoutRef = useRef(onTimeout);
-  onTimeoutRef.current = onTimeout;
+  useEffect(() => {
+    onTimeoutRef.current = onTimeout;
+  });
   // Throttle: track the last time we reset the timers
   const lastResetRef = useRef(0);
   const THROTTLE_MS = 30_000; // Only reset timers once per 30 seconds

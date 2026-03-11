@@ -15,7 +15,7 @@
 import Handlebars from 'handlebars';
 import * as admin from 'firebase-admin';
 import { ClientContext } from './client-context-aggregator';
-import { callAI, sanitizeObject, parseAIJson } from './ai-client';
+import { callAI, sanitizeObject } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
 
 // ---------------------------------------------------------------------------
@@ -366,12 +366,12 @@ export function validateTemplateData(
  * Resolve a dot-separated path against an object.
  * e.g. resolveDotPath(obj, 'fiduciaries.powerOfAttorney.agent') → obj.fiduciaries.powerOfAttorney.agent
  */
-function resolveDotPath(obj: Record<string, any>, path: string): any {
+function resolveDotPath(obj: Record<string, unknown>, path: string): unknown {
   const parts = path.split('.');
-  let current: any = obj;
+  let current: unknown = obj;
   for (const part of parts) {
     if (current == null || typeof current !== 'object') return undefined;
-    current = current[part];
+    current = (current as Record<string, unknown>)[part];
   }
   return current;
 }
@@ -382,22 +382,22 @@ function resolveDotPath(obj: Record<string, any>, path: string): any {
 
 function registerHelpers(): void {
   // Format a date string or Timestamp to "Month Day, Year"
-  Handlebars.registerHelper('formatDate', (dateVal: any) => {
+  Handlebars.registerHelper('formatDate', (dateVal: unknown) => {
     if (!dateVal) return '_______________';
     let d: Date;
-    if (dateVal.toDate) {
-      d = dateVal.toDate(); // Firestore Timestamp
+    if (dateVal && typeof dateVal === 'object' && 'toDate' in dateVal && typeof (dateVal as Record<string, unknown>).toDate === 'function') {
+      d = (dateVal as { toDate: () => Date }).toDate(); // Firestore Timestamp
     } else if (typeof dateVal === 'string') {
       d = new Date(dateVal);
     } else {
-      d = new Date(dateVal);
+      d = new Date(dateVal as string | number);
     }
-    if (isNaN(d.getTime())) return dateVal;
+    if (isNaN(d.getTime())) return String(dateVal);
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   });
 
   // Full name from a person object { firstName, middleName, lastName, suffix }
-  Handlebars.registerHelper('fullName', (person: any) => {
+  Handlebars.registerHelper('fullName', (person: Record<string, unknown> | null | undefined) => {
     if (!person) return '_______________';
     return [person.firstName, person.middleName, person.lastName, person.suffix]
       .filter(Boolean)
@@ -405,27 +405,27 @@ function registerHelpers(): void {
   });
 
   // Currency formatting
-  Handlebars.registerHelper('currency', (amount: any) => {
+  Handlebars.registerHelper('currency', (amount: unknown) => {
     if (amount == null || isNaN(Number(amount))) return '$0.00';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(amount));
   });
 
   // Uppercase
-  Handlebars.registerHelper('upper', (str: any) => {
+  Handlebars.registerHelper('upper', (str: unknown) => {
     return typeof str === 'string' ? str.toUpperCase() : '';
   });
 
   // Equality check
-  Handlebars.registerHelper('eq', (a: any, b: any) => a === b);
+  Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);
 
   // Greater than
-  Handlebars.registerHelper('gt', (a: any, b: any) => Number(a) > Number(b));
+  Handlebars.registerHelper('gt', (a: unknown, b: unknown) => Number(a) > Number(b));
 
   // Increment
-  Handlebars.registerHelper('inc', (val: any) => Number(val) + 1);
+  Handlebars.registerHelper('inc', (val: unknown) => Number(val) + 1);
 
   // Roman numeral helper for article numbering
-  Handlebars.registerHelper('roman', (num: any) => {
+  Handlebars.registerHelper('roman', (num: unknown) => {
     const n = Number(num);
     if (isNaN(n) || n <= 0) return String(num);
     const vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
@@ -442,7 +442,7 @@ function registerHelpers(): void {
   });
 
   // Ordinal number helper (1st, 2nd, 3rd, etc.)
-  Handlebars.registerHelper('ordinal', (num: any) => {
+  Handlebars.registerHelper('ordinal', (num: unknown) => {
     const n = Number(num);
     if (isNaN(n)) return String(num);
     const s = ['th', 'st', 'nd', 'rd'];
@@ -451,15 +451,15 @@ function registerHelpers(): void {
   });
 
   // Fill-in-blank helper (underscore line if value is empty)
-  Handlebars.registerHelper('fillOrBlank', (val: any) => {
-    if (!val || (typeof val === 'string' && val.trim() === '')) {
+  Handlebars.registerHelper('fillOrBlank', (val: unknown) => {
+    if (!val || (typeof val === 'string' && (val as string).trim() === '')) {
       return new Handlebars.SafeString('_______________');
     }
     return val;
   });
 
   // Conditional: has items in array
-  Handlebars.registerHelper('hasItems', function (this: any, arr: any, options: any) {
+  Handlebars.registerHelper('hasItems', function (this: unknown, arr: unknown, options: Handlebars.HelperOptions) {
     if (Array.isArray(arr) && arr.length > 0) {
       return options.fn(this);
     }
@@ -467,7 +467,7 @@ function registerHelpers(): void {
   });
 
   // Join array with separator
-  Handlebars.registerHelper('join', (arr: any[], sep: string) => {
+  Handlebars.registerHelper('join', (arr: unknown[], sep: string) => {
     if (!Array.isArray(arr)) return '';
     return arr.join(typeof sep === 'string' ? sep : ', ');
   });
@@ -576,7 +576,7 @@ export async function listTemplateVariants(
  * Build the flat template data object from a ClientContext.
  * Extracted so it can be reused by both renderTemplate and validateTemplateData.
  */
-export function buildTemplateData(ctx: ClientContext): Record<string, any> {
+export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
   return {
     // Client data (full)
     client: ctx.client,

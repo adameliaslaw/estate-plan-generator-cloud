@@ -72,10 +72,13 @@ export function useDocument<T extends DocumentData>(
 
   // Keep path in a ref so the cleanup can always access the latest value.
   const pathRef = useRef(path);
-  pathRef.current = path;
+  useEffect(() => {
+    pathRef.current = path;
+  });
 
   useEffect(() => {
     if (!path) {
+      // eslint-disable-next-line
       setState({ data: null, loading: false, error: null });
       return;
     }
@@ -248,7 +251,11 @@ export function useDocumentOnce<T extends DocumentData>(
 
   useEffect(() => {
     if (!path) {
-      setState({ data: null, loading: false, error: null });
+      // eslint-disable-next-line
+      setState((prev) => prev.loading || prev.data !== null || prev.error !== null
+        ? { data: null, loading: false, error: null }
+        : prev,
+      );
       return;
     }
 

@@ -22,24 +22,22 @@ export interface CallAIOptions {
   jsonMode?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Singleton OpenAI client
-// ---------------------------------------------------------------------------
-
-let _client: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!_client) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        'OPENAI_API_KEY environment variable is not set. ' +
-        'Configure it in Firebase Functions config or Secret Manager.',
-      );
-    }
-    _client = new OpenAI({ apiKey });
-  }
-  return _client;
+/** Subset of Firm data used by the AI client for provider selection and API keys. */
+export interface FirmData {
+  activeAiProvider?: string;
+  openAiApiKey?: string;
+  anthropicApiKey?: string;
+  geminiApiKey?: string;
+  perplexityApiKey?: string;
+  documentDraftingModel?: string;
+  settings?: {
+    activeAiProvider?: string;
+    openAiApiKey?: string;
+    anthropicApiKey?: string;
+    geminiApiKey?: string;
+    perplexityApiKey?: string;
+  };
+  [key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +55,7 @@ function getOpenAIClient(): OpenAI {
 export async function callAI(
   systemPrompt: string,
   userPrompt: string,
-  firmData: any, // Using 'any' here locally to avoid circular dependencies with frontend types if needed, or import Firm.
+  firmData: FirmData,
   options: CallAIOptions = {},
 ): Promise<string> {
   let provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
@@ -82,7 +80,7 @@ export async function callAI(
   }
 }
 
-async function fetchWithRetry(url: string, options: any, maxRetries = 3): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   let attempt = 0;
   while (true) {
     const response = await fetch(url, options);
@@ -100,7 +98,7 @@ async function fetchWithRetry(url: string, options: any, maxRetries = 3): Promis
 async function _callOpenAI(
   systemPrompt: string,
   userPrompt: string,
-  firmData: any,
+  firmData: FirmData,
   options: CallAIOptions
 ): Promise<string> {
   // Use the firm's API key if provided, fallback to the environment variable
@@ -135,7 +133,7 @@ async function _callOpenAI(
 async function _callAnthropic(
   systemPrompt: string,
   userPrompt: string,
-  firmData: any,
+  firmData: FirmData,
   options: CallAIOptions
 ): Promise<string> {
   const apiKey = firmData?.anthropicApiKey ?? firmData?.settings?.anthropicApiKey;
@@ -184,7 +182,7 @@ async function _callAnthropic(
 async function _callGemini(
   systemPrompt: string,
   userPrompt: string,
-  firmData: any,
+  firmData: FirmData,
   options: CallAIOptions
 ): Promise<string> {
   const apiKey = firmData?.geminiApiKey ?? firmData?.settings?.geminiApiKey;
@@ -200,7 +198,7 @@ async function _callGemini(
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-  const requestBody: any = {
+  const requestBody: Record<string, unknown> = {
     system_instruction: {
       parts: [{ text: systemPrompt }]
     },
@@ -216,7 +214,7 @@ async function _callGemini(
   };
 
   if (options.jsonMode) {
-    requestBody.generationConfig.responseMimeType = "application/json";
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = "application/json";
   }
 
   const response = await fetchWithRetry(endpoint, {
@@ -241,7 +239,7 @@ async function _callGemini(
 async function _callPerplexity(
   systemPrompt: string,
   userPrompt: string,
-  firmData: any,
+  firmData: FirmData,
   options: CallAIOptions
 ): Promise<string> {
   const apiKey = firmData?.perplexityApiKey ?? firmData?.settings?.perplexityApiKey;
