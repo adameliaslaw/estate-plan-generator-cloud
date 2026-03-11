@@ -376,7 +376,7 @@ export default function KnowledgeBasePage() {
                       {r.createdAt && (() => {
                         const ts = r.createdAt;
                         const date = ts?.toDate ? ts.toDate() : ts?._seconds ? new Date(ts._seconds * 1000) : null;
-                        return date ? <span>Added {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span> : null;
+                        return date ? <span>Added {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })} at {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} EST</span> : null;
                       })()}
                       {r.source === 'bulk-upload' && (
                         <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600 font-medium">Bulk Upload</span>
