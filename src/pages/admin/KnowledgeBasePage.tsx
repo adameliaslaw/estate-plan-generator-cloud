@@ -140,7 +140,7 @@ export default function KnowledgeBasePage() {
     (t) =>
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.docType.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   // Handlers
   const handleDeleteResource = async (id: string) => {
@@ -373,9 +373,11 @@ export default function KnowledgeBasePage() {
                     </div>
                     <p className="mt-0.5 text-xs text-gray-500 line-clamp-2">{r.content.slice(0, 200)}</p>
                     <div className="mt-1.5 flex items-center gap-2 text-[10px] text-gray-400">
-                      {r.createdAt?.toDate && (
-                        <span>Added {r.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                      )}
+                      {r.createdAt && (() => {
+                        const ts = r.createdAt;
+                        const date = ts?.toDate ? ts.toDate() : ts?._seconds ? new Date(ts._seconds * 1000) : null;
+                        return date ? <span>Added {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span> : null;
+                      })()}
                       {r.source === 'bulk-upload' && (
                         <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600 font-medium">Bulk Upload</span>
                       )}
