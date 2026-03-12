@@ -19,8 +19,6 @@ import {
   CheckCircle2,
   ChevronRight,
   AlertCircle,
-  Eye,
-  EyeOff,
   Image as ImageIcon,
   Key,
   Lock,
@@ -31,13 +29,12 @@ import {
   Shield,
   Unplug,
   Upload,
-  XCircle,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -50,7 +47,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
+
 import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
@@ -84,32 +81,20 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Timestamp, addDoc, collection } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import type { EmailTemplate, EmailTrigger } from '@/types';
-import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import {
+  GoogleLoginButton,
+  PageSkeleton,
+  ApiKeyField,
+  StatusBadge,
+  ColorPickerRow,
+  maskApiKey,
+} from '@/components/settings/SettingsHelpers';
 
 // ---------------------------------------------------------------------------
 // Google OAuth Config
 // ---------------------------------------------------------------------------
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
-function GoogleLoginButton({ onSuccess, onError, disabled }: { onSuccess: (code: string) => void, onError?: (error: any) => void, disabled?: boolean }) {
-  const login = useGoogleLogin({
-    flow: 'auth-code',
-    scope: 'https://www.googleapis.com/auth/calendar',
-    onSuccess: (codeResponse) => onSuccess(codeResponse.code),
-    onError: (error) => onError?.(error),
-  });
-
-  return (
-    <Button
-      onClick={() => login()}
-      disabled={disabled}
-      className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]"
-    >
-      {disabled ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
-      Connect Google Calendar
-    </Button>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Firebase MFA imports — TOTP
@@ -196,158 +181,9 @@ const TABS: TabDef[] = [
 function getInitialTab(): TabId {
   const path = window.location.pathname;
   if (path.includes('/settings/firm')) return 'firm';
-  if (path.includes('/settings/users')) return 'firm'; // route → firm tab
+  if (path.includes('/settings/users')) return 'firm';
   if (path.includes('/settings/billing')) return 'integrations';
   return 'firm';
-}
-
-/** Mask an API key showing only the last 4 characters. */
-function maskApiKey(key: string | undefined): string {
-  if (!key || key.length < 4) return '';
-  return `••••••••${key.slice(-4)} `;
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-/** Skeleton placeholder while loading firm data. */
-function PageSkeleton() {
-  return (
-    <div className="flex gap-6">
-      {/* Sidebar */}
-      <div className="hidden w-48 shrink-0 space-y-2 lg:block">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full rounded-lg" />
-        ))}
-      </div>
-      {/* Content */}
-      <div className="flex-1 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-80" />
-        <div className="mt-6 space-y-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Masked API key field with eye-toggle. */
-function ApiKeyField({
-  label,
-  storedKey,
-  pendingKey,
-  onPendingChange,
-  onSave,
-  saving,
-  description,
-}: {
-  label: string;
-  storedKey: string | undefined;
-  pendingKey: string;
-  onPendingChange: (v: string) => void;
-  onSave: () => void;
-  saving: boolean;
-  description?: string;
-}) {
-  const [revealed, setRevealed] = useState(false);
-  const hasStored = Boolean(storedKey);
-
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium text-[#1a365d]">{label}</Label>
-      {description && <p className="text-xs text-gray-500">{description}</p>}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Input
-            type={revealed ? 'text' : 'password'}
-            placeholder={hasStored ? maskApiKey(storedKey) : 'Enter API key…'}
-            value={pendingKey}
-            onChange={(e) => onPendingChange(e.target.value)}
-            className="pr-10 font-mono text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setRevealed((r) => !r)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            tabIndex={-1}
-          >
-            {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-        <Button
-          size="sm"
-          onClick={onSave}
-          disabled={saving || !pendingKey.trim()}
-          className="bg-[#2b6cb0] hover:bg-[#1a365d]"
-        >
-          {saving ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Update'}
-        </Button>
-      </div>
-      {hasStored && (
-        <p className="text-xs text-gray-400">
-          Current key: <span className="font-mono">{maskApiKey(storedKey)}</span>
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Integration status badge. */
-function StatusBadge({ connected }: { connected: boolean }) {
-  return connected ? (
-    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-      <CheckCircle2 className="mr-1 h-3 w-3" />
-      Connected
-    </Badge>
-  ) : (
-    <Badge variant="outline" className="border-gray-300 text-gray-500">
-      <XCircle className="mr-1 h-3 w-3" />
-      Not configured
-    </Badge>
-  );
-}
-
-/** Color picker row: hex input + color swatch. */
-function ColorPickerRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-gray-200 shadow-sm"
-        style={{ backgroundColor: value }}
-        title="Click to pick color"
-        onClick={() => document.getElementById(`cp - ${label} `)?.click()}
-      />
-      <input
-        id={`cp - ${label} `}
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="sr-only"
-      />
-      <div className="flex-1">
-        <Label className="text-xs text-gray-500">{label}</Label>
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="#000000"
-          className="mt-1 h-8 font-mono text-sm"
-          maxLength={7}
-        />
-      </div>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
