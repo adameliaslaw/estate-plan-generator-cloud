@@ -33,7 +33,7 @@ const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 200;
 
 /** Max resources to process per backfill invocation. */
-const BACKFILL_BATCH_SIZE = 50;
+const BACKFILL_BATCH_SIZE = 5;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,11 +159,9 @@ async function embedResource(
     return { embedded: true, chunks: 0 };
   }
 
-  // Long content: split into chunks and embed each
+  // Long content: split into chunks, embed and write each one sequentially
+  // to avoid holding all embeddings in memory at once
   const textChunks = chunkText(content);
-  const embeddings = await Promise.all(
-    textChunks.map((chunk) => generateEmbedding(chunk, openaiClient)),
-  );
 
   // Delete existing chunks first
   const existingChunks = await chunksCol.limit(500).get();
@@ -173,33 +171,22 @@ async function embedResource(
     await deleteBatch.commit();
   }
 
-  // Write new chunks in batches
-  let batch = db.batch();
-  let batchCount = 0;
-
+  // Embed and write each chunk one at a time
   for (let i = 0; i < textChunks.length; i++) {
+    const embedding = await generateEmbedding(textChunks[i], openaiClient);
     const chunkRef = chunksCol.doc(`chunk_${String(i).padStart(3, '0')}`);
-    batch.set(chunkRef, {
+    await chunkRef.set({
       parentResourceId: resourceId,
       firmId,
       chunkIndex: i,
       content: textChunks[i],
-      embedding: admin.firestore.FieldValue.vector(embeddings[i]),
+      embedding: admin.firestore.FieldValue.vector(embedding),
       embeddingModel: EMBEDDING_MODEL,
       embeddedAt: admin.firestore.FieldValue.serverTimestamp(),
       isActive: true,
     });
-    batchCount++;
-
-    if (batchCount >= 400) {
-      await batch.commit();
-      batch = db.batch();
-      batchCount = 0;
-    }
-  }
-
-  if (batchCount > 0) {
-    await batch.commit();
+    // Small delay between chunks to stay within rate limits
+    await new Promise((r) => setTimeout(r, 200));
   }
 
   // Update parent document with metadata (no embedding on parent for chunked docs)
