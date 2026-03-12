@@ -33,7 +33,7 @@ const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 200;
 
 /** Max resources to process per backfill invocation. */
-const BACKFILL_BATCH_SIZE = 5;
+const BACKFILL_BATCH_SIZE = 25;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -289,16 +289,18 @@ export const backfillEmbeddings = onCall(
 
     const db = admin.firestore();
 
-    // Only fetch lightweight metadata — NOT content — to avoid OOM
+    // Fetch metadata for active resources — use a larger limit to find unembedded ones
     const snap = await db
       .collection(`firms/${firmId}/knowledgeBase`)
       .where('isActive', '==', true)
       .select('embeddedAt', 'title')
-      .limit(BACKFILL_BATCH_SIZE)
+      .limit(200)
       .get();
 
-    // Filter to those missing embeddings
-    const needsEmbedding = snap.docs.filter((doc) => !doc.data().embeddedAt);
+    // Filter to those missing embeddings, then take up to BACKFILL_BATCH_SIZE
+    const needsEmbedding = snap.docs
+      .filter((doc) => !doc.data().embeddedAt)
+      .slice(0, BACKFILL_BATCH_SIZE);
 
     let processed = 0;
     let errors = 0;
