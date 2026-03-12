@@ -312,6 +312,7 @@ export const bulkProcessKnowledgeFiles = onCall(
           citation: '',
           content: truncateAtWordBoundary(text, 50000), // Cap at 50K chars for Firestore
           contentHtml: truncateAtWordBoundary(html, 50000),
+          contentSource: ocrPagesCount > 0 ? 'ocr' : 'native', // Auto-tag content source
           tags: [],
           docTypes: [],
           jurisdiction: 'NJ',

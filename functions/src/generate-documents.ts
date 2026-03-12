@@ -40,6 +40,8 @@ interface GenerateRequest {
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
   generationMode?: GenerationMode;
+  /** Optional model override (e.g. 'gpt-4.1', 'claude-sonnet-4-20250514') */
+  modelOverride?: string;
 }
 
 export interface GeneratedDoc {
@@ -326,7 +328,7 @@ export const generateDocuments = functions
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes, generationMode = 'ai' } = data as GenerateRequest;
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'ai', modelOverride } = data as GenerateRequest;
 
     if (!firmId || !clientId || !packageType) {
       throw new HttpsError(
@@ -366,6 +368,11 @@ export const generateDocuments = functions
       throw new HttpsError('not-found', `Firm ${firmId} not found.`);
     }
     const firmData = firmSnap.data()!;
+
+    // If a model override was specified, inject it into firmData for the AI client
+    if (modelOverride) {
+      (firmData as Record<string, unknown>).documentDraftingModel = modelOverride;
+    }
 
     // ------------------------------------------------------------------
     // 4. Determine document list

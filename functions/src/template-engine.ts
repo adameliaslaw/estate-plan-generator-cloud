@@ -721,17 +721,19 @@ async function enhanceWithAI(
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
 
-  // Build knowledge base context
+  // Build knowledge base context (full content — no truncation)
   const kbContext = ctx.knowledgeResources
-    .map((r) => `[${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}: ${r.content.slice(0, 500)}`)
+    .map((r) => `[${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}:\n${r.content}`)
     .join('\n\n');
 
-  // Notes context
+  // Notes context (full AI summaries)
   const notesContext = ctx.notes
     .slice(0, 5)
-    .map((n) => `[${n.noteType}] ${n.title ?? 'Note'}: ${(n.aiSummary ?? n.content ?? '').slice(0, 300)}`)
+    .map((n) => `[${n.noteType}] ${n.title ?? 'Note'}: ${n.aiSummary ?? n.content ?? ''}`)
     .join('\n');
 
+  // Prompt ordered for cache-friendliness: static system instructions first,
+  // then KB context (stable), then client-specific data (varies)
   const systemPrompt = `You are an expert New Jersey estate planning attorney reviewing and enhancing a legal document.
 
 You are given a template-rendered document that is structurally correct but may benefit from:
@@ -745,19 +747,20 @@ RULES:
 - Do NOT remove any existing clauses or statutory citations.
 - DO add relevant statutory citations from the knowledge base context provided.
 - DO incorporate any relevant notes or special considerations.
+- Cite the specific statute (N.J.S.A.) for every legal claim or provision. Do NOT fabricate citations.
 - Return ONLY the enhanced HTML content (no JSON wrapper, no markdown fences).
-- Preserve all HTML tags and structure.`;
+- Preserve all HTML tags and structure.
+
+KNOWLEDGE BASE:
+${kbContext || 'No specific resources available.'}
+
+CLIENT NOTES:
+${notesContext || 'No recent notes.'}`;
 
   const userPrompt = `Enhance this ${docType} document:
 
 TEMPLATE-RENDERED DOCUMENT:
 ${templateHtml.slice(0, 12000)}
-
-CLIENT NOTES:
-${notesContext || 'No recent notes.'}
-
-KNOWLEDGE BASE:
-${kbContext || 'No specific resources available.'}
 
 Return the enhanced HTML document.`;
 

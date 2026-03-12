@@ -44,3 +44,4 @@ export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } fro
 export { seedKnowledgeBase } from './seed-knowledge-base';
 export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables } from './process-template-file';
 export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';
+export { onKnowledgeResourceWritten, backfillEmbeddings } from './kb-embeddings';

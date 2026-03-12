@@ -64,8 +64,9 @@ export async function callAI(
   if (options.model) {
     const m = options.model.toLowerCase();
     if (m.startsWith('gemini')) provider = 'gemini';
-    else if (m.startsWith('claude')) provider = 'anthropic';
+    else if (m.startsWith('claude') || m.includes('opus') || m.includes('sonnet') || m.includes('haiku')) provider = 'anthropic';
     else if (m.startsWith('sonar')) provider = 'perplexity';
+    else if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) provider = 'openai';
     else provider = 'openai';
   }
 
@@ -109,7 +110,7 @@ async function _callOpenAI(
   }
 
   const client = new OpenAI({ apiKey });
-  const model = options.model ?? 'gpt-4o'; // Upgrading default model
+  const model = options.model ?? 'gpt-4.1'; // Updated default model
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 
@@ -142,7 +143,7 @@ async function _callAnthropic(
     throw new Error('Anthropic API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'claude-3-5-sonnet-20241022';
+  const model = options.model ?? 'claude-sonnet-4-20250514';
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 
@@ -191,7 +192,7 @@ async function _callGemini(
     throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'gemini-1.5-flash';
+  const model = options.model ?? 'gemini-2.5-flash';
   const temperature = options.temperature ?? 0.2;
 
   // Gemini requires system prompt to be passed inside 'system_instruction'
@@ -403,7 +404,7 @@ export async function callAIWithVision(
     throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'gemini-2.0-flash';
+  const model = options.model ?? 'gemini-2.5-flash';
   const temperature = options.temperature ?? 0.1;
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;

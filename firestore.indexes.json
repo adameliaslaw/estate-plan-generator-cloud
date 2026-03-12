@@ -203,6 +203,44 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "knowledgeBase",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 1536,
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
+      "collectionGroup": "chunks",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "firmId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 1536,
+            "flat": {}
+          }
+        }
+      ]
     }
   ],
   "fieldOverrides": []

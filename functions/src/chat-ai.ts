@@ -86,10 +86,14 @@ function formatKBForPrompt(resources: KBSnapshot[], limit: number = 15): string 
   if (resources.length === 0) return '';
 
   const lines = resources.slice(0, limit).map(
-    (r) => `  [${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}: ${r.content.slice(0, 300)}`,
+    (r) => {
+      const simLabel = r.similarity ? ` [relevance: ${(r.similarity * 100).toFixed(0)}%]` : '';
+      const contentPreview = r.content.length > 2000 ? r.content.slice(0, 2000) + '…' : r.content;
+      return `  [${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}${simLabel}:\n${contentPreview}`;
+    },
   );
 
-  return `\nKNOWLEDGE BASE (${resources.length} resources):\n${lines.join('\n')}`;
+  return `\nKNOWLEDGE BASE (${resources.length} resources):\n${lines.join('\n\n')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,9 +241,9 @@ async function buildContextString(
       }
     }
   } else {
-    // No client selected — still fetch firm + KB
+    // No client selected — still fetch firm + KB using vector search with user's message
     try {
-      const minCtx = await aggregateMinimalContext(firmId);
+      const minCtx = await aggregateMinimalContext(firmId, contextParams?.__userMessage);
       contextStr += `\nFIRM: ${minCtx.firm.firmName ?? ''}, ${minCtx.firm.firmAddress ?? ''}, ${minCtx.firm.firmPhone ?? ''}`;
       contextStr += `\nBar Number: ${minCtx.firm.barNumber ?? ''}`;
 
@@ -334,7 +338,33 @@ export const chatAi = functions
       }
 
       // 4. Build context (full aggregation for both modes)
-      const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, contextParams);
+      // Pass user message for vector search when no client is selected
+      const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, {
+        ...contextParams,
+        __userMessage: message,
+      });
+
+      // 4b. Detect model override in user message
+      let modelOverride: string | undefined;
+      const modelPatterns: Array<{ regex: RegExp; model: string }> = [
+        { regex: /\busing\s+opus\b/i, model: 'claude-opus-4-20250514' },
+        { regex: /\bwith\s+opus\b/i, model: 'claude-opus-4-20250514' },
+        { regex: /\buse\s+opus\b/i, model: 'claude-opus-4-20250514' },
+        { regex: /\busing\s+sonnet\b/i, model: 'claude-sonnet-4-20250514' },
+        { regex: /\bwith\s+sonnet\b/i, model: 'claude-sonnet-4-20250514' },
+        { regex: /\busing\s+gpt-?5\b/i, model: 'gpt-5' },
+        { regex: /\bwith\s+gpt-?5\b/i, model: 'gpt-5' },
+        { regex: /\busing\s+gemini\b/i, model: 'gemini-2.5-flash' },
+        { regex: /\bwith\s+gemini\b/i, model: 'gemini-2.5-flash' },
+        { regex: /\busing\s+gpt-?4\b/i, model: 'gpt-4.1' },
+        { regex: /\bwith\s+gpt-?4\b/i, model: 'gpt-4.1' },
+      ];
+      for (const { regex, model } of modelPatterns) {
+        if (regex.test(message)) {
+          modelOverride = model;
+          break;
+        }
+      }
 
       // 5. Fetch template awareness, learning context, and memory (parallel)
       const [templateSummary, learningCtx, memoryPromptStr] = await Promise.all([
@@ -366,9 +396,9 @@ export const chatAi = functions
         userPrompt = message;
       }
 
-      // 7. Call the LLM (uses firm's active provider)
+      // 7. Call the LLM (uses firm's active provider, with optional model override)
       const raw = await callAI(systemPrompt, userPrompt, firmData, {
-        model: firmData?.chatbotModel || undefined,
+        model: modelOverride ?? firmData?.chatbotModel ?? undefined,
         temperature: mode === 'draft' ? 0.2 : 0.4,
         maxTokens: mode === 'draft' ? 16000 : 8000,
       });

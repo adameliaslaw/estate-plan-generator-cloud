@@ -13,6 +13,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { searchKnowledgeBase, buildContextQuery, VectorSearchResult } from './kb-vector-search';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,6 +68,7 @@ export interface DocSnapshot {
   docType: string;
   displayName: string;
   status: string;
+  content?: string;
   createdAt: any;
 }
 
@@ -77,6 +79,7 @@ export interface KBSnapshot {
   content: string;
   category: string;
   tags: string[];
+  similarity?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,19 +120,32 @@ export async function aggregateClientContext(
     .orderBy('createdAt', 'desc')
     .limit(50);
 
-  let kbQuery: admin.firestore.Query = db
-    .collection(`firms/${firmId}/knowledgeBase`)
-    .where('isActive', '==', true);
+  // Build context-aware search query from client characteristics
+  const searchQuery = buildContextQuery(client, targetDocType);
 
-  if (targetDocType) {
-    kbQuery = kbQuery.where('docTypes', 'array-contains', targetDocType);
-  }
-
-  const [notesSnap, docsSnap, kbSnap] = await Promise.all([
+  const [notesSnap, docsSnap, kbResults] = await Promise.all([
     notesQuery.get(),
     docsQuery.get(),
-    kbQuery.limit(50).get(),
+    searchKnowledgeBase(firmId, searchQuery, {
+      docType: targetDocType,
+      limit: 15,
+    }).catch((err) => {
+      console.warn('[aggregateClientContext] Vector search failed, falling back to flat query:', err);
+      return null;
+    }),
   ]);
+
+  // Fallback: if vector search failed, use flat query
+  let kbSnap: admin.firestore.QuerySnapshot | null = null;
+  if (!kbResults) {
+    let kbQuery: admin.firestore.Query = db
+      .collection(`firms/${firmId}/knowledgeBase`)
+      .where('isActive', '==', true);
+    if (targetDocType) {
+      kbQuery = kbQuery.where('docTypes', 'array-contains', targetDocType);
+    }
+    kbSnap = await kbQuery.limit(50).get();
+  }
 
   // 3. Map results
   const notes: NoteSnapshot[] = notesSnap.docs.map((d) => {
@@ -152,21 +168,38 @@ export async function aggregateClientContext(
       docType: data.docType,
       displayName: data.displayName ?? d.id,
       status: data.status ?? 'draft',
+      content: data.content,
       createdAt: data.createdAt,
     };
   });
 
-  const knowledgeResources: KBSnapshot[] = kbSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      title: data.title,
-      citation: data.citation,
-      content: data.content,
-      category: data.category,
-      tags: data.tags ?? [],
-    };
-  });
+  // Map KB results from vector search or flat query fallback
+  let knowledgeResources: KBSnapshot[];
+  if (kbResults) {
+    knowledgeResources = kbResults.map((r: VectorSearchResult) => ({
+      id: r.id,
+      title: r.title,
+      citation: r.citation,
+      content: r.content,
+      category: r.category,
+      tags: r.tags,
+      similarity: r.similarity,
+    }));
+  } else if (kbSnap) {
+    knowledgeResources = kbSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        title: data.title,
+        citation: data.citation,
+        content: data.content,
+        category: data.category,
+        tags: data.tags ?? [],
+      };
+    });
+  } else {
+    knowledgeResources = [];
+  }
 
   // 4. Compute derived fields
   const computed = computeFields(client, firm);
@@ -281,22 +314,53 @@ export interface MinimalContext {
  */
 export async function aggregateMinimalContext(
   firmId: string,
+  searchQuery?: string,
 ): Promise<MinimalContext> {
   const db = admin.firestore();
 
-  const [firmSnap, kbSnap] = await Promise.all([
-    db.doc(`firms/${firmId}`).get(),
-    db.collection(`firms/${firmId}/knowledgeBase`)
-      .where('isActive', '==', true)
-      .limit(50)
-      .get(),
-  ]);
-
+  const firmSnap = await db.doc(`firms/${firmId}`).get();
   if (!firmSnap.exists) {
     throw new Error(`Firm ${firmId} not found.`);
   }
 
-  const knowledgeResources: KBSnapshot[] = kbSnap.docs.map((d) => {
+  // Use vector search if a query is provided, otherwise fall back to flat query
+  let knowledgeResources: KBSnapshot[];
+  if (searchQuery) {
+    try {
+      const results = await searchKnowledgeBase(firmId, searchQuery, { limit: 15 });
+      knowledgeResources = results.map((r) => ({
+        id: r.id,
+        title: r.title,
+        citation: r.citation,
+        content: r.content,
+        category: r.category,
+        tags: r.tags,
+        similarity: r.similarity,
+      }));
+    } catch (err) {
+      console.warn('[aggregateMinimalContext] Vector search failed, falling back to flat query:', err);
+      knowledgeResources = await _flatKBQuery(firmId);
+    }
+  } else {
+    knowledgeResources = await _flatKBQuery(firmId);
+  }
+
+  return {
+    firm: firmSnap.data()!,
+    knowledgeResources,
+  };
+}
+
+/** Fallback flat Firestore query for KB resources */
+async function _flatKBQuery(firmId: string): Promise<KBSnapshot[]> {
+  const db = admin.firestore();
+  const kbSnap = await db
+    .collection(`firms/${firmId}/knowledgeBase`)
+    .where('isActive', '==', true)
+    .limit(50)
+    .get();
+
+  return kbSnap.docs.map((d) => {
     const data = d.data();
     return {
       id: d.id,
@@ -307,9 +371,4 @@ export async function aggregateMinimalContext(
       tags: data.tags ?? [],
     };
   });
-
-  return {
-    firm: firmSnap.data()!,
-    knowledgeResources,
-  };
 }
