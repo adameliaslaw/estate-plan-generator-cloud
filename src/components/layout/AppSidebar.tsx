@@ -15,6 +15,17 @@ import { ROUTES, FIRM_DEFAULTS, COLLECTIONS } from '@/config/constants';
 import { useDocument } from '@/hooks/useFirestore';
 import type { Firm } from '@/types';
 
+// ---------------------------------------------------------------------------
+// Prefetch map — preload lazy page chunks on hover to eliminate navigation lag
+// ---------------------------------------------------------------------------
+const prefetchMap: Record<string, () => void> = {
+  [ROUTES.DASHBOARD]: () => { import('@/pages/admin/DashboardPage'); },
+  [ROUTES.CLIENTS]: () => { import('@/pages/admin/ClientListPage'); },
+  [ROUTES.CALENDAR]: () => { import('@/pages/admin/CalendarPage'); },
+  [ROUTES.PAYMENTS]: () => { import('@/pages/admin/PaymentsPage'); },
+  [ROUTES.KNOWLEDGE_BASE]: () => { import('@/pages/admin/KnowledgeBasePage'); },
+};
+
 interface NavItem {
   label: string;
   href: string;
@@ -123,6 +134,7 @@ export function AppSidebar({ onClose, isSheet = false }: AppSidebarProps) {
               key={item.href}
               to={item.href}
               onClick={onClose}
+              onMouseEnter={() => prefetchMap[item.href]?.()}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-150',
