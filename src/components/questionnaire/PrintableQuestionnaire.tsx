@@ -122,15 +122,17 @@ function PrintField({
 function renderAnswerArea(field: FieldConfig, value?: any) {
   const type = field.type;
 
-  // Radio / select with options — show checkboxes
-  if ((type === 'radio' || type === 'select') && field.options && field.options.length > 0) {
-    if (type === 'select' && field.options.length > 10) {
-      if (value) {
-        return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{value}</p>;
-      }
-      return <div className="mt-2"><BlankLines count={1} /></div>;
+  // Select dropdowns — compact: show selected value or blank line (don't list every option)
+  if (type === 'select') {
+    if (value) {
+      const label = field.options?.find((o) => o.value === value)?.label ?? value;
+      return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{label}</p>;
     }
+    return <div className="mt-2"><BlankLines count={1} /></div>;
+  }
 
+  // Radio with options — show checkboxes (these are true multi-choice)
+  if (type === 'radio' && field.options && field.options.length > 0) {
     return (
       <div className="mt-1 space-y-1">
         {field.options.map((opt) => {
