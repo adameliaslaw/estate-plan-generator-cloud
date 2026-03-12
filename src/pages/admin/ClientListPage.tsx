@@ -12,6 +12,7 @@ import {
   MoreVertical,
   Archive,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -40,6 +41,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import type { Client, PackageType, QuestionnaireStatus } from '@/types';
+import BulkImportModal from '@/components/clients/BulkImportModal';
 
 // ── Badge / label maps ─────────────────────────────────────────────────────────
 
@@ -147,8 +149,9 @@ function SortIcon({
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ClientListPage() {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
+  const [importOpen, setImportOpen] = useState(false);
 
   const firmId = userProfile?.firmId ?? '';
 
@@ -314,13 +317,22 @@ export default function ClientListPage() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => navigate(ROUTES.CLIENT_NEW)}
-          className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e407a] transition-colors"
-        >
-          <UserPlus className="h-4 w-4" />
-          Add Client
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-2 rounded-lg border border-[#2b6cb0] bg-white px-4 py-2.5 text-sm font-semibold text-[#2b6cb0] shadow-sm hover:bg-[#ebf4ff] transition-colors"
+          >
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </button>
+          <button
+            onClick={() => navigate(ROUTES.CLIENT_NEW)}
+            className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e407a] transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Client
+          </button>
+        </div>
       </div>
 
       {/* Search & filter bar */}
@@ -709,6 +721,13 @@ export default function ClientListPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BulkImportModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        firmId={firmId}
+        userId={user?.uid ?? ''}
+      />
     </div>
   );
 }

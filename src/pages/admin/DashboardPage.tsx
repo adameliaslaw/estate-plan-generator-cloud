@@ -25,6 +25,7 @@ import type { Client } from '@/types';
 import { TasksList } from '@/components/dashboard/TasksList';
 import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
 import { DashboardPayments } from '@/components/dashboard/DashboardPayments';
+import { AnalyticsWidgets } from '@/components/dashboard/AnalyticsWidgets';
 import { AudioRecorderModal, type AudioRecorderModalProps } from '@/components/ui/audio-recorder-modal';
 import { Mic } from 'lucide-react';
 import { collection, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -489,6 +490,9 @@ export default function DashboardPage() {
           loading={loading}
         />
       </div>
+
+      {/* Analytics widgets */}
+      <AnalyticsWidgets clients={allClients} loading={loading} />
 
       {/* Main content row */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
