@@ -176,6 +176,14 @@ export default function KnowledgeBasePage() {
     }
   }, [firmId]);
 
+  // Fetch both on mount so tab counts are accurate
+  useEffect(() => {
+    fetchResources();
+    fetchTemplates();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmId]);
+
+  // Re-fetch active tab data when switching tabs or filters change
   useEffect(() => {
     if (activeTab === 'resources') fetchResources();
     else fetchTemplates();
