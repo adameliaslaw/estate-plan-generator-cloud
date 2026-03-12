@@ -1,10 +1,10 @@
-﻿/**
+/**
  * BulkImportDialog.tsx â€” extracted from KnowledgeBasePage.tsx
  * (Knowledge Base resource bulk import â€” NOT the client CSV import)
  */
 
-import { useState, useCallback } from 'react';
-import { FileJson, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, Trash2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -12,7 +12,6 @@ import {
 import { toast } from 'sonner';
 import {
   knowledgeBaseService,
-  type KnowledgeCategory,
 } from '@/services/knowledge-base-service';
 
 export function BulkImportDialog({
