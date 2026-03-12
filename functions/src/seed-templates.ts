@@ -8,7 +8,7 @@
  * Firestore path: firms/{firmId}/documentTemplates/{templateId}
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { DocumentTemplate, extractTemplateVariables } from './template-engine';
 
@@ -16,7 +16,7 @@ import { DocumentTemplate, extractTemplateVariables } from './template-engine';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function assertFirmAccess(auth: any, firmId: string): void {
+function assertFirmAccess(auth: { token: Record<string, string | undefined>; uid: string }, firmId: string): void {
   const role = auth.token.role as string | undefined;
   if (!role || !['admin', 'attorney'].includes(role)) {
     throw new HttpsError('permission-denied', 'Only attorneys and administrators can manage templates.');
@@ -39,7 +39,7 @@ function templateCollection(firmId: string) {
 
 export const uploadTemplate = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
     const {
@@ -148,7 +148,7 @@ export const uploadTemplate = onCall(
 
 export const deleteTemplate = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, templateId } = request.data;
 
@@ -180,7 +180,7 @@ export const deleteTemplate = onCall(
 
 export const listTemplates = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, docType } = request.data;
 
@@ -231,7 +231,7 @@ export const listTemplates = onCall(
 
 export const getTemplateContent = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, templateId } = request.data;
 
