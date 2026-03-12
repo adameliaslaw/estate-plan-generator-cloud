@@ -24,6 +24,7 @@ import {
   Database,
   FileJson,
   RotateCcw,
+  Zap,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -146,6 +147,7 @@ export default function KnowledgeBasePage() {
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ content: string; name: string } | null>(null);
+  const [embeddingState, setEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
 
   // Fetch data
   const fetchResources = useCallback(async () => {
@@ -294,6 +296,39 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const handleBackfillEmbeddings = async () => {
+    if (!firmId) return;
+    setEmbeddingState('running');
+    let totalProcessed = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+    let batchNum = 0;
+
+    try {
+      // Process in batches until all resources are embedded
+      while (true) {
+        batchNum++;
+        toast.info(`Processing batch ${batchNum}...`, { id: 'embed-progress' });
+        const result = await knowledgeBaseService.backfillEmbeddings(firmId);
+        totalProcessed += result.processed;
+        totalSkipped += result.skipped;
+        totalErrors += result.errors;
+
+        if (result.processed === 0) break; // All done
+      }
+
+      setEmbeddingState('done');
+      toast.success(
+        `Embeddings complete! ${totalProcessed} processed, ${totalSkipped} already had embeddings, ${totalErrors} errors.`,
+        { id: 'embed-progress', duration: 8000 },
+      );
+    } catch (err) {
+      console.error('Embedding backfill failed:', err);
+      toast.error(`Embedding backfill failed after ${totalProcessed} resources. Check console for details.`, { id: 'embed-progress' });
+      setEmbeddingState('idle');
+    }
+  };
+
   return (
     <div className="space-y-6 p-6 md:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -310,6 +345,15 @@ export default function KnowledgeBasePage() {
         <div className="flex gap-2">
           {activeTab === 'resources' ? (
             <>
+              <Button
+                variant="outline"
+                onClick={handleBackfillEmbeddings}
+                disabled={embeddingState === 'running'}
+                className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+              >
+                <Zap className="mr-2 h-4 w-4" />
+                {embeddingState === 'running' ? 'Generating...' : embeddingState === 'done' ? 'Embeddings ✓' : 'Generate Embeddings'}
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setShowBulkImport(true)}

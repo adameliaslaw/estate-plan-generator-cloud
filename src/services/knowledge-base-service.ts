@@ -223,6 +223,20 @@ export const knowledgeBaseService = {
       }[];
     };
   },
+
+  /**
+   * Trigger batch embedding generation for existing KB resources.
+   * Processes up to 50 resources per call; call repeatedly until processed = 0.
+   */
+  async backfillEmbeddings(firmId: string): Promise<{
+    processed: number;
+    skipped: number;
+    errors: number;
+  }> {
+    const fn = httpsCallable(functions, 'backfillEmbeddings', { timeout: 300000 });
+    const res = await fn({ firmId });
+    return res.data as { processed: number; skipped: number; errors: number };
+  },
 };
 
 // ---------------------------------------------------------------------------
