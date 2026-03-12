@@ -10,17 +10,24 @@
  *  - Conversation history sidebar
  *  - Full client context in all modes
  *  - Memory-augmented AI responses
+ *  - @mention client tagging from any page
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark } from 'lucide-react';
+import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
+import { collection, getDocs } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { functions } from '@/config/firebase';
+import { functions, db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { DOC_TYPES } from '@/config/constants';
+
+interface ClientOption {
+  id: string;
+  name: string;
+}
 
 interface Message {
   id: string;
@@ -46,12 +53,12 @@ const DOC_TYPE_SELECT = Object.entries(DOC_TYPES).map(([, value]) => ({
   label: value.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim(),
 }));
 
-const WELCOME_MSG = (mode: 'chat' | 'draft', clientId?: string): Message => ({
+const WELCOME_MSG = (mode: 'chat' | 'draft', hasClient?: boolean): Message => ({
   id: 'welcome-' + Date.now(),
   role: 'assistant',
   content: mode === 'draft'
-    ? `📝 Drafting Mode active. I'll help you draft a document. ${clientId ? 'I can see the client context.' : 'Navigate to a client profile for full context.'}\n\nSelect a document type above, then tell me what you'd like. When ready, say "generate" or "draft it" and I'll produce the document.`
-    : 'Hello! I am your Estate Planning AI Assistant. I have context about your firm, clients, knowledge base, and templates. How can I help you today?',
+    ? `📝 Drafting Mode active. I'll help you draft a document. ${hasClient ? 'I can see the client context.' : 'Type **@ClientName** to connect a client, or navigate to their profile.'}\n\nSelect a document type above, then tell me what you'd like. When ready, say "generate" or "draft it" and I'll produce the document.`
+    : 'Hello! I am your Estate Planning AI Assistant. I have context about your firm, clients, knowledge base, and templates.\n\n💡 **Tip:** Type **@ClientName** to connect a client from anywhere!',
   timestamp: new Date(),
 });
 
@@ -62,6 +69,7 @@ export function GlobalAiWidget() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Conversation persistence
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -73,12 +81,21 @@ export function GlobalAiWidget() {
   const [mode, setMode] = useState<'chat' | 'draft'>('chat');
   const [draftDocType, setDraftDocType] = useState('will');
 
+  // @mention client tagging
+  const [mentionedClient, setMentionedClient] = useState<ClientOption | null>(null);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [allClients, setAllClients] = useState<ClientOption[]>([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
+
   const { userProfile } = useAuth();
   const firmId = userProfile?.firmId;
 
   // Extract clientId from URL if on a client page
   const clientIdMatch = window.location.pathname.match(/\/clients\/([^/]+)/);
-  const clientId = clientIdMatch?.[1] ?? undefined;
+  const urlClientId = clientIdMatch?.[1] ?? undefined;
+  // Effective clientId: URL takes priority, then @mention
+  const clientId = urlClientId ?? mentionedClient?.id ?? undefined;
 
   // Auto-scroll
   useEffect(() => {
@@ -86,6 +103,68 @@ export function GlobalAiWidget() {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isOpen, isTyping]);
+
+  // Load client list for @mention autocomplete
+  useEffect(() => {
+    if (!firmId || clientsLoaded) return;
+    const loadClients = async () => {
+      try {
+        const snap = await getDocs(collection(db, `firms/${firmId}/clients`));
+        const clients: ClientOption[] = snap.docs.map((d) => {
+          const data = d.data();
+          const pi = data.personalInfo ?? {};
+          const name = [pi.firstName, pi.lastName].filter(Boolean).join(' ') || d.id;
+          return { id: d.id, name };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        setAllClients(clients);
+        setClientsLoaded(true);
+      } catch (err) {
+        console.error('[GlobalAiWidget] Failed to load clients for @mention:', err);
+      }
+    };
+    loadClients();
+  }, [firmId, clientsLoaded]);
+
+  // Filter clients based on @mention query
+  const filteredClients = mentionQuery
+    ? allClients.filter((c) =>
+        c.name.toLowerCase().includes(mentionQuery.toLowerCase()),
+      ).slice(0, 8)
+    : allClients.slice(0, 8);
+
+  // Handle @mention selection
+  const selectMentionedClient = (client: ClientOption) => {
+    setMentionedClient(client);
+    setShowMentionDropdown(false);
+    setMentionQuery('');
+    // Replace @partial with @FullName in inputI
+    const mentionRegex = /@[\w\s]*$/;
+    const cleaned = inputValue.replace(mentionRegex, `@${client.name} `);
+    setInputValue(cleaned);
+    // Re-focus input
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  // Clear mentioned client
+  const clearMentionedClient = () => {
+    setMentionedClient(null);
+  };
+
+  // Handle input change with @mention detection
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputValue(val);
+
+    // Detect @mention: check if there's an active @query at the cursor position
+    const atMatch = val.match(/@([\w\s]*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      setShowMentionDropdown(true);
+    } else {
+      setShowMentionDropdown(false);
+      setMentionQuery('');
+    }
+  };
 
   // Load conversation history
   const loadHistory = useCallback(async () => {
@@ -106,7 +185,6 @@ export function GlobalAiWidget() {
   const resumeConversation = (conv: ConversationSummary) => {
     setConversationId(conv.id);
     setMode(conv.mode as 'chat' | 'draft');
-    // Clear messages — they'll be loaded server-side via conversationId
     setMessages([{
       id: 'loading',
       role: 'assistant',
@@ -119,7 +197,8 @@ export function GlobalAiWidget() {
   // Start a new conversation
   const startNewConversation = () => {
     setConversationId(undefined);
-    setMessages([WELCOME_MSG(mode, clientId)]);
+    setMentionedClient(null);
+    setMessages([WELCOME_MSG(mode, !!clientId)]);
     setShowHistory(false);
   };
 
@@ -128,7 +207,7 @@ export function GlobalAiWidget() {
     const newMode = mode === 'chat' ? 'draft' : 'chat';
     setMode(newMode);
     setConversationId(undefined);
-    setMessages([WELCOME_MSG(newMode, clientId)]);
+    setMessages([WELCOME_MSG(newMode, !!clientId)]);
   };
 
   // Save a message as a client note
@@ -157,15 +236,19 @@ export function GlobalAiWidget() {
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
+    // Strip @mention from the message text sent to the AI
+    const cleanedMessage = inputValue.trim().replace(/@[\w\s]+(?=\s|$)/, '').trim();
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue.trim(),
+      content: inputValue.trim(), // Show original text with @mention in the UI
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
+    setShowMentionDropdown(false);
     setIsTyping(true);
 
     try {
@@ -179,7 +262,7 @@ export function GlobalAiWidget() {
       const response = await chatAi({
         firmId,
         clientId,
-        message: inputValue.trim(),
+        message: cleanedMessage || inputValue.trim(),
         contextParams: {
           currentUrl: window.location.href,
           pathname: window.location.pathname,
@@ -339,8 +422,18 @@ export function GlobalAiWidget() {
             ))}
           </select>
           {clientId && (
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-              Client Connected
+            <span className="flex items-center gap-1 rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              <UserCheck className="h-3 w-3" />
+              {mentionedClient ? mentionedClient.name : 'Client Connected'}
+              {mentionedClient && !urlClientId && (
+                <button
+                  onClick={clearMentionedClient}
+                  className="ml-0.5 rounded-full hover:bg-emerald-200 p-0.5"
+                  title="Disconnect client"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              )}
             </span>
           )}
         </div>
@@ -482,13 +575,51 @@ export function GlobalAiWidget() {
 
       {/* Input */}
       <div className="shrink-0 border-t border-gray-200 bg-white p-3">
+        {/* @mention connected client chip */}
+        {mentionedClient && !urlClientId && (
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-700">
+              <AtSign className="h-3 w-3" />
+              {mentionedClient.name}
+              <button
+                onClick={clearMentionedClient}
+                className="ml-0.5 rounded-full hover:bg-emerald-200 p-0.5 transition-colors"
+                title="Disconnect client"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+            <span className="text-[10px] text-gray-400">Context connected</span>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <div className="relative flex-1">
+            {/* @mention autocomplete dropdown */}
+            {showMentionDropdown && filteredClients.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg z-10">
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                  Select a client
+                </div>
+                {filteredClients.map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => selectMentionedClient(client)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-500">
+                      {client.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-medium">{client.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <input
+              ref={inputRef}
               type="text"
-              placeholder={mode === 'draft' ? 'Describe the document you need...' : 'Ask anything...'}
+              placeholder={mode === 'draft' ? 'Describe the document you need... (use @ for clients)' : 'Ask anything... (use @ to tag a client)'}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 pr-10 text-sm focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors"
             />
