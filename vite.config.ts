@@ -25,8 +25,11 @@ export default defineConfig({
             if (id.includes('firebase')) {
               return 'vendor-firebase';
             }
-            if (id.includes('date-fns')) {
-              return 'vendor-date-fns';
+            if (id.includes('date-fns') || id.includes('react-day-picker')) {
+              return 'vendor-date';
+            }
+            if (id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('sonner')) {
+              return 'vendor-ui';
             }
           }
         },

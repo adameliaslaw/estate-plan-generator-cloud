@@ -1,8 +1,8 @@
-import { type ReactNode, useState, useEffect } from 'react';
+import { type ReactNode, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, ChevronDown, LogOut, User, AlertTriangle } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
-import { GlobalAiWidget } from '@/components/ai/GlobalAiWidget';
+const GlobalAiWidget = lazy(() => import('@/components/ai/GlobalAiWidget').then(m => ({ default: m.GlobalAiWidget })));
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useAuth } from '@/hooks/useAuth';
@@ -230,8 +230,10 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
         </main>
       </div>
 
-      {/* ── Global AI Chat Widget ── */}
-      <GlobalAiWidget />
+      {/* ── Global AI Chat Widget (lazy-loaded for faster initial page load) ── */}
+      <Suspense fallback={null}>
+        <GlobalAiWidget />
+      </Suspense>
     </div>
   );
 }
