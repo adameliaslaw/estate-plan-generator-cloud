@@ -286,18 +286,21 @@ export const backfillEmbeddings = onCall(
       throw new HttpsError('unauthenticated', 'Sign in required.');
     }
 
-    const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can run backfill.');
-    }
-
     const { firmId } = request.data as { firmId: string };
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
+    // Get OpenAI client — fail early with a clear message
+    let openai: OpenAI;
+    try {
+      openai = await getOpenAIClient(firmId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to initialize OpenAI client';
+      throw new HttpsError('failed-precondition', msg);
+    }
+
     const db = admin.firestore();
-    const openai = await getOpenAIClient(firmId);
 
     // Find resources without embeddings
     const snap = await db
@@ -317,41 +320,34 @@ export const backfillEmbeddings = onCall(
       );
     });
 
-    let embedded = 0;
-    let failed = 0;
-    let totalChunks = 0;
+    let processed = 0;
+    let errors = 0;
 
     for (const doc of needsEmbedding) {
       try {
         const result = await embedResource(firmId, doc.id, doc.data().content, openai);
         if (result.embedded) {
-          embedded++;
-          totalChunks += result.chunks;
+          processed++;
         }
 
         // Rate limiting: ~3 requests per second to stay well within OpenAI limits
         await new Promise((r) => setTimeout(r, 350));
       } catch (err) {
         console.error(`[backfillEmbeddings] Failed for ${doc.id}:`, err);
-        failed++;
+        errors++;
       }
     }
 
-    const remaining = snap.docs.length - needsEmbedding.length;
-    const moreToProcess = snap.docs.length === BACKFILL_BATCH_SIZE;
+    const skipped = snap.docs.length - needsEmbedding.length;
 
     console.log(
-      `[backfillEmbeddings] Done: ${embedded} embedded, ${failed} failed, ${totalChunks} chunks created. ` +
-        `${remaining} already had embeddings. ${moreToProcess ? 'More resources may need processing.' : 'All caught up.'}`,
+      `[backfillEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors.`,
     );
 
     return {
-      success: true,
-      embedded,
-      failed,
-      totalChunks,
-      alreadyEmbedded: remaining,
-      moreToProcess,
+      processed,
+      skipped,
+      errors,
     };
   },
 );
