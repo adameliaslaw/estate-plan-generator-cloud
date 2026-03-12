@@ -5,6 +5,8 @@ description: Commit all changes, push to GitHub, build, and deploy to Firebase
 
 ## Full Deploy Pipeline
 
+> **MANDATORY**: This pipeline MUST be run after completing ANY task that modifies code files. Do NOT notify or report completion to the user until all applicable steps below have been executed. If the user asks you to make code changes, finishing the code is NOT the end — deploy is.
+
 Run these steps in order to ship the current changes to production.
 
 1. Stage and commit all changes with a descriptive message:

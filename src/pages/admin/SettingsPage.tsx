@@ -501,9 +501,9 @@ export default function SettingsPage() {
       const exchangeFn = httpsCallable(functions, 'exchangeGoogleAuthCode');
       await exchangeFn({ code, redirectUri: 'postmessage', firmId });
       toast.success('Google Calendar connected successfully!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Google OAuth Exchange Error:', err);
-      toast.error(err.message || 'Failed to connect Google Calendar.');
+      toast.error(err instanceof Error ? err.message : 'Failed to connect Google Calendar.');
     } finally {
       setConnectingGoogle(false);
     }
@@ -618,8 +618,8 @@ export default function SettingsPage() {
       }
       setIsTemplateDialogOpen(false);
       setEditingTemplate(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save template');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save template');
     } finally {
       setSavingTemplateForm(false);
     }
