@@ -135,7 +135,8 @@ export default function KnowledgeBasePage() {
   // Data
   const [resources, setResources] = useState<KnowledgeResource[]>([]);
   const [templates, setTemplates] = useState<TemplateVariant[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingResources, setLoadingResources] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   // Dialogs
   const [showAddResource, setShowAddResource] = useState(false);
@@ -149,7 +150,7 @@ export default function KnowledgeBasePage() {
   // Fetch data
   const fetchResources = useCallback(async () => {
     if (!firmId) return;
-    setLoading(true);
+    setLoadingResources(true);
     try {
       const cat = activeCategory === 'all' ? undefined : activeCategory;
       const result = await knowledgeBaseService.searchResources({ firmId, category: cat, activeOnly: !showDeleted });
@@ -158,13 +159,13 @@ export default function KnowledgeBasePage() {
       console.error('Failed to fetch resources');
       toast.error('Failed to load knowledge base resources.');
     } finally {
-      setLoading(false);
+      setLoadingResources(false);
     }
   }, [firmId, activeCategory, showDeleted]);
 
   const fetchTemplates = useCallback(async () => {
     if (!firmId) return;
-    setLoading(true);
+    setLoadingTemplates(true);
     try {
       const result = await templateService.listTemplates(firmId);
       setTemplates(result.templates);
@@ -172,22 +173,15 @@ export default function KnowledgeBasePage() {
       console.error('Failed to fetch templates');
       toast.error('Failed to load templates.');
     } finally {
-      setLoading(false);
+      setLoadingTemplates(false);
     }
   }, [firmId]);
 
-  // Fetch both on mount so tab counts are accurate
+  // Fetch both on mount, re-fetch active tab on switch/filter change
   useEffect(() => {
     fetchResources();
     fetchTemplates();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId]);
-
-  // Re-fetch active tab data when switching tabs or filters change
-  useEffect(() => {
-    if (activeTab === 'resources') fetchResources();
-    else fetchTemplates();
-  }, [activeTab, fetchResources, fetchTemplates]);
+  }, [fetchResources, fetchTemplates]);
 
   // Filtered data
   const filteredResources = resources.filter(
@@ -431,7 +425,7 @@ export default function KnowledgeBasePage() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {(activeTab === 'resources' ? loadingResources : loadingTemplates) ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#2b6cb0] border-t-transparent" />
         </div>
