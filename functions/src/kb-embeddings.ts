@@ -278,7 +278,7 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
 export const backfillEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '1GiB',
+    memory: '2GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
