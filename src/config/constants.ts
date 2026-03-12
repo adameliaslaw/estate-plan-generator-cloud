@@ -455,6 +455,8 @@ export const ROUTES = {
   SETTINGS_FIRM: '/settings/firm',
   SETTINGS_USERS: '/settings/users',
   SETTINGS_BILLING: '/settings/billing',
+  CLIENT_PORTAL: (firmId: string, clientId: string) =>
+    `/portal/${firmId}/${clientId}`,
 } as const;
 
 // ---------------------------------------------------------------------------

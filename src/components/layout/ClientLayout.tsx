@@ -48,7 +48,9 @@ export function ClientLayout({ children }: ClientLayoutProps) {
             </div>
             <div>
               <p className="text-base font-semibold text-[#1a365d]">{FIRM_DEFAULTS.firmName}</p>
-              <p className="text-xs text-gray-500">Estate Planning Questionnaire</p>
+              <p className="text-xs text-gray-500">
+              {location.pathname.includes('/portal') ? 'Client Portal' : 'Estate Planning Questionnaire'}
+            </p>
             </div>
           </div>
         ) : (

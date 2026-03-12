@@ -29,6 +29,7 @@ const CalendarPage = lazy(() => import('@/pages/admin/CalendarPage'));
 const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
+const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 
 // Constants
 import { ROUTES } from '@/config/constants';
@@ -183,6 +184,14 @@ export default function App() {
               element={
                 <ClientLayout>
                   <QuestionnairePage />
+                </ClientLayout>
+              }
+            />
+            <Route
+              path="/portal/:firmId/:clientId"
+              element={
+                <ClientLayout>
+                  <ClientPortalPage />
                 </ClientLayout>
               }
             />
