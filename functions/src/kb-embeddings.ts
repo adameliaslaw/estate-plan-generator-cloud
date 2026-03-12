@@ -278,7 +278,7 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
 export const backfillEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '4GiB',
+    memory: '1GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
@@ -302,38 +302,40 @@ export const backfillEmbeddings = onCall(
 
     const db = admin.firestore();
 
-    // Find resources without embeddings
+    // Only fetch lightweight metadata — NOT content — to avoid OOM
     const snap = await db
       .collection(`firms/${firmId}/knowledgeBase`)
       .where('isActive', '==', true)
+      .select('embeddedAt', 'title')
       .limit(BACKFILL_BATCH_SIZE)
       .get();
 
     // Filter to those missing embeddings
-    const needsEmbedding = snap.docs.filter((doc) => {
-      const data = doc.data();
-      return (
-        !data.embeddedAt &&
-        data.content &&
-        typeof data.content === 'string' &&
-        data.content.length >= 50
-      );
-    });
+    const needsEmbedding = snap.docs.filter((doc) => !doc.data().embeddedAt);
 
     let processed = 0;
     let errors = 0;
 
-    for (const doc of needsEmbedding) {
+    // Process one document at a time to keep memory low
+    for (const docSnap of needsEmbedding) {
       try {
-        const result = await embedResource(firmId, doc.id, doc.data().content, openai);
-        if (result.embedded) {
-          processed++;
+        // Load content for this single document
+        const fullDoc = await db
+          .doc(`firms/${firmId}/knowledgeBase/${docSnap.id}`)
+          .get();
+        const data = fullDoc.data();
+
+        if (!data?.content || typeof data.content !== 'string' || data.content.length < 50) {
+          continue; // Skip documents without meaningful content
         }
 
-        // Rate limiting: ~3 requests per second to stay well within OpenAI limits
+        await embedResource(firmId, docSnap.id, data.content, openai);
+        processed++;
+
+        // Rate limiting: ~3 requests per second to stay within OpenAI limits
         await new Promise((r) => setTimeout(r, 350));
       } catch (err) {
-        console.error(`[backfillEmbeddings] Failed for ${doc.id}:`, err);
+        console.error(`[backfillEmbeddings] Failed for ${docSnap.id}:`, err);
         errors++;
       }
     }
