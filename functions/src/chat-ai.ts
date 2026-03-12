@@ -397,7 +397,7 @@ export const chatAi = functions
           content: result.reply,
           timestamp: new Date().toISOString(),
           isDraft: !!result.draftContent,
-          draftTitle: result.draftTitle,
+          draftTitle: result.draftTitle ?? null,
         });
 
         // If a draft was produced, save it + record in draft history
@@ -468,6 +468,8 @@ export const chatAi = functions
         role: 'assistant',
         content: raw,
         timestamp: new Date().toISOString(),
+        isDraft: false,
+        draftTitle: null,
       });
 
       // Save conversation

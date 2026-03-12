@@ -20,8 +20,8 @@ export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string; // ISO string
-  isDraft?: boolean;
-  draftTitle?: string;
+  isDraft?: boolean | null;
+  draftTitle?: string | null;
 }
 
 export interface Conversation {
