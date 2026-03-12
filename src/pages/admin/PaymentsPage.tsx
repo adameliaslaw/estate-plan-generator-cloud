@@ -15,6 +15,7 @@ import {
     Search,
     Send,
     Plus,
+    Trash2,
 } from 'lucide-react';
 import { where, orderBy, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -49,7 +50,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
-import { createDoc } from '@/hooks/useFirestore';
+import { createDoc, deleteDoc } from '@/hooks/useFirestore';
 
 // ── Cloud Function call ─────────────────────────────────────────────────────
 
@@ -561,6 +562,8 @@ export default function PaymentsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showSendDialog, setShowSendDialog] = useState(false);
     const [showRecordDialog, setShowRecordDialog] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [confirmDeletePayment, setConfirmDeletePayment] = useState<(Payment & { id: string }) | null>(null);
 
     // Fetch all clients for name lookup
     const { data: allClients } = useCollection<Client>(
@@ -636,6 +639,21 @@ export default function PaymentsPage() {
         }
         return list;
     }, [allPayments, activeTab, searchQuery, clientNameMap]);
+
+    // Delete handler
+    async function handleDeletePayment(payment: Payment & { id: string }) {
+        setDeletingId(payment.id);
+        try {
+            await deleteDoc(`firms/${firmId}/clients/${payment.clientId}/payments/${payment.id}`);
+            toast.success('Payment record deleted.');
+        } catch (err) {
+            console.error('[PaymentsPage] delete error:', err);
+            toast.error('Failed to delete payment.');
+        } finally {
+            setDeletingId(null);
+            setConfirmDeletePayment(null);
+        }
+    }
 
     const tabs: { key: FilterTab; label: string; count: number }[] = [
         { key: 'all', label: 'All', count: allPayments.length },
@@ -763,9 +781,9 @@ export default function PaymentsPage() {
                         <table className="min-w-full divide-y divide-gray-100">
                             <thead>
                                 <tr className="bg-gray-50/60">
-                                    {['Client', 'Description', 'Amount', 'Status', 'Date'].map((col) => (
+                                    {['Client', 'Description', 'Amount', 'Status', 'Date', ''].map((col) => (
                                         <th
-                                            key={col}
+                                            key={col || 'actions'}
                                             className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
                                         >
                                             {col}
@@ -815,6 +833,16 @@ export default function PaymentsPage() {
                                             <td className="whitespace-nowrap px-5 py-3.5 text-sm text-gray-500">
                                                 {formatDate(p.paidAt ?? p.createdAt)}
                                             </td>
+                                            <td className="whitespace-nowrap px-3 py-3.5 text-right">
+                                                <button
+                                                    onClick={() => setConfirmDeletePayment(p)}
+                                                    disabled={deletingId === p.id}
+                                                    className="rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                                    title="Delete payment"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -839,6 +867,32 @@ export default function PaymentsPage() {
                 firmId={firmId}
                 clients={allClients as (Client & { id: string })[]}
             />
+
+            {/* Confirm Delete Dialog */}
+            <Dialog open={!!confirmDeletePayment} onOpenChange={(v) => !v && setConfirmDeletePayment(null)}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-600">Delete Payment Record</DialogTitle>
+                        <DialogDescription className="text-sm text-gray-500">
+                            Are you sure you want to delete this payment record
+                            {confirmDeletePayment ? ` for ${formatCents(confirmDeletePayment.amount)}` : ''}?
+                            This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDeletePayment(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={!!deletingId}
+                            onClick={() => confirmDeletePayment && handleDeletePayment(confirmDeletePayment)}
+                        >
+                            {deletingId ? 'Deleting…' : 'Delete'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
