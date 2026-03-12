@@ -11,7 +11,7 @@ import { Calendar, RefreshCw } from 'lucide-react';
 import CalendarTab from '@/components/dashboard/CalendarTab';
 import { useAuth } from '@/hooks/useAuth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { app } from '@/config/firebase';
 
 export default function CalendarPage() {

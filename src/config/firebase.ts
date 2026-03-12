@@ -20,6 +20,7 @@ import {
   connectFirestoreEmulator,
   persistentLocalCache,
   persistentMultipleTabManager,
+  memoryLocalCache,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -59,14 +60,22 @@ const auth: Auth = getAuth(app);
 
 // ---------------------------------------------------------------------------
 // Firestore — initializeFirestore enables the persistent multi-tab cache
-// for offline support. Falls back gracefully in environments that do not
-// support IndexedDB (e.g. private browsing, some Safari versions).
+// for offline support. Falls back to memoryLocalCache in environments that
+// do not support IndexedDB (e.g. private browsing, some Safari versions).
 // ---------------------------------------------------------------------------
-const db: Firestore = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+let db: Firestore;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  });
+} catch (e) {
+  console.warn('[Firebase] Persistent cache unavailable, falling back to in-memory cache:', e);
+  db = initializeFirestore(app, {
+    localCache: memoryLocalCache(),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -93,7 +102,6 @@ if (useEmulators) {
   connectStorageEmulator(storage, 'localhost', 9199);
   connectFunctionsEmulator(functions, 'localhost', 5001);
 
-  // eslint-disable-next-line no-console
   console.info(
     '[Firebase] Emulators active — Auth:9099 | Firestore:8080 | Storage:9199 | Functions:5001',
   );

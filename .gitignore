@@ -60,3 +60,8 @@ ts_out.txt
 tsc_errors*
 ts_build_error.log
 dev_output.log
+firebase.txt
+
+# Catch debug artifacts in subdirectories
+functions/*.txt
+functions/*.log

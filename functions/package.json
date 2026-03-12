@@ -24,7 +24,6 @@
     "mammoth": "^1.11.0",
     "openai": "^4.70.0",
     "pdf-parse": "^2.4.5",
-    "puppeteer": "^23.11.1",
     "puppeteer-core": "^24.38.0"
   },
   "devDependencies": {

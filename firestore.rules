@@ -266,11 +266,12 @@ service cloud.firestore {
         // --- UPDATE ---
         // Admin: always allowed.
         // Attorney: allowed within their firm with validation.
-        // Paralegal: NOT allowed to update the client root document.
+        // Paralegal: allowed within their firm with validation
+        //            (needed for questionnaire progress, notes, status updates).
         // Client: may update ONLY their own record (questionnaire data)
         //         with status and personalInfo validation.
         allow update: if isAdmin()
-                      || (isAttorney()
+                      || ((isAttorney() || isParalegal())
                           && belongsToFirm(firmId)
                           && hasValidPersonalInfo()
                           && hasValidClientStatus())
