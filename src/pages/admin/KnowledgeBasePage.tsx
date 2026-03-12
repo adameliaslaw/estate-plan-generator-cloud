@@ -68,6 +68,61 @@ const DOC_TYPE_OPTIONS = Object.entries(DOC_TYPES).map(([, value]) => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Template Tags — predefined categories for filtering and organizing
+// ---------------------------------------------------------------------------
+const TEMPLATE_TAGS: { category: string; tags: { value: string; label: string; color: string }[] }[] = [
+  {
+    category: 'Document Type',
+    tags: [
+      { value: 'standard-will', label: 'Standard Will', color: 'bg-blue-50 text-blue-700' },
+      { value: 'pour-over-will', label: 'Pour-Over Will', color: 'bg-indigo-50 text-indigo-700' },
+      { value: 'simple-will', label: 'Simple Will', color: 'bg-sky-50 text-sky-700' },
+      { value: 'revocable-trust', label: 'Revocable Trust', color: 'bg-violet-50 text-violet-700' },
+      { value: 'irrevocable-trust', label: 'Irrevocable Trust', color: 'bg-purple-50 text-purple-700' },
+      { value: 'special-needs-trust', label: 'Special Needs Trust', color: 'bg-fuchsia-50 text-fuchsia-700' },
+      { value: 'financial-poa', label: 'Financial POA', color: 'bg-teal-50 text-teal-700' },
+      { value: 'healthcare-poa', label: 'Healthcare POA', color: 'bg-cyan-50 text-cyan-700' },
+      { value: 'living-will', label: 'Living Will / Advance Directive', color: 'bg-emerald-50 text-emerald-700' },
+      { value: 'guardianship', label: 'Guardianship Designation', color: 'bg-lime-50 text-lime-700' },
+    ],
+  },
+  {
+    category: 'Client',
+    tags: [
+      { value: 'male-client', label: 'Male Client', color: 'bg-blue-50 text-blue-600' },
+      { value: 'female-client', label: 'Female Client', color: 'bg-pink-50 text-pink-600' },
+      { value: 'husband', label: 'Husband', color: 'bg-slate-50 text-slate-700' },
+      { value: 'wife', label: 'Wife', color: 'bg-rose-50 text-rose-700' },
+      { value: 'married', label: 'Married', color: 'bg-amber-50 text-amber-700' },
+      { value: 'single', label: 'Single', color: 'bg-gray-100 text-gray-700' },
+      { value: 'has-children', label: 'Has Children', color: 'bg-orange-50 text-orange-700' },
+      { value: 'has-minor-children', label: 'Has Minor Children', color: 'bg-red-50 text-red-700' },
+    ],
+  },
+  {
+    category: 'Roles',
+    tags: [
+      { value: 'male-executor', label: 'Male Executor', color: 'bg-blue-50 text-blue-600' },
+      { value: 'female-executor', label: 'Female Executor', color: 'bg-pink-50 text-pink-600' },
+      { value: 'male-trustee', label: 'Male Trustee', color: 'bg-indigo-50 text-indigo-600' },
+      { value: 'female-trustee', label: 'Female Trustee', color: 'bg-fuchsia-50 text-fuchsia-600' },
+      { value: 'corporate-trustee', label: 'Corporate Trustee', color: 'bg-gray-100 text-gray-700' },
+    ],
+  },
+  {
+    category: 'Jurisdiction',
+    tags: [
+      { value: 'nj', label: 'New Jersey', color: 'bg-emerald-50 text-emerald-700' },
+      { value: 'ny', label: 'New York', color: 'bg-amber-50 text-amber-700' },
+      { value: 'pa', label: 'Pennsylvania', color: 'bg-sky-50 text-sky-700' },
+    ],
+  },
+];
+
+const ALL_TAGS = TEMPLATE_TAGS.flatMap((g) => g.tags);
+
+
+// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -80,6 +135,7 @@ export default function KnowledgeBasePage() {
   const [activeCategory, setActiveCategory] = useState<KnowledgeCategory | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
+  const [activeTemplateTag, setActiveTemplateTag] = useState<string | null>(null);
 
   // Data
   const [resources, setResources] = useState<KnowledgeResource[]>([]);
@@ -140,8 +196,9 @@ export default function KnowledgeBasePage() {
 
   const filteredTemplates = templates.filter(
     (t) =>
-      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.docType.toLowerCase().includes(searchTerm.toLowerCase()),
+      (t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.docType.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (!activeTemplateTag || (t.tags ?? []).includes(activeTemplateTag)),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
   // Handlers
@@ -504,7 +561,36 @@ export default function KnowledgeBasePage() {
         )
       ) : (
         /* Templates List */
-        filteredTemplates.length === 0 ? (
+        <>
+          {/* Tag Filter Pills */}
+          <div className="mb-4 flex flex-wrap gap-2 items-center">
+            <button
+              onClick={() => setActiveTemplateTag(null)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                !activeTemplateTag
+                  ? 'bg-[#2b6cb0] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              All
+            </button>
+            {TEMPLATE_TAGS.map((group) => (
+              group.tags.map((tag) => (
+                <button
+                  key={tag.value}
+                  onClick={() => setActiveTemplateTag(activeTemplateTag === tag.value ? null : tag.value)}
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                    activeTemplateTag === tag.value
+                      ? 'bg-[#2b6cb0] text-white'
+                      : `${tag.color} hover:opacity-80`
+                  }`}
+                >
+                  {tag.label}
+                </button>
+              ))
+            ))}
+          </div>
+        {filteredTemplates.length === 0 ? (
           <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
             <Layers className="mx-auto h-12 w-12 text-gray-300" />
             <p className="mt-3 text-sm font-medium text-gray-600">No templates uploaded</p>
@@ -537,6 +623,19 @@ export default function KnowledgeBasePage() {
                   )}
                 </div>
                 <p className="mt-3 text-xs text-gray-500 line-clamp-2">{t.description || t.contentPreview}</p>
+                {/* Tags */}
+                {(t.tags ?? []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(t.tags ?? []).map((tag) => {
+                      const tagDef = ALL_TAGS.find((td) => td.value === tag);
+                      return (
+                        <span key={tag} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${tagDef?.color || 'bg-gray-100 text-gray-600'}`}>
+                          {tagDef?.label || tag}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="mt-3 flex items-center gap-2">
                   <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
                     v{t.version}
@@ -569,7 +668,8 @@ export default function KnowledgeBasePage() {
               </div>
             ))}
           </div>
-        )
+        )}
+        </>
       )}
 
       {/* Add Resource Dialog */}
@@ -902,6 +1002,7 @@ function AddTemplateDialog({
   const [content, setContent] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // File upload state
   const [uploadMode, setUploadMode] = useState<'file' | 'manual'>('file');
@@ -1021,6 +1122,7 @@ function AddTemplateDialog({
         content: content.trim(),
         isDefault,
         variables: detectedVars.map((v) => v.suggestedVariable),
+        tags: selectedTags,
         ...(fileUrl ? { fileUrl, originalFileName } : {}),
       });
 
@@ -1068,6 +1170,7 @@ function AddTemplateDialog({
       setIsDefault(false);
       setSelectedFile(null);
       setDetectedVars([]);
+      setSelectedTags([]);
       setOriginalAiVars([]);
       setFileUrl('');
       setOriginalFileName('');
@@ -1320,6 +1423,34 @@ function AddTemplateDialog({
                 />
                 <span className="text-xs font-medium text-gray-700">Set as default</span>
               </label>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-2 block">Tags</label>
+            <div className="space-y-2">
+              {TEMPLATE_TAGS.map((group) => (
+                <div key={group.category}>
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{group.category}</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {group.tags.map((tag) => (
+                      <button
+                        key={tag.value}
+                        type="button"
+                        onClick={() => setSelectedTags((prev) => prev.includes(tag.value) ? prev.filter((t) => t !== tag.value) : [...prev, tag.value])}
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                          selectedTags.includes(tag.value)
+                            ? 'bg-[#2b6cb0] text-white ring-1 ring-[#2b6cb0]'
+                            : `${tag.color} hover:opacity-80`
+                        }`}
+                      >
+                        {selectedTags.includes(tag.value) ? '✓ ' : ''}{tag.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

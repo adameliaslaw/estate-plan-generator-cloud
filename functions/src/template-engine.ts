@@ -35,6 +35,7 @@ export interface DocumentTemplate {
   isDefault: boolean;
   isActive: boolean;
   variables: string[];
+  tags?: string[];
   createdAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
   updatedAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
   createdBy: string;

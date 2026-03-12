@@ -52,6 +52,7 @@ export const uploadTemplate = onCall(
       content,
       isDefault,
       variables,
+      tags,
       templateId, // If provided, update existing
       fileUrl,
       originalFileName,
@@ -103,6 +104,7 @@ export const uploadTemplate = onCall(
         version: currentVersion,
         isDefault: isDefault ?? false,
         variables: mergedVariables,
+        tags: tags ?? [],
         updatedAt: now,
         updatedBy: request.auth.uid,
       });
@@ -125,6 +127,7 @@ export const uploadTemplate = onCall(
         isDefault: isDefault ?? false,
         isActive: true,
         variables: mergedVariables,
+        tags: tags ?? [],
         createdAt: now,
         updatedAt: now,
         createdBy: request.auth.uid,
@@ -213,6 +216,7 @@ export const listTemplates = onCall(
         // Don't return full content in list view
         contentPreview: (data.content ?? '').slice(0, 200),
         variables: data.variables,
+        tags: data.tags ?? [],
         updatedAt: data.updatedAt,
       };
     });

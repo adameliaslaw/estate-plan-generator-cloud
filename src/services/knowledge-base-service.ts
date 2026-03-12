@@ -54,6 +54,7 @@ export interface TemplateVariant {
   isDefault: boolean;
   contentPreview: string;
   variables: string[];
+  tags: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updatedAt: any;
 }
@@ -239,6 +240,7 @@ export const templateService = {
     content: string;
     isDefault?: boolean;
     variables?: string[];
+    tags?: string[];
     templateId?: string;
     fileUrl?: string;
     originalFileName?: string;
