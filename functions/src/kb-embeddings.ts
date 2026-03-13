@@ -342,3 +342,245 @@ export const backfillEmbeddings = onCall(
     };
   },
 );
+
+// ---------------------------------------------------------------------------
+// Helper: strip Handlebars syntax from template content before embedding
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove Handlebars expressions ({{...}}) and block helpers from template
+ * content so the embedding captures the legal prose, not variable placeholders.
+ */
+function stripHandlebars(content: string): string {
+  return content
+    // Strip block comments {{!-- ... --}}
+    .replace(/\{\{!--[\s\S]*?--\}\}/g, '')
+    // Strip line comments {{! ... }}
+    .replace(/\{\{![\s\S]*?\}\}/g, '')
+    // Strip all Handlebars expressions (simple, block open, block close)
+    .replace(/\{\{[^}]*\}\}/g, ' ')
+    // Collapse excessive whitespace
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
+// Firestore onWrite trigger — auto-embed templates on create/update
+// ---------------------------------------------------------------------------
+
+export const onTemplateWritten = onDocumentWritten(
+  {
+    document: 'firms/{firmId}/documentTemplates/{templateId}',
+    region: 'us-east1',
+    memory: '512MiB',
+    timeoutSeconds: 120,
+  },
+  async (event) => {
+    const { firmId, templateId } = event.params;
+
+    // Skip deletions
+    if (!event.data?.after.exists) {
+      console.log(`[kb-embeddings] Template ${templateId} deleted, skipping.`);
+      return;
+    }
+
+    const afterData = event.data.after.data();
+    if (!afterData) return;
+
+    // Skip if content hasn't changed
+    if (event.data.before.exists) {
+      const beforeData = event.data.before.data();
+      if (beforeData?.content === afterData.content && afterData.embeddedAt) {
+        return;
+      }
+    }
+
+    const content = afterData.content;
+    if (!content || typeof content !== 'string' || content.length < 50) {
+      console.log(`[kb-embeddings] Template ${templateId} has insufficient content, skipping.`);
+      return;
+    }
+
+    // Skip inactive templates
+    if (afterData.isActive === false) {
+      console.log(`[kb-embeddings] Template ${templateId} is inactive, skipping.`);
+      return;
+    }
+
+    // Strip Handlebars syntax before embedding
+    const cleanContent = stripHandlebars(content);
+    if (cleanContent.length < 50) {
+      console.log(`[kb-embeddings] Template ${templateId} has no meaningful text after stripping Handlebars, skipping.`);
+      return;
+    }
+
+    try {
+      const openai = await getOpenAIClient(firmId);
+      const result = await embedTemplate(firmId, templateId, cleanContent, openai);
+      console.log(
+        `[kb-embeddings] Embedded template ${templateId}: ${result.chunks > 0 ? `${result.chunks} chunks` : 'single vector'}`,
+      );
+    } catch (err) {
+      console.error(`[kb-embeddings] Failed to embed template ${templateId}:`, err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Template-specific embedding helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Embed a single template document. Mirrors embedResource but writes to
+ * the documentTemplates collection and tags chunks with sourceType: 'template'.
+ */
+async function embedTemplate(
+  firmId: string,
+  templateId: string,
+  cleanContent: string,
+  openaiClient: OpenAI,
+): Promise<{ embedded: boolean; chunks: number }> {
+  const db = admin.firestore();
+  const templateRef = db.doc(`firms/${firmId}/documentTemplates/${templateId}`);
+  const chunksCol = templateRef.collection('chunks');
+
+  if (cleanContent.length <= CHUNK_THRESHOLD) {
+    const embedding = await generateEmbedding(cleanContent, openaiClient);
+
+    await templateRef.update({
+      embedding: admin.firestore.FieldValue.vector(embedding),
+      embeddingModel: EMBEDDING_MODEL,
+      embeddedAt: admin.firestore.FieldValue.serverTimestamp(),
+      chunkCount: 0,
+    });
+
+    // Clean up old chunks
+    const existingChunks = await chunksCol.limit(500).get();
+    if (!existingChunks.empty) {
+      const batch = db.batch();
+      existingChunks.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+
+    return { embedded: true, chunks: 0 };
+  }
+
+  // Long content: chunk and embed sequentially
+  const textChunks = chunkText(cleanContent);
+
+  // Delete existing chunks
+  const existingChunks = await chunksCol.limit(500).get();
+  if (!existingChunks.empty) {
+    const deleteBatch = db.batch();
+    existingChunks.docs.forEach((doc) => deleteBatch.delete(doc.ref));
+    await deleteBatch.commit();
+  }
+
+  for (let i = 0; i < textChunks.length; i++) {
+    const embedding = await generateEmbedding(textChunks[i], openaiClient);
+    await chunksCol.doc(`chunk_${String(i).padStart(3, '0')}`).set({
+      parentTemplateId: templateId,
+      firmId,
+      sourceType: 'template',
+      chunkIndex: i,
+      content: textChunks[i],
+      embedding: admin.firestore.FieldValue.vector(embedding),
+      embeddingModel: EMBEDDING_MODEL,
+      embeddedAt: admin.firestore.FieldValue.serverTimestamp(),
+      isActive: true,
+    });
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  await templateRef.update({
+    embeddingModel: EMBEDDING_MODEL,
+    embeddedAt: admin.firestore.FieldValue.serverTimestamp(),
+    chunkCount: textChunks.length,
+    embedding: admin.firestore.FieldValue.delete(),
+  });
+
+  return { embedded: true, chunks: textChunks.length };
+}
+
+// ---------------------------------------------------------------------------
+// Backfill callable — batch-embed existing templates
+// ---------------------------------------------------------------------------
+
+export const backfillTemplateEmbeddings = onCall(
+  {
+    region: 'us-east1',
+    memory: '4GiB',
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Sign in required.');
+    }
+
+    const { firmId } = request.data as { firmId: string };
+    if (!firmId) {
+      throw new HttpsError('invalid-argument', 'firmId is required.');
+    }
+
+    let openai: OpenAI;
+    try {
+      openai = await getOpenAIClient(firmId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to initialize OpenAI client';
+      throw new HttpsError('failed-precondition', msg);
+    }
+
+    const db = admin.firestore();
+
+    // Fetch metadata for active templates
+    const snap = await db
+      .collection(`firms/${firmId}/documentTemplates`)
+      .where('isActive', '==', true)
+      .select('embeddedAt', 'name')
+      .limit(200)
+      .get();
+
+    const needsEmbedding = snap.docs
+      .filter((doc) => !doc.data().embeddedAt)
+      .slice(0, BACKFILL_BATCH_SIZE);
+
+    let processed = 0;
+    let errors = 0;
+
+    for (const docSnap of needsEmbedding) {
+      try {
+        const fullDoc = await db
+          .doc(`firms/${firmId}/documentTemplates/${docSnap.id}`)
+          .get();
+        const data = fullDoc.data();
+
+        if (!data?.content || typeof data.content !== 'string' || data.content.length < 50) {
+          continue;
+        }
+
+        const cleanContent = stripHandlebars(data.content);
+        if (cleanContent.length < 50) continue;
+
+        await embedTemplate(firmId, docSnap.id, cleanContent, openai);
+        processed++;
+
+        await new Promise((r) => setTimeout(r, 350));
+      } catch (err) {
+        console.error(`[backfillTemplateEmbeddings] Failed for ${docSnap.id}:`, err);
+        errors++;
+      }
+    }
+
+    const skipped = snap.docs.length - needsEmbedding.length;
+
+    console.log(
+      `[backfillTemplateEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors.`,
+    );
+
+    return {
+      processed,
+      skipped,
+      errors,
+    };
+  },
+);

@@ -163,10 +163,11 @@ async function main() {
       continue;
     }
 
-    // Get all active resources
+    // Get all active resources, selecting only metadata to prevent OOM
     const snap = await db
       .collection(`firms/${firmId}/knowledgeBase`)
       .where('isActive', '==', true)
+      .select('title', 'embeddedAt')
       .get();
 
     const needsEmbedding = snap.docs.filter((d) => !d.data().embeddedAt);
@@ -177,7 +178,10 @@ async function main() {
     let errors = 0;
 
     for (const doc of needsEmbedding) {
-      const data = doc.data();
+      // Fetch the full document sequentially to avoid memory bloat
+      const fullDoc = await doc.ref.get();
+      const data = fullDoc.data();
+
       if (!data.content || typeof data.content !== 'string' || data.content.length < 50) {
         console.log(`  [skip] ${doc.id} — insufficient content`);
         continue;

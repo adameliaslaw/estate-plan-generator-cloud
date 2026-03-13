@@ -41,10 +41,10 @@ export interface ComputedFields {
   hasMinorChildren: boolean;
   hasSpecialNeedsChild: boolean;
   childCount: number;
-  minorChildren: any[];
-  adultChildren: any[];
+  minorChildren: Record<string, unknown>[];
+  adultChildren: Record<string, unknown>[];
   propertyCount: number;
-  propertiesForTrust: any[];
+  propertiesForTrust: Record<string, unknown>[];
   estimatedTotalAssets: number;
   primaryTrustName: string;
   todayFormatted: string;
@@ -60,7 +60,7 @@ export interface NoteSnapshot {
   noteType: string;
   transcription?: string;
   aiSummary?: string;
-  createdAt: any;
+  createdAt: admin.firestore.Timestamp | Date;
 }
 
 export interface DocSnapshot {
@@ -69,7 +69,7 @@ export interface DocSnapshot {
   displayName: string;
   status: string;
   content?: string;
-  createdAt: any;
+  createdAt: admin.firestore.Timestamp | Date;
 }
 
 export interface KBSnapshot {
@@ -220,14 +220,14 @@ export async function aggregateClientContext(
 
 function computeFields(
   client: admin.firestore.DocumentData,
-  firm: admin.firestore.DocumentData,
+  _firm: admin.firestore.DocumentData,
 ): ComputedFields {
   const pi = client.personalInfo ?? {};
   const spouse = client.spouseInfo;
-  const children: any[] = client.children ?? [];
+  const children: Array<Record<string, unknown>> = client.children ?? [];
   const assets = client.assets ?? {};
-  const realEstate: any[] = assets.realEstate ?? [];
-  const trusts: any[] = client.trusts ?? [];
+  const realEstate: Array<Record<string, unknown>> = assets.realEstate ?? [];
+  const trusts: Array<Record<string, unknown>> = client.trusts ?? [];
   const packageDetails = client.packageDetails ?? {};
 
   const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
@@ -236,25 +236,25 @@ function computeFields(
 
   const spouseFullName = spouse
     ? [spouse.firstName, spouse.middleName, spouse.lastName]
-        .filter(Boolean)
-        .join(' ')
+      .filter(Boolean)
+      .join(' ')
     : '';
 
   const hasSpouse = ['Married', 'Domestic Partnership'].includes(pi.maritalStatus);
-  const minorChildren = children.filter((c: any) => c.isMinor === true);
-  const adultChildren = children.filter((c: any) => c.isMinor !== true);
-  const hasSpecialNeedsChild = children.some((c: any) => c.specialNeeds === true);
-  const propertiesForTrust = realEstate.filter((p: any) => p.transferToTrust === true);
+  const minorChildren = children.filter((c) => c.isMinor === true);
+  const adultChildren = children.filter((c) => c.isMinor !== true);
+  const hasSpecialNeedsChild = children.some((c) => c.specialNeeds === true);
+  const propertiesForTrust = realEstate.filter((p) => p.transferToTrust === true);
 
   // Estimate total assets
   let estimatedTotalAssets = 0;
-  for (const p of realEstate) estimatedTotalAssets += p.estimatedValue ?? 0;
-  for (const a of assets.bankAccounts ?? []) estimatedTotalAssets += a.estimatedBalance ?? 0;
-  for (const a of assets.investmentAccounts ?? []) estimatedTotalAssets += a.estimatedValue ?? 0;
-  for (const a of assets.retirementAccounts ?? []) estimatedTotalAssets += a.estimatedValue ?? 0;
-  for (const a of assets.lifeInsurance ?? []) estimatedTotalAssets += a.cashValue ?? a.faceValue ?? 0;
-  for (const a of assets.businessInterests ?? []) estimatedTotalAssets += a.estimatedValue ?? 0;
-  for (const a of assets.personalProperty ?? []) estimatedTotalAssets += a.estimatedValue ?? 0;
+  for (const p of realEstate) estimatedTotalAssets += (p.estimatedValue as number) ?? 0;
+  for (const a of assets.bankAccounts ?? []) estimatedTotalAssets += (a.estimatedBalance as number) ?? 0;
+  for (const a of assets.investmentAccounts ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
+  for (const a of assets.retirementAccounts ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
+  for (const a of assets.lifeInsurance ?? []) estimatedTotalAssets += (a.cashValue as number) ?? (a.faceValue as number) ?? 0;
+  for (const a of assets.businessInterests ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
+  for (const a of assets.personalProperty ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
 
   if (typeof assets.estimatedTotalEstate === 'number' && assets.estimatedTotalEstate > 0) {
     estimatedTotalAssets = assets.estimatedTotalEstate;

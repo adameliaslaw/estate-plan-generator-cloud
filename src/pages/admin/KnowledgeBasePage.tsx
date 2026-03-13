@@ -148,6 +148,7 @@ export default function KnowledgeBasePage() {
   const [seeding, setSeeding] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ content: string; name: string } | null>(null);
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
+  const [templateEmbeddingState, setTemplateEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
 
   // Fetch data
   const fetchResources = useCallback(async () => {
@@ -196,7 +197,7 @@ export default function KnowledgeBasePage() {
   const filteredTemplates = templates.filter(
     (t) =>
       (t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.docType.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        t.docType.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (!activeTemplateTag || (t.tags ?? []).includes(activeTemplateTag)),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -329,6 +330,37 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const handleBackfillTemplateEmbeddings = async () => {
+    if (!firmId) return;
+    setTemplateEmbeddingState('running');
+    let totalProcessed = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+    let batchNum = 0;
+
+    try {
+      while (true) {
+        batchNum++;
+        toast.info(`Processing template batch ${batchNum}...`, { id: 'template-embed-progress' });
+        const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId);
+        totalProcessed += result.processed;
+        totalSkipped += result.skipped;
+        totalErrors += result.errors;
+        if (result.processed === 0) break;
+      }
+
+      setTemplateEmbeddingState('done');
+      toast.success(
+        `Template embeddings complete! ${totalProcessed} processed, ${totalSkipped} already embedded, ${totalErrors} errors.`,
+        { id: 'template-embed-progress', duration: 8000 },
+      );
+    } catch (err) {
+      console.error('Template embedding backfill failed:', err);
+      toast.error(`Template embedding failed after ${totalProcessed} templates. Check console for details.`, { id: 'template-embed-progress' });
+      setTemplateEmbeddingState('idle');
+    }
+  };
+
   return (
     <div className="space-y-6 p-6 md:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -369,7 +401,16 @@ export default function KnowledgeBasePage() {
               </Button>
             </>
           ) : (
-          <>
+            <>
+              <Button
+                variant="outline"
+                onClick={handleBackfillTemplateEmbeddings}
+                disabled={templateEmbeddingState === 'running'}
+                className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+              >
+                <Zap className="mr-2 h-4 w-4" />
+                {templateEmbeddingState === 'running' ? 'Generating...' : templateEmbeddingState === 'done' ? 'Embeddings ✓' : 'Generate Template Embeddings'}
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setShowBulkTemplateImport(true)}
@@ -393,22 +434,20 @@ export default function KnowledgeBasePage() {
         <nav className="flex gap-6">
           <button
             onClick={() => setActiveTab('resources')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'resources'
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'resources'
                 ? 'border-[#2b6cb0] text-[#2b6cb0]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             <BookOpen className="inline mr-1.5 h-4 w-4" />
             Resources ({resources.length})
           </button>
           <button
             onClick={() => setActiveTab('templates')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'templates'
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'templates'
                 ? 'border-[#2b6cb0] text-[#2b6cb0]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             <Layers className="inline mr-1.5 h-4 w-4" />
             Document Templates ({templates.length})
@@ -432,11 +471,10 @@ export default function KnowledgeBasePage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveCategory('all')}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                activeCategory === 'all'
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${activeCategory === 'all'
                   ? 'bg-[#2b6cb0] text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               All
             </button>
@@ -444,22 +482,20 @@ export default function KnowledgeBasePage() {
               <button
                 key={cat.key}
                 onClick={() => setActiveCategory(cat.key)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  activeCategory === cat.key
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${activeCategory === cat.key
                     ? 'bg-[#2b6cb0] text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 {cat.label}
               </button>
             ))}
             <button
               onClick={() => setShowDeleted(!showDeleted)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                showDeleted
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${showDeleted
                   ? 'bg-red-500 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Trash2 className="inline mr-1 h-3 w-3" />
               Deleted
@@ -607,11 +643,10 @@ export default function KnowledgeBasePage() {
           <div className="mb-4 flex flex-wrap gap-2 items-center">
             <button
               onClick={() => setActiveTemplateTag(null)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                !activeTemplateTag
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!activeTemplateTag
                   ? 'bg-[#2b6cb0] text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               All
             </button>
@@ -620,96 +655,94 @@ export default function KnowledgeBasePage() {
                 <button
                   key={tag.value}
                   onClick={() => setActiveTemplateTag(activeTemplateTag === tag.value ? null : tag.value)}
-                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                    activeTemplateTag === tag.value
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${activeTemplateTag === tag.value
                       ? 'bg-[#2b6cb0] text-white'
                       : `${tag.color} hover:opacity-80`
-                  }`}
+                    }`}
                 >
                   {tag.label}
                 </button>
               ))
             ))}
           </div>
-        {filteredTemplates.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
-            <Layers className="mx-auto h-12 w-12 text-gray-300" />
-            <p className="mt-3 text-sm font-medium text-gray-600">No templates uploaded</p>
-            <p className="mt-1 text-xs text-gray-400">Upload Handlebars HTML templates for each document type.</p>
-            <Button onClick={() => setShowAddTemplate(true)} className="mt-4 bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
-              <Upload className="mr-2 h-4 w-4" /> Upload Template
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredTemplates.map((t) => (
-              <div
-                key={t.id}
-                className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
-                      <FileText className="h-4 w-4 text-[#2b6cb0]" />
+          {filteredTemplates.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
+              <Layers className="mx-auto h-12 w-12 text-gray-300" />
+              <p className="mt-3 text-sm font-medium text-gray-600">No templates uploaded</p>
+              <p className="mt-1 text-xs text-gray-400">Upload Handlebars HTML templates for each document type.</p>
+              <Button onClick={() => setShowAddTemplate(true)} className="mt-4 bg-[#2b6cb0] hover:bg-[#1a365d] text-white">
+                <Upload className="mr-2 h-4 w-4" /> Upload Template
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredTemplates.map((t) => (
+                <div
+                  key={t.id}
+                  className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                        <FileText className="h-4 w-4 text-[#2b6cb0]" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">{t.name}</h3>
+                        <p className="text-xs text-gray-500">{t.docType}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900">{t.name}</h3>
-                      <p className="text-xs text-gray-500">{t.docType}</p>
-                    </div>
+                    {t.isDefault && (
+                      <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        DEFAULT
+                      </span>
+                    )}
                   </div>
-                  {t.isDefault && (
-                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      DEFAULT
-                    </span>
+                  <p className="mt-3 text-xs text-gray-500 line-clamp-2">{t.description || t.contentPreview}</p>
+                  {/* Tags */}
+                  {(t.tags ?? []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(t.tags ?? []).map((tag) => {
+                        const tagDef = ALL_TAGS.find((td) => td.value === tag);
+                        return (
+                          <span key={tag} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${tagDef?.color || 'bg-gray-100 text-gray-600'}`}>
+                            {tagDef?.label || tag}
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-                <p className="mt-3 text-xs text-gray-500 line-clamp-2">{t.description || t.contentPreview}</p>
-                {/* Tags */}
-                {(t.tags ?? []).length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {(t.tags ?? []).map((tag) => {
-                      const tagDef = ALL_TAGS.find((td) => td.value === tag);
-                      return (
-                        <span key={tag} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${tagDef?.color || 'bg-gray-100 text-gray-600'}`}>
-                          {tagDef?.label || tag}
-                        </span>
-                      );
-                    })}
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                      v{t.version}
+                    </span>
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${t.complexity === 1 ? 'bg-green-50 text-green-700' :
+                        t.complexity === 2 ? 'bg-amber-50 text-amber-700' :
+                          'bg-red-50 text-red-700'
+                      }`}>
+                      {t.complexity === 1 ? 'Simple' : t.complexity === 2 ? 'Standard' : 'Comprehensive'}
+                    </span>
+                    <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] text-blue-600">
+                      {t.variant}
+                    </span>
                   </div>
-                )}
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-                    v{t.version}
-                  </span>
-                  <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${
-                    t.complexity === 1 ? 'bg-green-50 text-green-700' :
-                    t.complexity === 2 ? 'bg-amber-50 text-amber-700' :
-                    'bg-red-50 text-red-700'
-                  }`}>
-                    {t.complexity === 1 ? 'Simple' : t.complexity === 2 ? 'Standard' : 'Comprehensive'}
-                  </span>
-                  <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] text-blue-600">
-                    {t.variant}
-                  </span>
+                  <div className="mt-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handlePreviewTemplate(t.id, t.name)}
+                      className="flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      <Eye className="h-3 w-3" /> Preview
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3 w-3" /> Remove
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handlePreviewTemplate(t.id, t.name)}
-                    className="flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                  >
-                    <Eye className="h-3 w-3" /> Preview
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTemplate(t.id)}
-                    className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3 w-3" /> Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
         </>
       )}
 

@@ -1,0 +1,7 @@
+﻿commit e412323aeb9acff3cdba2faee820f8a7e937f8fd
+Author: AI Bot <bot@example.com>
+Date:   Thu Mar 12 18:45:05 2026 -0400
+
+    feat: add local backfill-embeddings script, sequential chunk processing, remove Cloud Function button dependency
+
+functions/backfill-embeddings.cjs

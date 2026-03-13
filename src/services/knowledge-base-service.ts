@@ -237,6 +237,20 @@ export const knowledgeBaseService = {
     const res = await fn({ firmId });
     return res.data as { processed: number; skipped: number; errors: number };
   },
+
+  /**
+   * Trigger batch embedding generation for existing document templates.
+   * Processes up to 25 templates per call; call repeatedly until processed = 0.
+   */
+  async backfillTemplateEmbeddings(firmId: string): Promise<{
+    processed: number;
+    skipped: number;
+    errors: number;
+  }> {
+    const fn = httpsCallable(functions, 'backfillTemplateEmbeddings', { timeout: 300000 });
+    const res = await fn({ firmId });
+    return res.data as { processed: number; skipped: number; errors: number };
+  },
 };
 
 // ---------------------------------------------------------------------------

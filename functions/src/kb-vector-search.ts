@@ -45,6 +45,8 @@ export interface VectorSearchResult {
   isChunk: boolean;
   /** For chunk results, the index of the chunk within the parent */
   chunkIndex?: number;
+  /** Source of the result: 'kb' for knowledge base, 'template' for document templates */
+  sourceType: 'kb' | 'template';
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ export async function searchKnowledgeBase(
       tags: data.tags ?? [],
       similarity,
       isChunk: false,
+      sourceType: 'kb',
     });
   }
 
@@ -208,10 +211,110 @@ export async function searchKnowledgeBase(
       similarity,
       isChunk: true,
       chunkIndex: data.chunkIndex,
+      sourceType: 'kb',
     });
   }
 
-  // 6. Sort by similarity (highest first) and limit
+  // 6. Search template parent documents (short content with embedding on doc)
+  const templateRef = db.collection(`firms/${firmId}/documentTemplates`);
+  const templateQuery: admin.firestore.Query = templateRef.where('isActive', '==', true);
+
+  try {
+    const templateParentResults = await templateQuery
+      .findNearest({
+        vectorField: 'embedding',
+        queryVector,
+        limit: 5,
+        distanceMeasure: 'COSINE',
+        distanceResultField: '__distance',
+      })
+      .get();
+
+    for (const doc of templateParentResults.docs) {
+      const data = doc.data();
+      const distance = (data as Record<string, unknown>).__distance as number;
+      const similarity = 1 - (distance / 2);
+      if (similarity < minScore) continue;
+
+      seenResourceIds.add(`template:${doc.id}`);
+      results.push({
+        id: doc.id,
+        title: data.name ?? data.title ?? '',
+        content: data.content ?? '',
+        category: 'form_template',
+        tags: data.tags ?? [],
+        similarity,
+        isChunk: false,
+        sourceType: 'template',
+      });
+    }
+  } catch (err) {
+    // Template collection may not have vector index yet — non-fatal
+    console.warn('[kb-vector-search] Template parent vector search failed (index may not exist):', err);
+  }
+
+  // 7. Search template chunks (long templates split into embedded sub-docs)
+  try {
+    const templateChunkResults = await db
+      .collectionGroup('chunks')
+      .where('firmId', '==', firmId)
+      .where('sourceType', '==', 'template')
+      .where('isActive', '==', true)
+      .findNearest({
+        vectorField: 'embedding',
+        queryVector,
+        limit: 5,
+        distanceMeasure: 'COSINE',
+        distanceResultField: '__distance',
+      })
+      .get();
+
+    const templateParentCache = new Map<string, admin.firestore.DocumentData>();
+
+    for (const doc of templateChunkResults.docs) {
+      const data = doc.data();
+      const distance = (data as Record<string, unknown>).__distance as number;
+      const similarity = 1 - (distance / 2);
+      if (similarity < minScore) continue;
+
+      const parentTemplateId = data.parentTemplateId as string;
+      if (!parentTemplateId) continue;
+      if (seenResourceIds.has(`template:${parentTemplateId}`)) continue;
+
+      if (!templateParentCache.has(parentTemplateId)) {
+        try {
+          const parentDoc = await templateRef.doc(parentTemplateId).get();
+          if (parentDoc.exists) {
+            const parentData = parentDoc.data()!;
+            if (parentData.isActive === false) continue;
+            templateParentCache.set(parentTemplateId, parentData);
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      const parentData = templateParentCache.get(parentTemplateId);
+      if (!parentData) continue;
+
+      seenResourceIds.add(`template:${parentTemplateId}`);
+      results.push({
+        id: parentTemplateId,
+        title: parentData.name ?? parentData.title ?? '',
+        content: data.content ?? '',
+        category: 'form_template',
+        tags: parentData.tags ?? [],
+        similarity,
+        isChunk: true,
+        chunkIndex: data.chunkIndex,
+        sourceType: 'template',
+      });
+    }
+  } catch (err) {
+    console.warn('[kb-vector-search] Template chunk vector search failed (index may not exist):', err);
+  }
+
+  // 8. Sort by similarity (highest first) and limit
   results.sort((a, b) => b.similarity - a.similarity);
   return results.slice(0, limit);
 }

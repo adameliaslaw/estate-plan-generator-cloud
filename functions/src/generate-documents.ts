@@ -311,7 +311,7 @@ function requiresNotarization(docType: string): boolean {
 export const generateDocuments = functions
   .runWith({ timeoutSeconds: 540, memory: '1GB' })
   .region('us-east1')
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
     // 1. Authentication & authorization
     // ------------------------------------------------------------------
