@@ -103,7 +103,7 @@ function SubHeader({ title }: { title: string }) {
 
 function FiduciaryBlock({ role }: { role: string }) {
   return (
-    <div className="border-b border-gray-300 pb-1.5 mb-1.5">
+    <div className="border-b border-gray-300 pb-1.5 mb-1.5" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
       <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">{role}</p>
       <div className="grid grid-cols-2 gap-x-4">
         {/* Primary */}
@@ -363,9 +363,9 @@ export default function PrintableQuestionnaire({
         {/* ============================================================= */}
         {/* SECTION 6: HEALTHCARE DIRECTIVES                               */}
         {/* ============================================================= */}
-        <SectionHeader title="Section 6 — Healthcare Preferences" />
+        <SectionHeader title="Section 5 — Healthcare Preferences" forcePageBreak />
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
           <div>
             <SubHeader title="Life-Sustaining Treatment" />
             <div className="space-y-0.5">
@@ -402,7 +402,7 @@ export default function PrintableQuestionnaire({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 mt-3">
+        <div className="grid grid-cols-2 gap-x-6 mt-3" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
           <div>
             <SubHeader title="Burial / Funeral Preference" />
             <div className="flex gap-3">
@@ -422,13 +422,15 @@ export default function PrintableQuestionnaire({
           </div>
         </div>
 
-        <SubHeader title="Additional Healthcare Instructions" />
-        <BlankLines count={3} />
+        <div style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+          <SubHeader title="Additional Healthcare Instructions" />
+          <BlankLines count={3} />
+        </div>
 
         {/* ============================================================= */}
         {/* SECTION 7: ASSETS & LIABILITIES (SUMMARY)                      */}
         {/* ============================================================= */}
-        <SectionHeader title="Section 7 — Assets & Liabilities (Summary)" />
+        <SectionHeader title="Section 6 — Assets & Liabilities (Summary)" forcePageBreak />
         <p className="text-[8pt] text-gray-500 italic mb-2">
           Please list your major assets and liabilities below. Our office will gather detailed
           information during your consultation. Include approximate values where known.
@@ -458,7 +460,7 @@ export default function PrintableQuestionnaire({
         {/* ============================================================= */}
         {/* SECTION 8: ADDITIONAL INFORMATION                              */}
         {/* ============================================================= */}
-        <SectionHeader title="Section 8 — Additional Information" />
+        <SectionHeader title="Section 7 — Additional Information" />
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
