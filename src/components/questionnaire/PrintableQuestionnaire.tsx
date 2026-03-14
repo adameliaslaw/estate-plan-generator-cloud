@@ -79,7 +79,7 @@ function LabeledField({
 function SectionHeader({ title, subtitle, forcePageBreak }: { title: string; subtitle?: string; forcePageBreak?: boolean }) {
   return (
     <div className={`mt-5 mb-2 border-b-2 border-[#1a365d] pb-0.5 pt-1 ${forcePageBreak ? 'print-page-break' : ''}`}>
-      <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase" style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif', letterSpacing: '0.04em' }}>
+      <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase" style={{ letterSpacing: '0.03em' }}>
         {title}
       </h2>
       {subtitle && (
@@ -91,7 +91,7 @@ function SectionHeader({ title, subtitle, forcePageBreak }: { title: string; sub
 
 function SubHeader({ title }: { title: string }) {
   return (
-    <p className="text-[8pt] font-bold uppercase text-gray-600 mt-3 mb-1" style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif', letterSpacing: '0.04em' }}>
+    <p className="text-[8pt] font-bold uppercase text-gray-600 mt-3 mb-1" style={{ letterSpacing: '0.03em' }}>
       {title}
     </p>
   );
@@ -147,7 +147,7 @@ export default function PrintableQuestionnaire({
   clientName,
 }: PrintableQuestionnaireProps) {
   return (
-    <div>
+    <div style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
       {/* ── Screen-only toolbar ─────────────────────────────────────────── */}
       <div className="print:hidden mb-6 flex items-center justify-between rounded-lg border border-[#1a365d]/15 bg-[#ebf4ff] px-4 py-3">
         <div>
@@ -500,35 +500,6 @@ export default function PrintableQuestionnaire({
           </div>
         </div>
 
-        {/* ============================================================= */}
-        {/* CERTIFICATION / SIGNATURE                                      */}
-        {/* ============================================================= */}
-        <div className="mt-6 border-t-2 border-[#1a365d] pt-3 print:break-inside-avoid">
-          <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase mb-2" style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif', letterSpacing: '0.04em' }}>
-            Certification
-          </h2>
-          <p className="text-[9pt] text-gray-700 mb-4">
-            I certify that the information provided in this questionnaire is true and accurate to
-            the best of my knowledge. I understand that this information will be used to prepare
-            my estate planning documents and that any material omissions or inaccuracies may
-            affect the validity or effectiveness of those documents.
-          </p>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="border-b border-gray-400" style={{ height: '1.8rem' }} />
-              <p className="mt-0.5 text-[7pt] text-gray-500">Client Signature</p>
-            </div>
-            <div>
-              <div className="border-b border-gray-400" style={{ height: '1.8rem' }} />
-              <p className="mt-0.5 text-[7pt] text-gray-500">Date</p>
-            </div>
-            <div>
-              <div className="border-b border-gray-400" style={{ height: '1.8rem' }} />
-              <p className="mt-0.5 text-[7pt] text-gray-500">Print Name</p>
-            </div>
-            <div />
-          </div>
-        </div>
 
         {/* ============================================================= */}
         {/* LAST PAGE: DISTRIBUTION WISHES (attorney consultation)         */}
@@ -553,8 +524,8 @@ export default function PrintableQuestionnaire({
           ))}
         </div>
 
-        {/* Print footer */}
-        <div className="hidden print:block print:fixed print:bottom-0 print:left-0 print:right-0 print:text-center print:text-[7pt] print:text-gray-400 print:py-1">
+        {/* Print footer — static (not fixed) to avoid overlapping content */}
+        <div className="mt-8 text-center text-[7pt] text-gray-400 py-1 print:break-inside-avoid">
           Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200
         </div>
       </div>
@@ -564,10 +535,12 @@ export default function PrintableQuestionnaire({
         @media print {
           @page {
             size: letter portrait;
-            margin: 0.85in 0.8in 0.9in 0.8in;
+            margin: 0.75in 0.75in 0.75in 0.75in;
+          }
+          body, * {
+            font-family: Arial, Helvetica, sans-serif !important;
           }
           body {
-            font-family: Inter, Arial, Helvetica, sans-serif;
             font-size: 9pt;
             color: #000;
             background: #fff;
