@@ -350,7 +350,7 @@ export default function DocumentEditor({
 
   // ── Restore a version ──
   const handleRestoreVersion = useCallback(
-    (content: string, _versionNumber: number) => {
+    (content: string, _vn: number) => {
       if (!editor) return;
       editor.commands.setContent(content, { emitUpdate: false });
       setHasUnsavedChanges(true);

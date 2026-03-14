@@ -269,7 +269,7 @@ function NoteForm({
           isPinned: form.isPinned,
           isPrivate: form.isPrivate,
           updatedBy: authorUid,
-          updatedAt: serverTimestamp() as any,
+          updatedAt: serverTimestamp() as Note['updatedAt'],
         };
 
         if (!isEditing && !lastSavedState) {
@@ -277,7 +277,7 @@ function NoteForm({
           partialNote.clientId = clientId;
           partialNote.source = 'manual';
           partialNote.createdBy = authorUid;
-          partialNote.createdAt = serverTimestamp() as any;
+          partialNote.createdAt = serverTimestamp() as Note['createdAt'];
         }
 
         await setDoc(docRef, partialNote, { merge: true });
@@ -315,7 +315,7 @@ function NoteForm({
             audioDurationSeconds: audioRecorder.durationSeconds ?? null,
             transcriptionStatus: 'processing',
             updatedBy: authorUid,
-            updatedAt: serverTimestamp() as any,
+            updatedAt: serverTimestamp() as Note['updatedAt'],
           };
 
           if (!isEditing && !lastSavedState) {
@@ -324,7 +324,7 @@ function NoteForm({
             audioUpdate.source = 'manual';
             audioUpdate.title = sanitizeInput(form.title.trim()) || 'Audio Note';
             audioUpdate.createdBy = authorUid;
-            audioUpdate.createdAt = serverTimestamp() as any;
+            audioUpdate.createdAt = serverTimestamp() as Note['createdAt'];
           }
 
           await setDoc(docRef, audioUpdate, { merge: true });
@@ -361,7 +361,7 @@ function NoteForm({
           isPinned: form.isPinned,
           isPrivate: form.isPrivate,
           updatedBy: authorUid,
-          updatedAt: serverTimestamp() as any,
+          updatedAt: serverTimestamp() as Note['updatedAt'],
         }, { merge: true }).catch(console.error);
       }
     }

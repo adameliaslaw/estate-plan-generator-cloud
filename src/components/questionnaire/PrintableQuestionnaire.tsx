@@ -76,19 +76,22 @@ function LabeledField({
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, subtitle, forcePageBreak }: { title: string; subtitle?: string; forcePageBreak?: boolean }) {
   return (
-    <div className="mt-5 mb-2 border-b-2 border-[#1a365d] pb-0.5 print:break-before-auto">
-      <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase tracking-wide">
+    <div className={`mt-5 mb-2 border-b-2 border-[#1a365d] pb-0.5 pt-1 ${forcePageBreak ? 'print-page-break' : ''}`}>
+      <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase" style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif', letterSpacing: '0.04em' }}>
         {title}
       </h2>
+      {subtitle && (
+        <p className="text-[8pt] text-gray-500 italic mt-0.5">{subtitle}</p>
+      )}
     </div>
   );
 }
 
 function SubHeader({ title }: { title: string }) {
   return (
-    <p className="text-[8pt] font-bold uppercase tracking-wider text-gray-600 mt-3 mb-1">
+    <p className="text-[8pt] font-bold uppercase text-gray-600 mt-3 mb-1" style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif', letterSpacing: '0.04em' }}>
       {title}
     </p>
   );
@@ -355,88 +358,7 @@ export default function PrintableQuestionnaire({
           <FiduciaryBlock role="Guardian" />
         </div>
 
-        {/* ============================================================= */}
-        {/* SECTION 5: DISTRIBUTION & BEQUESTS                             */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 5 — Distribution Wishes" />
-
-        <SubHeader title="How should your estate be distributed?" />
-        <div className="space-y-0.5">
-          <CheckOption label="Everything to my spouse, then equally to children" />
-          <CheckOption label="Everything equally to children" />
-          <CheckOption label="Specific percentages to named beneficiaries (list below)" />
-          <CheckOption label="Custom distribution plan (describe below)" />
-        </div>
-
-        <SubHeader title="Per Stirpes" />
-        <p className="text-[8pt] text-gray-500 mb-1">
-          If a beneficiary predeceases you, should their share pass to their children?
-        </p>
-        <div className="flex gap-4">
-          <CheckOption label="Yes — their share passes to their children (per stirpes)" />
-          <CheckOption label="No — redistribute among surviving beneficiaries" />
-        </div>
-
-        <SubHeader title="Specific Beneficiaries (if applicable)" />
-        <table className="w-full text-[9pt] border-collapse mt-1">
-          <thead>
-            <tr className="border-b border-gray-400">
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Full Name</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Relationship</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 w-16">% Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[1, 2, 3].map((n) => (
-              <tr key={n} className="border-b border-gray-300">
-                <td className="py-1.5 pr-2"><BlankLine /></td>
-                <td className="py-1.5 pr-2"><BlankLine /></td>
-                <td className="py-1.5"><BlankLine width="3rem" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <SubHeader title="Specific Gifts / Bequests" />
-        <table className="w-full text-[9pt] border-collapse mt-1">
-          <thead>
-            <tr className="border-b border-gray-400">
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Item / Property</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Recipient</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 w-24">Relationship</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[1, 2, 3].map((n) => (
-              <tr key={n} className="border-b border-gray-300">
-                <td className="py-1.5 pr-2"><BlankLine /></td>
-                <td className="py-1.5 pr-2"><BlankLine /></td>
-                <td className="py-1.5"><BlankLine /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <SubHeader title="Charitable Gifts" />
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-1">
-          <LabeledField label="Organization 1" />
-          <LabeledField label="Amount or % of Estate" />
-          <LabeledField label="Organization 2" />
-          <LabeledField label="Amount or % of Estate" />
-        </div>
-
-        <SubHeader title="Ultimate Distribution" />
-        <p className="text-[8pt] text-gray-500 italic mb-1">
-          If none of your named beneficiaries survive you:
-        </p>
-        <div className="space-y-0.5">
-          <CheckOption label="To my heirs under NJ intestacy law" />
-          <CheckOption label="To a specific charity (name below)" />
-          <CheckOption label="Other arrangement (describe below)" />
-        </div>
-        <div className="mt-1">
-          <BlankLine />
-        </div>
+        {/* Distribution section moved to last page below */}
 
         {/* ============================================================= */}
         {/* SECTION 6: HEALTHCARE DIRECTIVES                               */}
@@ -582,7 +504,7 @@ export default function PrintableQuestionnaire({
         {/* CERTIFICATION / SIGNATURE                                      */}
         {/* ============================================================= */}
         <div className="mt-6 border-t-2 border-[#1a365d] pt-3 print:break-inside-avoid">
-          <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase tracking-wide mb-2">
+          <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase mb-2" style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif', letterSpacing: '0.04em' }}>
             Certification
           </h2>
           <p className="text-[9pt] text-gray-700 mb-4">
@@ -608,6 +530,29 @@ export default function PrintableQuestionnaire({
           </div>
         </div>
 
+        {/* ============================================================= */}
+        {/* LAST PAGE: DISTRIBUTION WISHES (attorney consultation)         */}
+        {/* ============================================================= */}
+        <SectionHeader
+          title="Distribution Wishes (To be completed with your attorney)"
+          forcePageBreak
+        />
+        <p className="text-[8pt] text-gray-500 mb-3">
+          This section is intended to be completed during your consultation. Your attorney will
+          discuss your options and document your wishes below.
+        </p>
+
+        {/* Lined notes area — fills remaining page */}
+        <div className="space-y-0">
+          {Array.from({ length: 32 }).map((_, i) => (
+            <div
+              key={i}
+              className="border-b border-gray-300"
+              style={{ height: '1.4rem' }}
+            />
+          ))}
+        </div>
+
         {/* Print footer */}
         <div className="hidden print:block print:fixed print:bottom-0 print:left-0 print:right-0 print:text-center print:text-[7pt] print:text-gray-400 print:py-1">
           Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200
@@ -622,6 +567,7 @@ export default function PrintableQuestionnaire({
             margin: 0.85in 0.8in 0.9in 0.8in;
           }
           body {
+            font-family: Inter, Arial, Helvetica, sans-serif;
             font-size: 9pt;
             color: #000;
             background: #fff;
@@ -632,6 +578,7 @@ export default function PrintableQuestionnaire({
           .hidden.print\\:block { display: block !important; }
           h1, h2, h3, h4 { page-break-after: avoid; }
           .print\\:break-inside-avoid { break-inside: avoid; }
+          .print-page-break { page-break-before: always; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .border-gray-500 { border-color: #444 !important; }
           .border-b.border-gray-400 { border-bottom: 0.75pt solid #444 !important; }

@@ -18,8 +18,6 @@ export function useFirmBranding(firmId?: string) {
 
     useEffect(() => {
         if (cachedBranding) {
-            setData(cachedBranding);
-            setLoading(false);
             return;
         }
 

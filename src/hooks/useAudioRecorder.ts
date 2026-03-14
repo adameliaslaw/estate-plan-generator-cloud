@@ -31,7 +31,7 @@ export function useAudioRecorder() {
             let mr: MediaRecorder;
             try {
                 mr = new MediaRecorder(stream, options);
-            } catch (err) {
+            } catch (_err) {
                 // Fallback if the browser doesn't support specifying the bitrate this way
                 mr = new MediaRecorder(stream);
             }

@@ -69,7 +69,6 @@ export function AudioRecorderModal({
     defaultClientId,
     clients = [],
     isSaving = false,
-    onAddClient: _onAddClient,
 }: AudioRecorderModalProps) {
     const [title, setTitle] = useState('');
     const [noteType, setNoteType] = useState<NoteType>('general');
@@ -111,17 +110,20 @@ export function AudioRecorderModal({
 
     useEffect(() => {
         if (open) {
-            setTitle('');
-            setNoteType('general');
-            setContent('');
-            setClientSearch('');
-            setIsDropdownOpen(false);
-            clearAudio();
-            if (defaultClientId) {
-                setSelectedClientId(defaultClientId);
-            } else {
-                setSelectedClientId('');
-            }
+            // Reset form when modal opens — use queueMicrotask to avoid synchronous setState in effect
+            queueMicrotask(() => {
+                setTitle('');
+                setNoteType('general');
+                setContent('');
+                setClientSearch('');
+                setIsDropdownOpen(false);
+                clearAudio();
+                if (defaultClientId) {
+                    setSelectedClientId(defaultClientId);
+                } else {
+                    setSelectedClientId('');
+                }
+            });
         } else {
             cancelRecording();
         }

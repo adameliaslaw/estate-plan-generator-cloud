@@ -514,7 +514,6 @@ function SendRequestDialog({
   clientId,
   clientEmail,
   clientName,
-  createdBy: _createdBy,
 }: SendRequestDialogProps) {
   const { userProfile } = useAuth();
   const [description, setDescription] = useState('');

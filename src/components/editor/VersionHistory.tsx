@@ -429,7 +429,6 @@ export default function VersionHistory({
   firmId,
   clientId,
   documentId,
-  currentContent: _currentContent,
   currentVersion,
   onRestoreVersion,
   onSaveVersion,
