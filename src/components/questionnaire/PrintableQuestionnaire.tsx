@@ -189,7 +189,7 @@ export default function PrintableQuestionnaire({
   clientName,
 }: PrintableQuestionnaireProps) {
   return (
-    <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', maxWidth: '8.5in', margin: '0 auto', padding: '1rem' }} className="print:!p-0 print:!max-w-none print:!m-0">
+    <div className="printable-questionnaire-wrapper" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
       {/* ── Screen-only toolbar ─────────────────────────────────────────── */}
       <div className="print:hidden mb-6 flex items-center justify-between rounded-lg border border-[#1a365d]/15 bg-[#ebf4ff] px-4 py-3">
         <div>
@@ -619,7 +619,14 @@ export default function PrintableQuestionnaire({
           .print\\:!hidden { display: none !important; }
           .hidden.print\\:block { display: block !important; }
 
-          /* ── THE FIX: Explicit page containers ──────────────────── */
+          /* Wrapper resets for print */
+          .printable-questionnaire-wrapper {
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Each .print-page = exactly one physical printed page */
           .print-page {
             width: 100%;
             height: 9.8in;
@@ -642,15 +649,22 @@ export default function PrintableQuestionnaire({
           h1, h2, h3, h4 { page-break-after: avoid; break-after: avoid; }
           tr { page-break-inside: avoid; break-inside: avoid; }
 
-          /* ── Ink-friendly overrides ──────────────────────────── */
+          /* Ink-friendly overrides */
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .border-gray-500 { border-color: #444 !important; }
           .border-b.border-gray-400 { border-bottom: 0.75pt solid #444 !important; }
           .border-b.border-gray-300 { border-bottom: 0.5pt solid #888 !important; }
           a { color: #000; text-decoration: none; }
         }
-        /* ── Screen preview styling for pages ──────────────────────── */
+        /* Screen preview styling */
         @media screen {
+          .printable-questionnaire-wrapper {
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 1rem 0;
+            background: #f1f5f9;
+            min-height: 100vh;
+          }
           .print-page {
             border: 1px solid #e2e8f0;
             border-radius: 4px;
