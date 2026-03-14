@@ -627,9 +627,9 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
         noteId: note.id,
       });
       toast.success('Note summary generated successfully.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Summarize error:', err);
-      toast.error(err.message || 'Failed to summarize transcription.');
+      toast.error(err instanceof Error ? err.message : 'Failed to summarize transcription.');
     } finally {
       setIsSummarizing(false);
     }
@@ -645,8 +645,8 @@ function NoteCard({ note, firmId, clientId, authorUid }: NoteCardProps) {
       const fullPath = note.audioStoragePath || `firms/${firmId}/clients/${clientId}/audio/${note.id}.m4a`;
       await requestTranscription(firmId, clientId, note.id, fullPath);
       toast.success('Transcription retry initiated.');
-    } catch (err: any) {
-      toast.error('Failed to retry transcription: ' + err.message);
+    } catch (err: unknown) {
+      toast.error('Failed to retry transcription: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setRetryingTranscription(false);
     }

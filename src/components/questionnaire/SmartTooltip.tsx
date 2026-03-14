@@ -183,7 +183,7 @@ const FALLBACK_ENTRY: TooltipEntry = {
 
 /** Normalize a fieldName to look up in the map (lowercase, underscores) */
 function normalizeKey(fieldName: string): string {
-  return fieldName.toLowerCase().replace(/[\s\-\.]+/g, '_');
+  return fieldName.toLowerCase().replace(/[\s\-.]+/g, '_');
 }
 
 // ---------------------------------------------------------------------------

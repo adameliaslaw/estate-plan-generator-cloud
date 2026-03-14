@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 declare global {
     interface Window {
-        google: any;
+        google: typeof google;
     }
 }
 
@@ -57,7 +57,7 @@ export function useGooglePlacesAutocomplete(
     onChange: (value: Partial<AddressComponents>) => void
 ) {
     const [isReady, setIsReady] = useState(false);
-    const autocompleteRef = useRef<any>(null);
+    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
     useEffect(() => {
         if (!apiKey) return;
@@ -93,7 +93,7 @@ export function useGooglePlacesAutocomplete(
             let streetNum = '';
             let routeName = '';
 
-            place.address_components.forEach((component: any) => {
+            place.address_components.forEach((component: google.maps.GeocoderAddressComponent) => {
                 const types = component.types;
                 if (types.includes('street_number')) {
                     streetNum = component.long_name;

@@ -95,28 +95,40 @@ function SubHeader({ title }: { title: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Fiduciary row (compact: name + relationship for primary + alternate)
+// Fiduciary block (stacked: name+relationship, then address+phone)
 // ---------------------------------------------------------------------------
 
-function FiduciaryRow({ role }: { role: string }) {
+function FiduciaryBlock({ role }: { role: string }) {
   return (
-    <tr>
-      <td className="py-1 pr-2 text-[9pt] font-medium text-gray-800 whitespace-nowrap align-top">
-        {role}
-      </td>
-      <td className="py-1 px-2 align-top">
-        <BlankLine />
-      </td>
-      <td className="py-1 px-2 align-top">
-        <BlankLine />
-      </td>
-      <td className="py-1 px-2 align-top">
-        <BlankLine />
-      </td>
-      <td className="py-1 pl-2 align-top">
-        <BlankLine />
-      </td>
-    </tr>
+    <div className="border-b border-gray-300 pb-1.5 mb-1.5">
+      <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">{role}</p>
+      <div className="grid grid-cols-2 gap-x-4">
+        {/* Primary */}
+        <div className="space-y-0.5">
+          <p className="text-[7pt] text-gray-400 uppercase">Primary</p>
+          <div className="grid grid-cols-2 gap-x-2">
+            <LabeledField label="Full Name" />
+            <LabeledField label="Relationship" />
+          </div>
+          <div className="grid grid-cols-2 gap-x-2">
+            <LabeledField label="Address" />
+            <LabeledField label="Phone" />
+          </div>
+        </div>
+        {/* Alternate */}
+        <div className="space-y-0.5">
+          <p className="text-[7pt] text-gray-400 uppercase">Alternate</p>
+          <div className="grid grid-cols-2 gap-x-2">
+            <LabeledField label="Full Name" />
+            <LabeledField label="Relationship" />
+          </div>
+          <div className="grid grid-cols-2 gap-x-2">
+            <LabeledField label="Address" />
+            <LabeledField label="Phone" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -126,7 +138,6 @@ function FiduciaryRow({ role }: { role: string }) {
 
 interface PrintableQuestionnaireProps {
   clientName?: string;
-  data?: any;
 }
 
 export default function PrintableQuestionnaire({
@@ -328,14 +339,6 @@ export default function PrintableQuestionnaire({
           Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child has special needs requiring a special needs trust.
         </p>
 
-        <SubHeader title="Guardian for Minor Children" />
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <LabeledField label="Primary Guardian — Name" />
-          <LabeledField label="Relationship to You" />
-          <LabeledField label="Alternate Guardian — Name" />
-          <LabeledField label="Relationship to You" />
-        </div>
-
         {/* ============================================================= */}
         {/* SECTION 4: FIDUCIARIES                                         */}
         {/* ============================================================= */}
@@ -344,24 +347,13 @@ export default function PrintableQuestionnaire({
           Name the people you trust to carry out your wishes. Provide primary and alternate for each role.
         </p>
 
-        <table className="w-full text-[9pt] border-collapse">
-          <thead>
-            <tr className="border-b border-gray-400">
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-36">Role</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 px-2">Primary — Full Name</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 px-2 w-24">Relationship</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 px-2">Alternate — Full Name</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pl-2 w-24">Relationship</th>
-            </tr>
-          </thead>
-          <tbody>
-            <FiduciaryRow role="Executor" />
-            <FiduciaryRow role="Trustee" />
-            <FiduciaryRow role="Successor Trustee" />
-            <FiduciaryRow role="POA Agent" />
-            <FiduciaryRow role="Healthcare Rep" />
-          </tbody>
-        </table>
+        <div className="space-y-0">
+          <FiduciaryBlock role="Executor" />
+          <FiduciaryBlock role="Trustee" />
+          <FiduciaryBlock role="POA Agent" />
+          <FiduciaryBlock role="Healthcare Rep" />
+          <FiduciaryBlock role="Guardian" />
+        </div>
 
         {/* ============================================================= */}
         {/* SECTION 5: DISTRIBUTION & BEQUESTS                             */}
@@ -627,7 +619,7 @@ export default function PrintableQuestionnaire({
         @media print {
           @page {
             size: letter portrait;
-            margin: 0.6in 0.65in 0.8in 0.65in;
+            margin: 0.85in 0.8in 0.9in 0.8in;
           }
           body {
             font-size: 9pt;

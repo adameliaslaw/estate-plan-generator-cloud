@@ -62,9 +62,9 @@ export function UploadScanModal({ open, onOpenChange, firmId, clientId }: Upload
             toast.success('Scan processed successfully! The digital questionnaire has been auto-filled.');
             onOpenChange(false);
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to process scan', err);
-            toast.error(err.message || 'An error occurred during OCR processing.');
+            toast.error(err instanceof Error ? err.message : 'An error occurred during OCR processing.');
         } finally {
             setIsUploading(false);
             setProgress(0);

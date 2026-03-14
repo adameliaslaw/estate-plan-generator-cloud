@@ -30,7 +30,7 @@ export function GoogleLoginButton({
   disabled,
 }: {
   onSuccess: (code: string) => void;
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
   disabled?: boolean;
 }) {
   const login = useGoogleLogin({

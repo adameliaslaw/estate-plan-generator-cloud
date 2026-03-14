@@ -54,7 +54,7 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handlePlaceSelect = useCallback((components: any) => {
+  const handlePlaceSelect = useCallback((components: Partial<{ streetNumber: string; route: string; city: string; state: string; zip: string; county: string }>) => {
     onChange({
       ...current,
       ...(components.streetNumber && { address: components.streetNumber }),

@@ -48,8 +48,8 @@ export default function ESignatureDialog({
                 signerEmail: signerEmail.trim(),
             });
             setSuccess(true);
-        } catch (err: any) {
-            setError(err.message || 'Failed to send document for e-signature');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to send document for e-signature');
         } finally {
             setSending(false);
         }

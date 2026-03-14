@@ -95,7 +95,7 @@ export default function LoginPage() {
 
       // User is a client. We must find their client document to route them to their questionnaire.
       try {
-        let firmId = userProfile.firmId || 'elias-counsel'; // Fallback to default
+        const firmId = userProfile.firmId || 'elias-counsel'; // Fallback to default
 
         // Link the client first to ensure they have the proper claims and the DB is updated
         try {
@@ -195,7 +195,7 @@ export default function LoginPage() {
         // After signing up successfully, the onAuthStateChanged in AuthContext will trigger
         // the client linking flow since it sees a new user but no profile.
         // We will call the linkClient function here just to be safe before routing triggers.
-        let firmId = 'elias-counsel'; // Fallback
+        const firmId = 'elias-counsel'; // Fallback
         const linkClientFn = httpsCallable(functions, 'linkClient');
         await linkClientFn({ firmId });
       }

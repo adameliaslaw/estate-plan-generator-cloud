@@ -108,9 +108,9 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   additional: Info,
 };
 
-function formatRelativeTime(timestamp: any): string {
+function formatRelativeTime(timestamp: { toDate?: () => Date } | Date | string | undefined): string {
   if (!timestamp) return '';
-  const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+  const date = typeof timestamp === 'object' && timestamp !== null && 'toDate' in timestamp && typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp as string | number);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
@@ -294,7 +294,7 @@ export default function ClientDashboardPage() {
   const qStatusCfg = Q_STATUS_CONFIG[qProgress?.status ?? 'not_started'];
   const QIcon = qStatusCfg.icon;
 
-  const handleSaveAudioNote = async (data: any) => {
+  const handleSaveAudioNote = async (data: { audioBlob: Blob | null; title: string; noteType: string; content: string; audioFileName: string; durationSeconds: number; clientId?: string; newClientName?: string }) => {
     if (!userProfile?.uid || !firmId || !clientId) return;
     setIsSavingRecord(true);
     try {

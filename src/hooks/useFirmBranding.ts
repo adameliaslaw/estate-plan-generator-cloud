@@ -24,7 +24,7 @@ export function useFirmBranding(firmId?: string) {
         }
 
         if (!fetchPromise) {
-            const getBranding = httpsCallable<any, FirmBrandingPublic>(functions, 'getFirmBranding');
+            const getBranding = httpsCallable<{ firmId?: string }, FirmBrandingPublic>(functions, 'getFirmBranding');
             fetchPromise = getBranding({ firmId }).then((res) => {
                 cachedBranding = res.data;
                 return res.data;

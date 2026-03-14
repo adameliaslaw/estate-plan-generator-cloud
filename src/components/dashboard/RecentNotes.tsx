@@ -48,9 +48,9 @@ export function RecentNotes({ clients = [], activeClientIds = [] }: RecentNotesP
 
     const [summarizingNoteIds, setSummarizingNoteIds] = useState<Record<string, boolean>>({});
 
-    const formatNoteTime = (timestamp: any) => {
+    const formatNoteTime = (timestamp: { toDate?: () => Date } | Date | string | undefined) => {
         if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        const date = typeof timestamp === 'object' && timestamp !== null && 'toDate' in timestamp && typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp as string | number);
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
         const diffMins = Math.floor(diffMs / 60_000);
@@ -73,9 +73,9 @@ export function RecentNotes({ clients = [], activeClientIds = [] }: RecentNotesP
                 noteId: note.id,
             });
             toast.success('Note summary generated successfully.');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Summarize error:', err);
-            toast.error(err.message || 'Failed to summarize transcription.');
+            toast.error(err instanceof Error ? err.message : 'Failed to summarize transcription.');
         } finally {
             setSummarizingNoteIds(prev => ({ ...prev, [note.id]: false }));
         }

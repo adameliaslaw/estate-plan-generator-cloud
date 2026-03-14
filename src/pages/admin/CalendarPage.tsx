@@ -24,10 +24,10 @@ export default function CalendarPage() {
     setIsSyncing(true);
     const toastId = toast.loading('Syncing with Google Calendar...');
     try {
-      const functions = getFunctions(app, 'us-east1');
-      const triggerFirmCalendarSync = httpsCallable(functions, 'triggerFirmCalendarSync');
+      const fns = getFunctions(app, 'us-east1');
+      const triggerFirmCalendarSync = httpsCallable(fns, 'triggerFirmCalendarSync');
       const result = await triggerFirmCalendarSync();
-      const updatedCount = (result.data as any)?.eventsUpdated || 0;
+      const updatedCount = (result.data as { eventsUpdated?: number })?.eventsUpdated || 0;
 
       toast.success(
         updatedCount > 0
@@ -35,10 +35,10 @@ export default function CalendarPage() {
           : 'Sync complete! All events are already up to date.',
         { id: toastId }
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to trigger manual calendar sync:', error);
       toast.error(
-        error.message?.includes('not connected')
+        error instanceof Error && error.message?.includes('not connected')
           ? 'Google Calendar is not connected. Please connect it in Settings.'
           : 'Failed to sync with Google Calendar. Please try again.',
         { id: toastId }
