@@ -682,6 +682,17 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
             ],
           },
           {
+            name: 'gender',
+            label: 'Gender',
+            type: 'radio',
+            required: true,
+            width: 'third',
+            options: [
+              { label: 'Male', value: 'male' },
+              { label: 'Female', value: 'female' },
+            ],
+          },
+          {
             name: 'specialNeeds',
             label: 'Special Needs?',
             type: 'yesno',

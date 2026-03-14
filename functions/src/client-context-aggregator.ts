@@ -51,6 +51,19 @@ export interface ComputedFields {
   todayISO: string;
   packageType: string;
   packageLabel: string;
+  // Relationship titles
+  spouseTitle: string;            // "husband" | "wife" | "spouse" | "partner"
+  clientTitle: string;            // "wife" | "husband" | "spouse" | "partner" (reverse of spouseTitle)
+  clientPronouns: { subject: string; object: string; possessive: string };
+  spousePronouns: { subject: string; object: string; possessive: string };
+  executorTitle: string;          // from fiduciaries.executor.primary.relationship, lowercased
+  alternateExecutorTitle: string;
+  trusteeTitle: string;
+  poaAgentTitle: string;
+  healthcareRepTitle: string;
+  guardianTitle: string;
+  // Children enriched with relationship titles
+  childrenWithTitles: Array<Record<string, unknown> & { childTitle: string }>;
 }
 
 export interface NoteSnapshot {
@@ -230,6 +243,23 @@ function computeFields(
   const trusts: Array<Record<string, unknown>> = client.trusts ?? [];
   const packageDetails = client.packageDetails ?? {};
 
+  // -- Address auto-fill: copy client address to spouse/children if sameAddress --
+  if (spouse && spouse.sameAddress === true) {
+    spouse.address = spouse.address || pi.address;
+    spouse.city = spouse.city || pi.city;
+    spouse.state = spouse.state || pi.state;
+    spouse.zip = spouse.zip || pi.zip;
+    spouse.county = spouse.county || pi.county;
+  }
+  for (const child of children) {
+    if (child.sameAddress === true) {
+      child.address = child.address || pi.address;
+      child.city = child.city || pi.city;
+      child.state = child.state || pi.state;
+      child.zip = child.zip || pi.zip;
+    }
+  }
+
   const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
     .filter(Boolean)
     .join(' ');
@@ -245,6 +275,59 @@ function computeFields(
   const adultChildren = children.filter((c) => c.isMinor !== true);
   const hasSpecialNeedsChild = children.some((c) => c.specialNeeds === true);
   const propertiesForTrust = realEstate.filter((p) => p.transferToTrust === true);
+
+  // -- Relationship titles --------------------------------------------------
+  const isDomesticPartnership = pi.maritalStatus === 'Domestic Partnership';
+  // Prefer new explicit gender field; fall back to legacy isFemale boolean
+  const clientIsFemale = pi.gender === 'female' || (pi.gender == null && client.isFemale === true);
+
+  let spouseTitle: string;
+  let clientTitle: string;
+  if (!hasSpouse) {
+    spouseTitle = '';
+    clientTitle = '';
+  } else if (isDomesticPartnership) {
+    spouseTitle = 'partner';
+    clientTitle = 'partner';
+  } else if (clientIsFemale) {
+    spouseTitle = 'husband';   // client is female → spouse is husband
+    clientTitle = 'wife';      // client's own title is wife
+  } else {
+    spouseTitle = 'wife';      // client is male → spouse is wife
+    clientTitle = 'husband';   // client's own title is husband
+  }
+
+  const malePronouns = { subject: 'he', object: 'him', possessive: 'his' };
+  const femalePronouns = { subject: 'she', object: 'her', possessive: 'her' };
+  const neutralPronouns = { subject: 'they', object: 'them', possessive: 'their' };
+
+  const clientPronouns = clientIsFemale ? femalePronouns : malePronouns;
+  const spousePronouns = hasSpouse
+    ? (isDomesticPartnership ? neutralPronouns : (clientIsFemale ? malePronouns : femalePronouns))
+    : neutralPronouns;
+
+  // Fiduciary relationship titles (lowercased, from questionnaire free-text)
+  const fid = client.fiduciaries ?? {};
+  const executorTitle = (fid.executor?.primary?.relationship ?? '').toLowerCase();
+  const alternateExecutorTitle = (fid.executor?.alternate?.relationship ?? '').toLowerCase();
+  const trusteeTitle = (fid.trustee?.primary?.relationship ?? '').toLowerCase();
+  const poaAgentTitle = (fid.powerOfAttorney?.agent?.relationship ?? fid.poaAgent?.primary?.relationship ?? '').toLowerCase();
+  const healthcareRepTitle = (fid.healthcareProxy?.agent?.relationship ?? fid.healthcareRep?.primary?.relationship ?? '').toLowerCase();
+  const guardianTitle = (client.guardianPrimary?.relationship ?? fid.guardian?.primary?.relationship ?? '').toLowerCase();
+
+  // Enrich children with gendered titles ("son", "daughter", "child")
+  const childrenWithTitles = children.map((c) => {
+    const gender = (c.gender as string) ?? '';
+    let childTitle: string;
+    if (gender === 'male') childTitle = 'son';
+    else if (gender === 'female') childTitle = 'daughter';
+    else childTitle = 'child';
+    // Stepchildren get prefixed
+    if (c.relationship === 'stepchild') {
+      childTitle = gender === 'male' ? 'stepson' : gender === 'female' ? 'stepdaughter' : 'stepchild';
+    }
+    return { ...c, childTitle };
+  });
 
   // Estimate total assets
   let estimatedTotalAssets = 0;
@@ -295,6 +378,18 @@ function computeFields(
     todayISO,
     packageType: packageDetails.packageType ?? 'foundation',
     packageLabel: packageLabels[packageDetails.packageType] ?? 'Foundation',
+    // Relationship titles
+    spouseTitle,
+    clientTitle,
+    clientPronouns,
+    spousePronouns,
+    executorTitle,
+    alternateExecutorTitle,
+    trusteeTitle,
+    poaAgentTitle,
+    healthcareRepTitle,
+    guardianTitle,
+    childrenWithTitles,
   };
 }
 

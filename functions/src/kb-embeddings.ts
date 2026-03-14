@@ -209,7 +209,7 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
   {
     document: 'firms/{firmId}/knowledgeBase/{resourceId}',
     region: 'us-east1',
-    memory: '512MiB',
+    memory: '1GiB',
     timeoutSeconds: 120,
   },
   async (event) => {
@@ -372,7 +372,7 @@ export const onTemplateWritten = onDocumentWritten(
   {
     document: 'firms/{firmId}/documentTemplates/{templateId}',
     region: 'us-east1',
-    memory: '512MiB',
+    memory: '1GiB',
     timeoutSeconds: 120,
   },
   async (event) => {

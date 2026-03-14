@@ -84,6 +84,28 @@ clientFullName, spouseFullName, hasSpouse, hasMinorChildren, hasSpecialNeedsChil
 childCount, minorChildren[], adultChildren[], propertyCount
 propertiesForTrust[], estimatedTotalAssets, primaryTrustName
 todayFormatted, todayISO, packageType, packageLabel
+
+RELATIONSHIP TITLE FIELDS (auto-derived from questionnaire data):
+spouseTitle — "husband", "wife", or "partner" (derived from client gender + marital status)
+clientTitle — the client's own relationship descriptor (reverse of spouseTitle)
+executorTitle — relationship descriptor for executor (from fiduciaries.executor.primary.relationship)
+alternateExecutorTitle — relationship descriptor for alternate executor
+trusteeTitle — relationship descriptor for trustee
+poaAgentTitle — relationship descriptor for POA agent
+healthcareRepTitle — relationship descriptor for healthcare rep
+guardianTitle — relationship descriptor for guardian
+clientPronouns.subject / .object / .possessive — he/him/his or she/her/her
+spousePronouns.subject / .object / .possessive — he/him/his or she/her/her
+childrenWithTitles[] — same as children[] but each child also has a "childTitle" field = "son"/"daughter"/"stepson"/"stepdaughter"
+
+CRITICAL MAPPING RULES — RELATIONSHIP WORDS vs NAMES:
+- "my husband", "my wife", "my partner" → map to spouseTitle (NOT spouseFullName)
+- "my son", "my daughter", "my stepson", "my stepdaughter" → map to the child's childTitle (NOT to a name field)
+- "my children" (collective reference) → do NOT map; leave as literal text
+- "he", "him", "his", "she", "her" referring to the client → map to clientPronouns.subject / .object / .possessive
+- "he", "him", "his", "she", "her" referring to the spouse → map to spousePronouns.subject / .object / .possessive
+- Only actual NAMES (e.g., "John Smith", "Jane Doe") should map to name fields like clientFullName, spouseFullName, children[0].name
+- Phrases like "my husband, Sean Byrnes" contain TWO variables: "my husband" → spouseTitle, "Sean Byrnes" → spouseFullName
 `;
 
 // ---------------------------------------------------------------------------
@@ -258,9 +280,83 @@ Respond with a valid JSON object (no markdown fences):
       // Continue without AI analysis — still return the extracted content
     }
 
+    // -----------------------------------------------------------------------
+    // Step 2: Templatize content — replace detected literal text with
+    // Handlebars variable tags in the extracted HTML
+    // -----------------------------------------------------------------------
+    let templatizedHtml = extractedHtml;
+
+    if (detectedVariables.length > 0) {
+      // Sort by originalText length descending so longer matches are replaced
+      // first (prevents partial replacements, e.g., "Jack" inside "Jack Byrnes")
+      const sorted = [...detectedVariables].sort(
+        (a, b) => b.originalText.length - a.originalText.length,
+      );
+
+      for (const v of sorted) {
+        if (!v.originalText || !v.suggestedVariable) continue;
+        // Skip very short matches (< 2 chars) to avoid replacing "I", "a", etc.
+        if (v.originalText.length < 2) continue;
+
+        const tag = `{{${v.suggestedVariable}}}`;
+        // Use a regex for case-sensitive whole-word-ish matching
+        // Escape special regex characters in the match text
+        const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'g');
+        templatizedHtml = templatizedHtml.replace(regex, tag);
+      }
+
+      console.log(`[processTemplateFile] Templatized content: replaced ${sorted.length} variable occurrences`);
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3: AI loop detection — detect repeating child-reference patterns
+    // and convert indexed children (children[0], children[1], ...) into
+    // {{#each childrenWithTitles}} loops
+    // -----------------------------------------------------------------------
+    const hasIndexedChildren = detectedVariables.some(
+      (v) => /children\[\d+\]/.test(v.suggestedVariable),
+    );
+
+    if (hasIndexedChildren) {
+      try {
+        const loopPrompt = `You are a Handlebars template expert. The following HTML template has been partially converted — it contains indexed child references like {{children[0].name}}, {{children[1].name}}, {{childrenWithTitles[0].childTitle}}, etc.
+
+Your job: find the REPEATING sections that reference individual children by index (children[0], children[1], children[2], childrenWithTitles[0], etc.) and convert them into a single {{#each childrenWithTitles}} loop block.
+
+RULES:
+1. Identify THE SMALLEST repeating unit — the clause or paragraph that repeats for each child.
+2. Replace ALL indexed instances of that clause with a SINGLE {{#each childrenWithTitles}} block.
+3. Inside the block, use {{this.childTitle}} for "son"/"daughter", {{this.name}} for the child's name, and {{this.dob}}, {{this.relationship}}, etc. for other child fields.
+4. Use {{@index}}, {{@first}}, {{@last}} for ordinal logic if needed (e.g., "and" before the last child).
+5. Do NOT touch sections that reference children collectively (e.g., "my children") — leave those as literal text.
+6. Do NOT modify any other part of the template — only the repeating child sections.
+7. Preserve all HTML structure and formatting.
+8. If children references are NOT repeating (e.g., just one child mentioned), leave them as indexed references.
+
+Return ONLY the modified HTML (no JSON wrapper, no markdown fences, no explanation).`;
+
+        const loopResult = await callAI(loopPrompt, templatizedHtml.slice(0, 15000), firmData, {
+          temperature: 0.05,
+          maxTokens: 15000,
+        });
+
+        // Validate the AI returned something reasonable
+        if (loopResult && loopResult.trim().length > 100 && loopResult.includes('{{#each')) {
+          templatizedHtml = loopResult;
+          console.log('[processTemplateFile] AI loop detection: converted indexed children to {{#each}} block');
+        } else {
+          console.log('[processTemplateFile] AI loop detection: no repeating pattern found or AI returned unchanged content');
+        }
+      } catch (err) {
+        console.error('[processTemplateFile] AI loop detection error (non-fatal):', err);
+        // Continue with the templatized content without loop conversion
+      }
+    }
+
     return {
       success: true,
-      extractedHtml,
+      extractedHtml: templatizedHtml,
       extractedText: truncateAtWordBoundary(extractedText, 5000),
       detectedVariables,
       suggestedDocType,

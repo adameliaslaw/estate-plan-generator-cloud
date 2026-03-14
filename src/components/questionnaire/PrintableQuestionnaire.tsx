@@ -1,428 +1,122 @@
 /**
  * PrintableQuestionnaire.tsx
  *
- * Renders all questionnaire sections and questions in a clean, print-friendly
- * format for clients who prefer to fill out the intake by hand.
+ * Condensed ~4-5 page estate planning intake form designed for paper.
  *
- * Features:
- * - Organized by section with numbered questions
- * - Multiple-choice questions show checkbox options
- * - Text questions show blank lines for handwriting
- * - "Print" button triggers window.print()
- * - CSS @media print for clean output with page numbers
- * - Header: "Estate Planning Questionnaire — Elias Counsel, LLC"
- * - Repeater fields show one blank block (with "Add additional on reverse if needed")
+ * Design decisions:
+ * - Dense table layouts instead of one-field-per-row
+ * - Assets/liabilities → free-text summary boxes (not structured repeaters)
+ * - Fiduciaries → compact table (name + relationship only, no address/phone)
+ * - All conditional logic flattened (paper can't branch)
+ * - Pre-allocated rows for children (5), bequests (3), beneficiaries (3)
+ * - Professional legal intake appearance with firm branding
  *
  * Usage:
- *   <PrintableQuestionnaire clientName="Jane Smith" />
+ *   <PrintableQuestionnaire />                       — blank form
+ *   <PrintableQuestionnaire clientName="J. Smith" />  — headed form
  */
 
-import { useRef } from 'react';
 import { Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { QUESTIONNAIRE_STEPS } from '@/config/questionnaire-steps';
-import type { QuestionnaireStep, FieldConfig } from '@/types/questionnaire';
 
 // ---------------------------------------------------------------------------
-// Section display names and ordering
+// Helpers
 // ---------------------------------------------------------------------------
 
-const SECTION_LABELS: Record<string, string> = {
-  aboutYou: 'Section 1: About You',
-  spouse: 'Section 2: Your Spouse / Domestic Partner',
-  children: 'Section 3: Your Children & Dependents',
-  assets: 'Section 4: Your Assets',
-  liabilities: 'Section 5: Your Liabilities',
-  fiduciaries: 'Section 6: Your Fiduciaries',
-  wishes: 'Section 7: Your Distribution Wishes',
-  healthcare: 'Section 8: Healthcare Preferences',
-  additional: 'Section 9: Additional Information',
-};
-
-const SECTION_ORDER = [
-  'aboutYou',
-  'spouse',
-  'children',
-  'assets',
-  'liabilities',
-  'fiduciaries',
-  'wishes',
-  'healthcare',
-  'additional',
-] as const;
-
-// ---------------------------------------------------------------------------
-// Helper: blank answer lines
-// ---------------------------------------------------------------------------
+function BlankLine({ width = '100%' }: { width?: string }) {
+  return (
+    <div
+      className="border-b border-gray-400"
+      style={{ height: '1.25rem', width }}
+    />
+  );
+}
 
 function BlankLines({ count = 1 }: { count?: number }) {
   return (
-    <div className="mt-1 space-y-1">
+    <div className="space-y-0.5">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="border-b border-gray-400" style={{ height: '1.5rem' }} />
+        <BlankLine key={i} />
       ))}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helper: render a single field in print format
-// ---------------------------------------------------------------------------
-
-function PrintField({
-  field,
-  questionNumber,
-  value,
-}: {
-  field: FieldConfig;
-  questionNumber?: number;
-  value?: any;
-}) {
-  // Skip internal heading and info fields
-  if (field.type === 'heading' || field.type === 'info') {
-    if (field.type === 'heading' && field.label) {
-      return (
-        <div className="mt-3 mb-1">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-600 print:text-[9pt]">
-            {field.label}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  }
-
-  const labelText = field.label || field.name;
-  const showNumber = questionNumber != null;
-
+function CheckOption({ label }: { label: string }) {
   return (
-    <div className="mb-4 print:mb-3">
-      {/* Label */}
-      <label className="block text-sm font-medium text-gray-900 print:text-[10pt]">
-        {showNumber && (
-          <span className="mr-1 text-gray-500 print:text-[10pt]">{questionNumber}.</span>
-        )}
-        {labelText}
-        {field.required && (
-          <span className="ml-1 text-gray-400 text-xs print:text-[9pt]">(required)</span>
-        )}
-      </label>
-
-      {/* Help text */}
-      {field.helpText && (
-        <p className="mt-0.5 text-xs text-gray-500 italic print:text-[8pt]">{field.helpText}</p>
-      )}
-
-      {/* Answer area based on field type */}
-      {renderAnswerArea(field, value)}
+    <div className="flex items-start gap-1.5">
+      <div className="mt-[2px] h-3 w-3 flex-shrink-0 border border-gray-500 rounded-sm" />
+      <span className="text-[9pt] leading-tight text-gray-800">{label}</span>
     </div>
   );
 }
 
-function renderAnswerArea(field: FieldConfig, value?: any) {
-  const type = field.type;
-
-  // Select dropdowns — compact: show selected value or blank line (don't list every option)
-  if (type === 'select') {
-    if (value) {
-      const label = field.options?.find((o) => o.value === value)?.label ?? value;
-      return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{label}</p>;
-    }
-    return <div className="mt-2"><BlankLines count={1} /></div>;
-  }
-
-  // Radio with options — show checkboxes (these are true multi-choice)
-  if (type === 'radio' && field.options && field.options.length > 0) {
+function LabeledField({
+  label,
+  width = '100%',
+  inline = false,
+}: {
+  label: string;
+  width?: string;
+  inline?: boolean;
+}) {
+  if (inline) {
     return (
-      <div className="mt-1 space-y-1">
-        {field.options.map((opt) => {
-          const isSelected = value === opt.value;
-          return (
-            <div key={opt.value} className="flex items-start gap-2">
-              <div
-                className="mt-0.5 flex h-3.5 w-3.5 items-center justify-center flex-shrink-0 rounded-sm border border-gray-500 print:h-3 print:w-3"
-                aria-hidden="true"
-              >
-                {isSelected && <span className="text-[10px] leading-none font-bold print:text-[8px]">X</span>}
-              </div>
-              <div>
-                <span className="text-sm text-gray-800 print:text-[10pt]">{opt.label}</span>
-                {'description' in opt && opt.description && (
-                  <p className="text-xs text-gray-500 leading-tight print:text-[8pt]">
-                    {opt.description}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex items-end gap-1" style={{ width }}>
+        <span className="text-[8pt] text-gray-500 whitespace-nowrap pb-0.5">{label}:</span>
+        <div className="flex-1 border-b border-gray-400" style={{ height: '1.15rem' }} />
       </div>
     );
   }
+  return (
+    <div style={{ width }}>
+      <p className="text-[8pt] font-medium text-gray-600 mb-0.5">{label}</p>
+      <BlankLine />
+    </div>
+  );
+}
 
-  // Yes/No
-  if (type === 'yesno') {
-    const isYes = value === true || value === 'yes';
-    const isNo = value === false || value === 'no';
-    return (
-      <div className="mt-1 flex items-center gap-6">
-        <div className="flex items-center gap-1.5">
-          <div className="flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-gray-500 print:h-3 print:w-3">
-            {isYes && <span className="text-[10px] leading-none font-bold print:text-[8px]">X</span>}
-          </div>
-          <span className="text-sm print:text-[10pt]">Yes</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-gray-500 print:h-3 print:w-3">
-            {isNo && <span className="text-[10px] leading-none font-bold print:text-[8px]">X</span>}
-          </div>
-          <span className="text-sm print:text-[10pt]">No</span>
-        </div>
-      </div>
-    );
-  }
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div className="mt-5 mb-2 border-b-2 border-[#1a365d] pb-0.5 print:break-before-auto">
+      <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase tracking-wide">
+        {title}
+      </h2>
+    </div>
+  );
+}
 
-  // Textarea — multiple lines
-  if (type === 'textarea') {
-    if (value) {
-      return (
-        <div className="mt-1 rounded bg-gray-50 px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap print:bg-transparent print:p-0 print:text-[10pt] print:italic">
-          {value}
-        </div>
-      );
-    }
-    const rows = field.rows ?? 4;
-    return <BlankLines count={rows} />;
-  }
-
-  // Repeater — render a compact sub-form
-  if (type === 'repeater' && field.repeaterConfig) {
-    const { itemLabel, fields: subFields = [] } = field.repeaterConfig;
-    const items = Array.isArray(value) && value.length > 0 ? value : [{}];
-
-    return (
-      <div className="space-y-4">
-        {items.map((item, idx) => (
-          <div key={idx} className="mt-2 border border-gray-300 rounded p-3 print:border-gray-400">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 print:text-[8pt]">
-              {itemLabel} {idx + 1}
-            </p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 print:gap-y-2">
-              {subFields
-                .filter((sf) => sf.type !== 'heading' && sf.type !== 'info')
-                .map((sf) => {
-                  const sfValue = item?.[sf.name];
-                  return (
-                    <div
-                      key={sf.name}
-                      className={
-                        sf.width === 'full' || sf.type === 'textarea' || sf.type === 'yesno'
-                          ? 'col-span-2'
-                          : 'col-span-1'
-                      }
-                    >
-                      <label className="block text-xs font-medium text-gray-700 print:text-[9pt]">
-                        {sf.label}
-                      </label>
-                      {renderAnswerArea(sf, sfValue)}
-                    </div>
-                  );
-                })}
-            </div>
-            {idx === items.length - 1 && (
-              <p className="mt-3 text-[10px] text-gray-400 italic print:text-[8pt]">
-                Add additional {itemLabel?.toLowerCase() ?? 'items'} on a separate sheet if needed.
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // Date field
-  if (type === 'date') {
-    if (value) {
-      return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{value}</p>;
-    }
-    return (
-      <div className="mt-1 flex items-end gap-1">
-        <div>
-          <p className="text-[9px] text-gray-400 mb-0.5">Month</p>
-          <div className="w-10 border-b border-gray-400" style={{ height: '1.4rem' }} />
-        </div>
-        <p className="text-gray-400 mb-1">/</p>
-        <div>
-          <p className="text-[9px] text-gray-400 mb-0.5">Day</p>
-          <div className="w-10 border-b border-gray-400" style={{ height: '1.4rem' }} />
-        </div>
-        <p className="text-gray-400 mb-1">/</p>
-        <div>
-          <p className="text-[9px] text-gray-400 mb-0.5">Year</p>
-          <div className="w-16 border-b border-gray-400" style={{ height: '1.4rem' }} />
-        </div>
-      </div>
-    );
-  }
-
-  // Currency
-  if (type === 'currency') {
-    if (value) {
-      return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">${value}</p>;
-    }
-    return (
-      <div className="mt-1 flex items-end gap-1">
-        <span className="text-sm text-gray-500 mb-0.5">$</span>
-        <div className="flex-1 border-b border-gray-400" style={{ height: '1.5rem' }} />
-      </div>
-    );
-  }
-
-  // Pre-filled simple text (number, phone, ssn4, text, email)
-  if (value !== undefined && value !== null && value !== '') {
-    return <p className="mt-1 text-sm font-medium text-gray-900 print:text-[10pt]">{value}</p>;
-  }
-
-  // Number
-  if (type === 'number') {
-    return <BlankLines count={1} />;
-  }
-
-  // Phone
-  if (type === 'phone') {
-    return (
-      <div className="mt-1 flex items-end gap-1">
-        <span className="text-sm text-gray-500 mb-0.5">(</span>
-        <div className="w-8 border-b border-gray-400" style={{ height: '1.5rem' }} />
-        <span className="text-sm text-gray-500 mb-0.5">)</span>
-        <div className="w-12 border-b border-gray-400" style={{ height: '1.5rem' }} />
-        <span className="text-sm text-gray-500 mb-0.5">-</span>
-        <div className="w-16 border-b border-gray-400" style={{ height: '1.5rem' }} />
-      </div>
-    );
-  }
-
-  // SSN last 4
-  if (type === 'ssn4') {
-    return (
-      <div className="mt-1 flex items-end gap-1">
-        <span className="text-sm text-gray-500 mb-0.5">XXX - XX -</span>
-        <div className="w-14 border-b border-gray-400" style={{ height: '1.5rem' }} />
-      </div>
-    );
-  }
-
-  // Default: single blank line (text, email, etc.)
-  return <BlankLines count={1} />;
+function SubHeader({ title }: { title: string }) {
+  return (
+    <p className="text-[8pt] font-bold uppercase tracking-wider text-gray-600 mt-3 mb-1">
+      {title}
+    </p>
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Section renderer
+// Fiduciary row (compact: name + relationship for primary + alternate)
 // ---------------------------------------------------------------------------
 
-function PrintSection({
-  section,
-  steps,
-  data,
-  globalQuestionRef,
-}: {
-  section: string;
-  steps: QuestionnaireStep[];
-  data?: any;
-  globalQuestionRef: { current: number };
-}) {
-  if (steps.length === 0) return null;
-
-  const sectionLabel = SECTION_LABELS[section] ?? `Section: ${section}`;
-
+function FiduciaryRow({ role }: { role: string }) {
   return (
-    <section className="mb-8 print:mb-6 print:break-inside-avoid-page">
-      {/* Section header */}
-      <div className="mb-4 border-b-2 border-[#1a365d] pb-1 print:border-[#1a365d]">
-        <h2 className="text-base font-bold text-[#1a365d] uppercase tracking-wide print:text-[11pt]">
-          {sectionLabel}
-        </h2>
-        {/* Section-level condition note */}
-        {steps[0].condition && (
-          <p className="text-[11px] text-gray-500 italic print:text-[8pt]">
-            Complete this section only if applicable to your situation.
-          </p>
-        )}
-      </div>
-
-      {/* Steps within the section */}
-      <div className="space-y-5 print:space-y-3">
-        {steps.map((step) => {
-          // Skip steps with no renderable fields
-          const renderableFields = step.fields.filter(
-            (f) => f.type !== 'info' || f.type === 'info',
-          );
-          if (renderableFields.length === 0) return null;
-
-          return (
-            <div key={step.id} className="print:break-inside-avoid">
-              {/* Step title */}
-              {step.title && step.title !== '' && (
-                <p className="mb-2 text-sm font-semibold text-gray-900 print:text-[10pt]">
-                  {step.title}
-                </p>
-              )}
-              {step.subtitle && (
-                <p className="mb-2 text-xs text-gray-500 italic print:text-[9pt]">
-                  {step.subtitle}
-                </p>
-              )}
-
-              {/* Conditional note */}
-              {step.condition && (
-                <p className="mb-2 text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded print:text-[8pt]">
-                  Note: Complete only if applicable.
-                </p>
-              )}
-
-              {/* Fields */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0 print:gap-x-4">
-                {step.fields.map((field) => {
-                  // Headings span full width
-                  if (field.type === 'heading') {
-                    return (
-                      <div key={field.name} className="col-span-2">
-                        <PrintField field={field} />
-                      </div>
-                    );
-                  }
-                  // Info fields — skip (they're instructional)
-                  if (field.type === 'info') {
-                    return null;
-                  }
-
-                  // Full-width fields
-                  const isFullWidth =
-                    field.width === 'full' ||
-                    field.type === 'textarea' ||
-                    field.type === 'repeater' ||
-                    (field.type === 'radio' && field.options && field.options.length > 3) ||
-                    field.type === 'yesno';
-
-                  // Increment global question counter for non-heading, non-info fields
-                  globalQuestionRef.current += 1;
-                  const qNum = globalQuestionRef.current;
-
-                  return (
-                    <div
-                      key={field.name}
-                      className={isFullWidth ? 'col-span-2' : 'col-span-1'}
-                    >
-                      <PrintField field={field} questionNumber={qNum} value={data?.[field.name]} />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
+    <tr>
+      <td className="py-1 pr-2 text-[9pt] font-medium text-gray-800 whitespace-nowrap align-top">
+        {role}
+      </td>
+      <td className="py-1 px-2 align-top">
+        <BlankLine />
+      </td>
+      <td className="py-1 px-2 align-top">
+        <BlankLine />
+      </td>
+      <td className="py-1 px-2 align-top">
+        <BlankLine />
+      </td>
+      <td className="py-1 pl-2 align-top">
+        <BlankLine />
+      </td>
+    </tr>
   );
 }
 
@@ -437,27 +131,17 @@ interface PrintableQuestionnaireProps {
 
 export default function PrintableQuestionnaire({
   clientName,
-  data,
 }: PrintableQuestionnaireProps) {
-  const printRef = useRef<HTMLDivElement>(null);
-
-  // Group steps by section, preserving order
-  const stepsBySection: Record<string, QuestionnaireStep[]> = {};
-  for (const section of SECTION_ORDER) {
-    stepsBySection[section] = QUESTIONNAIRE_STEPS.filter((s) => s.section === section);
-  }
-
-  // Global question counter (mutable ref, reset per render)
-  const globalQuestionRef = { current: 0 };
-
   return (
     <div>
-      {/* Screen-only toolbar */}
+      {/* ── Screen-only toolbar ─────────────────────────────────────────── */}
       <div className="print:hidden mb-6 flex items-center justify-between rounded-lg border border-[#1a365d]/15 bg-[#ebf4ff] px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-[#1a365d]">Printable Questionnaire</p>
+          <p className="text-sm font-semibold text-[#1a365d]">
+            Printable Intake Form (Condensed)
+          </p>
           <p className="text-xs text-[#1a365d]/60">
-            Print and complete by hand, then return to our office.
+            4-5 page version for in-person interviews and paper intake.
           </p>
         </div>
         <Button
@@ -465,181 +149,501 @@ export default function PrintableQuestionnaire({
           className="gap-2 bg-[#1a365d] hover:bg-[#2b6cb0] text-white"
         >
           <Printer className="h-4 w-4" />
-          Print Questionnaire
+          Print Form
         </Button>
       </div>
 
-      {/* Printable document */}
-      <div
-        ref={printRef}
-        className="bg-white print:bg-white print:text-black"
-        id="printable-questionnaire"
-      >
-        {/* Document header */}
-        <header className="mb-6 print:mb-4">
-          {/* Firm branding line */}
-          <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-3 print:border-[#1a365d]">
+      {/* ── Printable document ──────────────────────────────────────────── */}
+      <div className="bg-white print:bg-white print:text-black" id="printable-questionnaire">
+        {/* ============================================================= */}
+        {/* HEADER                                                        */}
+        {/* ============================================================= */}
+        <header className="mb-4">
+          <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-2">
             <div>
-              <h1 className="text-lg font-bold text-[#1a365d] print:text-[14pt]">
+              <h1 className="text-[14pt] font-bold text-[#1a365d]">
                 Estate Planning Questionnaire
               </h1>
-              <p className="text-sm font-medium text-[#2b6cb0] print:text-[11pt]">
+              <p className="text-[10pt] font-medium text-[#2b6cb0]">
                 Elias Counsel, LLC
               </p>
             </div>
-            <div className="text-right text-xs text-gray-500 print:text-[8pt]">
+            <div className="text-right text-[8pt] text-gray-500">
               <p>168 Prospect Plains Road</p>
               <p>Monroe Township, NJ 08831</p>
               <p>(609) 655-3200</p>
-              <p>info@adameliaslaw.com</p>
             </div>
           </div>
 
-          {/* Client info box */}
-          <div className="mt-4 grid grid-cols-3 gap-4 rounded border border-gray-300 p-3 print:border-gray-400">
+          {/* Client / Date / File No */}
+          <div className="mt-3 grid grid-cols-3 gap-3 rounded border border-gray-300 p-2">
             <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide print:text-[8pt]">
-                Client Name
-              </p>
+              <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
               {clientName ? (
-                <p className="mt-0.5 text-sm font-medium text-gray-900 print:text-[10pt]">
-                  {clientName}
-                </p>
+                <p className="text-[10pt] font-medium text-gray-900 mt-0.5">{clientName}</p>
               ) : (
-                <div className="mt-1 border-b border-gray-400" style={{ height: '1.4rem' }} />
+                <BlankLine />
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide print:text-[8pt]">
-                Date Completed
-              </p>
-              <div className="mt-1 border-b border-gray-400" style={{ height: '1.4rem' }} />
+              <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
+              <BlankLine />
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide print:text-[8pt]">
-                File No.
-              </p>
-              <div className="mt-1 border-b border-gray-400" style={{ height: '1.4rem' }} />
+              <p className="text-[7pt] font-semibold text-gray-500 uppercase">File No.</p>
+              <BlankLine />
             </div>
           </div>
 
-          {/* Instructions */}
-          <div className="mt-4 rounded bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-600 leading-relaxed print:bg-white print:border-gray-300 print:text-[9pt]">
-            <p className="font-semibold text-gray-800 mb-1 print:text-[9pt]">Instructions</p>
-            <p>
-              Please complete all applicable sections. Leave blank any items that do not apply to
-              your situation. Use black or blue ink. Print legibly. If you need additional space,
-              continue on a separate sheet and indicate the question number. Return the completed
-              questionnaire to our office or upload it to your client portal at{' '}
-              <span className="font-medium">eliascounsel.com</span>.
-            </p>
-            <p className="mt-1 text-gray-500 italic">
-              CONFIDENTIAL: This document contains personal and legal information protected by the
-              attorney-client privilege upon execution of an engagement letter.
-            </p>
-          </div>
+          <p className="mt-2 text-[8pt] text-gray-500 italic">
+            Please complete all applicable sections using black or blue ink.
+            Leave blank any items that do not apply. Continue on a separate
+            sheet if needed, noting the section number. CONFIDENTIAL.
+          </p>
         </header>
 
-        {/* Sections */}
-        {SECTION_ORDER.map((section) => (
-          <PrintSection
-            key={section}
-            section={section}
-            steps={stepsBySection[section] ?? []}
-            data={data}
-            globalQuestionRef={globalQuestionRef}
-          />
-        ))}
+        {/* ============================================================= */}
+        {/* SECTION 1: CLIENT INFORMATION                                  */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 1 — About You" />
 
-        {/* Signature block */}
-        <section className="mt-8 print:mt-6 print:break-inside-avoid">
-          <div className="border-t-2 border-[#1a365d] pt-4">
-            <h2 className="mb-4 text-base font-bold text-[#1a365d] uppercase tracking-wide print:text-[11pt]">
-              Certification
-            </h2>
-            <p className="mb-6 text-sm text-gray-700 print:text-[10pt]">
-              I certify that the information provided in this questionnaire is true and accurate to
-              the best of my knowledge. I understand that this information will be used to prepare
-              my estate planning documents and that any material omissions or inaccuracies may
-              affect the validity or effectiveness of those documents.
-            </p>
-            <div className="grid grid-cols-2 gap-8 print:gap-6">
-              <div>
-                <div className="border-b border-gray-400" style={{ height: '2rem' }} />
-                <p className="mt-1 text-xs text-gray-500 print:text-[8pt]">Client Signature</p>
-              </div>
-              <div>
-                <div className="border-b border-gray-400" style={{ height: '2rem' }} />
-                <p className="mt-1 text-xs text-gray-500 print:text-[8pt]">Date</p>
-              </div>
-              <div>
-                <div className="border-b border-gray-400" style={{ height: '2rem' }} />
-                <p className="mt-1 text-xs text-gray-500 print:text-[8pt]">Print Name</p>
-              </div>
-              <div>
-                {/* spacer */}
-              </div>
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+          <LabeledField label="First Name" />
+          <LabeledField label="Middle Name" />
+          <LabeledField label="Last Name" />
+          <LabeledField label="Suffix" />
+        </div>
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+          <LabeledField label="Date of Birth" />
+          <LabeledField label="Last 4 SSN" width="60%" />
+          <div className="col-span-2">
+            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Gender</p>
+            <div className="flex gap-4">
+              <CheckOption label="Male" />
+              <CheckOption label="Female" />
             </div>
           </div>
-        </section>
+        </div>
+        <div className="grid grid-cols-1 gap-y-2 mt-2">
+          <LabeledField label="Street Address" />
+        </div>
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+          <LabeledField label="City" />
+          <LabeledField label="State" />
+          <LabeledField label="ZIP Code" />
+          <LabeledField label="County" />
+        </div>
+        <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+          <LabeledField label="Email" />
+          <LabeledField label="Phone" />
+          <LabeledField label="Alternate Phone" />
+        </div>
+        <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+          <div>
+            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Marital Status</p>
+            <div className="space-y-0.5">
+              <CheckOption label="Single" />
+              <CheckOption label="Married" />
+              <CheckOption label="Domestic Partnership" />
+              <CheckOption label="Divorced" />
+              <CheckOption label="Widowed" />
+              <CheckOption label="Separated" />
+            </div>
+          </div>
+          <div>
+            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
+            <div className="space-y-0.5">
+              <CheckOption label="U.S. Citizen" />
+              <CheckOption label="Permanent Resident" />
+              <CheckOption label="Non-Resident" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <LabeledField label="Occupation" />
+            <LabeledField label="Employer" />
+          </div>
+        </div>
 
-        {/* Print footer with page numbers via CSS counters */}
-        <div className="hidden print:block print:fixed print:bottom-0 print:left-0 print:right-0 print:text-center print:text-[8pt] print:text-gray-400 print:py-2 print:border-t print:border-gray-200">
-          Estate Planning Questionnaire — Elias Counsel, LLC — 168 Prospect Plains Road, Monroe
-          Township, NJ 08831 — (609) 655-3200
+        {/* ============================================================= */}
+        {/* SECTION 2: SPOUSE                                              */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 2 — Spouse / Domestic Partner" />
+        <p className="text-[8pt] text-gray-500 italic mb-2">
+          Complete only if married or in a domestic partnership.
+        </p>
+
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+          <LabeledField label="First Name" />
+          <LabeledField label="Middle Name" />
+          <LabeledField label="Last Name" />
+          <LabeledField label="Suffix" />
+        </div>
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+          <LabeledField label="Date of Birth" />
+          <LabeledField label="Last 4 SSN" width="60%" />
+          <div className="col-span-2 flex items-end gap-4 pb-0.5">
+            <CheckOption label="Same address as above" />
+            <span className="text-[8pt] text-gray-400 italic">If not, provide address below:</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-y-2 mt-1">
+          <LabeledField label="Spouse Address (if different)" />
+        </div>
+
+        {/* ============================================================= */}
+        {/* SECTION 3: CHILDREN                                            */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 3 — Children & Dependents" />
+
+        <table className="w-full text-[9pt] border-collapse mt-1">
+          <thead>
+            <tr className="border-b border-gray-400">
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">#</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Full Name</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">DOB</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">M/F</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Relationship</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1">Special Needs?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <tr key={n} className="border-b border-gray-300">
+                <td className="py-1.5 pr-2 text-gray-400">{n}.</td>
+                <td className="py-1.5 pr-2"><BlankLine /></td>
+                <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
+                <td className="py-1.5 pr-2"><BlankLine width="2rem" /></td>
+                <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
+                <td className="py-1.5">
+                  <div className="flex gap-2">
+                    <CheckOption label="Y" />
+                    <CheckOption label="N" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-[7pt] text-gray-400 italic mt-1">
+          Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child has special needs requiring a special needs trust.
+        </p>
+
+        <SubHeader title="Guardian for Minor Children" />
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <LabeledField label="Primary Guardian — Name" />
+          <LabeledField label="Relationship to You" />
+          <LabeledField label="Alternate Guardian — Name" />
+          <LabeledField label="Relationship to You" />
+        </div>
+
+        {/* ============================================================= */}
+        {/* SECTION 4: FIDUCIARIES                                         */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 4 — Your Fiduciaries" />
+        <p className="text-[8pt] text-gray-500 italic mb-1">
+          Name the people you trust to carry out your wishes. Provide primary and alternate for each role.
+        </p>
+
+        <table className="w-full text-[9pt] border-collapse">
+          <thead>
+            <tr className="border-b border-gray-400">
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-36">Role</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 px-2">Primary — Full Name</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 px-2 w-24">Relationship</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 px-2">Alternate — Full Name</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pl-2 w-24">Relationship</th>
+            </tr>
+          </thead>
+          <tbody>
+            <FiduciaryRow role="Executor" />
+            <FiduciaryRow role="Trustee" />
+            <FiduciaryRow role="Successor Trustee" />
+            <FiduciaryRow role="POA Agent" />
+            <FiduciaryRow role="Healthcare Rep" />
+          </tbody>
+        </table>
+
+        {/* ============================================================= */}
+        {/* SECTION 5: DISTRIBUTION & BEQUESTS                             */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 5 — Distribution Wishes" />
+
+        <SubHeader title="How should your estate be distributed?" />
+        <div className="space-y-0.5">
+          <CheckOption label="Everything to my spouse, then equally to children" />
+          <CheckOption label="Everything equally to children" />
+          <CheckOption label="Specific percentages to named beneficiaries (list below)" />
+          <CheckOption label="Custom distribution plan (describe below)" />
+        </div>
+
+        <SubHeader title="Per Stirpes" />
+        <p className="text-[8pt] text-gray-500 mb-1">
+          If a beneficiary predeceases you, should their share pass to their children?
+        </p>
+        <div className="flex gap-4">
+          <CheckOption label="Yes — their share passes to their children (per stirpes)" />
+          <CheckOption label="No — redistribute among surviving beneficiaries" />
+        </div>
+
+        <SubHeader title="Specific Beneficiaries (if applicable)" />
+        <table className="w-full text-[9pt] border-collapse mt-1">
+          <thead>
+            <tr className="border-b border-gray-400">
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Full Name</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Relationship</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 w-16">% Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[1, 2, 3].map((n) => (
+              <tr key={n} className="border-b border-gray-300">
+                <td className="py-1.5 pr-2"><BlankLine /></td>
+                <td className="py-1.5 pr-2"><BlankLine /></td>
+                <td className="py-1.5"><BlankLine width="3rem" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <SubHeader title="Specific Gifts / Bequests" />
+        <table className="w-full text-[9pt] border-collapse mt-1">
+          <thead>
+            <tr className="border-b border-gray-400">
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Item / Property</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Recipient</th>
+              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 w-24">Relationship</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[1, 2, 3].map((n) => (
+              <tr key={n} className="border-b border-gray-300">
+                <td className="py-1.5 pr-2"><BlankLine /></td>
+                <td className="py-1.5 pr-2"><BlankLine /></td>
+                <td className="py-1.5"><BlankLine /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <SubHeader title="Charitable Gifts" />
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-1">
+          <LabeledField label="Organization 1" />
+          <LabeledField label="Amount or % of Estate" />
+          <LabeledField label="Organization 2" />
+          <LabeledField label="Amount or % of Estate" />
+        </div>
+
+        <SubHeader title="Ultimate Distribution" />
+        <p className="text-[8pt] text-gray-500 italic mb-1">
+          If none of your named beneficiaries survive you:
+        </p>
+        <div className="space-y-0.5">
+          <CheckOption label="To my heirs under NJ intestacy law" />
+          <CheckOption label="To a specific charity (name below)" />
+          <CheckOption label="Other arrangement (describe below)" />
+        </div>
+        <div className="mt-1">
+          <BlankLine />
+        </div>
+
+        {/* ============================================================= */}
+        {/* SECTION 6: HEALTHCARE DIRECTIVES                               */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 6 — Healthcare Preferences" />
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <div>
+            <SubHeader title="Life-Sustaining Treatment" />
+            <div className="space-y-0.5">
+              <CheckOption label="Provide all possible measures" />
+              <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+              <CheckOption label="Trial period, then withdraw if no improvement" />
+              <CheckOption label="My healthcare representative decides" />
+            </div>
+          </div>
+          <div>
+            <SubHeader title="Artificial Nutrition & Hydration" />
+            <div className="space-y-0.5">
+              <CheckOption label="Continue in all circumstances" />
+              <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+              <CheckOption label="My healthcare representative decides" />
+            </div>
+          </div>
+          <div>
+            <SubHeader title="Pain Management" />
+            <div className="space-y-0.5">
+              <CheckOption label="Maximum relief, even if it may hasten death" />
+              <CheckOption label="Relief that does not risk hastening death" />
+              <CheckOption label="My healthcare representative decides" />
+            </div>
+          </div>
+          <div>
+            <SubHeader title="Organ Donation" />
+            <div className="space-y-0.5">
+              <CheckOption label="Yes — all organs and tissues" />
+              <CheckOption label="Yes — specific organs only" />
+              <CheckOption label="No" />
+              <CheckOption label="Already registered" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-6 mt-3">
+          <div>
+            <SubHeader title="Burial / Funeral Preference" />
+            <div className="flex gap-3">
+              <CheckOption label="Burial" />
+              <CheckOption label="Cremation" />
+              <CheckOption label="No preference" />
+              <CheckOption label="Other" />
+            </div>
+          </div>
+          <div>
+            <SubHeader title="Pregnancy Provision (if applicable)" />
+            <div className="space-y-0.5">
+              <CheckOption label="Follow directive even if pregnant" />
+              <CheckOption label="Do not follow if pregnant" />
+              <CheckOption label="My representative decides" />
+            </div>
+          </div>
+        </div>
+
+        <SubHeader title="Additional Healthcare Instructions" />
+        <BlankLines count={3} />
+
+        {/* ============================================================= */}
+        {/* SECTION 7: ASSETS & LIABILITIES (SUMMARY)                      */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 7 — Assets & Liabilities (Summary)" />
+        <p className="text-[8pt] text-gray-500 italic mb-2">
+          Please list your major assets and liabilities below. Our office will gather detailed
+          information during your consultation. Include approximate values where known.
+        </p>
+
+        <SubHeader title="Real Estate" />
+        <p className="text-[7pt] text-gray-400 mb-0.5">
+          List each property: address, estimated value, how titled (joint, individual, trust)
+        </p>
+        <BlankLines count={4} />
+
+        <SubHeader title="Financial Accounts" />
+        <p className="text-[7pt] text-gray-400 mb-0.5">
+          Bank accounts, investments, retirement (401k, IRA), life insurance
+        </p>
+        <BlankLines count={4} />
+
+        <SubHeader title="Business Interests" />
+        <BlankLines count={2} />
+
+        <SubHeader title="Significant Debts" />
+        <p className="text-[7pt] text-gray-400 mb-0.5">
+          Mortgages, loans, credit card debt, other obligations
+        </p>
+        <BlankLines count={3} />
+
+        {/* ============================================================= */}
+        {/* SECTION 8: ADDITIONAL INFORMATION                              */}
+        {/* ============================================================= */}
+        <SectionHeader title="Section 8 — Additional Information" />
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div>
+            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+              Do you have existing estate planning documents?
+            </p>
+            <div className="flex gap-4">
+              <CheckOption label="Yes" />
+              <CheckOption label="No" />
+            </div>
+            <LabeledField label="If yes, describe (type and approximate date)" />
+          </div>
+          <div>
+            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+              Any pending legal matters?
+            </p>
+            <div className="flex gap-4">
+              <CheckOption label="Yes" />
+              <CheckOption label="No" />
+            </div>
+            <LabeledField label="If yes, describe" />
+          </div>
+        </div>
+
+        <SubHeader title="Additional Notes" />
+        <p className="text-[7pt] text-gray-400 mb-0.5">
+          Special circumstances, family dynamics, concerns about a specific beneficiary, pets, property in other states, etc.
+        </p>
+        <BlankLines count={4} />
+
+        <div className="mt-2">
+          <p className="text-[8pt] font-medium text-gray-600 mb-0.5">How did you hear about us?</p>
+          <div className="flex gap-3 flex-wrap">
+            <CheckOption label="Referral" />
+            <CheckOption label="Google" />
+            <CheckOption label="Social Media" />
+            <CheckOption label="Attorney Referral" />
+            <CheckOption label="Other" />
+          </div>
+        </div>
+
+        {/* ============================================================= */}
+        {/* CERTIFICATION / SIGNATURE                                      */}
+        {/* ============================================================= */}
+        <div className="mt-6 border-t-2 border-[#1a365d] pt-3 print:break-inside-avoid">
+          <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase tracking-wide mb-2">
+            Certification
+          </h2>
+          <p className="text-[9pt] text-gray-700 mb-4">
+            I certify that the information provided in this questionnaire is true and accurate to
+            the best of my knowledge. I understand that this information will be used to prepare
+            my estate planning documents and that any material omissions or inaccuracies may
+            affect the validity or effectiveness of those documents.
+          </p>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <div className="border-b border-gray-400" style={{ height: '1.8rem' }} />
+              <p className="mt-0.5 text-[7pt] text-gray-500">Client Signature</p>
+            </div>
+            <div>
+              <div className="border-b border-gray-400" style={{ height: '1.8rem' }} />
+              <p className="mt-0.5 text-[7pt] text-gray-500">Date</p>
+            </div>
+            <div>
+              <div className="border-b border-gray-400" style={{ height: '1.8rem' }} />
+              <p className="mt-0.5 text-[7pt] text-gray-500">Print Name</p>
+            </div>
+            <div />
+          </div>
+        </div>
+
+        {/* Print footer */}
+        <div className="hidden print:block print:fixed print:bottom-0 print:left-0 print:right-0 print:text-center print:text-[7pt] print:text-gray-400 print:py-1">
+          Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200
         </div>
       </div>
 
-      {/* Print CSS */}
+      {/* ── Print CSS ──────────────────────────────────────────────────── */}
       <style>{`
         @media print {
-          /* Page setup */
           @page {
             size: letter portrait;
-            margin: 0.75in 0.75in 1in 0.75in;
-
-            /* Page number in footer */
-            @bottom-center {
-              content: "Page " counter(page) " of " counter(pages);
-              font-size: 8pt;
-              color: #888;
-            }
+            margin: 0.6in 0.65in 0.8in 0.65in;
           }
-
-          /* Reset */
           body {
-            font-size: 10pt;
+            font-size: 9pt;
             color: #000;
             background: #fff;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-
-          /* Hide screen-only elements */
           .print\\:hidden { display: none !important; }
-
-          /* Show print-only elements */
           .hidden.print\\:block { display: block !important; }
-
-          /* Avoid orphaned headings */
           h1, h2, h3, h4 { page-break-after: avoid; }
-
-          /* Keep section content together where possible */
-          section { page-break-inside: avoid; }
-
-          /* Borders and backgrounds */
-          * {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-
-          /* Checkbox squares */
-          .rounded-sm.border { border: 1.5pt solid #444 !important; }
-
-          /* Blank lines */
-          .border-b.border-gray-400 { border-bottom: 1pt solid #444 !important; }
-
-          /* Links: no blue color */
+          .print\\:break-inside-avoid { break-inside: avoid; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .border-gray-500 { border-color: #444 !important; }
+          .border-b.border-gray-400 { border-bottom: 0.75pt solid #444 !important; }
+          .border-b.border-gray-300 { border-bottom: 0.5pt solid #888 !important; }
           a { color: #000; text-decoration: none; }
         }
       `}</style>

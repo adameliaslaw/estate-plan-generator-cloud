@@ -310,6 +310,18 @@ export const VARIABLE_TO_QUESTIONNAIRE_MAP: Record<string, VariableMapping> = {
   'packageType':                { variable: 'packageType',                section: 'computed',      label: 'Package Type (auto)',             fieldPath: 'computed' },
   'packageLabel':               { variable: 'packageLabel',               section: 'computed',      label: 'Package Label (auto)',            fieldPath: 'computed' },
   'isFemale':                   { variable: 'isFemale',                   section: 'computed',      label: 'Is Female (auto)',               fieldPath: 'computed' },
+  // Relationship title computed fields
+  'spouseTitle':                { variable: 'spouseTitle',                section: 'computed',      label: 'Spouse Title – husband/wife/partner (auto)', fieldPath: 'computed' },
+  'clientTitle':                { variable: 'clientTitle',                section: 'computed',      label: 'Client Title – husband/wife/partner (auto)', fieldPath: 'computed' },
+  'clientPronouns':             { variable: 'clientPronouns',             section: 'computed',      label: 'Client Pronouns (auto)',         fieldPath: 'computed' },
+  'spousePronouns':             { variable: 'spousePronouns',             section: 'computed',      label: 'Spouse Pronouns (auto)',          fieldPath: 'computed' },
+  'executorTitle':              { variable: 'executorTitle',              section: 'computed',      label: 'Executor Relationship Title (auto)', fieldPath: 'computed' },
+  'alternateExecutorTitle':     { variable: 'alternateExecutorTitle',     section: 'computed',      label: 'Alternate Executor Relationship Title (auto)', fieldPath: 'computed' },
+  'trusteeTitle':               { variable: 'trusteeTitle',               section: 'computed',      label: 'Trustee Relationship Title (auto)', fieldPath: 'computed' },
+  'poaAgentTitle':              { variable: 'poaAgentTitle',              section: 'computed',      label: 'POA Agent Relationship Title (auto)', fieldPath: 'computed' },
+  'healthcareRepTitle':         { variable: 'healthcareRepTitle',         section: 'computed',      label: 'Healthcare Rep Relationship Title (auto)', fieldPath: 'computed' },
+  'guardianTitle':              { variable: 'guardianTitle',              section: 'computed',      label: 'Guardian Relationship Title (auto)', fieldPath: 'computed' },
+  'childrenWithTitles':         { variable: 'childrenWithTitles',         section: 'computed',      label: 'Children with son/daughter titles (auto)', fieldPath: 'computed' },
 
   // ------ Firm data (from firm profile, not questionnaire) ------
   'firm':                       { variable: 'firm',                       section: 'Firm',          label: 'Firm Data',            fieldPath: 'firm' },

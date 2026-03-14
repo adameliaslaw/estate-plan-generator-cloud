@@ -129,6 +129,20 @@ const BUSINESS_ENTITY_OPTIONS = [
   { label: 'Other', value: 'Other' },
 ];
 
+const RELATIONSHIP_OPTIONS = [
+  { label: 'Spouse', value: 'Spouse' },
+  { label: 'Son', value: 'Son' },
+  { label: 'Daughter', value: 'Daughter' },
+  { label: 'Father', value: 'Father' },
+  { label: 'Mother', value: 'Mother' },
+  { label: 'Brother', value: 'Brother' },
+  { label: 'Sister', value: 'Sister' },
+  { label: 'Friend', value: 'Friend' },
+  { label: 'Attorney', value: 'Attorney' },
+  { label: 'Accountant', value: 'Accountant' },
+  { label: 'Other', value: 'Other' },
+];
+
 // ---------------------------------------------------------------------------
 // SECTION 1: ABOUT YOU (Personal Information)
 // ---------------------------------------------------------------------------
@@ -334,6 +348,27 @@ const SECTION_ABOUT_YOU: QuestionnaireStep[] = [
     ],
   },
 
+  // Step 7b: Gender
+  {
+    id: 'personal_gender',
+    section: 'aboutYou',
+    title: 'What is your gender?',
+    subtitle: 'Used for document language (e.g., "he/she", "husband/wife").',
+    estimatedMinutes: 1,
+    fields: [
+      {
+        name: 'personalInfo.gender',
+        label: 'Gender',
+        type: 'radio',
+        required: true,
+        options: [
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+    ],
+  },
+
   // Step 8: Citizenship
   {
     id: 'personal_citizenship',
@@ -494,7 +529,6 @@ const SECTION_SPOUSE: QuestionnaireStep[] = [
     id: 'spouse_address',
     section: 'spouse',
     title: "What is your spouse's / partner's home address?",
-    subtitle: 'If the same as yours, you may re-enter your address here.',
     estimatedMinutes: 1,
     condition: {
       field: 'personalInfo.maritalStatus',
@@ -503,10 +537,17 @@ const SECTION_SPOUSE: QuestionnaireStep[] = [
     },
     fields: [
       {
+        name: 'spouseInfo.sameAddress',
+        label: 'Same address as mine',
+        type: 'yesno',
+        helpText: 'If yes, your address will be used for your spouse.',
+      },
+      {
         name: 'spouseInfo.address',
         label: 'Street Address',
         type: 'text',
         required: true,
+        condition: { field: 'spouseInfo.sameAddress', operator: 'equals', value: false },
         placeholder: '123 Main Street',
         width: 'full',
       },
@@ -517,6 +558,7 @@ const SECTION_SPOUSE: QuestionnaireStep[] = [
         required: true,
         placeholder: 'City',
         width: 'third',
+        condition: { field: 'spouseInfo.sameAddress', operator: 'equals', value: false },
       },
       {
         name: 'spouseInfo.state',
@@ -526,6 +568,7 @@ const SECTION_SPOUSE: QuestionnaireStep[] = [
         defaultValue: 'NJ',
         options: US_STATE_OPTIONS,
         width: 'third',
+        condition: { field: 'spouseInfo.sameAddress', operator: 'equals', value: false },
       },
       {
         name: 'spouseInfo.zip',
@@ -535,6 +578,7 @@ const SECTION_SPOUSE: QuestionnaireStep[] = [
         placeholder: '08831',
         validation: { pattern: '^\\d{5}(-\\d{4})?$', patternMessage: 'Enter a valid ZIP code' },
         width: 'third',
+        condition: { field: 'spouseInfo.sameAddress', operator: 'equals', value: false },
       },
       {
         name: 'spouseInfo.county',
@@ -544,6 +588,7 @@ const SECTION_SPOUSE: QuestionnaireStep[] = [
         options: NJ_COUNTY_OPTIONS,
         helpText: 'Select NJ county if applicable.',
         width: 'half',
+        condition: { field: 'spouseInfo.sameAddress', operator: 'equals', value: false },
       },
     ],
   },
@@ -738,11 +783,28 @@ const SECTION_CHILDREN: QuestionnaireStep[] = [
               ],
             },
             {
+              name: 'gender',
+              label: 'Gender',
+              type: 'radio',
+              required: true,
+              options: [
+                { label: 'Male', value: 'male' },
+                { label: 'Female', value: 'female' },
+              ],
+            },
+            {
+              name: 'sameAddress',
+              label: 'Same address as mine',
+              type: 'yesno',
+              helpText: 'If yes, your address will be used for this child.',
+            },
+            {
               name: 'address',
-              label: 'Address (if different from yours)',
+              label: 'Address',
               type: 'text',
               placeholder: 'Street address',
               width: 'full',
+              condition: { field: 'sameAddress', operator: 'equals', value: false },
             },
             {
               name: 'specialNeeds',
@@ -788,8 +850,9 @@ const SECTION_CHILDREN: QuestionnaireStep[] = [
       {
         name: 'guardianPrimary.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Sister, Brother, Friend',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -821,8 +884,9 @@ const SECTION_CHILDREN: QuestionnaireStep[] = [
       {
         name: 'guardianAlternate.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Sister, Brother, Friend',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1761,8 +1825,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.executor.primary.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter, Friend',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1794,8 +1859,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.executor.alternate.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter, Friend',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1840,8 +1906,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.trustee.primary.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Self, Spouse, Son, Daughter',
+        type: 'select',
+        options: [...RELATIONSHIP_OPTIONS.slice(0, 0), { label: 'Self', value: 'Self' }, ...RELATIONSHIP_OPTIONS],
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1873,8 +1940,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.trustee.successor.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1906,8 +1974,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.trustee.secondSuccessor.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Son, Daughter, Friend',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1951,8 +2020,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.poaAgent.primary.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -1984,8 +2054,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.poaAgent.alternate.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -2029,8 +2100,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.healthcareRep.primary.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -2062,8 +2134,9 @@ const SECTION_FIDUCIARIES: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.healthcareRep.alternate.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g., Spouse, Son, Daughter',
+        type: 'select',
+        options: RELATIONSHIP_OPTIONS,
+        placeholder: 'Select relationship',
         width: 'half',
       },
       {
@@ -2121,6 +2194,35 @@ const SECTION_WISHES: QuestionnaireStep[] = [
             label: 'Custom distribution plan',
             value: 'custom',
             description: 'Describe a custom distribution plan. Our attorney will work with you to document your wishes.',
+          },
+        ],
+      },
+    ],
+  },
+
+  // Per Stirpes Election
+  {
+    id: 'distribution_per_stirpes',
+    section: 'wishes',
+    title: 'If a beneficiary predeceases you, should their share pass to their children?',
+    subtitle: 'This is called distribution "per stirpes" — it keeps the share within that family branch.',
+    estimatedMinutes: 1,
+    fields: [
+      {
+        name: 'distribution.perStirpes',
+        label: 'Per Stirpes Distribution',
+        type: 'radio',
+        required: true,
+        options: [
+          {
+            label: 'Yes — their share passes to their children',
+            value: 'yes',
+            description: 'Per stirpes: if your son predeceases you, his children inherit his share.',
+          },
+          {
+            label: 'No — redistribute among surviving beneficiaries',
+            value: 'no',
+            description: 'Per capita: only surviving beneficiaries inherit.',
           },
         ],
       },
@@ -2228,6 +2330,14 @@ const SECTION_WISHES: QuestionnaireStep[] = [
               type: 'text',
               required: true,
               placeholder: "Recipient's full name",
+              width: 'half',
+            },
+            {
+              name: 'recipientRelationship',
+              label: 'Relationship to You',
+              type: 'select',
+              options: RELATIONSHIP_OPTIONS,
+              placeholder: 'Select relationship',
               width: 'half',
             },
           ],
@@ -2547,7 +2657,7 @@ const SECTION_HEALTHCARE: QuestionnaireStep[] = [
     subtitle:
       'New Jersey law allows you to specify whether your advance directive applies during pregnancy.',
     estimatedMinutes: 1,
-    condition: { field: 'personalInfo.sex', operator: 'equals', value: 'Female' },
+    condition: { field: 'personalInfo.gender', operator: 'equals', value: 'female' },
     fields: [
       {
         name: 'healthcarePreferences.pregnancyDirective',

@@ -941,6 +941,7 @@ export default function ClientDashboardPage() {
             packageType={packageType}
             trustTypes={client.trusts?.map((t) => t.trustType)}
             questionnaireComplete={isQuestionnaireComplete}
+            clientUpdatedAt={client.updatedAt as { seconds: number } | null}
           />
         </TabsContent>
 

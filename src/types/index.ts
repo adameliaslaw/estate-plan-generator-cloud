@@ -283,6 +283,7 @@ export interface PersonalInfo {
   phone: string;
   alternatePhone?: string;
   maritalStatus: MaritalStatus;
+  gender?: 'male' | 'female';   // for pronouns, relationship titles, pregnancy provision
   citizenship: CitizenshipStatus;
   occupation?: string;
   employer?: string;
@@ -293,6 +294,7 @@ export interface SpouseInfo extends PersonalInfo {
   separateRepresentation: boolean;
   separateAttorneyName?: string;
   separateAttorneyFirm?: string;
+  sameAddress?: boolean;  // auto-fill from client address
 }
 
 // ============================================================================
@@ -303,6 +305,8 @@ export interface Child {
   id: string;                   // client-side UUID
   name: string;
   dob: string;                  // ISO 8601 date string
+  gender: 'male' | 'female';   // for gendered relationship titles (son/daughter)
+  sameAddress?: boolean;         // auto-fill from client address
   address?: string;
   city?: string;
   state?: string;
