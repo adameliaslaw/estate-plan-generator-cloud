@@ -103,7 +103,7 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
   return (
     <div className="flex h-screen print:h-auto overflow-hidden print:!overflow-visible bg-gray-50">
       {/* ── Desktop sidebar ── */}
-      <div className="hidden lg:flex lg:shrink-0">
+      <div className="hidden lg:flex lg:shrink-0 print:!hidden">
         <AppSidebar />
       </div>
 

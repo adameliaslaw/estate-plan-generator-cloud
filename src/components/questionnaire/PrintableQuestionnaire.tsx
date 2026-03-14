@@ -604,6 +604,8 @@ export default function PrintableQuestionnaire({
           html, body {
             margin: 0 !important;
             padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
           }
           body, * {
             font-family: Arial, Helvetica, sans-serif !important;
@@ -616,7 +618,29 @@ export default function PrintableQuestionnaire({
             print-color-adjust: exact;
           }
           .print\\:hidden { display: none !important; }
+          .print\\:!hidden { display: none !important; }
           .hidden.print\\:block { display: block !important; }
+
+          /* Strip AppLayout parent containers so questionnaire fills full page */
+          #printable-questionnaire,
+          #printable-questionnaire * {
+            max-width: none !important;
+          }
+          /* Reset the flex layout wrapper that AppLayout uses */
+          main, [class*="overflow-hidden"], [class*="overflow-y-auto"] {
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+          }
+          .mx-auto { margin: 0 !important; }
+          .px-4, .sm\\:px-6, .lg\\:px-8 {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }
+          .py-6 {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+          }
 
           /* ── THE FIX: Explicit page containers ──────────────────── */
           .print-page {
