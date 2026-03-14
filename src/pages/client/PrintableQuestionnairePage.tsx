@@ -72,5 +72,5 @@ export default function PrintableQuestionnairePage() {
         ? `${clientFullName} & ${spouseFullName}`
         : clientFullName || 'Client';
 
-    return <PrintableQuestionnaire clientName={displayHeading} data={client} />;
+    return <PrintableQuestionnaire clientName={displayHeading} />;
 }

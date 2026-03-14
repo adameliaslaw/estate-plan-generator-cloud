@@ -1,10 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
     interface Window {
-        google: typeof google;
+        google: any;
     }
 }
+
+/** Minimal type shims so we don't need @types/google.maps */
+interface GoogleAddressComponent {
+    long_name: string;
+    short_name: string;
+    types: string[];
+}
+
+interface GooglePlaceResult {
+    address_components?: GoogleAddressComponent[];
+    formatted_address?: string;
+}
+
+interface GoogleAutocomplete {
+    addListener(event: string, cb: () => void): { remove(): void };
+    getPlace(): GooglePlaceResult | undefined;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 
 /**
@@ -57,7 +76,7 @@ export function useGooglePlacesAutocomplete(
     onChange: (value: Partial<AddressComponents>) => void
 ) {
     const [isReady, setIsReady] = useState(false);
-    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+    const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
 
     useEffect(() => {
         if (!apiKey) return;
@@ -83,7 +102,7 @@ export function useGooglePlacesAutocomplete(
         autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
             types: ['address'],
             fields: ['address_components', 'formatted_address'],
-        });
+        }) as GoogleAutocomplete;
 
         const listener = autocompleteRef.current.addListener('place_changed', () => {
             const place = autocompleteRef.current?.getPlace();
@@ -93,7 +112,7 @@ export function useGooglePlacesAutocomplete(
             let streetNum = '';
             let routeName = '';
 
-            place.address_components.forEach((component: google.maps.GeocoderAddressComponent) => {
+            place.address_components.forEach((component: GoogleAddressComponent) => {
                 const types = component.types;
                 if (types.includes('street_number')) {
                     streetNum = component.long_name;
