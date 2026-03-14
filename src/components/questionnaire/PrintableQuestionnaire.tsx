@@ -1,19 +1,16 @@
 /**
  * PrintableQuestionnaire.tsx
  *
- * Condensed ~4-5 page estate planning intake form designed for paper.
+ * Condensed ~5-page estate planning intake form designed for paper.
  *
- * Design decisions:
- * - Dense table layouts instead of one-field-per-row
- * - Assets/liabilities → free-text summary boxes (not structured repeaters)
- * - Fiduciaries → compact table (name + relationship only, no address/phone)
- * - All conditional logic flattened (paper can't branch)
- * - Pre-allocated rows for children (5), bequests (3), beneficiaries (3)
- * - Professional legal intake appearance with firm branding
+ * CRITICAL DESIGN: Each "page" is an explicit fixed-height container that
+ * maps 1:1 to a physical printed page. This prevents ANY page bleeding —
+ * the browser never guesses where to break because we tell it exactly.
  *
- * Usage:
- *   <PrintableQuestionnaire />                       — blank form
- *   <PrintableQuestionnaire clientName="J. Smith" />  — headed form
+ * Page geometry (letter portrait):
+ *   Paper:     8.5in × 11in
+ *   Margins:   0.6in top/bottom, 0.65in left/right
+ *   Printable: 7.2in × 9.8in
  */
 
 import { Printer } from 'lucide-react';
@@ -76,9 +73,9 @@ function LabeledField({
   );
 }
 
-function SectionHeader({ title, subtitle, forcePageBreak }: { title: string; subtitle?: string; forcePageBreak?: boolean }) {
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className={`mt-5 mb-2 border-b-2 border-[#1a365d] pb-0.5 pt-1 ${forcePageBreak ? 'print-page-break' : ''}`}>
+    <div className="mb-2 border-b-2 border-[#1a365d] pb-0.5 pt-1">
       <h2 className="text-[10pt] font-bold text-[#1a365d] uppercase" style={{ letterSpacing: '0.03em' }}>
         {title}
       </h2>
@@ -98,12 +95,32 @@ function SubHeader({ title }: { title: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Page wrapper — each instance = exactly one printed page
+// ---------------------------------------------------------------------------
+
+function PrintPage({ children, isLast = false }: { children: React.ReactNode; isLast?: boolean }) {
+  return (
+    <div
+      className="print-page"
+      style={{
+        /* Screen: just show with a gap between pages */
+        boxSizing: 'border-box',
+        marginBottom: isLast ? 0 : '2rem',
+        /* Print dimensions handled in @media print below */
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Fiduciary block (stacked: name+relationship, then address+phone)
 // ---------------------------------------------------------------------------
 
 function FiduciaryBlock({ role }: { role: string }) {
   return (
-    <div className="border-b border-gray-300 pb-1.5 mb-1.5" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+    <div className="border-b border-gray-300 pb-1.5 mb-1.5">
       <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">{role}</p>
       <div className="grid grid-cols-2 gap-x-4">
         {/* Primary */}
@@ -136,12 +153,37 @@ function FiduciaryBlock({ role }: { role: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Page footer
+// ---------------------------------------------------------------------------
+
+function PageFooter({ pageNum, totalPages }: { pageNum: number; totalPages: number }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        textAlign: 'center',
+        fontSize: '7pt',
+        color: '#999',
+        paddingTop: '4px',
+      }}
+    >
+      Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200 — Page {pageNum} of {totalPages}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 interface PrintableQuestionnaireProps {
   clientName?: string;
 }
+
+const TOTAL_PAGES = 5;
 
 export default function PrintableQuestionnaire({
   clientName,
@@ -155,7 +197,7 @@ export default function PrintableQuestionnaire({
             Printable Intake Form (Condensed)
           </p>
           <p className="text-xs text-[#1a365d]/60">
-            4-5 page version for in-person interviews and paper intake.
+            {TOTAL_PAGES}-page version for in-person interviews and paper intake.
           </p>
         </div>
         <Button
@@ -167,369 +209,389 @@ export default function PrintableQuestionnaire({
         </Button>
       </div>
 
-      {/* ── Printable document ──────────────────────────────────────────── */}
+      {/* ── Printable pages ────────────────────────────────────────────── */}
       <div className="bg-white print:bg-white print:text-black" id="printable-questionnaire">
-        {/* ============================================================= */}
-        {/* HEADER                                                        */}
-        {/* ============================================================= */}
-        <header className="mb-4">
-          <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-2">
-            <div>
-              <h1 className="text-[14pt] font-bold text-[#1a365d]">
-                Estate Planning Questionnaire
-              </h1>
-              <p className="text-[10pt] font-medium text-[#2b6cb0]">
-                Elias Counsel, LLC
+
+        {/* ================================================================
+            PAGE 1: Header + Section 1 (About You) + Section 2 (Spouse)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ position: 'relative', height: '100%' }}>
+            {/* HEADER */}
+            <header className="mb-3">
+              <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-2">
+                <div>
+                  <h1 className="text-[14pt] font-bold text-[#1a365d]">
+                    Estate Planning Questionnaire
+                  </h1>
+                  <p className="text-[10pt] font-medium text-[#2b6cb0]">
+                    Elias Counsel, LLC
+                  </p>
+                </div>
+                <div className="text-right text-[8pt] text-gray-500">
+                  <p>168 Prospect Plains Road</p>
+                  <p>Monroe Township, NJ 08831</p>
+                  <p>(609) 655-3200</p>
+                </div>
+              </div>
+
+              {/* Client / Date / File No */}
+              <div className="mt-3 grid grid-cols-3 gap-3 rounded border border-gray-300 p-2">
+                <div>
+                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
+                  {clientName ? (
+                    <p className="text-[10pt] font-medium text-gray-900 mt-0.5">{clientName}</p>
+                  ) : (
+                    <BlankLine />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
+                  <BlankLine />
+                </div>
+                <div>
+                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">File No.</p>
+                  <BlankLine />
+                </div>
+              </div>
+
+              <p className="mt-2 text-[8pt] text-gray-500 italic">
+                Please complete all applicable sections using black or blue ink.
+                Leave blank any items that do not apply. Continue on a separate
+                sheet if needed, noting the section number. CONFIDENTIAL.
               </p>
+            </header>
+
+            {/* SECTION 1: CLIENT INFORMATION */}
+            <SectionHeader title="Section 1 — About You" />
+
+            <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+              <LabeledField label="First Name" />
+              <LabeledField label="Middle Name" />
+              <LabeledField label="Last Name" />
+              <LabeledField label="Suffix" />
             </div>
-            <div className="text-right text-[8pt] text-gray-500">
-              <p>168 Prospect Plains Road</p>
-              <p>Monroe Township, NJ 08831</p>
-              <p>(609) 655-3200</p>
+            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+              <LabeledField label="Date of Birth" />
+              <LabeledField label="Last 4 SSN" width="60%" />
+              <div className="col-span-2">
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Gender</p>
+                <div className="flex gap-4">
+                  <CheckOption label="Male" />
+                  <CheckOption label="Female" />
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* Client / Date / File No */}
-          <div className="mt-3 grid grid-cols-3 gap-3 rounded border border-gray-300 p-2">
-            <div>
-              <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
-              {clientName ? (
-                <p className="text-[10pt] font-medium text-gray-900 mt-0.5">{clientName}</p>
-              ) : (
-                <BlankLine />
-              )}
+            <div className="grid grid-cols-1 gap-y-2 mt-2">
+              <LabeledField label="Street Address" />
             </div>
-            <div>
-              <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
-              <BlankLine />
+            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+              <LabeledField label="City" />
+              <LabeledField label="State" />
+              <LabeledField label="ZIP Code" />
+              <LabeledField label="County" />
             </div>
-            <div>
-              <p className="text-[7pt] font-semibold text-gray-500 uppercase">File No.</p>
-              <BlankLine />
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+              <LabeledField label="Email" />
+              <LabeledField label="Phone" />
+              <LabeledField label="Alternate Phone" />
             </div>
-          </div>
-
-          <p className="mt-2 text-[8pt] text-gray-500 italic">
-            Please complete all applicable sections using black or blue ink.
-            Leave blank any items that do not apply. Continue on a separate
-            sheet if needed, noting the section number. CONFIDENTIAL.
-          </p>
-        </header>
-
-        {/* ============================================================= */}
-        {/* SECTION 1: CLIENT INFORMATION                                  */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 1 — About You" />
-
-        <div className="grid grid-cols-4 gap-x-3 gap-y-2">
-          <LabeledField label="First Name" />
-          <LabeledField label="Middle Name" />
-          <LabeledField label="Last Name" />
-          <LabeledField label="Suffix" />
-        </div>
-        <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
-          <LabeledField label="Date of Birth" />
-          <LabeledField label="Last 4 SSN" width="60%" />
-          <div className="col-span-2">
-            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Gender</p>
-            <div className="flex gap-4">
-              <CheckOption label="Male" />
-              <CheckOption label="Female" />
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Marital Status</p>
+                <div className="space-y-0.5">
+                  <CheckOption label="Single" />
+                  <CheckOption label="Married" />
+                  <CheckOption label="Domestic Partnership" />
+                  <CheckOption label="Divorced" />
+                  <CheckOption label="Widowed" />
+                  <CheckOption label="Separated" />
+                </div>
+              </div>
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
+                <div className="space-y-0.5">
+                  <CheckOption label="U.S. Citizen" />
+                  <CheckOption label="Permanent Resident" />
+                  <CheckOption label="Non-Resident" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <LabeledField label="Occupation" />
+                <LabeledField label="Employer" />
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-y-2 mt-2">
-          <LabeledField label="Street Address" />
-        </div>
-        <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
-          <LabeledField label="City" />
-          <LabeledField label="State" />
-          <LabeledField label="ZIP Code" />
-          <LabeledField label="County" />
-        </div>
-        <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
-          <LabeledField label="Email" />
-          <LabeledField label="Phone" />
-          <LabeledField label="Alternate Phone" />
-        </div>
-        <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
-          <div>
-            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Marital Status</p>
-            <div className="space-y-0.5">
-              <CheckOption label="Single" />
-              <CheckOption label="Married" />
-              <CheckOption label="Domestic Partnership" />
-              <CheckOption label="Divorced" />
-              <CheckOption label="Widowed" />
-              <CheckOption label="Separated" />
-            </div>
-          </div>
-          <div>
-            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
-            <div className="space-y-0.5">
-              <CheckOption label="U.S. Citizen" />
-              <CheckOption label="Permanent Resident" />
-              <CheckOption label="Non-Resident" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <LabeledField label="Occupation" />
-            <LabeledField label="Employer" />
-          </div>
-        </div>
 
-        {/* ============================================================= */}
-        {/* SECTION 2: SPOUSE                                              */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 2 — Spouse / Domestic Partner" />
-        <p className="text-[8pt] text-gray-500 italic mb-2">
-          Complete only if married or in a domestic partnership.
-        </p>
-
-        <div className="grid grid-cols-4 gap-x-3 gap-y-2">
-          <LabeledField label="First Name" />
-          <LabeledField label="Middle Name" />
-          <LabeledField label="Last Name" />
-          <LabeledField label="Suffix" />
-        </div>
-        <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
-          <LabeledField label="Date of Birth" />
-          <LabeledField label="Last 4 SSN" width="60%" />
-          <div className="col-span-2 flex items-end gap-4 pb-0.5">
-            <CheckOption label="Same address as above" />
-            <span className="text-[8pt] text-gray-400 italic">If not, provide address below:</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-y-2 mt-1">
-          <LabeledField label="Spouse Address (if different)" />
-        </div>
-
-        {/* ============================================================= */}
-        {/* SECTION 3: CHILDREN                                            */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 3 — Children & Dependents" />
-
-        <table className="w-full text-[9pt] border-collapse mt-1">
-          <thead>
-            <tr className="border-b border-gray-400">
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">#</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Full Name</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">DOB</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">M/F</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Relationship</th>
-              <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1">Special Needs?</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <tr key={n} className="border-b border-gray-300">
-                <td className="py-1.5 pr-2 text-gray-400">{n}.</td>
-                <td className="py-1.5 pr-2"><BlankLine /></td>
-                <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
-                <td className="py-1.5 pr-2"><BlankLine width="2rem" /></td>
-                <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
-                <td className="py-1.5">
-                  <div className="flex gap-2">
-                    <CheckOption label="Y" />
-                    <CheckOption label="N" />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="text-[7pt] text-gray-400 italic mt-1">
-          Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child has special needs requiring a special needs trust.
-        </p>
-
-        {/* ============================================================= */}
-        {/* SECTION 4: FIDUCIARIES                                         */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 4 — Your Fiduciaries" />
-        <p className="text-[8pt] text-gray-500 italic mb-1">
-          Name the people you trust to carry out your wishes. Provide primary and alternate for each role.
-        </p>
-
-        <div className="space-y-0">
-          <FiduciaryBlock role="Executor" />
-          <FiduciaryBlock role="Trustee" />
-          <FiduciaryBlock role="POA Agent" />
-          <FiduciaryBlock role="Healthcare Rep" />
-          <FiduciaryBlock role="Guardian" />
-        </div>
-
-        {/* Distribution section moved to last page below */}
-
-        {/* ============================================================= */}
-        {/* SECTION 6: HEALTHCARE DIRECTIVES                               */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 5 — Healthcare Preferences" forcePageBreak />
-
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <div>
-            <SubHeader title="Life-Sustaining Treatment" />
-            <div className="space-y-0.5">
-              <CheckOption label="Provide all possible measures" />
-              <CheckOption label="Withhold if terminally ill or permanently unconscious" />
-              <CheckOption label="Trial period, then withdraw if no improvement" />
-              <CheckOption label="My healthcare representative decides" />
-            </div>
-          </div>
-          <div>
-            <SubHeader title="Artificial Nutrition & Hydration" />
-            <div className="space-y-0.5">
-              <CheckOption label="Continue in all circumstances" />
-              <CheckOption label="Withhold if terminally ill or permanently unconscious" />
-              <CheckOption label="My healthcare representative decides" />
-            </div>
-          </div>
-          <div>
-            <SubHeader title="Pain Management" />
-            <div className="space-y-0.5">
-              <CheckOption label="Maximum relief, even if it may hasten death" />
-              <CheckOption label="Relief that does not risk hastening death" />
-              <CheckOption label="My healthcare representative decides" />
-            </div>
-          </div>
-          <div>
-            <SubHeader title="Organ Donation" />
-            <div className="space-y-0.5">
-              <CheckOption label="Yes — all organs and tissues" />
-              <CheckOption label="Yes — specific organs only" />
-              <CheckOption label="No" />
-              <CheckOption label="Already registered" />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-6 mt-3" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <div>
-            <SubHeader title="Burial / Funeral Preference" />
-            <div className="flex gap-3">
-              <CheckOption label="Burial" />
-              <CheckOption label="Cremation" />
-              <CheckOption label="No preference" />
-              <CheckOption label="Other" />
-            </div>
-          </div>
-          <div>
-            <SubHeader title="Pregnancy Provision (if applicable)" />
-            <div className="space-y-0.5">
-              <CheckOption label="Follow directive even if pregnant" />
-              <CheckOption label="Do not follow if pregnant" />
-              <CheckOption label="My representative decides" />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <SubHeader title="Additional Healthcare Instructions" />
-          <BlankLines count={3} />
-        </div>
-
-        {/* ============================================================= */}
-        {/* SECTION 7: ASSETS & LIABILITIES (SUMMARY)                      */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 6 — Assets & Liabilities (Summary)" forcePageBreak />
-        <p className="text-[8pt] text-gray-500 italic mb-2">
-          Please list your major assets and liabilities below. Our office will gather detailed
-          information during your consultation. Include approximate values where known.
-        </p>
-
-        <SubHeader title="Real Estate" />
-        <p className="text-[7pt] text-gray-400 mb-0.5">
-          List each property: address, estimated value, how titled (joint, individual, trust)
-        </p>
-        <BlankLines count={4} />
-
-        <SubHeader title="Financial Accounts" />
-        <p className="text-[7pt] text-gray-400 mb-0.5">
-          Bank accounts, investments, retirement (401k, IRA), life insurance
-        </p>
-        <BlankLines count={4} />
-
-        <SubHeader title="Business Interests" />
-        <BlankLines count={2} />
-
-        <SubHeader title="Significant Debts" />
-        <p className="text-[7pt] text-gray-400 mb-0.5">
-          Mortgages, loans, credit card debt, other obligations
-        </p>
-        <BlankLines count={3} />
-
-        {/* ============================================================= */}
-        {/* SECTION 8: ADDITIONAL INFORMATION                              */}
-        {/* ============================================================= */}
-        <SectionHeader title="Section 7 — Additional Information" />
-
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div>
-            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
-              Do you have existing estate planning documents?
+            {/* SECTION 2: SPOUSE */}
+            <SectionHeader title="Section 2 — Spouse / Domestic Partner" />
+            <p className="text-[8pt] text-gray-500 italic mb-2">
+              Complete only if married or in a domestic partnership.
             </p>
-            <div className="flex gap-4">
-              <CheckOption label="Yes" />
-              <CheckOption label="No" />
+
+            <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+              <LabeledField label="First Name" />
+              <LabeledField label="Middle Name" />
+              <LabeledField label="Last Name" />
+              <LabeledField label="Suffix" />
             </div>
-            <LabeledField label="If yes, describe (type and approximate date)" />
+            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+              <LabeledField label="Date of Birth" />
+              <LabeledField label="Last 4 SSN" width="60%" />
+              <div className="col-span-2 flex items-end gap-4 pb-0.5">
+                <CheckOption label="Same address as above" />
+                <span className="text-[8pt] text-gray-400 italic">If not, provide address below:</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-y-2 mt-1">
+              <LabeledField label="Spouse Address (if different)" />
+            </div>
+
+            <PageFooter pageNum={1} totalPages={TOTAL_PAGES} />
           </div>
-          <div>
-            <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
-              Any pending legal matters?
+        </PrintPage>
+
+        {/* ================================================================
+            PAGE 2: Section 3 (Children) + Section 4 (Fiduciaries)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ position: 'relative', height: '100%' }}>
+            {/* SECTION 3: CHILDREN */}
+            <SectionHeader title="Section 3 — Children & Dependents" />
+
+            <table className="w-full text-[9pt] border-collapse mt-1">
+              <thead>
+                <tr className="border-b border-gray-400">
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">#</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Full Name</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">DOB</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">M/F</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Relationship</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1">Special Needs?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <tr key={n} className="border-b border-gray-300">
+                    <td className="py-1.5 pr-2 text-gray-400">{n}.</td>
+                    <td className="py-1.5 pr-2"><BlankLine /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="2rem" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
+                    <td className="py-1.5">
+                      <div className="flex gap-2">
+                        <CheckOption label="Y" />
+                        <CheckOption label="N" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[7pt] text-gray-400 italic mt-1">
+              Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child has special needs requiring a special needs trust.
             </p>
-            <div className="flex gap-4">
-              <CheckOption label="Yes" />
-              <CheckOption label="No" />
+
+            {/* SECTION 4: FIDUCIARIES */}
+            <SectionHeader title="Section 4 — Your Fiduciaries" />
+            <p className="text-[8pt] text-gray-500 italic mb-1">
+              Name the people you trust to carry out your wishes. Provide primary and alternate for each role.
+            </p>
+
+            <div className="space-y-0">
+              <FiduciaryBlock role="Executor" />
+              <FiduciaryBlock role="Trustee" />
+              <FiduciaryBlock role="POA Agent" />
+              <FiduciaryBlock role="Healthcare Rep" />
+              <FiduciaryBlock role="Guardian" />
             </div>
-            <LabeledField label="If yes, describe" />
+
+            <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
           </div>
-        </div>
+        </PrintPage>
 
-        <SubHeader title="Additional Notes" />
-        <p className="text-[7pt] text-gray-400 mb-0.5">
-          Special circumstances, family dynamics, concerns about a specific beneficiary, pets, property in other states, etc.
-        </p>
-        <BlankLines count={4} />
+        {/* ================================================================
+            PAGE 3: Section 5 (Healthcare Preferences)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ position: 'relative', height: '100%' }}>
+            <SectionHeader title="Section 5 — Healthcare Preferences" />
 
-        <div className="mt-2">
-          <p className="text-[8pt] font-medium text-gray-600 mb-0.5">How did you hear about us?</p>
-          <div className="flex gap-3 flex-wrap">
-            <CheckOption label="Referral" />
-            <CheckOption label="Google" />
-            <CheckOption label="Social Media" />
-            <CheckOption label="Attorney Referral" />
-            <CheckOption label="Other" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div>
+                <SubHeader title="Life-Sustaining Treatment" />
+                <div className="space-y-0.5">
+                  <CheckOption label="Provide all possible measures" />
+                  <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+                  <CheckOption label="Trial period, then withdraw if no improvement" />
+                  <CheckOption label="My healthcare representative decides" />
+                </div>
+              </div>
+              <div>
+                <SubHeader title="Artificial Nutrition & Hydration" />
+                <div className="space-y-0.5">
+                  <CheckOption label="Continue in all circumstances" />
+                  <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+                  <CheckOption label="My healthcare representative decides" />
+                </div>
+              </div>
+              <div>
+                <SubHeader title="Pain Management" />
+                <div className="space-y-0.5">
+                  <CheckOption label="Maximum relief, even if it may hasten death" />
+                  <CheckOption label="Relief that does not risk hastening death" />
+                  <CheckOption label="My healthcare representative decides" />
+                </div>
+              </div>
+              <div>
+                <SubHeader title="Organ Donation" />
+                <div className="space-y-0.5">
+                  <CheckOption label="Yes — all organs and tissues" />
+                  <CheckOption label="Yes — specific organs only" />
+                  <CheckOption label="No" />
+                  <CheckOption label="Already registered" />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-6 mt-3">
+              <div>
+                <SubHeader title="Burial / Funeral Preference" />
+                <div className="flex gap-3">
+                  <CheckOption label="Burial" />
+                  <CheckOption label="Cremation" />
+                  <CheckOption label="No preference" />
+                  <CheckOption label="Other" />
+                </div>
+              </div>
+              <div>
+                <SubHeader title="Pregnancy Provision (if applicable)" />
+                <div className="space-y-0.5">
+                  <CheckOption label="Follow directive even if pregnant" />
+                  <CheckOption label="Do not follow if pregnant" />
+                  <CheckOption label="My representative decides" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <SubHeader title="Additional Healthcare Instructions" />
+              <BlankLines count={3} />
+            </div>
+
+            {/* SECTION 6 starts on same page */}
+            <SectionHeader title="Section 6 — Assets & Liabilities (Summary)" />
+            <p className="text-[8pt] text-gray-500 italic mb-2">
+              Please list your major assets and liabilities below. Our office will gather detailed
+              information during your consultation. Include approximate values where known.
+            </p>
+
+            <SubHeader title="Real Estate" />
+            <p className="text-[7pt] text-gray-400 mb-0.5">
+              List each property: address, estimated value, how titled (joint, individual, trust)
+            </p>
+            <BlankLines count={4} />
+
+            <SubHeader title="Financial Accounts" />
+            <p className="text-[7pt] text-gray-400 mb-0.5">
+              Bank accounts, investments, retirement (401k, IRA), life insurance
+            </p>
+            <BlankLines count={4} />
+
+            <PageFooter pageNum={3} totalPages={TOTAL_PAGES} />
           </div>
-        </div>
+        </PrintPage>
 
+        {/* ================================================================
+            PAGE 4: Section 6 (continued) + Section 7 (Additional Info)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ position: 'relative', height: '100%' }}>
+            <div className="mb-1 border-b border-[#1a365d] pb-0.5">
+              <p className="text-[8pt] font-semibold text-[#1a365d] uppercase">Section 6 — Assets & Liabilities (continued)</p>
+            </div>
 
-        {/* ============================================================= */}
-        {/* LAST PAGE: DISTRIBUTION WISHES (attorney consultation)         */}
-        {/* ============================================================= */}
-        <SectionHeader
-          title="Distribution Wishes (To be completed with your attorney)"
-          forcePageBreak
-        />
-        <p className="text-[8pt] text-gray-500 mb-3">
-          This section is intended to be completed during your consultation. Your attorney will
-          discuss your options and document your wishes below.
-        </p>
+            <SubHeader title="Business Interests" />
+            <BlankLines count={3} />
 
-        {/* Lined notes area — fills remaining page */}
-        <div className="space-y-0">
-          {Array.from({ length: 32 }).map((_, i) => (
-            <div
-              key={i}
-              className="border-b border-gray-300"
-              style={{ height: '1.4rem' }}
-            />
-          ))}
-        </div>
+            <SubHeader title="Significant Debts" />
+            <p className="text-[7pt] text-gray-400 mb-0.5">
+              Mortgages, loans, credit card debt, other obligations
+            </p>
+            <BlankLines count={3} />
 
-        {/* Print footer — static (not fixed) to avoid overlapping content */}
-        <div className="mt-8 text-center text-[7pt] text-gray-400 py-1 print:break-inside-avoid">
-          Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200
-        </div>
+            {/* SECTION 7: ADDITIONAL INFORMATION */}
+            <SectionHeader title="Section 7 — Additional Information" />
+
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+                  Do you have existing estate planning documents?
+                </p>
+                <div className="flex gap-4">
+                  <CheckOption label="Yes" />
+                  <CheckOption label="No" />
+                </div>
+                <LabeledField label="If yes, describe (type and approximate date)" />
+              </div>
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+                  Any pending legal matters?
+                </p>
+                <div className="flex gap-4">
+                  <CheckOption label="Yes" />
+                  <CheckOption label="No" />
+                </div>
+                <LabeledField label="If yes, describe" />
+              </div>
+            </div>
+
+            <SubHeader title="Additional Notes" />
+            <p className="text-[7pt] text-gray-400 mb-0.5">
+              Special circumstances, family dynamics, concerns about a specific beneficiary, pets, property in other states, etc.
+            </p>
+            <BlankLines count={5} />
+
+            <div className="mt-2">
+              <p className="text-[8pt] font-medium text-gray-600 mb-0.5">How did you hear about us?</p>
+              <div className="flex gap-3 flex-wrap">
+                <CheckOption label="Referral" />
+                <CheckOption label="Google" />
+                <CheckOption label="Social Media" />
+                <CheckOption label="Attorney Referral" />
+                <CheckOption label="Other" />
+              </div>
+            </div>
+
+            <PageFooter pageNum={4} totalPages={TOTAL_PAGES} />
+          </div>
+        </PrintPage>
+
+        {/* ================================================================
+            PAGE 5: Distribution Wishes (attorney consultation)
+            ================================================================ */}
+        <PrintPage isLast>
+          <div style={{ position: 'relative', height: '100%' }}>
+            <SectionHeader title="Distribution Wishes (To be completed with your attorney)" />
+            <p className="text-[8pt] text-gray-500 mb-3">
+              This section is intended to be completed during your consultation. Your attorney will
+              discuss your options and document your wishes below.
+            </p>
+
+            {/* Lined notes area — fills remaining page */}
+            <div className="space-y-0">
+              {Array.from({ length: 32 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="border-b border-gray-300"
+                  style={{ height: '1.4rem' }}
+                />
+              ))}
+            </div>
+
+            <PageFooter pageNum={5} totalPages={TOTAL_PAGES} />
+          </div>
+        </PrintPage>
+
       </div>
 
       {/* ── Print CSS ──────────────────────────────────────────────────── */}
@@ -537,7 +599,11 @@ export default function PrintableQuestionnaire({
         @media print {
           @page {
             size: letter portrait;
-            margin: 0.75in 0.75in 0.75in 0.75in;
+            margin: 0.6in 0.65in;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
           }
           body, * {
             font-family: Arial, Helvetica, sans-serif !important;
@@ -551,14 +617,48 @@ export default function PrintableQuestionnaire({
           }
           .print\\:hidden { display: none !important; }
           .hidden.print\\:block { display: block !important; }
-          h1, h2, h3, h4 { page-break-after: avoid; }
-          .print\\:break-inside-avoid { break-inside: avoid; }
-          .print-page-break { page-break-before: always; }
+
+          /* ── THE FIX: Explicit page containers ──────────────────── */
+          .print-page {
+            width: 100%;
+            height: 9.8in;
+            max-height: 9.8in;
+            overflow: hidden;
+            position: relative;
+            page-break-after: always;
+            page-break-inside: avoid;
+            break-after: page;
+            break-inside: avoid;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box;
+          }
+          .print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
+          /* Prevent ANY element from breaking across pages */
+          h1, h2, h3, h4 { page-break-after: avoid; break-after: avoid; }
+          tr { page-break-inside: avoid; break-inside: avoid; }
+
+          /* ── Ink-friendly overrides ──────────────────────────── */
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .border-gray-500 { border-color: #444 !important; }
           .border-b.border-gray-400 { border-bottom: 0.75pt solid #444 !important; }
           .border-b.border-gray-300 { border-bottom: 0.5pt solid #888 !important; }
           a { color: #000; text-decoration: none; }
+        }
+        /* ── Screen preview styling for pages ──────────────────────── */
+        @media screen {
+          .print-page {
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 0.65in;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            background: #fff;
+            min-height: 11in;
+            box-sizing: border-box;
+          }
         }
       `}</style>
     </div>
