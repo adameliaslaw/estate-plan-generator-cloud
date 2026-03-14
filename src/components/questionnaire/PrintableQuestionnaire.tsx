@@ -189,7 +189,7 @@ export default function PrintableQuestionnaire({
   clientName,
 }: PrintableQuestionnaireProps) {
   return (
-    <div style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+    <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', maxWidth: '8.5in', margin: '0 auto', padding: '1rem' }} className="print:!p-0 print:!max-w-none print:!m-0">
       {/* ── Screen-only toolbar ─────────────────────────────────────────── */}
       <div className="print:hidden mb-6 flex items-center justify-between rounded-lg border border-[#1a365d]/15 bg-[#ebf4ff] px-4 py-3">
         <div>
@@ -604,11 +604,6 @@ export default function PrintableQuestionnaire({
           html, body {
             margin: 0 !important;
             padding: 0 !important;
-            height: auto !important;
-            overflow: visible !important;
-          }
-          body, * {
-            font-family: Arial, Helvetica, sans-serif !important;
           }
           body {
             font-size: 9pt;
@@ -617,30 +612,12 @@ export default function PrintableQuestionnaire({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
+          body, * {
+            font-family: Arial, Helvetica, sans-serif !important;
+          }
           .print\\:hidden { display: none !important; }
           .print\\:!hidden { display: none !important; }
           .hidden.print\\:block { display: block !important; }
-
-          /* Strip AppLayout parent containers so questionnaire fills full page */
-          #printable-questionnaire,
-          #printable-questionnaire * {
-            max-width: none !important;
-          }
-          /* Reset the flex layout wrapper that AppLayout uses */
-          main, [class*="overflow-hidden"], [class*="overflow-y-auto"] {
-            overflow: visible !important;
-            height: auto !important;
-            max-height: none !important;
-          }
-          .mx-auto { margin: 0 !important; }
-          .px-4, .sm\\:px-6, .lg\\:px-8 {
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-          }
-          .py-6 {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-          }
 
           /* ── THE FIX: Explicit page containers ──────────────────── */
           .print-page {

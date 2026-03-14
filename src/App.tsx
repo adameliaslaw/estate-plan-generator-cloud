@@ -196,23 +196,9 @@ export default function App() {
               }
             />
 
-            {/* ── Printable questionnaire (staff only, print-optimized) ── */}
-            <Route
-              path="/questionnaire/print"
-              element={
-                <AppLayout allowedRoles={[...STAFF_ROLES]}>
-                  <PrintableQuestionnaire />
-                </AppLayout>
-              }
-            />
-            <Route
-              path="/questionnaire/:firmId/:clientId/print"
-              element={
-                <AppLayout allowedRoles={[...STAFF_ROLES]}>
-                  <PrintableQuestionnairePage />
-                </AppLayout>
-              }
-            />
+            {/* ── Printable questionnaire (no AppLayout — renders standalone for clean print) ── */}
+            <Route path="/questionnaire/print" element={<PrintableQuestionnaire />} />
+            <Route path="/questionnaire/:firmId/:clientId/print" element={<PrintableQuestionnairePage />} />
 
             {/* ── Legal pages (public) ── */}
             <Route path="/terms" element={<TermsOfServicePage />} />
