@@ -778,7 +778,7 @@ Return the enhanced HTML document.`;
 
   try {
     const enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
-      model: safeFirm?.documentDraftingModel || 'gpt-4.1',
+      model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
       maxTokens: 12000,
     });

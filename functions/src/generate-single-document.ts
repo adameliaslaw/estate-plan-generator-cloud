@@ -254,7 +254,7 @@ export const generateSingleDocument = onCall(
       mimeType: 'text/html',
       currentVersion,
       generatedByAI: true,
-      aiModel: 'gpt-4.1',
+      aiModel: 'gpt-5.4',
       requiresSignature: ['will', 'pourOverWill', 'poa', 'livingWill', 'trust', 'deed'].includes(docType),
       notarized: ['poa', 'deed', 'affidavitOfConsideration'].includes(docType),
       tags: [],

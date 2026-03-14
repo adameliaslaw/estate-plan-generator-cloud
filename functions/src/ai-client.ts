@@ -66,7 +66,7 @@ export async function callAI(
     if (m.startsWith('gemini')) provider = 'gemini';
     else if (m.startsWith('claude') || m.includes('opus') || m.includes('sonnet') || m.includes('haiku')) provider = 'anthropic';
     else if (m.startsWith('sonar')) provider = 'perplexity';
-    else if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) provider = 'openai';
+    else if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('gpt-5')) provider = 'openai';
     else provider = 'openai';
   }
 
@@ -110,7 +110,7 @@ async function _callOpenAI(
   }
 
   const client = new OpenAI({ apiKey });
-  const model = options.model ?? 'gpt-4.1'; // Updated default model
+  const model = options.model ?? 'gpt-5.4'; // Updated to latest model (March 2026)
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 
@@ -143,7 +143,7 @@ async function _callAnthropic(
     throw new Error('Anthropic API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'claude-sonnet-4-20250514';
+  const model = options.model ?? 'claude-sonnet-4-6';
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 

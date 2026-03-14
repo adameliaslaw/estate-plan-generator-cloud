@@ -377,7 +377,7 @@ Identify all issues by severity. Be specific about location (article/section nam
     console.log(`[reviewDocument] Reviewing ${docType} (${documentId}) for client ${clientId}`);
 
     const raw = await callAI(systemPrompt, userPrompt, firmData, {
-      model: 'gpt-4.1',
+      model: 'gpt-5.4',
       temperature: 0.1,
       maxTokens: 4096,
       jsonMode: true,

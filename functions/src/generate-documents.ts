@@ -40,7 +40,7 @@ interface GenerateRequest {
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
   generationMode?: GenerationMode;
-  /** Optional model override (e.g. 'gpt-4.1', 'claude-sonnet-4-20250514') */
+  /** Optional model override (e.g. 'gpt-5.4', 'claude-sonnet-4-6') */
   modelOverride?: string;
 }
 
@@ -249,7 +249,7 @@ async function saveDocument(
       ],
     currentVersion,
     generatedByAI: true,
-    aiModel: 'gpt-4.1',
+    aiModel: 'gpt-5.4',
     requiresSignature: requiresSignature(doc.docType),
     notarized: requiresNotarization(doc.docType),
     tags: [],

@@ -187,7 +187,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
   try {
     // Force Anthropic for enrichment
     const raw = await callAI(systemPrompt, userPrompt, { ...firmData, activeAiProvider: 'anthropic' }, {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,

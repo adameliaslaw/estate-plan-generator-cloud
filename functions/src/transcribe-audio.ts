@@ -8,7 +8,7 @@
  *    the corresponding Note document in Firestore.
  *
  * 2. summarizeTranscription — Reads a completed transcription from a Note doc
- *    and generates a concise legal-assistant summary using GPT-4.1.
+ *    and generates a concise legal-assistant summary using GPT-5.4.
  *
  * Firestore path:  firms/{firmId}/clients/{clientId}/notes/{noteId}
  * Storage path:    Provided by the caller as `storagePath` (e.g.
@@ -259,7 +259,7 @@ export const transcribeAudio = functions
 /**
  * summarizeTranscription
  *
- * Reads a completed transcription from a Note document and calls GPT-4.1 to
+ * Reads a completed transcription from a Note document and calls GPT-5.4 to
  * produce a concise legal-assistant summary highlighting key decisions, action
  * items, and client concerns.
  *
@@ -320,7 +320,7 @@ export const summarizeTranscription = functions
     }
 
     // ------------------------------------------------------------------
-    // 3. Generate AI summary via GPT-4o
+    // 3. Generate AI summary via GPT-5.4
     // ------------------------------------------------------------------
     const firmSnap = await db.collection('firms').doc(firmId).get();
     const firmData = firmSnap.data() || {};
@@ -333,17 +333,17 @@ export const summarizeTranscription = functions
     const userPrompt =
       `Please summarize the following transcription:\n\n---\n${transcription.slice(0, 30000)}\n---`;
 
-    console.log(`[summarizeTranscription] Calling GPT-4o — transcription length=${transcription.length}`);
+    console.log(`[summarizeTranscription] Calling GPT-5.4 — transcription length=${transcription.length}`);
 
     let aiSummary: string;
     try {
       aiSummary = await callAI(systemPrompt, userPrompt, firmData, {
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
         temperature: 0.2,
         maxTokens: 1024,
       });
     } catch (error) {
-      console.error('[summarizeTranscription] GPT-4.1 error:', error);
+      console.error('[summarizeTranscription] GPT-5.4 error:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Summary generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

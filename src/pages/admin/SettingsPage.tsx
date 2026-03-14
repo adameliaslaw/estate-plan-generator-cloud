@@ -1031,7 +1031,7 @@ export default function SettingsPage() {
                             onChange={() => handleSaveActiveAiProvider('openai')}
                             disabled={savingActiveAi}
                           />
-                          <span className="text-sm">OpenAI (GPT-4)</span>
+                          <span className="text-sm">OpenAI (GPT-5.4)</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -1042,7 +1042,7 @@ export default function SettingsPage() {
                             onChange={() => handleSaveActiveAiProvider('anthropic')}
                             disabled={savingActiveAi}
                           />
-                          <span className="text-sm">Anthropic (Claude 3.5 Sonnet)</span>
+                          <span className="text-sm">Anthropic (Claude 4.6)</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -1083,29 +1083,29 @@ export default function SettingsPage() {
                             <SelectContent>
                               {activeAiProvider === 'openai' && (
                                 <>
-                                  <SelectItem value="gpt-4o">gpt-4o</SelectItem>
-                                  <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
-                                  <SelectItem value="o1-preview">o1-preview</SelectItem>
-                                  <SelectItem value="o1-mini">o1-mini</SelectItem>
-                                  <SelectItem value="o3-mini">o3-mini</SelectItem>
+                                  <SelectItem value="gpt-5.4">gpt-5.4</SelectItem>
+                                  <SelectItem value="gpt-5.4-pro">gpt-5.4-pro</SelectItem>
+                                  <SelectItem value="gpt-5-mini">gpt-5-mini</SelectItem>
+                                  <SelectItem value="o4-mini">o4-mini</SelectItem>
+                                  <SelectItem value="o3">o3</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'anthropic' && (
                                 <>
-                                  <SelectItem value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</SelectItem>
-                                  <SelectItem value="claude-3-opus-20240229">claude-3-opus-20240229</SelectItem>
-                                  <SelectItem value="claude-3-haiku-20240307">claude-3-haiku-20240307</SelectItem>
+                                  <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
+                                  <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'gemini' && (
                                 <>
-                                  <SelectItem value="gemini-1.5-pro">gemini-1.5-pro</SelectItem>
-                                  <SelectItem value="gemini-1.5-flash">gemini-1.5-flash</SelectItem>
-                                  <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
+                                  <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
+                                  <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
+                                  <SelectItem value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'perplexity' && (
                                 <>
+                                  <SelectItem value="sonar-deep-research">sonar-deep-research</SelectItem>
                                   <SelectItem value="sonar-reasoning-pro">sonar-reasoning-pro</SelectItem>
                                   <SelectItem value="sonar-pro">sonar-pro</SelectItem>
                                   <SelectItem value="sonar-reasoning">sonar-reasoning</SelectItem>
@@ -1132,29 +1132,29 @@ export default function SettingsPage() {
                             <SelectContent>
                               {activeAiProvider === 'openai' && (
                                 <>
-                                  <SelectItem value="gpt-4o">gpt-4o</SelectItem>
-                                  <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
-                                  <SelectItem value="o1-preview">o1-preview</SelectItem>
-                                  <SelectItem value="o1-mini">o1-mini</SelectItem>
-                                  <SelectItem value="o3-mini">o3-mini</SelectItem>
+                                  <SelectItem value="gpt-5.4">gpt-5.4</SelectItem>
+                                  <SelectItem value="gpt-5.4-pro">gpt-5.4-pro</SelectItem>
+                                  <SelectItem value="gpt-5-mini">gpt-5-mini</SelectItem>
+                                  <SelectItem value="o4-mini">o4-mini</SelectItem>
+                                  <SelectItem value="o3">o3</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'anthropic' && (
                                 <>
-                                  <SelectItem value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</SelectItem>
-                                  <SelectItem value="claude-3-opus-20240229">claude-3-opus-20240229</SelectItem>
-                                  <SelectItem value="claude-3-haiku-20240307">claude-3-haiku-20240307</SelectItem>
+                                  <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
+                                  <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'gemini' && (
                                 <>
-                                  <SelectItem value="gemini-1.5-pro">gemini-1.5-pro</SelectItem>
-                                  <SelectItem value="gemini-1.5-flash">gemini-1.5-flash</SelectItem>
-                                  <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
+                                  <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
+                                  <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
+                                  <SelectItem value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</SelectItem>
                                 </>
                               )}
                               {activeAiProvider === 'perplexity' && (
                                 <>
+                                  <SelectItem value="sonar-deep-research">sonar-deep-research</SelectItem>
                                   <SelectItem value="sonar-reasoning-pro">sonar-reasoning-pro</SelectItem>
                                   <SelectItem value="sonar-pro">sonar-pro</SelectItem>
                                   <SelectItem value="sonar-reasoning">sonar-reasoning</SelectItem>

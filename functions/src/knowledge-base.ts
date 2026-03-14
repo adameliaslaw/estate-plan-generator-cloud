@@ -331,7 +331,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
 
     // Use the firm's preferred AI provider or default
     const raw = await callAI(systemPrompt, userPrompt, {}, {
-      model: 'gpt-4.1-mini',
+      model: 'gpt-5-mini',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,

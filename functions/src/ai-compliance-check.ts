@@ -9,7 +9,7 @@
  *
  * The function:
  *  1. Fetches the document from Firestore
- *  2. Sends the document content to GPT-4.1 with an NJ statutory checklist
+ *  2. Sends the document content to GPT-5.4 with an NJ statutory checklist
  *  3. Parses the JSON response
  *  4. Saves findings to the document's `complianceReview` field
  *  5. Returns the structured findings to the caller
@@ -205,11 +205,11 @@ ${sanitizedContent}
 
 Check this document against all applicable NJ statutory requirements as described in your instructions. Return the JSON compliance report.`;
 
-    // ── Call GPT-4.1 ──────────────────────────────────────────────────────
+    // ── Call GPT-5.4 ──────────────────────────────────────────────────────
     let rawResponse: string;
     try {
       rawResponse = await callAI(COMPLIANCE_SYSTEM_PROMPT, userPrompt, firmData, {
-        model: 'gpt-4.1',
+        model: 'gpt-5.4',
         temperature: 0.1, // Maximum accuracy for legal compliance
         maxTokens: 3000,
         jsonMode: true,

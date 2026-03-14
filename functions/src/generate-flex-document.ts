@@ -409,7 +409,7 @@ Generate the complete document now.
     // 4. Call AI
     // ------------------------------------------------------------------
     const raw = await callAI(systemPrompt, userPrompt, firmData, {
-      model: 'gpt-4.1',
+      model: 'gpt-5.4',
       temperature: docType === 'letterOfInstruction' || docType === 'coverLetter' ? 0.3 : 0.15,
       maxTokens: 6144,
       jsonMode: true,
@@ -469,7 +469,7 @@ Generate the complete document now.
         changeNotes: 'Initial AI generation',
       }],
       generatedByAI: true,
-      aiModel: 'gpt-4.1',
+      aiModel: 'gpt-5.4',
       requiresSignature: ['engagementLetter', 'codicil', 'trustAmendment', 'trustRestatement', 'hipaaRelease', 'certificationOfTrust'].includes(docType),
       notarized: ['certificationOfTrust', 'trustAmendment', 'trustRestatement', 'hipaaRelease'].includes(docType),
       tags: ['flex', docType],

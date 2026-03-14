@@ -180,7 +180,7 @@ Generate the complete deed. Include the RTF exemption clause, full property desc
 `.trim();
 
   const raw = await callAI(DEED_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-4.1',
+    model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
     maxTokens: 6144,
     jsonMode: true,
