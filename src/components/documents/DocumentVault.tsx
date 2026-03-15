@@ -28,6 +28,7 @@ import {
   FileSignature,
   Loader2,
   AlertCircle,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +71,7 @@ import GenerateDocumentsButton from './GenerateDocumentsButton';
 import AttorneyReviewGate from './AttorneyReviewGate';
 import DocumentReviewDialog from './DocumentReviewDialog';
 import FlexDocumentGenerator from './FlexDocumentGenerator';
+import SingleDocumentGenerator from './SingleDocumentGenerator';
 import ExportButton from './ExportButton';
 import BatchExportButton from './BatchExportButton';
 import ESignatureDialog from './ESignatureDialog';
@@ -388,6 +390,7 @@ export default function DocumentVault({
   const [signDoc, setSignDoc] = useState<Document | null>(null);
 
   const [showFlexGen, setShowFlexGen] = useState(false);
+  const [showSingleGen, setShowSingleGen] = useState(false);
 
   // ── Derived / filtered list ──────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -501,7 +504,16 @@ export default function DocumentVault({
         />
 
         {/* Flex doc generator still available */}
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+            onClick={() => setShowSingleGen(true)}
+          >
+            <Wand2 className="h-4 w-4" />
+            Generate Individual Document
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -509,7 +521,7 @@ export default function DocumentVault({
             onClick={() => setShowFlexGen(true)}
           >
             <PlusCircle className="h-4 w-4" />
-            Generate Additional Document
+            Generate Supplementary Document
           </Button>
         </div>
 
@@ -518,6 +530,12 @@ export default function DocumentVault({
           clientId={clientId}
           open={showFlexGen}
           onClose={() => setShowFlexGen(false)}
+        />
+        <SingleDocumentGenerator
+          firmId={firmId}
+          clientId={clientId}
+          open={showSingleGen}
+          onClose={() => setShowSingleGen(false)}
         />
       </>
     );
@@ -615,9 +633,13 @@ export default function DocumentVault({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowSingleGen(true)}>
+                <Wand2 className="mr-2 h-4 w-4 text-[#2b6cb0]" />
+                Generate Standard Document
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setShowFlexGen(true)}>
                 <Sparkles className="mr-2 h-4 w-4 text-[#2b6cb0]" />
-                Generate with AI
+                Generate Supplementary Document
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {

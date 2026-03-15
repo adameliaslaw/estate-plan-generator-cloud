@@ -21,11 +21,9 @@ import {
   loadConversation,
   buildMemoryPrompt,
   extractAndSaveKeyFacts,
-  recordDraftHistory,
   ConversationMessage,
 } from './ai-memory';
-import { saveDocumentToVault } from './document-save-helper';
-import { generateFromTemplate, getTemplate } from './template-engine';
+import { generateDocument } from './unified-generator';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -265,13 +263,18 @@ async function buildContextString(
 }
 
 // ---------------------------------------------------------------------------
-// Parse draft response
+// Detect generation intent in AI response
 // ---------------------------------------------------------------------------
 
-function parseDraftResponse(raw: string): ChatAiResponse {
-  // Strategy 1: Parse as JSON (ideal case — AI followed the structured output instruction)
+interface GenerationAction {
+  shouldGenerate: boolean;
+  docType?: string;
+  instructions?: string;
+}
+
+function detectGenerationIntent(raw: string, draftDocType?: string): GenerationAction {
+  // Strategy 1: AI returned a structured JSON action
   try {
-    // Strip markdown fences if present
     const cleaned = raw
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/i, '')
@@ -279,71 +282,32 @@ function parseDraftResponse(raw: string): ChatAiResponse {
 
     if (cleaned.startsWith('{')) {
       const parsed = JSON.parse(cleaned);
-      if (parsed.draftContent) {
+      if (parsed.action === 'generate' || parsed.draftContent || parsed.content) {
         return {
-          reply: parsed.reply ?? 'Here is your document draft.',
-          draftContent: parsed.draftContent,
-          draftTitle: parsed.draftTitle,
-        };
-      }
-      // Sometimes the AI puts the document in 'content' instead of 'draftContent'
-      if (parsed.content && typeof parsed.content === 'string' && parsed.content.length > 500) {
-        return {
-          reply: parsed.reply ?? 'Here is your document draft.',
-          draftContent: parsed.content,
-          draftTitle: parsed.title ?? parsed.draftTitle,
+          shouldGenerate: true,
+          docType: parsed.docType ?? draftDocType,
+          instructions: parsed.instructions ?? parsed.customInstructions,
         };
       }
     }
   } catch {
-    // Not JSON — try fallback strategies
+    // Not JSON — check for other signals
   }
 
-  // Strategy 2: Detect substantial HTML content in plain text response
-  // Many LLMs output HTML documents directly without JSON wrapping
+  // Strategy 2: AI produced a substantial HTML document in its response
   const hasHtmlStructure = /<(?:h[1-6]|p|div|table|section|article)[^>]*>[\s\S]*?<\/(?:h[1-6]|p|div|table|section|article)>/i.test(raw);
-  const htmlContentLength = (raw.match(/<[^>]+>/g) || []).length;
-
-  if (hasHtmlStructure && htmlContentLength > 10 && raw.length > 500) {
-    // Extract a title from the first heading
-    const titleMatch = raw.match(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/i);
-    const title = titleMatch?.[1]?.replace(/<[^>]*>/g, '').trim() || 'Chat Draft';
-
-    // Strip any conversational preamble before the HTML
-    const htmlStart = raw.search(/<(?:!DOCTYPE|html|h[1-6]|div|p|section)[^>]*>/i);
-    const draftContent = htmlStart > 0 ? raw.slice(htmlStart) : raw;
-
-    return {
-      reply: `I've drafted your document: "${title}". It has been saved to the Document Vault.`,
-      draftContent,
-      draftTitle: title,
-    };
+  const htmlTagCount = (raw.match(/<[^>]+>/g) || []).length;
+  if (hasHtmlStructure && htmlTagCount > 10 && raw.length > 500) {
+    return { shouldGenerate: true, docType: draftDocType };
   }
 
-  // Strategy 3: Detect markdown-formatted documents (# headings, **bold**, etc.)
+  // Strategy 3: AI produced a markdown-formatted document
   const markdownHeadings = (raw.match(/^#{1,3}\s+.+$/gm) || []).length;
   if (markdownHeadings >= 3 && raw.length > 1000) {
-    const titleMatch = raw.match(/^#\s+(.+)$/m);
-    const title = titleMatch?.[1]?.trim() || 'Chat Draft';
-
-    // Convert basic markdown to HTML for vault storage
-    let htmlContent = raw
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br/>');
-    htmlContent = `<p>${htmlContent}</p>`;
-
-    return {
-      reply: `I've drafted your document: "${title}". It has been saved to the Document Vault.`,
-      draftContent: htmlContent,
-      draftTitle: title,
-    };
+    return { shouldGenerate: true, docType: draftDocType };
   }
 
-  return { reply: raw };
+  return { shouldGenerate: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -476,9 +440,37 @@ export const chatAi = functions
         },
       ];
 
-      // 9. Parse response (check for draft content in draft mode)
+      // 9. Handle draft mode — detect if the AI wants to generate a document
       if (mode === 'draft') {
-        const result: ChatAiResponse = parseDraftResponse(raw);
+        const genAction = detectGenerationIntent(raw, draftDocType);
+        const result: ChatAiResponse = { reply: raw };
+
+        if (genAction.shouldGenerate && clientId) {
+          // The AI signaled generation intent — call the unified generator
+          // instead of parsing the AI's response as the document
+          const targetDocType = genAction.docType ?? draftDocType ?? 'custom';
+
+          console.log(`[chatAi] Generation intent detected for ${targetDocType}, routing to unified generator`);
+
+          try {
+            const genResult = await generateDocument({
+              firmId,
+              clientId,
+              docType: targetDocType,
+              generationMode: 'hybrid',
+              customInstructions: genAction.instructions,
+              createdBy: context.auth.uid,
+              triggerSource: 'chat-draft',
+            });
+
+            result.draftTitle = genResult.title;
+            result.draftContent = genResult.content;
+            result.reply = `I've generated your ${targetDocType} and saved it to the Document Vault as "${genResult.title}" (version ${genResult.currentVersion}).`;
+          } catch (genErr) {
+            console.error('[chatAi] Unified generator failed:', genErr);
+            result.reply = `I tried to generate the document but encountered an error: ${genErr instanceof Error ? genErr.message : 'Unknown error'}. You can try again or use the dedicated Generate Documents button.`;
+          }
+        }
 
         // Add AI reply to messages — use short summary for drafts to prevent token bloat
         allMessages.push({
@@ -490,54 +482,6 @@ export const chatAi = functions
           isDraft: !!result.draftContent,
           draftTitle: result.draftTitle ?? null,
         });
-
-        // If a draft was produced, try template-engine hybrid, then save via shared helper
-        if (result.draftContent && clientId) {
-          let finalContent = result.draftContent;
-
-          // Attempt template-engine hybrid when a matching template exists
-          if (draftDocType) {
-            try {
-              const matchingTemplate = await getTemplate(firmId, draftDocType);
-              if (matchingTemplate) {
-                console.log(`[chatAi] Template found for ${draftDocType}, routing through hybrid generation`);
-                const ctx = await aggregateClientContext(firmId, clientId, draftDocType);
-                const hybridDoc = await generateFromTemplate(ctx, draftDocType, 'hybrid');
-                finalContent = hybridDoc.content;
-                result.draftContent = finalContent;
-                result.draftTitle = result.draftTitle ?? hybridDoc.title;
-              }
-            } catch (templateErr) {
-              console.warn('[chatAi] Template-engine hybrid failed, using raw LLM output:', templateErr);
-              // Fall through — use the original LLM-generated draft
-            }
-          }
-
-          // Save via shared helper for consistent schema
-          const saveResult = await saveDocumentToVault({
-            firmId,
-            clientId,
-            docType: draftDocType ?? 'custom',
-            displayName: result.draftTitle ?? `Chat Draft — ${draftDocType ?? 'Document'}`,
-            content: finalContent,
-            status: 'draft',
-            createdBy: context.auth.uid,
-            aiModel: effectiveModel ?? firmData?.documentDraftingModel ?? 'gpt-5.4',
-            tags: ['chat-draft', draftDocType ?? 'custom'],
-            changeNotes: 'Generated via AI drafting conversation',
-            generationMode: 'chat-draft',
-          });
-
-          result.reply += `\n\n✅ Draft saved to the client's Document Vault as "${result.draftTitle ?? saveResult.docId}".`;
-
-          // Record draft history (fire-and-forget)
-          recordDraftHistory(firmId, clientId, {
-            docType: draftDocType ?? 'custom',
-            title: result.draftTitle ?? saveResult.docId,
-            generatedAt: new Date().toISOString(),
-            generationMode: 'chat-draft',
-          }).catch(console.error);
-        }
 
         // Save conversation (fire-and-forget)
         const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
