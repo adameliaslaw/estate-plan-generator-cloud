@@ -46,3 +46,4 @@ export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables
 export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';
 export { onKnowledgeResourceWritten, backfillEmbeddings, onTemplateWritten, backfillTemplateEmbeddings } from './kb-embeddings';
 export { getDocumentVersions, getDocumentVersionContent, revertDocumentVersion } from './document-versions';
+export { enhanceTemplate } from './enhance-template';

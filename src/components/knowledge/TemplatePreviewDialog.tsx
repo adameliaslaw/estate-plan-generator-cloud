@@ -46,6 +46,7 @@ import {
   Braces,
   Loader2,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,6 +63,8 @@ import {
 } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { templateService, type FullTemplate } from '@/services/knowledge-base-service';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/config/firebase';
 import './template-preview-styles.css';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -124,6 +127,9 @@ export function TemplatePreviewDialog({
   const [isDirty, setIsDirty] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
+  const [enhancing, setEnhancing] = useState(false);
+  const [showEnhanceOptions, setShowEnhanceOptions] = useState(false);
+  const [enhanceFocus, setEnhanceFocus] = useState('');
 
   // Track editor HTML for variable extraction (avoids complex dep in useMemo)
   const [editorHtml, setEditorHtml] = useState('');
@@ -281,6 +287,46 @@ export function TemplatePreviewDialog({
     }
   }, [template, firmId, getCurrentContent, onSaved]);
 
+  // Enhance with AI
+  const handleEnhance = useCallback(async () => {
+    if (!template || !firmId) return;
+
+    setEnhancing(true);
+    setShowEnhanceOptions(false);
+    try {
+      const content = getCurrentContent();
+      const enhanceFn = httpsCallable(functions, 'enhanceTemplate');
+      const result = await enhanceFn({
+        firmId,
+        templateId: template.id,
+        templateContent: content,
+        templateName: template.name,
+        enhancementFocus: enhanceFocus.trim() || undefined,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = result.data as any;
+
+      if (data.enhancedContent) {
+        // Load enhanced content into editor
+        editor?.commands.setContent(data.enhancedContent, { emitUpdate: false });
+        setEditorHtml(data.enhancedContent);
+        setSourceContent(data.enhancedContent);
+        setIsDirty(true);
+        setEnhanceFocus('');
+        toast.success(
+          `Template enhanced! Review the changes and click Save to keep them.`,
+          { duration: 5000 }
+        );
+      }
+    } catch (err) {
+      console.error('[TemplatePreview] Enhancement failed:', err);
+      toast.error(`Enhancement failed: ${(err as Error).message}`);
+    } finally {
+      setEnhancing(false);
+    }
+  }, [template, firmId, getCurrentContent, editor, enhanceFocus]);
+
   // ── Toolbar button helper ──
   const ToolbarBtn = ({
     icon: Icon,
@@ -368,6 +414,60 @@ export function TemplatePreviewDialog({
                 )}
                 {saving ? 'Saving…' : isDirty ? 'Save Changes' : 'Saved'}
               </Button>
+
+              {/* Enhance with AI */}
+              <div className="relative">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={enhancing || loading}
+                  onClick={() => setShowEnhanceOptions(!showEnhanceOptions)}
+                  className="gap-1.5 h-8 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                >
+                  {enhancing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {enhancing ? 'Enhancing…' : 'Enhance with AI'}
+                </Button>
+
+                {showEnhanceOptions && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-50">
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Enhancement Focus (optional)</p>
+                    <input
+                      type="text"
+                      value={enhanceFocus}
+                      onChange={(e) => setEnhanceFocus(e.target.value)}
+                      placeholder="e.g. Update NJ statute references, add digital assets clause"
+                      className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs focus:border-[#2b6cb0] focus:outline-none focus:ring-1 focus:ring-[#2b6cb0] mb-3"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleEnhance();
+                        if (e.key === 'Escape') setShowEnhanceOptions(false);
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleEnhance}
+                        className="flex-1 h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white gap-1"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Enhance Now
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowEnhanceOptions(false)}
+                        className="h-7 text-xs px-2"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-2">AI will improve language, update statutes, and add missing provisions. Review changes before saving.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </DialogHeader>
