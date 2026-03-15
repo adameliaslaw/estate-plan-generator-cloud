@@ -222,6 +222,27 @@
       ]
     },
     {
+      "collectionGroup": "knowledgeBase",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "docTypes",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 1536,
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
       "collectionGroup": "chunks",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

@@ -157,7 +157,7 @@ export async function aggregateClientContext(
     if (targetDocType) {
       kbQuery = kbQuery.where('docTypes', 'array-contains', targetDocType);
     }
-    kbSnap = await kbQuery.limit(50).get();
+    kbSnap = await kbQuery.limit(10).get();
   }
 
   // 3. Map results
@@ -452,7 +452,7 @@ async function _flatKBQuery(firmId: string): Promise<KBSnapshot[]> {
   const kbSnap = await db
     .collection(`firms/${firmId}/knowledgeBase`)
     .where('isActive', '==', true)
-    .limit(50)
+    .limit(10)
     .get();
 
   return kbSnap.docs.map((d) => {

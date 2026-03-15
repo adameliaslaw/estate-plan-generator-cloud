@@ -327,12 +327,13 @@ export const chatAi = functions
       const firmData = firmDoc.data() as FirmData;
 
       // 3. Load existing conversation if resuming
-      let resolvedHistory = history;
+      let resolvedHistory = history.slice(-20); // Cap history to prevent unbounded prompt growth
       if (inConvId && history.length === 0) {
         const existingConv = await loadConversation(firmId, inConvId);
         if (existingConv) {
           resolvedHistory = existingConv.messages
             .filter((m) => m.role !== 'assistant' || !m.content.startsWith('Hello!'))
+            .slice(-20)
             .map((m) => ({ role: m.role, content: m.content }));
         }
       }

@@ -256,22 +256,32 @@ export function GlobalAiWidget() {
 
       const historyCtx = messages
         .filter((m) => !m.id.startsWith('welcome-') && m.id !== 'loading')
+        .slice(-20) // Cap history to prevent unbounded prompt growth
         .map((m) => ({ role: m.role, content: m.content }));
 
       const chatAi = httpsCallable(functions, 'chatAi');
-      const response = await chatAi({
-        firmId,
-        clientId,
-        message: cleanedMessage || inputValue.trim(),
-        contextParams: {
-          currentUrl: window.location.href,
-          pathname: window.location.pathname,
-        },
-        history: historyCtx,
-        mode,
-        ...(mode === 'draft' ? { draftDocType } : {}),
-        conversationId,
-      });
+      const CHAT_TIMEOUT_MS = 90_000; // 90 seconds
+      const response = await Promise.race([
+        chatAi({
+          firmId,
+          clientId,
+          message: cleanedMessage || inputValue.trim(),
+          contextParams: {
+            currentUrl: window.location.href,
+            pathname: window.location.pathname,
+          },
+          history: historyCtx,
+          mode,
+          ...(mode === 'draft' ? { draftDocType } : {}),
+          conversationId,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('AI response timed out. Please try again with a shorter message.')),
+            CHAT_TIMEOUT_MS,
+          )
+        ),
+      ]);
 
       const data = response.data as {
         reply: string;

@@ -83,6 +83,18 @@ async function getOpenAIClient(firmId: string): Promise<OpenAI> {
  * 3. Runs findNearest on the chunks collection group (long docs)
  * 4. Merges, deduplicates, and ranks by similarity
  */
+
+const VECTOR_SEARCH_TIMEOUT_MS = 10_000; // 10 seconds — fail fast if index is missing
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 export async function searchKnowledgeBase(
   firmId: string,
   queryText: string,
@@ -111,31 +123,39 @@ export async function searchKnowledgeBase(
     parentQuery = parentQuery.where('docTypes', 'array-contains', docType);
   }
 
-  const parentResults = await parentQuery
-    .findNearest({
-      vectorField: 'embedding',
-      queryVector,
-      limit: limit + 5, // fetch extra to account for filtering
-      distanceMeasure: 'COSINE',
-      distanceResultField: '__distance',
-    })
-    .get();
+  const parentResults = await withTimeout(
+    parentQuery
+      .findNearest({
+        vectorField: 'embedding',
+        queryVector,
+        limit: limit + 5, // fetch extra to account for filtering
+        distanceMeasure: 'COSINE',
+        distanceResultField: '__distance',
+      })
+      .get(),
+    VECTOR_SEARCH_TIMEOUT_MS,
+    'KB parent vector search',
+  );
 
   // 3. Search chunks (long content split into embedded sub-docs)
   // Chunks are stored per-resource: firms/{firmId}/knowledgeBase/{resourceId}/chunks/{chunkId}
   // We use a collection group query on 'chunks'
-  const chunkResults = await db
-    .collectionGroup('chunks')
-    .where('firmId', '==', firmId)
-    .where('isActive', '==', true)
-    .findNearest({
-      vectorField: 'embedding',
-      queryVector,
-      limit: limit + 5,
-      distanceMeasure: 'COSINE',
-      distanceResultField: '__distance',
-    })
-    .get();
+  const chunkResults = await withTimeout(
+    db
+      .collectionGroup('chunks')
+      .where('firmId', '==', firmId)
+      .where('isActive', '==', true)
+      .findNearest({
+        vectorField: 'embedding',
+        queryVector,
+        limit: limit + 5,
+        distanceMeasure: 'COSINE',
+        distanceResultField: '__distance',
+      })
+      .get(),
+    VECTOR_SEARCH_TIMEOUT_MS,
+    'KB chunk vector search',
+  );
 
   // 4. Process parent results
   const results: VectorSearchResult[] = [];
