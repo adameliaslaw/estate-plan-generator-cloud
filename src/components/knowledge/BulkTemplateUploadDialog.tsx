@@ -100,6 +100,7 @@ export function BulkTemplateUploadDialog({
       description: string;
       tags: string[];
       content: string;
+      rawText: string;
     }
 
     const processedFiles: ProcessedFile[] = [];
@@ -145,6 +146,7 @@ export function BulkTemplateUploadDialog({
           description: processed.documentSummary || '',
           tags: processed.suggestedTags || [],
           content: processed.extractedHtml || processed.extractedText || '',
+          rawText: (processed as any).rawExtractedText || processed.extractedText || '',
         });
       } catch (err) {
         console.error(`Bulk template processing failed for ${file.name}:`, err);
@@ -178,7 +180,7 @@ export function BulkTemplateUploadDialog({
           // Prepare payload for the consolidation AI
           const payload = groupFiles.map(pf => ({
             fileName: pf.baseName,
-            extractedText: pf.content,
+            extractedText: pf.rawText,
           }));
 
           const consolidated = await templateService.consolidateTemplateVariables(firmId, docType, payload);

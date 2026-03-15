@@ -482,6 +482,7 @@ Return ONLY the modified HTML (no JSON wrapper, no markdown fences, no explanati
       success: true,
       extractedHtml: templatizedHtml,
       extractedText: truncateAtWordBoundary(extractedText, 5000),
+      rawExtractedText: truncateAtWordBoundary(extractedText, 20000),
       detectedVariables,
       suggestedDocType,
       suggestedTags,
