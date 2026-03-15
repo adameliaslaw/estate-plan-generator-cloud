@@ -85,17 +85,24 @@ export function BulkTemplateUploadDialog({
 
     let successCount = 0;
 
-    const processedData: {
+    // =====================================================================
+    // PASS 1: Upload to Storage + AI processing (no saving yet)
+    // Collect all processed data and variables before saving anything.
+    // =====================================================================
+    interface ProcessedFile {
       index: number;
+      file: File;
+      fileUrl: string;
       baseName: string;
       docType: string;
       variables: string[];
-      templateId?: string;
+      detectedVariables: DetectedVariable[];
       description: string;
       tags: string[];
-      variant: string;
-      complexity: number;
-    }[] = [];
+      content: string;
+    }
+
+    const processedFiles: ProcessedFile[] = [];
 
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
@@ -117,52 +124,89 @@ export function BulkTemplateUploadDialog({
           });
         });
 
-        // 2. Process (extract text + AI variable detection)
+        // 2. Process with AI (extract text + variable detection)
         setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'processing' } : r));
 
         const processed = await templateService.processTemplateFile(firmId, storagePath, file.name);
         const detectedDocType = processed.suggestedDocType || 'will';
         const baseName = file.name.replace(/\.(docx|pdf)$/i, '').replace(/[_-]/g, ' ');
+        const vars = processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [];
 
-        // 3. Auto-save template
-        setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'saving', docType: detectedDocType, variableCount: processed.detectedVariables?.length || 0 } : r));
+        setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'processing' as const, docType: detectedDocType, variableCount: vars.length } : r));
+
+        processedFiles.push({
+          index: i,
+          file,
+          fileUrl,
+          baseName,
+          docType: detectedDocType,
+          variables: vars,
+          detectedVariables: processed.detectedVariables || [],
+          description: processed.documentSummary || '',
+          tags: processed.suggestedTags || [],
+          content: processed.extractedHtml || processed.extractedText || '',
+        });
+      } catch (err) {
+        console.error(`Bulk template processing failed for ${file.name}:`, err);
+        setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'failed', error: (err as Error).message || 'Processing failed' } : r));
+      }
+    }
+
+    // =====================================================================
+    // PASS 2: Merge variables across same-docType templates, then save all
+    // =====================================================================
+    // Build union of variables per docType so paired templates are consistent
+    const unionByDocType = new Map<string, Set<string>>();
+    for (const pf of processedFiles) {
+      const existing = unionByDocType.get(pf.docType) || new Set<string>();
+      for (const v of pf.variables) existing.add(v);
+      unionByDocType.set(pf.docType, existing);
+    }
+
+    // Log union stats
+    for (const [docType, vars] of unionByDocType) {
+      const count = processedFiles.filter((pf) => pf.docType === docType).length;
+      if (count > 1) {
+        console.log(`[BulkUpload] Merged ${count} "${docType}" templates → ${vars.size} union variables`);
+      }
+    }
+
+    for (const pf of processedFiles) {
+      try {
+        setResults((prev) => prev.map((r, idx) => idx === pf.index ? { ...r, status: 'saving' } : r));
+
+        // Use union variables for this docType (ensures consistency across paired templates)
+        const unionVars = unionByDocType.get(pf.docType);
+        const mergedVariables = unionVars ? [...unionVars].sort() : pf.variables;
 
         const saveResult = await templateService.uploadTemplate({
           firmId,
-          docType: detectedDocType,
-          name: baseName,
-          description: processed.documentSummary || '',
+          docType: pf.docType,
+          name: pf.baseName,
+          description: pf.description,
           variant: 'standard',
           complexity: 2,
-          content: processed.extractedHtml || processed.extractedText || '',
+          content: pf.content,
           isDefault: false,
-          variables: processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [],
-          tags: processed.suggestedTags || [],
+          variables: mergedVariables,
+          tags: pf.tags,
           softwareSource,
           folder: folder.trim() || undefined,
-          fileUrl,
-          originalFileName: file.name,
+          fileUrl: pf.fileUrl,
+          originalFileName: pf.file.name,
         });
 
-        processedData.push({
-          index: i,
-          baseName,
-          docType: detectedDocType,
-          variables: processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [],
-          templateId: saveResult.templateId,
-          description: processed.documentSummary || '',
-          tags: processed.suggestedTags || [],
-          variant: 'standard',
-          complexity: 2,
-        });
+        // Show the MERGED variable count (not the raw AI count)
+        setResults((prev) => prev.map((r, idx) => idx === pf.index ? { ...r, status: 'success', variableCount: mergedVariables.length } : r));
+        successCount++;
 
-        // 4. Confirm variables for learning (fire-and-forget)
-        if (processed.detectedVariables?.length > 0) {
+        // Confirm variables for learning (fire-and-forget)
+        if (pf.detectedVariables.length > 0) {
           templateService.confirmTemplateVariables(
             firmId,
-            baseName,
-            detectedDocType,
-            processed.detectedVariables.map((v: DetectedVariable) => ({
+            pf.baseName,
+            pf.docType,
+            pf.detectedVariables.map((v: DetectedVariable) => ({
               originalText: v.originalText,
               confirmedVariable: v.suggestedVariable,
               fieldLabel: v.fieldLabel,
@@ -170,90 +214,10 @@ export function BulkTemplateUploadDialog({
           ).catch(console.error);
         }
 
-        setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'success' } : r));
-        successCount++;
+        console.log(`[BulkUpload] Saved "${pf.baseName}" (${pf.docType}) with ${mergedVariables.length} merged variables, templateId=${saveResult.templateId}`);
       } catch (err) {
-        console.error(`Bulk template upload failed for ${file.name}:`, err);
-        setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'failed', error: (err as Error).message || 'Processing failed' } : r));
-      }
-    }
-
-    // -----------------------------------------------------------------------
-    // Fix 3: Cross-template consistency check
-    // Group by docType, take the union of variable sets, re-save any template
-    // that was missing variables detected in its sibling(s).
-    // -----------------------------------------------------------------------
-    if (processedData.length > 1) {
-      console.log(`[BulkUpload] Starting cross-template consistency check with ${processedData.length} templates`);
-      const byDocType = new Map<string, typeof processedData>();
-      for (const pd of processedData) {
-        const group = byDocType.get(pd.docType) || [];
-        group.push(pd);
-        byDocType.set(pd.docType, group);
-      }
-
-      let reconciledCount = 0;
-      for (const [docType, group] of byDocType) {
-        if (group.length < 2) continue;
-
-        // Build union of all variable sets in this docType group
-        const unionVars = new Set<string>();
-        for (const pd of group) {
-          for (const v of pd.variables) unionVars.add(v);
-        }
-
-        console.log(`[BulkUpload] DocType "${docType}": ${group.length} templates, union has ${unionVars.size} vars`);
-
-        // Update EVERY template in the group with the full union variable set
-        // This ensures consistency even when both have different sets of the same size
-        const reconcilePromises: Promise<unknown>[] = [];
-        for (const pd of group) {
-          const pdVarSet = new Set(pd.variables);
-          const hasMissing = [...unionVars].some((v) => !pdVarSet.has(v));
-
-          if (hasMissing && pd.templateId) {
-            const missing = [...unionVars].filter((v) => !pdVarSet.has(v));
-            console.log(
-              `[BulkUpload] Reconciling "${pd.baseName}" (${docType}): had ${pd.variables.length} vars, ` +
-              `union has ${unionVars.size}. Adding ${missing.length}: ${missing.join(', ')}`,
-            );
-
-            // Must await — dialog closes on completion which would cancel fire-and-forget calls
-            reconcilePromises.push(
-              templateService.uploadTemplate({
-                firmId,
-                templateId: pd.templateId,
-                docType,
-                name: pd.baseName,
-                variables: [...unionVars],
-                description: pd.description,
-                tags: pd.tags,
-                variant: pd.variant,
-                complexity: pd.complexity,
-                softwareSource,
-                folder: folder.trim() || undefined,
-              }).then(() => {
-                console.log(`[BulkUpload] Reconciliation save succeeded for "${pd.baseName}"`);
-              }).catch((err) => console.error(`[BulkUpload] Reconciliation save FAILED for "${pd.baseName}":`, err)),
-            );
-
-            // Update result display to reflect reconciled count
-            setResults((prev) => prev.map((r, idx) =>
-              idx === pd.index ? { ...r, variableCount: unionVars.size } : r,
-            ));
-            reconciledCount++;
-          }
-        }
-        // Wait for all reconciliation saves to complete before dialog closes
-        if (reconcilePromises.length > 0) {
-          console.log(`[BulkUpload] Waiting for ${reconcilePromises.length} reconciliation save(s)...`);
-          await Promise.all(reconcilePromises);
-          console.log(`[BulkUpload] All reconciliation saves completed`);
-        }
-      }
-
-      if (reconciledCount > 0) {
-        toast.info(`Cross-template consistency: reconciled variables for ${reconciledCount} template(s).`);
+        console.error(`Bulk template save failed for ${pf.file.name}:`, err);
+        setResults((prev) => prev.map((r, idx) => idx === pf.index ? { ...r, status: 'failed', error: (err as Error).message || 'Save failed' } : r));
       }
     }
 
