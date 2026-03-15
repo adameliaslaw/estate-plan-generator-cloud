@@ -151,7 +151,7 @@ Jurisdiction tags:
 // ---------------------------------------------------------------------------
 
 export const processTemplateFile = onCall(
-  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 240 },
+  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 150 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -233,20 +233,24 @@ export const processTemplateFile = onCall(
 
     // Use AI to detect template variables and suggest mappings
     // -----------------------------------------------------------------------
-    // Multi-pass detection: split large documents into overlapping chunks
-    // to ensure full coverage (each chunk ≤ 15K chars, 3K overlap)
+    // Hybrid detection strategy:
+    //   ≤ 30K chars → single AI call with full text (no truncation)
+    //   > 30K chars → parallel chunked analysis (20K chunks, 4K overlap)
     // -----------------------------------------------------------------------
-    const CHUNK_SIZE = 15000;
-    const CHUNK_OVERLAP = 3000;
+    const SINGLE_PASS_LIMIT = 30000;
+    const CHUNK_SIZE = 20000;
+    const CHUNK_OVERLAP = 4000;
 
     const chunks: string[] = [];
-    if (extractedText.length <= CHUNK_SIZE) {
-      chunks.push(truncateAtWordBoundary(extractedText, CHUNK_SIZE));
+    if (extractedText.length <= SINGLE_PASS_LIMIT) {
+      // Single pass — send entire document text, no truncation
+      chunks.push(extractedText);
     } else {
+      // Multi-pass — split into overlapping chunks for large documents (e.g., trusts)
       let offset = 0;
       while (offset < extractedText.length) {
         const end = Math.min(offset + CHUNK_SIZE, extractedText.length);
-        chunks.push(truncateAtWordBoundary(extractedText.slice(offset, end), CHUNK_SIZE));
+        chunks.push(extractedText.slice(offset, end));
         if (end >= extractedText.length) break;
         offset += CHUNK_SIZE - CHUNK_OVERLAP;
       }
@@ -321,10 +325,9 @@ Respond with a valid JSON object (no markdown fences):
     const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
 
     try {
-      // Process each chunk and merge results
-      for (let ci = 0; ci < chunks.length; ci++) {
-        const chunkLabel = chunks.length > 1 ? ` (chunk ${ci + 1}/${chunks.length})` : '';
-        const userPrompt = `Analyze this document${chunkLabel} and detect all template variables/placeholders:\n\n${chunks[ci]}`;
+      if (chunks.length === 1) {
+        // Single-pass — one AI call for the full document
+        const userPrompt = `Analyze this document and detect all template variables/placeholders:\n\n${chunks[0]}`;
 
         const raw = await callAI(systemPrompt, userPrompt, firmData, {
           temperature: 0,
@@ -339,35 +342,60 @@ Respond with a valid JSON object (no markdown fences):
           documentSummary: string;
         }>(raw);
 
-        const chunkVars = parsed.detectedVariables ?? [];
+        detectedVariables = parsed.detectedVariables ?? [];
+        suggestedDocType = parsed.suggestedDocType ?? '';
+        suggestedTags = parsed.suggestedTags ?? [];
+        documentSummary = parsed.documentSummary ?? '';
+      } else {
+        // Multi-pass — process chunks in PARALLEL for speed
+        const chunkPromises = chunks.map((chunk, ci) => {
+          const chunkLabel = ` (chunk ${ci + 1}/${chunks.length})`;
+          const userPrompt = `Analyze this document${chunkLabel} and detect all template variables/placeholders:\n\n${chunk}`;
 
-        if (ci === 0) {
-          // First chunk — take docType and summary from it
-          suggestedDocType = parsed.suggestedDocType ?? '';
-          suggestedTags = parsed.suggestedTags ?? [];
-          documentSummary = parsed.documentSummary ?? '';
-          detectedVariables = chunkVars;
-        } else {
-          // Subsequent chunks — merge variables, deduplicate by originalText
-          for (const newVar of chunkVars) {
-            const existingIdx = detectedVariables.findIndex(
-              (v) => v.originalText.toLowerCase() === newVar.originalText.toLowerCase(),
-            );
-            if (existingIdx >= 0) {
-              // Keep the higher-confidence version
-              const existing = detectedVariables[existingIdx];
-              const existingRank = confidenceRank[existing.confidence] ?? 0;
-              const newRank = confidenceRank[newVar.confidence] ?? 0;
-              if (newRank > existingRank) {
-                detectedVariables[existingIdx] = newVar;
+          return callAI(systemPrompt, userPrompt, firmData, {
+            temperature: 0,
+            maxTokens: 4096,
+            jsonMode: true,
+          });
+        });
+
+        const rawResults = await Promise.all(chunkPromises);
+
+        for (let ci = 0; ci < rawResults.length; ci++) {
+          const parsed = parseAIJson<{
+            detectedVariables: typeof detectedVariables;
+            suggestedDocType: string;
+            suggestedTags: string[];
+            documentSummary: string;
+          }>(rawResults[ci]);
+
+          const chunkVars = parsed.detectedVariables ?? [];
+
+          if (ci === 0) {
+            // First chunk — take docType, tags, and summary
+            suggestedDocType = parsed.suggestedDocType ?? '';
+            suggestedTags = parsed.suggestedTags ?? [];
+            documentSummary = parsed.documentSummary ?? '';
+            detectedVariables = chunkVars;
+          } else {
+            // Merge: deduplicate by originalText, keep higher-confidence
+            for (const newVar of chunkVars) {
+              const existingIdx = detectedVariables.findIndex(
+                (v) => v.originalText.toLowerCase() === newVar.originalText.toLowerCase(),
+              );
+              if (existingIdx >= 0) {
+                const existing = detectedVariables[existingIdx];
+                const existingRank = confidenceRank[existing.confidence] ?? 0;
+                const newRank = confidenceRank[newVar.confidence] ?? 0;
+                if (newRank > existingRank) {
+                  detectedVariables[existingIdx] = newVar;
+                }
+              } else {
+                detectedVariables.push(newVar);
               }
-            } else {
-              detectedVariables.push(newVar);
             }
           }
-        }
 
-        if (chunks.length > 1) {
           console.log(`[processTemplateFile] Chunk ${ci + 1}/${chunks.length}: detected ${chunkVars.length} variables (total unique: ${detectedVariables.length})`);
         }
       }
