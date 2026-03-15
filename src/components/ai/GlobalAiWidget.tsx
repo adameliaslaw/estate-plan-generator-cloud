@@ -259,8 +259,8 @@ export function GlobalAiWidget() {
         .slice(-20) // Cap history to prevent unbounded prompt growth
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const chatAi = httpsCallable(functions, 'chatAi');
-      const CHAT_TIMEOUT_MS = 90_000; // 90 seconds
+      const chatAi = httpsCallable(functions, 'chatAi', { timeout: 120_000 }); // Match server-side 120s timeout
+      const CHAT_TIMEOUT_MS = 120_000; // 120 seconds — matches server function timeout
       const response = await Promise.race([
         chatAi({
           firmId,
