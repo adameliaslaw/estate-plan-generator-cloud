@@ -267,7 +267,7 @@ export const templateService = {
     description?: string;
     variant?: string;
     complexity?: number;
-    content: string;
+    content?: string;
     isDefault?: boolean;
     variables?: string[];
     tags?: string[];

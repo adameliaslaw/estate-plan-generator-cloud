@@ -715,7 +715,7 @@ export default function KnowledgeBasePage() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-3 text-xs text-gray-500 line-clamp-2">{t.description || t.contentPreview}</p>
+                  <p className="mt-3 text-xs text-gray-500 line-clamp-2">{t.description || t.contentPreview?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}</p>
                   {/* Tags */}
                   {(t.tags ?? []).length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">

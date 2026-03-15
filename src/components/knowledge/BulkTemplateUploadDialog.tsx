@@ -85,13 +85,16 @@ export function BulkTemplateUploadDialog({
 
     let successCount = 0;
 
-    // Track per-file results for cross-template consistency check
     const processedData: {
       index: number;
       baseName: string;
       docType: string;
       variables: string[];
       templateId?: string;
+      description: string;
+      tags: string[];
+      variant: string;
+      complexity: number;
     }[] = [];
 
     for (let i = 0; i < selectedFiles.length; i++) {
@@ -147,6 +150,10 @@ export function BulkTemplateUploadDialog({
           docType: detectedDocType,
           variables: processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [],
           templateId: saveResult.templateId,
+          description: processed.documentSummary || '',
+          tags: processed.suggestedTags || [],
+          variant: 'standard',
+          complexity: 2,
         });
 
         // 4. Confirm variables for learning (fire-and-forget)
@@ -203,14 +210,19 @@ export function BulkTemplateUploadDialog({
               `union has ${unionVars.size}. Adding ${missing.length} from siblings: ${missing.join(', ')}`,
             );
 
-            // Re-save with the full union variable set
+            // Re-save with the full union variable set, preserving original metadata
             templateService.uploadTemplate({
               firmId,
               templateId: pd.templateId,
               docType,
               name: pd.baseName,
-              content: '', // empty = keep existing content (update only variables)
               variables: [...unionVars],
+              description: pd.description,
+              tags: pd.tags,
+              variant: pd.variant,
+              complexity: pd.complexity,
+              softwareSource,
+              folder: folder.trim() || undefined,
             }).catch(console.error);
 
             // Update result display to reflect reconciled count

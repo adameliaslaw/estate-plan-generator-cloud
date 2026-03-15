@@ -136,6 +136,10 @@ export async function recordConfirmedVariables(
   const dictSnap = await dictRef.get();
   const existingMappings = (dictSnap.data()?.mappings as Record<string, DictionaryEntry>) ?? {};
 
+  // Use Timestamp.now() for fields stored inside arrays/nested objects —
+  // FieldValue.serverTimestamp() is a sentinel that Firestore prohibits inside arrays.
+  const concreteNow = admin.firestore.Timestamp.now();
+
   for (const v of variables) {
     const key = v.originalText.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 100);
     const existing = existingMappings[key];
@@ -144,7 +148,7 @@ export async function recordConfirmedVariables(
       variable: v.confirmedVariable,
       fieldLabel: v.fieldLabel,
       uses: (existing?.uses ?? 0) + 1,
-      lastUsed: now,
+      lastUsed: concreteNow,
       docTypes: Array.from(new Set([...(existing?.docTypes ?? []), docType])),
     };
   }
@@ -160,7 +164,7 @@ export async function recordConfirmedVariables(
     templateName,
     docType,
     detectedVariables: variables.slice(0, 20), // Cap per template
-    uploadedAt: now,
+    uploadedAt: concreteNow, // Must be concrete Timestamp, not FieldValue sentinel (arrays forbid sentinels)
   };
 
   // Keep most recent 20 examples
