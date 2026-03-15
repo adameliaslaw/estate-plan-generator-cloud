@@ -184,6 +184,7 @@ export function BulkTemplateUploadDialog({
     // that was missing variables detected in its sibling(s).
     // -----------------------------------------------------------------------
     if (processedData.length > 1) {
+      console.log(`[BulkUpload] Starting cross-template consistency check with ${processedData.length} templates`);
       const byDocType = new Map<string, typeof processedData>();
       for (const pd of processedData) {
         const group = byDocType.get(pd.docType) || [];
@@ -201,17 +202,22 @@ export function BulkTemplateUploadDialog({
           for (const v of pd.variables) unionVars.add(v);
         }
 
-        // Re-save any template that has fewer variables than the union
+        console.log(`[BulkUpload] DocType "${docType}": ${group.length} templates, union has ${unionVars.size} vars`);
+
+        // Update EVERY template in the group with the full union variable set
+        // This ensures consistency even when both have different sets of the same size
         const reconcilePromises: Promise<unknown>[] = [];
         for (const pd of group) {
-          if (pd.variables.length < unionVars.size && pd.templateId) {
-            const missing = [...unionVars].filter((v) => !pd.variables.includes(v));
+          const pdVarSet = new Set(pd.variables);
+          const hasMissing = [...unionVars].some((v) => !pdVarSet.has(v));
+
+          if (hasMissing && pd.templateId) {
+            const missing = [...unionVars].filter((v) => !pdVarSet.has(v));
             console.log(
-              `[BulkUpload] Consistency: "${pd.baseName}" (${docType}) had ${pd.variables.length} vars, ` +
-              `union has ${unionVars.size}. Adding ${missing.length} from siblings: ${missing.join(', ')}`,
+              `[BulkUpload] Reconciling "${pd.baseName}" (${docType}): had ${pd.variables.length} vars, ` +
+              `union has ${unionVars.size}. Adding ${missing.length}: ${missing.join(', ')}`,
             );
 
-            // Re-save with the full union variable set, preserving original metadata
             // Must await — dialog closes on completion which would cancel fire-and-forget calls
             reconcilePromises.push(
               templateService.uploadTemplate({
@@ -226,7 +232,9 @@ export function BulkTemplateUploadDialog({
                 complexity: pd.complexity,
                 softwareSource,
                 folder: folder.trim() || undefined,
-              }).catch((err) => console.error('[BulkUpload] Reconciliation save failed:', err)),
+              }).then(() => {
+                console.log(`[BulkUpload] Reconciliation save succeeded for "${pd.baseName}"`);
+              }).catch((err) => console.error(`[BulkUpload] Reconciliation save FAILED for "${pd.baseName}":`, err)),
             );
 
             // Update result display to reflect reconciled count
@@ -238,7 +246,9 @@ export function BulkTemplateUploadDialog({
         }
         // Wait for all reconciliation saves to complete before dialog closes
         if (reconcilePromises.length > 0) {
+          console.log(`[BulkUpload] Waiting for ${reconcilePromises.length} reconciliation save(s)...`);
           await Promise.all(reconcilePromises);
+          console.log(`[BulkUpload] All reconciliation saves completed`);
         }
       }
 
