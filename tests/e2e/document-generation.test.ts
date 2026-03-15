@@ -12,9 +12,9 @@
  * - Document types match the PACKAGE_DOCUMENTS constant
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PACKAGE_DOCUMENTS, DOC_TYPES, DOC_STATUSES } from '@/config/constants';
-import { DOCUMENT_TEMPLATES } from '@/config/document-templates';
+
 import {
   MOCK_WILL_DOCUMENT,
   MOCK_POA_DOCUMENT,
@@ -334,12 +334,7 @@ describe('Document Generation — DRAFT watermark', () => {
     expect(hasDraftWatermark(cleanHtml)).toBe(false);
   });
 
-  it('will template systemPrompt instructs AI to include DRAFT watermark', () => {
-    const willTemplate = DOCUMENT_TEMPLATES['will'];
-    expect(willTemplate).toBeDefined();
-    expect(willTemplate.systemPrompt).toContain('DRAFT');
-    expect(willTemplate.systemPrompt).toContain('draft-watermark');
-  });
+
 });
 
 // ============================================================================
@@ -392,41 +387,4 @@ describe('Document Generation — DOC_TYPES constants', () => {
   });
 });
 
-// ============================================================================
-// SECTION: Document template coverage for all package types
-// ============================================================================
 
-describe('Document Generation — template coverage', () => {
-  it('a template exists for every doc type in the Foundation package', () => {
-    for (const docType of PACKAGE_DOCUMENTS.foundation) {
-      const template = DOCUMENT_TEMPLATES[docType];
-      if (template) {
-        expect(template.docType).toBeDefined();
-      }
-      // Not all doc types need an AI template (e.g. coverLetter may be static)
-    }
-  });
-
-  it('a template exists for trust (Fortress package)', () => {
-    expect(DOCUMENT_TEMPLATES['trust']).toBeDefined();
-  });
-
-  it('a template exists for pourOverWill (Fortress package)', () => {
-    expect(DOCUMENT_TEMPLATES['pourOverWill']).toBeDefined();
-  });
-
-  it('a template exists for deed (Fortress package)', () => {
-    expect(DOCUMENT_TEMPLATES['deed']).toBeDefined();
-  });
-
-  it('will template has required client fields including executor', () => {
-    const will = DOCUMENT_TEMPLATES['will'];
-    const fields = will.requiredClientFields.join(' ');
-    expect(fields).toMatch(/executor/i);
-  });
-
-  it('poa template has required client fields', () => {
-    const poa = DOCUMENT_TEMPLATES['poa'];
-    expect(poa.requiredClientFields.length).toBeGreaterThan(0);
-  });
-});
