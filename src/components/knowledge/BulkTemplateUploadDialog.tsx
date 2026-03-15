@@ -186,15 +186,18 @@ export function BulkTemplateUploadDialog({
           const consolidated = await templateService.consolidateTemplateVariables(firmId, docType, payload);
           
           if (consolidated?.detectedVariables) {
-            console.log(`[BulkUpload] AI Consolidation successful! Found ${consolidated.detectedVariables.length} variables.`);
-            
-            // Override the naive union with the smart AI consolidated list
-            const smartVars = new Set<string>();
+            // ADDITIVE merge: start with the existing union, then add any NEW
+            // variables the consolidation AI found that individual passes missed.
+            // Never remove variables — the consolidation can only increase the set.
+            const existingUnion = vars; // the naive union already computed
+            let added = 0;
             for (const v of consolidated.detectedVariables) {
-              smartVars.add(v.suggestedVariable);
+              if (!existingUnion.has(v.suggestedVariable)) {
+                existingUnion.add(v.suggestedVariable);
+                added++;
+              }
               
-              // Also ensure we confirm these variables so learning data is captured for all identified variables
-              // We'll attach these to the first file's detected variables list so they get confirmed later
+              // Capture for learning regardless
               if (!groupFiles[0].detectedVariables.some(existing => existing.suggestedVariable === v.suggestedVariable)) {
                 groupFiles[0].detectedVariables.push({
                    ...v,
@@ -202,11 +205,10 @@ export function BulkTemplateUploadDialog({
                 });
               }
             }
-            // Update the map that the next step uses
-            unionByDocType.set(docType, smartVars);
+            console.log(`[BulkUpload] AI Consolidation: found ${consolidated.detectedVariables.length} vars, added ${added} new to union (total: ${existingUnion.size})`);
 
           } else {
-             console.log(`[BulkUpload] AI Consolidation returned no variables, falling back to naive union (${vars.size} vars).`);
+             console.log(`[BulkUpload] AI Consolidation returned no variables, keeping naive union (${vars.size} vars).`);
           }
 
         } catch (err) {
