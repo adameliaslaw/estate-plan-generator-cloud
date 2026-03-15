@@ -29,6 +29,7 @@ import {
   Loader2,
   AlertCircle,
   Wand2,
+  History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,7 @@ import AttorneyReviewGate from './AttorneyReviewGate';
 import DocumentReviewDialog from './DocumentReviewDialog';
 import FlexDocumentGenerator from './FlexDocumentGenerator';
 import SingleDocumentGenerator from './SingleDocumentGenerator';
+import VersionHistoryDialog from './VersionHistoryDialog';
 import ExportButton from './ExportButton';
 import BatchExportButton from './BatchExportButton';
 import ESignatureDialog from './ESignatureDialog';
@@ -196,9 +198,10 @@ interface RowActionsProps {
   onSendSignature: (doc: Document) => void;
   onEdit: (doc: Document) => void;
   onRegenerate?: (doc: Document) => void;
+  onVersionHistory: (doc: Document) => void;
 }
 
-function RowActions({ doc, firmId, clientId, isStale, onReview, onApprove, onDelete, onSendSignature, onEdit, onRegenerate }: RowActionsProps) {
+function RowActions({ doc, firmId, clientId, isStale, onReview, onApprove, onDelete, onSendSignature, onEdit, onRegenerate, onVersionHistory }: RowActionsProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex items-center gap-1">
@@ -262,6 +265,23 @@ function RowActions({ doc, firmId, clientId, isStale, onReview, onApprove, onDel
           </TooltipTrigger>
           <TooltipContent>AI review</TooltipContent>
         </Tooltip>
+
+        {/* Version History */}
+        {doc.currentVersion > 1 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-400 hover:text-[#2b6cb0]"
+                onClick={() => onVersionHistory(doc)}
+              >
+                <History className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Version history</TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Regenerate (stale drafts only) */}
         {isStale && doc.status === 'draft' && onRegenerate && (
@@ -391,6 +411,7 @@ export default function DocumentVault({
 
   const [showFlexGen, setShowFlexGen] = useState(false);
   const [showSingleGen, setShowSingleGen] = useState(false);
+  const [versionHistoryDoc, setVersionHistoryDoc] = useState<Document | null>(null);
 
   // ── Derived / filtered list ──────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -773,6 +794,7 @@ export default function DocumentVault({
                         onDelete={(d) => setDeleteTarget(d)}
                         onSendSignature={(d) => setSignDoc(d)}
                         onEdit={(d) => navigate(`/clients/${clientId}/documents/${d.id}/edit`)}
+                        onVersionHistory={(d) => setVersionHistoryDoc(d)}
                       />
                     </td>
                   </tr>
@@ -874,6 +896,19 @@ export default function DocumentVault({
           clientId={clientId}
           documentId={signDoc.id}
           documentName={signDoc.displayName}
+        />
+      )}
+
+      {/* ── Version History Dialog ──────────────────────────────────────────── */}
+      {versionHistoryDoc && (
+        <VersionHistoryDialog
+          firmId={firmId}
+          clientId={clientId}
+          documentId={versionHistoryDoc.id}
+          documentName={versionHistoryDoc.displayName}
+          currentVersion={versionHistoryDoc.currentVersion}
+          open={!!versionHistoryDoc}
+          onClose={() => setVersionHistoryDoc(null)}
         />
       )}
     </div>

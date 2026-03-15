@@ -417,4 +417,74 @@ export const documentService = {
     const result = await fn(params);
     return result.data;
   },
+
+  // ── Version Management ──────────────────────────────────────────────────────
+
+  async getDocumentVersions(params: {
+    firmId: string;
+    clientId: string;
+    documentId: string;
+  }): Promise<{
+    success: boolean;
+    documentId: string;
+    versions: Array<{
+      versionNumber: number;
+      displayName: string;
+      status: string;
+      changeNotes: string;
+      createdBy: string;
+      createdAt: string | null;
+      contentPreview: string;
+      hasFullContent: boolean;
+    }>;
+  }> {
+    const fn = httpsCallable<typeof params, ReturnType<typeof this.getDocumentVersions> extends Promise<infer T> ? T : never>(
+      functions,
+      'getDocumentVersions',
+    );
+    const result = await fn(params);
+    return result.data;
+  },
+
+  async getDocumentVersionContent(params: {
+    firmId: string;
+    clientId: string;
+    documentId: string;
+    versionNumber: number;
+  }): Promise<{
+    success: boolean;
+    versionNumber: number;
+    content: string;
+    displayName: string;
+    changeNotes: string;
+    createdBy: string;
+    createdAt: string | null;
+  }> {
+    const fn = httpsCallable<typeof params, ReturnType<typeof this.getDocumentVersionContent> extends Promise<infer T> ? T : never>(
+      functions,
+      'getDocumentVersionContent',
+    );
+    const result = await fn(params);
+    return result.data;
+  },
+
+  async revertDocumentVersion(params: {
+    firmId: string;
+    clientId: string;
+    documentId: string;
+    targetVersion: number;
+  }): Promise<{
+    success: boolean;
+    documentId: string;
+    restoredVersion: number;
+    newVersion: number;
+    message: string;
+  }> {
+    const fn = httpsCallable<typeof params, ReturnType<typeof this.revertDocumentVersion> extends Promise<infer T> ? T : never>(
+      functions,
+      'revertDocumentVersion',
+    );
+    const result = await fn(params);
+    return result.data;
+  },
 };

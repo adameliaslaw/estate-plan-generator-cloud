@@ -45,3 +45,4 @@ export { seedKnowledgeBase } from './seed-knowledge-base';
 export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables } from './process-template-file';
 export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';
 export { onKnowledgeResourceWritten, backfillEmbeddings, onTemplateWritten, backfillTemplateEmbeddings } from './kb-embeddings';
+export { getDocumentVersions, getDocumentVersionContent, revertDocumentVersion } from './document-versions';
