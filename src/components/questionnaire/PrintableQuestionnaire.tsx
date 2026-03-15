@@ -597,13 +597,17 @@ export default function PrintableQuestionnaire({
       {/* ── Print CSS ──────────────────────────────────────────────────── */}
       <style>{`
         @media print {
+          /* Zero @page margin — WE control all spacing via .print-page padding */
           @page {
             size: letter portrait;
-            margin: 0.6in 0.65in;
+            margin: 0;
           }
           html, body {
             margin: 0 !important;
             padding: 0 !important;
+            width: 8.5in !important;
+            height: auto !important;
+            overflow: visible !important;
           }
           body {
             font-size: 9pt;
@@ -615,37 +619,57 @@ export default function PrintableQuestionnaire({
           body, * {
             font-family: Arial, Helvetica, sans-serif !important;
           }
+
+          /* Hide screen-only elements */
           .print\\:hidden { display: none !important; }
           .print\\:!hidden { display: none !important; }
           .hidden.print\\:block { display: block !important; }
 
-          /* Wrapper resets for print */
-          .printable-questionnaire-wrapper {
+          /* Reset ALL containers to be transparent */
+          #root,
+          .printable-questionnaire-wrapper,
+          .printable-questionnaire-wrapper > div,
+          #printable-questionnaire {
+            display: block !important;
+            width: auto !important;
             max-width: none !important;
             margin: 0 !important;
             padding: 0 !important;
+            overflow: visible !important;
+            height: auto !important;
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
           }
 
-          /* Each .print-page = exactly one physical printed page */
+          /*
+           * Each .print-page = exactly ONE physical printed page.
+           * We make each one 8.5in × 11in with internal padding = page margins.
+           * The content area = 8.5 - 2*0.65 = 7.2in wide, 11 - 2*0.6 = 9.8in tall.
+           */
           .print-page {
-            width: 100%;
-            height: 9.8in;
-            max-height: 9.8in;
+            width: 8.5in;
+            height: 11in;
+            padding: 0.6in 0.65in;
+            margin: 0 !important;
+            box-sizing: border-box;
             overflow: hidden;
             position: relative;
             page-break-after: always;
             page-break-inside: avoid;
             break-after: page;
             break-inside: avoid;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-sizing: border-box;
+            background: #fff !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
           }
           .print-page:last-child {
             page-break-after: auto;
             break-after: auto;
           }
-          /* Prevent ANY element from breaking across pages */
+
+          /* Prevent elements from breaking across pages */
           h1, h2, h3, h4 { page-break-after: avoid; break-after: avoid; }
           tr { page-break-inside: avoid; break-inside: avoid; }
 
@@ -656,7 +680,8 @@ export default function PrintableQuestionnaire({
           .border-b.border-gray-300 { border-bottom: 0.5pt solid #888 !important; }
           a { color: #000; text-decoration: none; }
         }
-        /* Screen preview styling */
+
+        /* ── Screen preview ─────────────────────────────────────────── */
         @media screen {
           .printable-questionnaire-wrapper {
             max-width: 8.5in;
