@@ -190,6 +190,7 @@ export function AddTemplateDialog({
         setDetectedVars(result.detectedVariables);
         setOriginalAiVars(result.detectedVariables.map(v => ({ ...v }))); // Deep copy for diff
       }
+      if (result.suggestedTags?.length > 0) setSelectedTags(result.suggestedTags);
       if (result.learningStats) setLearningStats(result.learningStats);
 
       toast.success(`File processed — ${result.detectedVariables?.length || 0} variables detected.`);

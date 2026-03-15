@@ -108,12 +108,50 @@ CRITICAL MAPPING RULES — RELATIONSHIP WORDS vs NAMES:
 - Phrases like "my husband, Sean Byrnes" contain TWO variables: "my husband" → spouseTitle, "Sean Byrnes" → spouseFullName
 `;
 
+const AVAILABLE_TAGS = `
+AVAILABLE TEMPLATE TAGS — select ALL that apply based on document content:
+
+Document Type tags:
+- "standard-will" — a standard last will and testament
+- "pour-over-will" — a pour-over will directing assets into a trust
+- "simple-will" — a simple/basic will
+- "revocable-trust" — a revocable living trust
+- "irrevocable-trust" — an irrevocable trust
+- "special-needs-trust" — a special needs trust
+- "financial-poa" — a financial/durable power of attorney
+- "healthcare-poa" — a healthcare power of attorney / healthcare proxy
+- "living-will" — a living will or advance directive
+- "guardianship" — a guardianship designation
+
+Client tags:
+- "male-client" — the primary client/testator/grantor is male
+- "female-client" — the primary client/testator/grantor is female
+- "husband" — the client is a husband
+- "wife" — the client is a wife
+- "married" — the client is married (spouse referenced)
+- "single" — the client is single/unmarried
+- "has-children" — children are referenced in the document
+- "has-minor-children" — minor children or guardianship provisions are present
+
+Role tags:
+- "male-executor" — the named executor is male
+- "female-executor" — the named executor is female
+- "male-trustee" — the named trustee is male
+- "female-trustee" — the named trustee is female
+- "corporate-trustee" — a corporate/institutional trustee is named
+
+Jurisdiction tags:
+- "nj" — New Jersey law referenced or NJ-specific provisions
+- "ny" — New York law referenced or NY-specific provisions
+- "pa" — Pennsylvania law referenced or PA-specific provisions
+`;
+
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
 
 export const processTemplateFile = onCall(
-  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 120 },
+  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 240 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -194,7 +232,27 @@ export const processTemplateFile = onCall(
     const learningPrompt = formatLearningPrompt(learningCtx);
 
     // Use AI to detect template variables and suggest mappings
-    const analysisText = truncateAtWordBoundary(extractedText, 8000);
+    // -----------------------------------------------------------------------
+    // Multi-pass detection: split large documents into overlapping chunks
+    // to ensure full coverage (each chunk ≤ 15K chars, 3K overlap)
+    // -----------------------------------------------------------------------
+    const CHUNK_SIZE = 15000;
+    const CHUNK_OVERLAP = 3000;
+
+    const chunks: string[] = [];
+    if (extractedText.length <= CHUNK_SIZE) {
+      chunks.push(truncateAtWordBoundary(extractedText, CHUNK_SIZE));
+    } else {
+      let offset = 0;
+      while (offset < extractedText.length) {
+        const end = Math.min(offset + CHUNK_SIZE, extractedText.length);
+        chunks.push(truncateAtWordBoundary(extractedText.slice(offset, end), CHUNK_SIZE));
+        if (end >= extractedText.length) break;
+        offset += CHUNK_SIZE - CHUNK_OVERLAP;
+      }
+    }
+
+    console.log(`[processTemplateFile] Analyzing ${chunks.length} chunk(s) (text length: ${extractedText.length} chars)`);
 
     const systemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
 
@@ -231,6 +289,7 @@ For each detected variable, suggest the best matching questionnaire field from t
 - "low": Could be sample data but uncertain (e.g., appears only once with ambiguous context)
 
 ${AVAILABLE_FIELDS}
+${AVAILABLE_TAGS}
 ${learningPrompt}
 Respond with a valid JSON object (no markdown fences):
 {
@@ -244,10 +303,9 @@ Respond with a valid JSON object (no markdown fences):
     }
   ],
   "suggestedDocType": "one of: will, pourOverWill, trust, poa, livingWill, deed, affidavitOfConsideration, gitRep3, estatePlanSummary, actionSteps",
+  "suggestedTags": ["array of tag values from the AVAILABLE TEMPLATE TAGS list above that match this document"],
   "documentSummary": "one paragraph summary of what this template is for"
 }`;
-
-    const userPrompt = `Analyze this document and detect all template variables/placeholders:\n\n${analysisText}`;
 
     let detectedVariables: {
       originalText: string;
@@ -257,24 +315,62 @@ Respond with a valid JSON object (no markdown fences):
       context: string;
     }[] = [];
     let suggestedDocType = '';
+    let suggestedTags: string[] = [];
     let documentSummary = '';
 
+    const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
     try {
-      const raw = await callAI(systemPrompt, userPrompt, firmData, {
-        temperature: 0.1,
-        maxTokens: 4096,
-        jsonMode: true,
-      });
+      // Process each chunk and merge results
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunkLabel = chunks.length > 1 ? ` (chunk ${ci + 1}/${chunks.length})` : '';
+        const userPrompt = `Analyze this document${chunkLabel} and detect all template variables/placeholders:\n\n${chunks[ci]}`;
 
-      const parsed = parseAIJson<{
-        detectedVariables: typeof detectedVariables;
-        suggestedDocType: string;
-        documentSummary: string;
-      }>(raw);
+        const raw = await callAI(systemPrompt, userPrompt, firmData, {
+          temperature: 0,
+          maxTokens: 4096,
+          jsonMode: true,
+        });
 
-      detectedVariables = parsed.detectedVariables ?? [];
-      suggestedDocType = parsed.suggestedDocType ?? '';
-      documentSummary = parsed.documentSummary ?? '';
+        const parsed = parseAIJson<{
+          detectedVariables: typeof detectedVariables;
+          suggestedDocType: string;
+          suggestedTags: string[];
+          documentSummary: string;
+        }>(raw);
+
+        const chunkVars = parsed.detectedVariables ?? [];
+
+        if (ci === 0) {
+          // First chunk — take docType and summary from it
+          suggestedDocType = parsed.suggestedDocType ?? '';
+          suggestedTags = parsed.suggestedTags ?? [];
+          documentSummary = parsed.documentSummary ?? '';
+          detectedVariables = chunkVars;
+        } else {
+          // Subsequent chunks — merge variables, deduplicate by originalText
+          for (const newVar of chunkVars) {
+            const existingIdx = detectedVariables.findIndex(
+              (v) => v.originalText.toLowerCase() === newVar.originalText.toLowerCase(),
+            );
+            if (existingIdx >= 0) {
+              // Keep the higher-confidence version
+              const existing = detectedVariables[existingIdx];
+              const existingRank = confidenceRank[existing.confidence] ?? 0;
+              const newRank = confidenceRank[newVar.confidence] ?? 0;
+              if (newRank > existingRank) {
+                detectedVariables[existingIdx] = newVar;
+              }
+            } else {
+              detectedVariables.push(newVar);
+            }
+          }
+        }
+
+        if (chunks.length > 1) {
+          console.log(`[processTemplateFile] Chunk ${ci + 1}/${chunks.length}: detected ${chunkVars.length} variables (total unique: ${detectedVariables.length})`);
+        }
+      }
     } catch (err) {
       console.error('[processTemplateFile] AI analysis error:', err);
       // Continue without AI analysis — still return the extracted content
@@ -360,6 +456,7 @@ Return ONLY the modified HTML (no JSON wrapper, no markdown fences, no explanati
       extractedText: truncateAtWordBoundary(extractedText, 5000),
       detectedVariables,
       suggestedDocType,
+      suggestedTags,
       documentSummary,
       fileName,
       fileType: ext,

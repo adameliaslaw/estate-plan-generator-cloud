@@ -58,16 +58,20 @@ export const uploadTemplate = onCall(
       originalFileName,
     } = request.data;
 
-    if (!firmId || !docType || !name || !content) {
-      throw new HttpsError('invalid-argument', 'firmId, docType, name, and content are required.');
+    if (!firmId || !docType || !name) {
+      throw new HttpsError('invalid-argument', 'firmId, docType, and name are required.');
+    }
+    // content is required for new templates, optional for updates
+    if (!templateId && !content) {
+      throw new HttpsError('invalid-argument', 'content is required for new templates.');
     }
     assertFirmAccess(request.auth, firmId);
 
     const now = admin.firestore.FieldValue.serverTimestamp();
     const col = templateCollection(firmId);
 
-    // Auto-extract variables from template content
-    const autoExtracted = extractTemplateVariables(content);
+    // Auto-extract variables from template content (if content provided)
+    const autoExtracted = content ? extractTemplateVariables(content) : [];
     // Merge auto-extracted with any manually provided; auto-extracted take precedence
     const manualVars: string[] = variables ?? [];
     const mergedVariables = Array.from(new Set([...autoExtracted, ...manualVars])).sort();
@@ -95,19 +99,23 @@ export const uploadTemplate = onCall(
       }
 
       const currentVersion = (existing.data()?.version ?? 0) + 1;
-      await ref.update({
+      const updateData: Record<string, unknown> = {
         name,
         description: description ?? '',
         variant: variant ?? 'standard',
         complexity: complexity ?? 2,
-        content,
         version: currentVersion,
         isDefault: isDefault ?? false,
         variables: mergedVariables,
         tags: tags ?? [],
         updatedAt: now,
         updatedBy: request.auth.uid,
-      });
+      };
+      // Only update content if provided (allows variable-only updates)
+      if (content) {
+        updateData.content = content;
+      }
+      await ref.update(updateData);
 
       console.log(`[uploadTemplate] Updated template ${templateId} (v${currentVersion})`);
       return { success: true, templateId, version: currentVersion };

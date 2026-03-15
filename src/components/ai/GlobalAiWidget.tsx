@@ -14,9 +14,9 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck } from 'lucide-react';
+import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { functions, db } from '@/config/firebase';
@@ -230,6 +230,63 @@ export function GlobalAiWidget() {
     } catch (err) {
       console.error('[GlobalAiWidget] Save as note error:', err);
       toast.error('Failed to save as note.');
+    }
+  };
+
+  // Save a long AI message to the document vault
+  const handleSaveToVault = async (msg: Message) => {
+    if (!firmId || !clientId) {
+      toast.error('Navigate to a client profile to save documents.');
+      return;
+    }
+    if (!userProfile) {
+      toast.error('You must be signed in.');
+      return;
+    }
+    try {
+      const docId = `chat_draft_${Date.now()}`;
+      const docRef = doc(db, `firms/${firmId}/clients/${clientId}/documents`, docId);
+      const now = serverTimestamp();
+
+      // Extract title from first heading or first line
+      const titleMatch = msg.content.match(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/i)
+        || msg.content.match(/^#\s+(.+)$/m);
+      const title = titleMatch?.[1]?.replace(/<[^>]*>/g, '').trim() || `AI Draft — ${new Date().toLocaleDateString()}`;
+
+      await setDoc(docRef, {
+        id: docId,
+        firmId,
+        clientId,
+        docType: 'custom',
+        displayName: title,
+        status: 'draft',
+        content: msg.content,
+        storagePath: '',
+        fileName: `${docId}.html`,
+        mimeType: 'text/html',
+        currentVersion: 1,
+        versions: [{
+          versionNumber: 1,
+          storagePath: '',
+          createdAt: new Date(),
+          createdBy: userProfile.uid,
+          changeNotes: 'Saved from AI chat conversation',
+        }],
+        generatedByAI: true,
+        requiresSignature: false,
+        notarized: false,
+        tags: ['chat-draft'],
+        isConfidential: true,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: userProfile.uid,
+        updatedBy: userProfile.uid,
+      });
+
+      toast.success(`Saved to Document Vault: "${title}"`);
+    } catch (err) {
+      console.error('[GlobalAiWidget] Save to vault error:', err);
+      toast.error('Failed to save to vault.');
     }
   };
 
@@ -550,19 +607,32 @@ export function GlobalAiWidget() {
                     </span>
                     {/* Save as Note button — only when client is connected */}
                     {clientId && !msg.id.startsWith('welcome-') && msg.id !== 'loading' && (
-                      <button
-                        onClick={() => handleSaveAsNote(msg)}
-                        className={cn(
-                          'mt-1 flex items-center gap-1 text-[10px] font-medium transition-colors',
-                          isUser
-                            ? 'text-purple-200 hover:text-white'
-                            : 'text-gray-400 hover:text-purple-600',
+                      <div className="mt-1 flex items-center gap-3">
+                        <button
+                          onClick={() => handleSaveAsNote(msg)}
+                          className={cn(
+                            'flex items-center gap-1 text-[10px] font-medium transition-colors',
+                            isUser
+                              ? 'text-purple-200 hover:text-white'
+                              : 'text-gray-400 hover:text-purple-600',
+                          )}
+                          title="Save this message as a client note"
+                        >
+                          <Bookmark className="h-3 w-3" />
+                          Save as Note
+                        </button>
+                        {/* Save to Vault — for long AI messages (likely documents) */}
+                        {!isUser && msg.content.length > 500 && (
+                          <button
+                            onClick={() => handleSaveToVault(msg)}
+                            className="flex items-center gap-1 text-[10px] font-medium text-gray-400 hover:text-amber-600 transition-colors"
+                            title="Save to Document Vault"
+                          >
+                            <FolderOpen className="h-3 w-3" />
+                            Save to Vault
+                          </button>
                         )}
-                        title="Save this message as a client note"
-                      >
-                        <Bookmark className="h-3 w-3" />
-                        Save as Note
-                      </button>
+                      </div>
                     )}
                   </div>
                 </div>

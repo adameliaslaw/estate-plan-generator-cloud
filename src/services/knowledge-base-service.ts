@@ -306,6 +306,7 @@ export const templateService = {
       context: string;
     }[];
     suggestedDocType: string;
+    suggestedTags: string[];
     documentSummary: string;
     learningStats: {
       totalCorrections: number;
@@ -313,7 +314,7 @@ export const templateService = {
       dictionarySize: number;
     };
   }> {
-    const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 120000 });
+    const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 240000 });
     const res = await fn({ firmId, storagePath, fileName });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = res.data as any;
@@ -328,6 +329,7 @@ export const templateService = {
         context: string;
       }[];
       suggestedDocType: string;
+      suggestedTags: string[];
       documentSummary: string;
       learningStats: {
         totalCorrections: number;

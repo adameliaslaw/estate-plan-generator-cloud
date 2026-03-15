@@ -267,7 +267,7 @@ async function buildContextString(
 // ---------------------------------------------------------------------------
 
 function parseDraftResponse(raw: string): ChatAiResponse {
-  // Try to parse as JSON (draft mode response)
+  // Strategy 1: Parse as JSON (ideal case — AI followed the structured output instruction)
   try {
     // Strip markdown fences if present
     const cleaned = raw
@@ -284,9 +284,61 @@ function parseDraftResponse(raw: string): ChatAiResponse {
           draftTitle: parsed.draftTitle,
         };
       }
+      // Sometimes the AI puts the document in 'content' instead of 'draftContent'
+      if (parsed.content && typeof parsed.content === 'string' && parsed.content.length > 500) {
+        return {
+          reply: parsed.reply ?? 'Here is your document draft.',
+          draftContent: parsed.content,
+          draftTitle: parsed.title ?? parsed.draftTitle,
+        };
+      }
     }
   } catch {
-    // Not JSON — plain text reply, no draft produced
+    // Not JSON — try fallback strategies
+  }
+
+  // Strategy 2: Detect substantial HTML content in plain text response
+  // Many LLMs output HTML documents directly without JSON wrapping
+  const hasHtmlStructure = /<(?:h[1-6]|p|div|table|section|article)[^>]*>[\s\S]*?<\/(?:h[1-6]|p|div|table|section|article)>/i.test(raw);
+  const htmlContentLength = (raw.match(/<[^>]+>/g) || []).length;
+
+  if (hasHtmlStructure && htmlContentLength > 10 && raw.length > 500) {
+    // Extract a title from the first heading
+    const titleMatch = raw.match(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/i);
+    const title = titleMatch?.[1]?.replace(/<[^>]*>/g, '').trim() || 'Chat Draft';
+
+    // Strip any conversational preamble before the HTML
+    const htmlStart = raw.search(/<(?:!DOCTYPE|html|h[1-6]|div|p|section)[^>]*>/i);
+    const draftContent = htmlStart > 0 ? raw.slice(htmlStart) : raw;
+
+    return {
+      reply: `I've drafted your document: "${title}". It has been saved to the Document Vault.`,
+      draftContent,
+      draftTitle: title,
+    };
+  }
+
+  // Strategy 3: Detect markdown-formatted documents (# headings, **bold**, etc.)
+  const markdownHeadings = (raw.match(/^#{1,3}\s+.+$/gm) || []).length;
+  if (markdownHeadings >= 3 && raw.length > 1000) {
+    const titleMatch = raw.match(/^#\s+(.+)$/m);
+    const title = titleMatch?.[1]?.trim() || 'Chat Draft';
+
+    // Convert basic markdown to HTML for vault storage
+    let htmlContent = raw
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br/>');
+    htmlContent = `<p>${htmlContent}</p>`;
+
+    return {
+      reply: `I've drafted your document: "${title}". It has been saved to the Document Vault.`,
+      draftContent: htmlContent,
+      draftTitle: title,
+    };
   }
 
   return { reply: raw };
@@ -422,10 +474,12 @@ export const chatAi = functions
       if (mode === 'draft') {
         const result: ChatAiResponse = parseDraftResponse(raw);
 
-        // Add AI reply to messages
+        // Add AI reply to messages — use short summary for drafts to prevent token bloat
         allMessages.push({
           role: 'assistant',
-          content: result.reply,
+          content: result.draftContent
+            ? `[Document draft saved to vault: "${result.draftTitle ?? 'Draft'}"]`
+            : result.reply,
           timestamp: new Date().toISOString(),
           isDraft: !!result.draftContent,
           draftTitle: result.draftTitle ?? null,

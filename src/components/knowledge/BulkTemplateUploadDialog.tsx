@@ -82,6 +82,15 @@ export function BulkTemplateUploadDialog({
 
     let successCount = 0;
 
+    // Track per-file results for cross-template consistency check
+    const processedData: {
+      index: number;
+      baseName: string;
+      docType: string;
+      variables: string[];
+      templateId?: string;
+    }[] = [];
+
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
 
@@ -112,7 +121,7 @@ export function BulkTemplateUploadDialog({
         // 3. Auto-save template
         setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'saving', docType: detectedDocType, variableCount: processed.detectedVariables?.length || 0 } : r));
 
-        await templateService.uploadTemplate({
+        const saveResult = await templateService.uploadTemplate({
           firmId,
           docType: detectedDocType,
           name: baseName,
@@ -122,8 +131,17 @@ export function BulkTemplateUploadDialog({
           content: processed.extractedHtml || processed.extractedText || '',
           isDefault: false,
           variables: processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [],
+          tags: processed.suggestedTags || [],
           fileUrl,
           originalFileName: file.name,
+        });
+
+        processedData.push({
+          index: i,
+          baseName,
+          docType: detectedDocType,
+          variables: processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [],
+          templateId: saveResult.templateId,
         });
 
         // 4. Confirm variables for learning (fire-and-forget)
@@ -145,6 +163,62 @@ export function BulkTemplateUploadDialog({
       } catch (err) {
         console.error(`Bulk template upload failed for ${file.name}:`, err);
         setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'failed', error: (err as Error).message || 'Processing failed' } : r));
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fix 3: Cross-template consistency check
+    // Group by docType, take the union of variable sets, re-save any template
+    // that was missing variables detected in its sibling(s).
+    // -----------------------------------------------------------------------
+    if (processedData.length > 1) {
+      const byDocType = new Map<string, typeof processedData>();
+      for (const pd of processedData) {
+        const group = byDocType.get(pd.docType) || [];
+        group.push(pd);
+        byDocType.set(pd.docType, group);
+      }
+
+      let reconciledCount = 0;
+      for (const [docType, group] of byDocType) {
+        if (group.length < 2) continue;
+
+        // Build union of all variable sets in this docType group
+        const unionVars = new Set<string>();
+        for (const pd of group) {
+          for (const v of pd.variables) unionVars.add(v);
+        }
+
+        // Re-save any template that has fewer variables than the union
+        for (const pd of group) {
+          if (pd.variables.length < unionVars.size && pd.templateId) {
+            const missing = [...unionVars].filter((v) => !pd.variables.includes(v));
+            console.log(
+              `[BulkUpload] Consistency: "${pd.baseName}" (${docType}) had ${pd.variables.length} vars, ` +
+              `union has ${unionVars.size}. Adding ${missing.length} from siblings: ${missing.join(', ')}`,
+            );
+
+            // Re-save with the full union variable set
+            templateService.uploadTemplate({
+              firmId,
+              templateId: pd.templateId,
+              docType,
+              name: pd.baseName,
+              content: '', // empty = keep existing content (update only variables)
+              variables: [...unionVars],
+            }).catch(console.error);
+
+            // Update result display to reflect reconciled count
+            setResults((prev) => prev.map((r, idx) =>
+              idx === pd.index ? { ...r, variableCount: unionVars.size } : r,
+            ));
+            reconciledCount++;
+          }
+        }
+      }
+
+      if (reconciledCount > 0) {
+        toast.info(`Cross-template consistency: reconciled variables for ${reconciledCount} template(s).`);
       }
     }
 
