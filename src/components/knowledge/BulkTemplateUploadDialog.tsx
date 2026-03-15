@@ -202,6 +202,7 @@ export function BulkTemplateUploadDialog({
         }
 
         // Re-save any template that has fewer variables than the union
+        const reconcilePromises: Promise<unknown>[] = [];
         for (const pd of group) {
           if (pd.variables.length < unionVars.size && pd.templateId) {
             const missing = [...unionVars].filter((v) => !pd.variables.includes(v));
@@ -211,19 +212,22 @@ export function BulkTemplateUploadDialog({
             );
 
             // Re-save with the full union variable set, preserving original metadata
-            templateService.uploadTemplate({
-              firmId,
-              templateId: pd.templateId,
-              docType,
-              name: pd.baseName,
-              variables: [...unionVars],
-              description: pd.description,
-              tags: pd.tags,
-              variant: pd.variant,
-              complexity: pd.complexity,
-              softwareSource,
-              folder: folder.trim() || undefined,
-            }).catch(console.error);
+            // Must await — dialog closes on completion which would cancel fire-and-forget calls
+            reconcilePromises.push(
+              templateService.uploadTemplate({
+                firmId,
+                templateId: pd.templateId,
+                docType,
+                name: pd.baseName,
+                variables: [...unionVars],
+                description: pd.description,
+                tags: pd.tags,
+                variant: pd.variant,
+                complexity: pd.complexity,
+                softwareSource,
+                folder: folder.trim() || undefined,
+              }).catch((err) => console.error('[BulkUpload] Reconciliation save failed:', err)),
+            );
 
             // Update result display to reflect reconciled count
             setResults((prev) => prev.map((r, idx) =>
@@ -231,6 +235,10 @@ export function BulkTemplateUploadDialog({
             ));
             reconciledCount++;
           }
+        }
+        // Wait for all reconciliation saves to complete before dialog closes
+        if (reconcilePromises.length > 0) {
+          await Promise.all(reconcilePromises);
         }
       }
 
