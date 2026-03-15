@@ -117,6 +117,12 @@ interface FirmSettings {
   firmEmail: string;
   firmWebsite: string;
   barNumber: string;
+
+  // Notary defaults
+  defaultNotaryName?: string;
+  defaultNotaryCommission?: string;
+  defaultNotaryExpiration?: string;
+
   logoUrl?: string;
   primaryColor: string;
   accentColor: string;
@@ -214,6 +220,9 @@ export default function SettingsPage() {
     firmEmail: '',
     firmWebsite: '',
     barNumber: '',
+    defaultNotaryName: '',
+    defaultNotaryCommission: '',
+    defaultNotaryExpiration: '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -290,6 +299,9 @@ export default function SettingsPage() {
       firmEmail: firmDoc.firmEmail ?? FIRM_DEFAULTS.firmEmail,
       firmWebsite: firmDoc.firmWebsite ?? FIRM_DEFAULTS.firmWebsite,
       barNumber: firmDoc.barNumber ?? FIRM_DEFAULTS.barNumber,
+      defaultNotaryName: firmDoc.defaultNotaryName ?? '',
+      defaultNotaryCommission: firmDoc.defaultNotaryCommission ?? '',
+      defaultNotaryExpiration: firmDoc.defaultNotaryExpiration ?? '',
     });
 
     if (firmDoc.logoUrl) setLogoPreview(firmDoc.logoUrl);
@@ -326,6 +338,9 @@ export default function SettingsPage() {
         firmEmail: sanitizeInput(firmProfile.firmEmail),
         firmWebsite: sanitizeInput(firmProfile.firmWebsite),
         barNumber: sanitizeInput(firmProfile.barNumber),
+        defaultNotaryName: sanitizeInput(firmProfile.defaultNotaryName),
+        defaultNotaryCommission: sanitizeInput(firmProfile.defaultNotaryCommission),
+        defaultNotaryExpiration: sanitizeInput(firmProfile.defaultNotaryExpiration),
         updatedBy: userProfile?.uid ?? '',
       });
       toast.success('Firm profile saved.');
@@ -838,6 +853,45 @@ export default function SettingsPage() {
                         }
                         placeholder="050422014"
                       />
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Notary Defaults */}
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#1a365d]">Default Notary Information</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Pre-filled on all documents requiring notarization (POAs, deeds, affidavits).</p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="defaultNotaryName" className="text-[#1a365d]">Notary Name</Label>
+                        <Input
+                          id="defaultNotaryName"
+                          value={firmProfile.defaultNotaryName}
+                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryName: e.target.value }))}
+                          placeholder="Jane Smith"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="defaultNotaryCommission" className="text-[#1a365d]">Commission Number</Label>
+                        <Input
+                          id="defaultNotaryCommission"
+                          value={firmProfile.defaultNotaryCommission}
+                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryCommission: e.target.value }))}
+                          placeholder="2387651"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="defaultNotaryExpiration" className="text-[#1a365d]">Commission Expiration</Label>
+                        <Input
+                          id="defaultNotaryExpiration"
+                          type="date"
+                          value={firmProfile.defaultNotaryExpiration}
+                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryExpiration: e.target.value }))}
+                        />
+                      </div>
                     </div>
                   </div>
 
