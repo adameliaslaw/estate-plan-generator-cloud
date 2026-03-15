@@ -122,6 +122,9 @@ interface FirmSettings {
   defaultNotaryName?: string;
   defaultNotaryCommission?: string;
   defaultNotaryExpiration?: string;
+  defaultNotaryType?: 'attorney' | 'notaryPublic';
+  defaultNotaryCounty?: string;
+  defaultNotaryAttorneyId?: string;
 
   logoUrl?: string;
   primaryColor: string;
@@ -223,6 +226,9 @@ export default function SettingsPage() {
     defaultNotaryName: '',
     defaultNotaryCommission: '',
     defaultNotaryExpiration: '',
+    defaultNotaryType: 'attorney' as 'attorney' | 'notaryPublic',
+    defaultNotaryCounty: '',
+    defaultNotaryAttorneyId: '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -302,6 +308,9 @@ export default function SettingsPage() {
       defaultNotaryName: firmDoc.defaultNotaryName ?? '',
       defaultNotaryCommission: firmDoc.defaultNotaryCommission ?? '',
       defaultNotaryExpiration: firmDoc.defaultNotaryExpiration ?? '',
+      defaultNotaryType: firmDoc.defaultNotaryType ?? 'attorney',
+      defaultNotaryCounty: firmDoc.defaultNotaryCounty ?? '',
+      defaultNotaryAttorneyId: firmDoc.defaultNotaryAttorneyId ?? '',
     });
 
     if (firmDoc.logoUrl) setLogoPreview(firmDoc.logoUrl);
@@ -341,6 +350,9 @@ export default function SettingsPage() {
         defaultNotaryName: sanitizeInput(firmProfile.defaultNotaryName),
         defaultNotaryCommission: sanitizeInput(firmProfile.defaultNotaryCommission),
         defaultNotaryExpiration: sanitizeInput(firmProfile.defaultNotaryExpiration),
+        defaultNotaryType: firmProfile.defaultNotaryType,
+        defaultNotaryCounty: sanitizeInput(firmProfile.defaultNotaryCounty),
+        defaultNotaryAttorneyId: sanitizeInput(firmProfile.defaultNotaryAttorneyId),
         updatedBy: userProfile?.uid ?? '',
       });
       toast.success('Firm profile saved.');
@@ -858,41 +870,91 @@ export default function SettingsPage() {
 
                   <Separator />
 
-                  {/* Notary Defaults */}
-                  <div className="space-y-3">
+                  {/* Notary / Attorney Certification Defaults */}
+                  <div className="space-y-4">
                     <div>
-                      <h3 className="text-sm font-semibold text-[#1a365d]">Default Notary Information</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">Pre-filled on all documents requiring notarization (POAs, deeds, affidavits).</p>
+                      <h3 className="text-sm font-semibold text-[#1a365d]">Notarization / Attorney Certification</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Pre-filled on all documents requiring notarization (POAs, deeds, affidavits, self-proving affidavits).</p>
                     </div>
+
+                    {/* Notary type selector */}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-[#1a365d]">Certification Type</Label>
+                        <Select
+                          value={firmProfile.defaultNotaryType}
+                          onValueChange={(v) => setFirmProfile((p) => ({ ...p, defaultNotaryType: v as 'attorney' | 'notaryPublic' }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="attorney">Attorney at Law (self-certifying)</SelectItem>
+                            <SelectItem value="notaryPublic">Notary Public</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-400">NJ attorneys may notarize documents they prepare.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="defaultNotaryCounty" className="text-[#1a365d]">County</Label>
+                        <Input
+                          id="defaultNotaryCounty"
+                          value={firmProfile.defaultNotaryCounty}
+                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryCounty: e.target.value }))}
+                          placeholder="Middlesex"
+                        />
+                      </div>
+                    </div>
+
                     <div className="grid gap-4 sm:grid-cols-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="defaultNotaryName" className="text-[#1a365d]">Notary Name</Label>
+                        <Label htmlFor="defaultNotaryName" className="text-[#1a365d]">
+                          {firmProfile.defaultNotaryType === 'attorney' ? 'Attorney Name' : 'Notary Name'}
+                        </Label>
                         <Input
                           id="defaultNotaryName"
                           value={firmProfile.defaultNotaryName}
                           onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryName: e.target.value }))}
-                          placeholder="Jane Smith"
+                          placeholder={firmProfile.defaultNotaryType === 'attorney' ? 'Adam M. Elias, Esq.' : 'Jane Smith'}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="defaultNotaryCommission" className="text-[#1a365d]">Commission Number</Label>
+                        <Label htmlFor="defaultNotaryAttorneyId" className="text-[#1a365d]">
+                          {firmProfile.defaultNotaryType === 'attorney' ? 'Attorney ID Number' : 'Commission Number'}
+                        </Label>
                         <Input
-                          id="defaultNotaryCommission"
-                          value={firmProfile.defaultNotaryCommission}
-                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryCommission: e.target.value }))}
-                          placeholder="2387651"
+                          id="defaultNotaryAttorneyId"
+                          value={firmProfile.defaultNotaryType === 'attorney' ? firmProfile.defaultNotaryAttorneyId : firmProfile.defaultNotaryCommission}
+                          onChange={(e) => {
+                            if (firmProfile.defaultNotaryType === 'attorney') {
+                              setFirmProfile((p) => ({ ...p, defaultNotaryAttorneyId: e.target.value }));
+                            } else {
+                              setFirmProfile((p) => ({ ...p, defaultNotaryCommission: e.target.value }));
+                            }
+                          }}
+                          placeholder={firmProfile.defaultNotaryType === 'attorney' ? '050422014' : '2387651'}
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="defaultNotaryExpiration" className="text-[#1a365d]">Commission Expiration</Label>
-                        <Input
-                          id="defaultNotaryExpiration"
-                          type="date"
-                          value={firmProfile.defaultNotaryExpiration}
-                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryExpiration: e.target.value }))}
-                        />
-                      </div>
+                      {firmProfile.defaultNotaryType === 'notaryPublic' && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="defaultNotaryExpiration" className="text-[#1a365d]">Commission Expiration</Label>
+                          <Input
+                            id="defaultNotaryExpiration"
+                            type="date"
+                            value={firmProfile.defaultNotaryExpiration}
+                            onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryExpiration: e.target.value }))}
+                          />
+                        </div>
+                      )}
                     </div>
+
+                    {firmProfile.defaultNotaryType === 'attorney' && (
+                      <Alert className="border-blue-100 bg-blue-50/50">
+                        <AlertDescription className="text-xs text-blue-700">
+                          Documents will include: <em>"Before me, <strong>{firmProfile.defaultNotaryName || '[Attorney Name]'}</strong>, an Attorney at Law of the State of New Jersey, Attorney ID No. <strong>{firmProfile.defaultNotaryAttorneyId || firmProfile.barNumber || '[ID]'}</strong>"</em>
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
 
                   <div className="flex justify-end pt-2">
