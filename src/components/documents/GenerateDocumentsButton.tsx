@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { logSystemActivity } from '@/utils/activity-logger';
 import type { GenerationMode } from '@/services/knowledge-base-service';
+import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sources';
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ export default function GenerateDocumentsButton({
   const [result, setResult] = useState<GenerateDocumentsResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [generationMode, setGenerationMode] = useState<GenerationMode>('template');
+  const [softwareSource, setSoftwareSource] = useState('');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const packageDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -157,6 +159,7 @@ export default function GenerateDocumentsButton({
         packageType,
         trustTypes,
         generationMode,
+        ...(softwareSource ? { softwareSource } : {}),
       });
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
@@ -324,6 +327,30 @@ export default function GenerateDocumentsButton({
                 ))}
               </div>
             </div>
+
+            {/* Software Source Selector */}
+            {generationMode !== 'ai' && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Template Source
+                </p>
+                <select
+                  title="Software Source"
+                  value={softwareSource}
+                  onChange={(e) => setSoftwareSource(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
+                >
+                  {SOFTWARE_SOURCES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+                {softwareSource && (
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Templates from {getSoftwareSourceLabel(softwareSource)} will be used. Falls back to any available template if none match.
+                  </p>
+                )}
+              </div>
+            )}
 
             <Alert className="border-amber-200 bg-amber-50">
               <AlertCircle className="h-4 w-4 text-amber-600" />

@@ -53,6 +53,8 @@ export const uploadTemplate = onCall(
       isDefault,
       variables,
       tags,
+      softwareSource,
+      folder,
       templateId, // If provided, update existing
       fileUrl,
       originalFileName,
@@ -108,6 +110,8 @@ export const uploadTemplate = onCall(
         isDefault: isDefault ?? false,
         variables: mergedVariables,
         tags: tags ?? [],
+        softwareSource: softwareSource ?? '',
+        ...(folder !== undefined ? { folder } : {}),
         updatedAt: now,
         updatedBy: request.auth.uid,
       };
@@ -143,7 +147,11 @@ export const uploadTemplate = onCall(
         ...(fileUrl ? { fileUrl, originalFileName: originalFileName ?? '' } : {}),
       };
 
-      await ref.set(template);
+      await ref.set({
+        ...template,
+        softwareSource: softwareSource ?? '',
+        folder: folder ?? '',
+      });
       console.log(`[uploadTemplate] Created template ${ref.id} for ${docType} (${variant ?? 'standard'})`);
       return { success: true, templateId: ref.id, version: 1 };
     }
@@ -190,7 +198,7 @@ export const listTemplates = onCall(
   { region: 'us-east1', memory: '256MiB' },
   async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { firmId, docType } = request.data;
+    const { firmId, docType, softwareSource, folder } = request.data;
 
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
@@ -206,6 +214,12 @@ export const listTemplates = onCall(
 
     if (docType) {
       query = query.where('docType', '==', docType);
+    }
+    if (softwareSource) {
+      query = query.where('softwareSource', '==', softwareSource);
+    }
+    if (folder) {
+      query = query.where('folder', '==', folder);
     }
 
     const snap = await query.orderBy('docType').orderBy('complexity').get();
@@ -225,6 +239,8 @@ export const listTemplates = onCall(
         contentPreview: (data.content ?? '').slice(0, 200),
         variables: data.variables,
         tags: data.tags ?? [],
+        softwareSource: data.softwareSource ?? '',
+        folder: data.folder ?? '',
         updatedAt: data.updatedAt,
       };
     });

@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner';
 import { templateService } from '@/services/knowledge-base-service';
 import { type DetectedVariable } from '@/components/knowledge/AddTemplateDialog';
+import { SOFTWARE_SOURCES } from '@/config/software-sources';
 
 
 
@@ -38,6 +39,8 @@ export function BulkTemplateUploadDialog({
   const [results, setResults] = useState<BulkTemplateResult[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [softwareSource, setSoftwareSource] = useState('');
+  const [folder, setFolder] = useState('');
 
   const handleFileSelect = (newFiles: FileList | null) => {
     if (!newFiles) return;
@@ -132,6 +135,8 @@ export function BulkTemplateUploadDialog({
           isDefault: false,
           variables: processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [],
           tags: processed.suggestedTags || [],
+          softwareSource,
+          folder: folder.trim() || undefined,
           fileUrl,
           originalFileName: file.name,
         });
@@ -243,6 +248,35 @@ export function BulkTemplateUploadDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Software Source & Folder selectors (apply to all files) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-700">Software Source</label>
+              <select
+                title="Software Source"
+                value={softwareSource}
+                onChange={(e) => setSoftwareSource(e.target.value)}
+                disabled={processing}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-[#2b6cb0] focus:outline-none"
+              >
+                {SOFTWARE_SOURCES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700">Folder</label>
+              <input
+                type="text"
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
+                disabled={processing}
+                placeholder="e.g., NJ Wills"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-[#2b6cb0] focus:outline-none"
+              />
+            </div>
+          </div>
+
           {/* Drop zone */}
           {!results.length && (
             <div

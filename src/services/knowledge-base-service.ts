@@ -55,6 +55,8 @@ export interface TemplateVariant {
   contentPreview: string;
   variables: string[];
   tags: string[];
+  softwareSource: string;
+  folder?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updatedAt: any;
 }
@@ -269,6 +271,8 @@ export const templateService = {
     isDefault?: boolean;
     variables?: string[];
     tags?: string[];
+    softwareSource?: string;
+    folder?: string;
     templateId?: string;
     fileUrl?: string;
     originalFileName?: string;
@@ -283,9 +287,13 @@ export const templateService = {
     await fn({ firmId, templateId });
   },
 
-  async listTemplates(firmId: string, docType?: string): Promise<{ templates: TemplateVariant[]; count: number }> {
+  async listTemplates(
+    firmId: string,
+    docType?: string,
+    filters?: { softwareSource?: string; folder?: string },
+  ): Promise<{ templates: TemplateVariant[]; count: number }> {
     const fn = httpsCallable(functions, 'listTemplates');
-    const res = await fn({ firmId, docType });
+    const res = await fn({ firmId, docType, ...filters });
     return res.data as { templates: TemplateVariant[]; count: number };
   },
 

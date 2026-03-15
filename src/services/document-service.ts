@@ -16,6 +16,7 @@ export interface GenerateDocumentsRequest {
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
   generationMode?: 'template' | 'ai' | 'hybrid';
+  softwareSource?: string;
 }
 
 export interface GenerateDocumentsResponse {

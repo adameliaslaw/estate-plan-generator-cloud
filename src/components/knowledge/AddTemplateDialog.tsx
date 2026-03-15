@@ -13,6 +13,7 @@ import {
   templateService,
 } from '@/services/knowledge-base-service';
 import { DOC_TYPES } from '@/config/constants';
+import { SOFTWARE_SOURCES } from '@/config/software-sources';
 
 const DOC_TYPE_OPTIONS = Object.entries(DOC_TYPES).map(([, value]) => ({
   value,
@@ -100,6 +101,8 @@ export function AddTemplateDialog({
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [softwareSource, setSoftwareSource] = useState('');  
+  const [folder, setFolder] = useState('');
 
   // File upload state
   const [uploadMode, setUploadMode] = useState<'file' | 'manual'>('file');
@@ -221,6 +224,8 @@ export function AddTemplateDialog({
         isDefault,
         variables: detectedVars.map((v) => v.suggestedVariable),
         tags: selectedTags,
+        softwareSource,
+        folder: folder.trim() || undefined,
         ...(fileUrl ? { fileUrl, originalFileName } : {}),
       });
 
@@ -269,6 +274,8 @@ export function AddTemplateDialog({
       setSelectedFile(null);
       setDetectedVars([]);
       setSelectedTags([]);
+      setSoftwareSource('');
+      setFolder('');
       setOriginalAiVars([]);
       setFileUrl('');
       setOriginalFileName('');
@@ -521,6 +528,33 @@ export function AddTemplateDialog({
                 />
                 <span className="text-xs font-medium text-gray-700">Set as default</span>
               </label>
+            </div>
+          </div>
+
+          {/* Software Source & Folder */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-700">Software Source</label>
+              <select
+                title="Software Source"
+                value={softwareSource}
+                onChange={(e) => setSoftwareSource(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
+              >
+                {SOFTWARE_SOURCES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700">Folder</label>
+              <input
+                type="text"
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
+                placeholder="e.g., NJ Wills, Trust Templates"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
+              />
             </div>
           </div>
 

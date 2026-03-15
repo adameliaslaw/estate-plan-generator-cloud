@@ -24,6 +24,8 @@ import {
   recordDraftHistory,
   ConversationMessage,
 } from './ai-memory';
+import { saveDocumentToVault } from './document-save-helper';
+import { generateFromTemplate, getTemplate } from './template-engine';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -449,9 +451,13 @@ export const chatAi = functions
         userPrompt = message;
       }
 
-      // 7. Call the LLM (uses firm's active provider, with optional model override)
+      // 7. Call the LLM
+      // Draft mode uses documentDraftingModel for higher quality; chat uses chatbotModel
+      const effectiveModel = mode === 'draft'
+        ? (modelOverride ?? firmData?.documentDraftingModel ?? firmData?.chatbotModel ?? undefined)
+        : (modelOverride ?? firmData?.chatbotModel ?? undefined);
       const raw = await callAI(systemPrompt, userPrompt, firmData, {
-        model: modelOverride ?? firmData?.chatbotModel ?? undefined,
+        model: effectiveModel,
         temperature: mode === 'draft' ? 0.2 : 0.4,
         maxTokens: mode === 'draft' ? 16000 : 8000,
       });
@@ -485,52 +491,49 @@ export const chatAi = functions
           draftTitle: result.draftTitle ?? null,
         });
 
-        // If a draft was produced, save it + record in draft history
+        // If a draft was produced, try template-engine hybrid, then save via shared helper
         if (result.draftContent && clientId) {
-          const now = admin.firestore.FieldValue.serverTimestamp();
-          const docId = `${draftDocType ?? 'custom'}_chat_${Date.now()}`;
-          const docRef = admin.firestore()
-            .collection('firms').doc(firmId)
-            .collection('clients').doc(clientId)
-            .collection('documents').doc(docId);
+          let finalContent = result.draftContent;
 
-          await docRef.set({
-            id: docId,
+          // Attempt template-engine hybrid when a matching template exists
+          if (draftDocType) {
+            try {
+              const matchingTemplate = await getTemplate(firmId, draftDocType);
+              if (matchingTemplate) {
+                console.log(`[chatAi] Template found for ${draftDocType}, routing through hybrid generation`);
+                const ctx = await aggregateClientContext(firmId, clientId, draftDocType);
+                const hybridDoc = await generateFromTemplate(ctx, draftDocType, 'hybrid');
+                finalContent = hybridDoc.content;
+                result.draftContent = finalContent;
+                result.draftTitle = result.draftTitle ?? hybridDoc.title;
+              }
+            } catch (templateErr) {
+              console.warn('[chatAi] Template-engine hybrid failed, using raw LLM output:', templateErr);
+              // Fall through — use the original LLM-generated draft
+            }
+          }
+
+          // Save via shared helper for consistent schema
+          const saveResult = await saveDocumentToVault({
             firmId,
             clientId,
             docType: draftDocType ?? 'custom',
             displayName: result.draftTitle ?? `Chat Draft — ${draftDocType ?? 'Document'}`,
+            content: finalContent,
             status: 'draft',
-            content: result.draftContent,
-            storagePath: '',
-            fileName: `${docId}.html`,
-            mimeType: 'text/html',
-            currentVersion: 1,
-            versions: [{
-              versionNumber: 1,
-              storagePath: '',
-              createdAt: admin.firestore.Timestamp.now(),
-              createdBy: context.auth.uid,
-              changeNotes: 'Generated via AI drafting conversation',
-            }],
-            generatedByAI: true,
-            aiModel: firmData?.chatbotModel ?? 'gpt-5.4',
-            requiresSignature: false,
-            notarized: false,
-            tags: ['chat-draft', draftDocType ?? 'custom'],
-            isConfidential: true,
-            createdAt: now,
-            updatedAt: now,
             createdBy: context.auth.uid,
-            updatedBy: context.auth.uid,
+            aiModel: effectiveModel ?? firmData?.documentDraftingModel ?? 'gpt-5.4',
+            tags: ['chat-draft', draftDocType ?? 'custom'],
+            changeNotes: 'Generated via AI drafting conversation',
+            generationMode: 'chat-draft',
           });
 
-          result.reply += `\n\n✅ Draft saved to the client's Document Vault as "${result.draftTitle ?? docId}".`;
+          result.reply += `\n\n✅ Draft saved to the client's Document Vault as "${result.draftTitle ?? saveResult.docId}".`;
 
           // Record draft history (fire-and-forget)
           recordDraftHistory(firmId, clientId, {
             docType: draftDocType ?? 'custom',
-            title: result.draftTitle ?? docId,
+            title: result.draftTitle ?? saveResult.docId,
             generatedAt: new Date().toISOString(),
             generationMode: 'chat-draft',
           }).catch(console.error);

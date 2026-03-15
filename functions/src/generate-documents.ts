@@ -29,6 +29,7 @@ import { generateEstatePlanSummary } from './generators/summary-generator';
 import { generateActionSteps } from './generators/action-steps-generator';
 import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext } from './client-context-aggregator';
+import { saveDocumentToVault } from './document-save-helper';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +43,8 @@ interface GenerateRequest {
   generationMode?: GenerationMode;
   /** Optional model override (e.g. 'gpt-5.4', 'claude-sonnet-4-6') */
   modelOverride?: string;
+  /** Optional software source filter for template selection */
+  softwareSource?: string;
 }
 
 export interface GeneratedDoc {
@@ -188,96 +191,39 @@ async function generateDocument(
 }
 
 // ---------------------------------------------------------------------------
-// Firestore save helper
+// Firestore save helper — delegates to shared saveDocumentToVault
 // ---------------------------------------------------------------------------
 
 async function saveDocument(
-  db: admin.firestore.Firestore,
+  _db: admin.firestore.Firestore,
   firmId: string,
   clientId: string,
   doc: GeneratedDoc,
   createdBy: string,
   propertyIndex?: number,
 ): Promise<string> {
-  const now = admin.firestore.FieldValue.serverTimestamp();
-
   // Build a deterministic document ID so re-generating replaces the old draft
   const suffix = propertyIndex !== undefined ? `_${propertyIndex}` : '';
   const docId = `${doc.docType}${suffix}`;
 
-  const docRef = db
-    .collection('firms')
-    .doc(firmId)
-    .collection('clients')
-    .doc(clientId)
-    .collection('documents')
-    .doc(docId);
-
-  const existing = await docRef.get();
-  const currentVersion: number = existing.exists
-    ? ((existing.data()?.currentVersion as number) ?? 0) + 1
-    : 1;
-
-  const docData: Record<string, unknown> = {
-    id: docId,
+  const result = await saveDocumentToVault({
     firmId,
     clientId,
     docType: doc.docType,
     displayName: doc.title,
-    status: doc.status === 'error' ? 'draft' : 'draft',
-    // Content stored inline for draft stage; production would write to Storage
     content: doc.content,
-    storagePath: '',           // populated when exported to PDF/DOCX
-    fileName: `${docId}.html`,
-    mimeType: 'text/html',
-    versions: existing.exists
-      ? admin.firestore.FieldValue.arrayUnion({
-        versionNumber: currentVersion,
-        storagePath: '',
-        createdAt: admin.firestore.Timestamp.now(),
-        createdBy,
-        changeNotes: 'AI regeneration',
-      })
-      : [
-        {
-          versionNumber: 1,
-          storagePath: '',
-          createdAt: admin.firestore.Timestamp.now(),
-          createdBy,
-          changeNotes: 'Initial AI generation',
-        },
-      ],
-    currentVersion,
-    generatedByAI: true,
-    aiModel: 'gpt-5.4',
-    requiresSignature: requiresSignature(doc.docType),
-    notarized: requiresNotarization(doc.docType),
-    tags: [],
-    isConfidential: true,
-    updatedAt: now,
-    updatedBy: createdBy,
-  };
+    status: doc.status,
+    createdBy,
+    documentId: docId,
+    generationMode: 'batch',
+    propertyAddress: doc.propertyAddress,
+  });
 
-  if (!existing.exists) {
-    docData['createdAt'] = now;
-    docData['createdBy'] = createdBy;
-    await docRef.set(docData);
-  } else {
-    await docRef.update(docData);
-  }
-
-  // If this is a per-property doc, also store the property address as a tag
-  if (doc.propertyAddress) {
-    await docRef.update({
-      tags: admin.firestore.FieldValue.arrayUnion(`property:${doc.propertyAddress}`),
-    });
-  }
-
-  return docId;
+  return result.docId;
 }
 
 // ---------------------------------------------------------------------------
-// Metadata helpers
+// Metadata helper
 // ---------------------------------------------------------------------------
 
 function docTypeDisplayName(docType: string): string {
@@ -294,14 +240,6 @@ function docTypeDisplayName(docType: string): string {
     actionSteps: 'Action Steps Checklist',
   };
   return names[docType] ?? docType;
-}
-
-function requiresSignature(docType: string): boolean {
-  return ['will', 'pourOverWill', 'poa', 'livingWill', 'trust', 'deed'].includes(docType);
-}
-
-function requiresNotarization(docType: string): boolean {
-  return ['poa', 'deed', 'affidavitOfConsideration', 'gitRep3'].includes(docType);
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +266,7 @@ export const generateDocuments = functions
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes, generationMode = 'ai', modelOverride } = data as GenerateRequest;
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'ai', modelOverride, softwareSource } = data as GenerateRequest;
 
     if (!firmId || !clientId || !packageType) {
       throw new HttpsError(
@@ -380,7 +318,8 @@ export const generateDocuments = functions
     const documentsToGenerate = getDocumentsForPackage(packageType);
 
     console.log(
-      `[generateDocuments] Starting generation for client=${clientId} package=${packageType} mode=${generationMode}`,
+      `[generateDocuments] Starting generation for client=${clientId} package=${packageType} mode=${generationMode}` +
+      (softwareSource ? ` software=${softwareSource}` : ''),
       `documents=[${documentsToGenerate.join(', ')}]`,
     );
 
@@ -419,6 +358,7 @@ export const generateDocuments = functions
               undefined, // templateId
               undefined, // variant
               aiGenFn,
+              softwareSource,
             );
             docsForType = [doc];
           }

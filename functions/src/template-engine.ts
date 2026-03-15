@@ -36,6 +36,8 @@ export interface DocumentTemplate {
   isActive: boolean;
   variables: string[];
   tags?: string[];
+  softwareSource?: string;
+  folder?: string;
   createdAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
   updatedAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
   createdBy: string;
@@ -500,13 +502,16 @@ function ensureHelpers() {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch a template from Firestore by docType, optionally by specific templateId or variant.
+ * Fetch a template from Firestore by docType, optionally by specific templateId, variant,
+ * or softwareSource. When softwareSource is provided but no match is found, falls back
+ * to a query without the software filter (auto-fallback).
  */
 export async function getTemplate(
   firmId: string,
   docType: string,
   templateId?: string,
   variant?: string,
+  softwareSource?: string,
 ): Promise<DocumentTemplate | null> {
   const db = admin.firestore();
   const col = db.collection('firms').doc(firmId).collection('documentTemplates');
@@ -519,20 +524,46 @@ export async function getTemplate(
     if (!snap.exists) return null;
     rawData = snap.data();
   } else {
-    // Otherwise query by docType + variant or default
-    let query = col
-      .where('docType', '==', docType)
-      .where('isActive', '==', true);
+    // Build query by docType + variant or default
+    const buildQuery = (withSoftware: boolean) => {
+      let q = col
+        .where('docType', '==', docType)
+        .where('isActive', '==', true);
 
-    if (variant) {
-      query = query.where('variant', '==', variant);
+      if (variant) {
+        q = q.where('variant', '==', variant);
+      } else {
+        q = q.where('isDefault', '==', true);
+      }
+
+      if (withSoftware && softwareSource) {
+        q = q.where('softwareSource', '==', softwareSource);
+      }
+
+      return q;
+    };
+
+    // Try with softwareSource filter first
+    if (softwareSource) {
+      const snap = await buildQuery(true).limit(1).get();
+      if (!snap.empty) {
+        rawData = snap.docs[0].data();
+      } else {
+        // Auto-fallback: query without software filter
+        console.info(
+          `[getTemplate] No template found for docType="${docType}" softwareSource="${softwareSource}", falling back.`,
+        );
+        const fallbackSnap = await buildQuery(false).limit(1).get();
+        if (!fallbackSnap.empty) {
+          rawData = fallbackSnap.docs[0].data();
+        }
+      }
     } else {
-      query = query.where('isDefault', '==', true);
+      const snap = await buildQuery(false).limit(1).get();
+      if (!snap.empty) {
+        rawData = snap.docs[0].data();
+      }
     }
-
-    const snap = await query.limit(1).get();
-    if (snap.empty) return null;
-    rawData = snap.docs[0].data();
   }
 
   // Runtime validation: ensure required fields exist
@@ -670,6 +701,7 @@ export async function generateFromTemplate(
   templateId?: string,
   variant?: string,
   aiGeneratorFn?: () => Promise<GeneratedDoc>,
+  softwareSource?: string,
 ): Promise<GeneratedDoc> {
   const firmId = ctx.firm.id ?? ctx.client.firmId;
 
@@ -681,8 +713,8 @@ export async function generateFromTemplate(
     return aiGeneratorFn();
   }
 
-  // Fetch template
-  const template = await getTemplate(firmId, docType, templateId, variant);
+  // Fetch template (with optional software source filtering + auto-fallback)
+  const template = await getTemplate(firmId, docType, templateId, variant, softwareSource);
   if (!template) {
     if (mode === 'hybrid' && aiGeneratorFn) {
       console.warn(`[template-engine] No template found for ${docType}, falling back to AI.`);

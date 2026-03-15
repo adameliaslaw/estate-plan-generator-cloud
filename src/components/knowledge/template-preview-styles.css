@@ -1,0 +1,197 @@
+/**
+ * template-preview-styles.css
+ *
+ * Styles for the TemplatePreviewDialog — renders templates as formatted
+ * legal documents reusing the same approach as the main document editor.
+ * Also styles for variable highlighting badges and the variables sidebar.
+ */
+
+/* ── Page appearance (reuses legal editor styling) ────────────────────────── */
+
+.template-preview-wrap {
+  background-color: #e5e7eb;
+  padding: 20px 16px;
+  overflow-y: auto;
+  max-height: 60vh;
+  border-radius: 8px;
+}
+
+.template-preview .tiptap {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #000;
+  background: #fff;
+  padding: 64px 72px 80px;
+  min-height: 400px;
+  max-width: 780px;
+  margin: 0 auto;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid #d1d5db;
+  outline: none;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.template-preview .tiptap:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: -2px;
+}
+
+/* ── Headings ─────────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap h1 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18pt;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 24px;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.template-preview .tiptap h2 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14pt;
+  font-weight: bold;
+  margin-top: 20px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.template-preview .tiptap h3 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  font-weight: bold;
+  text-decoration: underline;
+  margin-top: 16px;
+  margin-bottom: 10px;
+}
+
+.template-preview .tiptap h4 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12pt;
+  font-weight: bold;
+  font-style: italic;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+/* ── Paragraphs ───────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap p {
+  margin-top: 0;
+  margin-bottom: 10px;
+  text-align: justify;
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap ul,
+.template-preview .tiptap ol {
+  margin: 0 0 10px 0;
+  padding-left: 28px;
+}
+
+.template-preview .tiptap li {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.template-preview .tiptap li p {
+  margin: 0;
+}
+
+/* ── Blockquote ───────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap blockquote {
+  border-left: 3px solid #9ca3af;
+  margin: 12px 0;
+  padding: 6px 14px;
+  color: #374151;
+  font-style: italic;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 12px;
+  font-size: 11pt;
+}
+
+.template-preview .tiptap td,
+.template-preview .tiptap th {
+  border: 1px solid #000;
+  padding: 5px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.template-preview .tiptap th {
+  background-color: #f3f4f6;
+  font-weight: bold;
+}
+
+/* ── HR ───────────────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap hr {
+  border: none;
+  border-top: 2px dashed #d1d5db;
+  margin: 32px 0 24px;
+}
+
+/* ── Links ────────────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* ── Selection ────────────────────────────────────────────────────────────── */
+
+.template-preview .tiptap ::selection {
+  background-color: rgba(43, 108, 176, 0.2);
+}
+
+/* ── Text alignment ──────────────────────────────────────────────────────── */
+
+.template-preview .tiptap [style*="text-align: center"] { text-align: center; }
+.template-preview .tiptap [style*="text-align: right"]  { text-align: right; }
+.template-preview .tiptap [style*="text-align: justify"] { text-align: justify; }
+
+/* ── Source code view ────────────────────────────────────────────────────── */
+
+.template-source-view {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 20px;
+  border-radius: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+  tab-size: 2;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.template-source-view:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: -2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .template-preview .tiptap {
+    padding: 32px 24px;
+    max-width: 100%;
+  }
+
+  .template-preview-wrap {
+    padding: 8px;
+  }
+}

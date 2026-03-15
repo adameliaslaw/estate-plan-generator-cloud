@@ -15,12 +15,12 @@ import {
   Edit,
   FileText,
   Scale,
+  Eye,
   BookMarked,
   ClipboardList,
   StickyNote,
   Upload,
   Layers,
-  Eye,
   Database,
   FileJson,
   RotateCcw,
@@ -28,12 +28,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
   knowledgeBaseService,
@@ -46,6 +40,8 @@ import { AddResourceDialog } from '@/components/knowledge/AddResourceDialog';
 import { AddTemplateDialog } from '@/components/knowledge/AddTemplateDialog';
 import { BulkTemplateUploadDialog } from '@/components/knowledge/BulkTemplateUploadDialog';
 import { BulkImportDialog } from '@/components/knowledge/KBBulkImportDialog';
+import { TemplatePreviewDialog } from '@/components/knowledge/TemplatePreviewDialog';
+import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sources';
 
 // ---------------------------------------------------------------------------
 // Category config
@@ -132,6 +128,7 @@ export default function KnowledgeBasePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [activeTemplateTag, setActiveTemplateTag] = useState<string | null>(null);
+  const [activeSoftwareSource, setActiveSoftwareSource] = useState<string | null>(null);
 
   // Data
   const [resources, setResources] = useState<KnowledgeResource[]>([]);
@@ -146,7 +143,7 @@ export default function KnowledgeBasePage() {
   const [showBulkTemplateImport, setShowBulkTemplateImport] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
   const [seeding, setSeeding] = useState(false);
-  const [previewTemplate, setPreviewTemplate] = useState<{ content: string; name: string } | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<{ id: string; name: string } | null>(null);
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
   const [templateEmbeddingState, setTemplateEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
 
@@ -198,7 +195,8 @@ export default function KnowledgeBasePage() {
     (t) =>
       (t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.docType.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!activeTemplateTag || (t.tags ?? []).includes(activeTemplateTag)),
+      (!activeTemplateTag || (t.tags ?? []).includes(activeTemplateTag)) &&
+      (!activeSoftwareSource || t.softwareSource === activeSoftwareSource),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
   // Handlers
@@ -237,14 +235,8 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const handlePreviewTemplate = async (templateId: string, name: string) => {
-    if (!firmId) return;
-    try {
-      const full = await templateService.getTemplateContent(firmId, templateId);
-      setPreviewTemplate({ content: full.content, name });
-    } catch {
-      toast.error('Failed to load template content.');
-    }
+  const handlePreviewTemplate = (templateId: string, name: string) => {
+    setPreviewTemplate({ id: templateId, name });
   };
 
   const [convertingId, setConvertingId] = useState<string | null>(null);
@@ -665,6 +657,32 @@ export default function KnowledgeBasePage() {
               ))
             ))}
           </div>
+
+          {/* Software Source Filter Pills */}
+          <div className="mb-4 flex flex-wrap gap-2 items-center">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mr-1">Software:</span>
+            <button
+              onClick={() => setActiveSoftwareSource(null)}
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${!activeSoftwareSource
+                  ? 'bg-[#2b6cb0] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+            >
+              All
+            </button>
+            {SOFTWARE_SOURCES.filter((s) => s.value !== '').map((s) => (
+              <button
+                key={s.value}
+                onClick={() => setActiveSoftwareSource(activeSoftwareSource === s.value ? null : s.value)}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${activeSoftwareSource === s.value
+                    ? 'bg-[#2b6cb0] text-white'
+                    : 'bg-purple-50 text-purple-700 hover:opacity-80'
+                  }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
           {filteredTemplates.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
               <Layers className="mx-auto h-12 w-12 text-gray-300" />
@@ -711,7 +729,7 @@ export default function KnowledgeBasePage() {
                       })}
                     </div>
                   )}
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
                     <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
                       v{t.version}
                     </span>
@@ -724,6 +742,16 @@ export default function KnowledgeBasePage() {
                     <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] text-blue-600">
                       {t.variant}
                     </span>
+                    {t.softwareSource && (
+                      <span className="rounded bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+                        {getSoftwareSourceLabel(t.softwareSource)}
+                      </span>
+                    )}
+                    {t.folder && (
+                      <span className="rounded bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                        📂 {t.folder}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
@@ -780,23 +808,14 @@ export default function KnowledgeBasePage() {
       />
 
       {/* Template Preview Dialog */}
-      {previewTemplate && (
-        <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5 text-[#2b6cb0]" />
-                Template Preview — {previewTemplate.name}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-6">
-              <pre className="whitespace-pre-wrap text-xs text-gray-700 font-mono leading-relaxed">
-                {previewTemplate.content}
-              </pre>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <TemplatePreviewDialog
+        open={!!previewTemplate}
+        onClose={() => setPreviewTemplate(null)}
+        firmId={firmId ?? ''}
+        templateId={previewTemplate?.id ?? ''}
+        templateName={previewTemplate?.name ?? ''}
+        onSaved={() => fetchTemplates()}
+      />
     </div>
   );
 }
