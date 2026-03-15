@@ -539,8 +539,25 @@ export default function SettingsPage() {
   const handleDisconnectGoogleCalendar = useCallback(async () => {
     if (!firmDocPath) return;
     try {
+      // Best-effort: revoke the token with Google so the app doesn't stay listed
+      // in the user's Google Account permissions.
+      if (firmDoc?.googleCalendar?.accessToken) {
+        try {
+          await fetch(
+            `https://oauth2.googleapis.com/revoke?token=${firmDoc.googleCalendar.accessToken}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+          );
+        } catch {
+          // Non-critical — token may already be expired/revoked
+        }
+      }
+
       await updateDoc(firmDocPath, {
-        googleCalendar: { connected: false },
+        'googleCalendar.connected': false,
+        'googleCalendar.accessToken': '',
+        'googleCalendar.refreshToken': '',
+        'googleCalendar.tokenExpiry': 0,
+        'googleCalendar.email': '',
         updatedBy: userProfile?.uid ?? '',
       });
       toast.success('Google Calendar disconnected.');
@@ -548,7 +565,7 @@ export default function SettingsPage() {
       console.error(err);
       toast.error('Failed to disconnect Google Calendar.');
     }
-  }, [firmDocPath, userProfile]);
+  }, [firmDocPath, firmDoc, userProfile]);
 
   const handleSaveSecurity = useCallback(async () => {
     if (!firmDocPath) return;

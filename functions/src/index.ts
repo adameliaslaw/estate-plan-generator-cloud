@@ -42,7 +42,7 @@ export { linkClient } from './link-client';
 export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources, bulkImportKnowledgeResources, analyzeKnowledgeContent } from './knowledge-base';
 export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';
 export { seedKnowledgeBase } from './seed-knowledge-base';
-export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables } from './process-template-file';
+export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables, consolidateTemplateVariables } from './process-template-file';
 export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';
 export { onKnowledgeResourceWritten, backfillEmbeddings, onTemplateWritten, backfillTemplateEmbeddings } from './kb-embeddings';
 export { getDocumentVersions, getDocumentVersionContent, revertDocumentVersion } from './document-versions';

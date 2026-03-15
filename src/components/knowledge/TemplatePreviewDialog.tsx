@@ -157,6 +157,7 @@ export function TemplatePreviewDialog({
     ],
     content: '',
     editable: true,
+    immediatelyRender: false,
     onUpdate: ({ editor: ed }) => {
       setIsDirty(true);
       setEditorHtml(ed.getHTML());

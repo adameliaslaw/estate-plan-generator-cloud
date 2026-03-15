@@ -347,6 +347,32 @@ export const templateService = {
     };
   },
 
+  async consolidateTemplateVariables(
+    firmId: string,
+    docType: string,
+    files: { fileName: string; extractedText: string }[]
+  ): Promise<{
+    detectedVariables: {
+      originalText: string;
+      suggestedVariable: string;
+      fieldLabel: string;
+      confidence: string;
+    }[];
+  }> {
+    const fn = httpsCallable(functions, 'consolidateTemplateVariables', { timeout: 60000 });
+    const res = await fn({ firmId, docType, files });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = res.data as any;
+    return data as {
+      detectedVariables: {
+        originalText: string;
+        suggestedVariable: string;
+        fieldLabel: string;
+        confidence: string;
+      }[];
+    };
+  },
+
   async recordTemplateCorrection(
     firmId: string,
     corrections: {

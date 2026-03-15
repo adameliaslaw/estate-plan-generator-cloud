@@ -199,6 +199,7 @@ export default function DocumentEditor({
     ],
     content: '',
     editable: !isReadOnly,
+    immediatelyRender: false,
     onUpdate: ({ editor: ed }) => {
       setHasUnsavedChanges(true);
       setSaveStatus('unsaved');

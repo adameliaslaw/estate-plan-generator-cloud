@@ -494,6 +494,108 @@ Return ONLY the modified HTML (no JSON wrapper, no markdown fences, no explanati
 );
 
 // ---------------------------------------------------------------------------
+// Consolidate variables across multiple templates of the same type
+// ---------------------------------------------------------------------------
+
+export const consolidateTemplateVariables = onCall(
+  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 60 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+    const { firmId, files, docType } = request.data as {
+      firmId: string;
+      docType: string;
+      files: {
+        fileName: string;
+        extractedText: string;
+      }[];
+    };
+
+    if (!firmId || !files || files.length < 2) {
+      throw new HttpsError('invalid-argument', 'firmId and at least 2 files are required.');
+    }
+
+    const role = request.auth.token.role as string | undefined;
+    if (!role || !['admin', 'attorney'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only attorneys and administrators can process templates.');
+    }
+
+    // Fetch firm data and learning context
+    const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
+    const firmData = firmSnap.data() ?? {};
+    const learningCtx = await getLearningContext(firmId);
+    const learningPrompt = formatLearningPrompt(learningCtx);
+
+    console.log(`[consolidateTemplateVariables] Consolidating ${files.length} "${docType}" templates for firm ${firmId}`);
+
+    // Build the consolidated prompt
+    const systemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
+
+Your job is to identify EVERY piece of client-specific data that would need to be replaced when using these documents as templates.
+You are being provided with text from MULTIPLE templates of the same document type (e.g., paired wills for spouses).
+They are separated by "--- DOCUMENT [N] ---".
+
+CRITICAL: Because these are paired templates, you must identify a single, unified list of DO NOT duplicate variables that mean the same thing. Return ONE canonical list of unique variables found across ALL the provided documents.
+
+DETECTION STRATEGIES (use ALL of these):
+1. **Explicit Placeholders** (Handlebars, bracket placeholders, underlines, etc.)
+2. **Contextual / Semantic Detection** (Repeated proper names, specific addresses, relationship references, etc.)
+3. **Structural Detection** (Signature blocks, notary sections, etc.)
+
+For each detected variable, suggest the best matching questionnaire field from the available fields list. Set "confidence" based on:
+- "high": Explicit placeholder OR clear legal context
+- "medium": Likely sample data based on context
+- "low": Could be sample data but uncertain
+
+${AVAILABLE_FIELDS}
+${learningPrompt}
+Respond with a valid JSON object (no markdown fences):
+{
+  "detectedVariables": [
+    {
+      "originalText": "the exact text found in the document(s)",
+      "suggestedVariable": "the Handlebars variable path to use (e.g., personalInfo.firstName)",
+      "fieldLabel": "human-readable label (e.g., Client First Name)",
+      "confidence": "high" | "medium" | "low"
+    }
+  ]
+}`;
+
+    // Concatenate all document texts, truncated to avoid blowing up the context window
+    const MAX_CHARS_PER_DOC = 15000;
+    const combinedText = files
+      .map((f, i) => `--- DOCUMENT ${i + 1}: ${f.fileName} ---\n${truncateAtWordBoundary(f.extractedText, MAX_CHARS_PER_DOC)}`)
+      .join('\n\n');
+
+    const userPrompt = `Identify the unified list of template variables across these ${files.length} documents:\n\n${combinedText}`;
+
+    try {
+      const raw = await callAI(systemPrompt, userPrompt, firmData, {
+        temperature: 0,
+        maxTokens: 4096,
+        jsonMode: true,
+      });
+
+      const parsed = parseAIJson<{
+        detectedVariables: {
+          originalText: string;
+          suggestedVariable: string;
+          fieldLabel: string;
+          confidence: string;
+        }[];
+      }>(raw);
+
+      const vars = parsed.detectedVariables ?? [];
+      console.log(`[consolidateTemplateVariables] Success: AI identified ${vars.length} unified variables`);
+      return { success: true, detectedVariables: vars };
+    } catch (err) {
+      console.error('[consolidateTemplateVariables] AI analysis error:', err);
+      throw new HttpsError('internal', 'AI consolidation failed.');
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Record user corrections to AI-suggested variable mappings
 // ---------------------------------------------------------------------------
 

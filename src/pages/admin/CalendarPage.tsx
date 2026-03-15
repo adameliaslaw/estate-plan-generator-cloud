@@ -37,12 +37,16 @@ export default function CalendarPage() {
       );
     } catch (error: unknown) {
       console.error('Failed to trigger manual calendar sync:', error);
-      toast.error(
-        error instanceof Error && error.message?.includes('not connected')
-          ? 'Google Calendar is not connected. Please connect it in Settings.'
-          : 'Failed to sync with Google Calendar. Please try again.',
-        { id: toastId }
-      );
+      const msg = error instanceof Error ? error.message : '';
+      let toastMsg = 'Failed to sync with Google Calendar. Please try again.';
+
+      if (msg.includes('not connected') || msg.includes('failed-precondition')) {
+        toastMsg = 'Google Calendar is not connected. Please connect it in Settings → Integrations.';
+      } else if (msg.includes('revoked') || msg.includes('unauthenticated') || msg.includes('authorisation')) {
+        toastMsg = 'Google Calendar authorization expired. Please reconnect in Settings → Integrations → Google Calendar.';
+      }
+
+      toast.error(toastMsg, { id: toastId });
     } finally {
       setIsSyncing(false);
     }

@@ -163,11 +163,58 @@ export function BulkTemplateUploadDialog({
       unionByDocType.set(pf.docType, existing);
     }
 
-    // Log union stats
+    // Log union stats and optionally call AI consolidation for paired templates
     for (const [docType, vars] of unionByDocType) {
-      const count = processedFiles.filter((pf) => pf.docType === docType).length;
-      if (count > 1) {
-        console.log(`[BulkUpload] Merged ${count} "${docType}" templates → ${vars.size} union variables`);
+      const groupFiles = processedFiles.filter((pf) => pf.docType === docType);
+      
+      if (groupFiles.length > 1) {
+        console.log(`[BulkUpload] DocType "${docType}" has ${groupFiles.length} files. Starting AI consolidation...`);
+        // Show status indicating consolidation
+        for (const f of groupFiles) {
+          setResults((prev) => prev.map((r, idx) => idx === f.index ? { ...r, status: 'processing' as const, error: 'AI variable consolidation...' } : r));
+        }
+
+        try {
+          // Prepare payload for the consolidation AI
+          const payload = groupFiles.map(pf => ({
+            fileName: pf.baseName,
+            extractedText: pf.content,
+          }));
+
+          const consolidated = await templateService.consolidateTemplateVariables(firmId, docType, payload);
+          
+          if (consolidated?.detectedVariables) {
+            console.log(`[BulkUpload] AI Consolidation successful! Found ${consolidated.detectedVariables.length} variables.`);
+            
+            // Override the naive union with the smart AI consolidated list
+            const smartVars = new Set<string>();
+            for (const v of consolidated.detectedVariables) {
+              smartVars.add(v.suggestedVariable);
+              
+              // Also ensure we confirm these variables so learning data is captured for all identified variables
+              // We'll attach these to the first file's detected variables list so they get confirmed later
+              if (!groupFiles[0].detectedVariables.some(existing => existing.suggestedVariable === v.suggestedVariable)) {
+                groupFiles[0].detectedVariables.push({
+                   ...v,
+                   context: 'Discovered during multi-file AI consolidation'
+                });
+              }
+            }
+            // Update the map that the next step uses
+            unionByDocType.set(docType, smartVars);
+
+          } else {
+             console.log(`[BulkUpload] AI Consolidation returned no variables, falling back to naive union (${vars.size} vars).`);
+          }
+
+        } catch (err) {
+          console.error(`[BulkUpload] AI consolidation failed for ${docType}, falling back to naive union:`, err);
+        }
+        
+        // Clear the temporary processing message
+        for (const f of groupFiles) {
+          setResults((prev) => prev.map((r, idx) => idx === f.index ? { ...r, error: undefined } : r));
+        }
       }
     }
 
