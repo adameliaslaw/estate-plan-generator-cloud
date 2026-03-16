@@ -103,10 +103,10 @@ function PrintPage({ children, isLast = false }: { children: React.ReactNode; is
     <div
       className="print-page"
       style={{
-        /* Screen: just show with a gap between pages */
         boxSizing: 'border-box',
         marginBottom: isLast ? 0 : '2rem',
-        /* Print dimensions handled in @media print below */
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {children}
@@ -160,14 +160,11 @@ function PageFooter({ pageNum, totalPages }: { pageNum: number; totalPages: numb
   return (
     <div
       style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
+        marginTop: 'auto',
         textAlign: 'center',
         fontSize: '7pt',
         color: '#999',
-        paddingTop: '4px',
+        paddingTop: '8px',
       }}
     >
       Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200 — Page {pageNum} of {totalPages}
@@ -216,7 +213,7 @@ export default function PrintableQuestionnaire({
             PAGE 1: Header + Section 1 (About You) + Section 2 (Spouse)
             ================================================================ */}
         <PrintPage>
-          <div style={{ position: 'relative', height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             {/* HEADER */}
             <header className="mb-3">
               <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-2">
@@ -388,7 +385,7 @@ export default function PrintableQuestionnaire({
             PAGE 2: Section 3 (Children) + Section 4 (Fiduciaries)
             ================================================================ */}
         <PrintPage>
-          <div style={{ position: 'relative', height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             {/* SECTION 3: CHILDREN */}
             <SectionHeader title="Section 3 — Children & Dependents" />
 
@@ -447,7 +444,7 @@ export default function PrintableQuestionnaire({
             PAGE 3: Section 5 (Healthcare Preferences)
             ================================================================ */}
         <PrintPage>
-          <div style={{ position: 'relative', height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <SectionHeader title="Section 5 — Healthcare Preferences" />
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -539,7 +536,7 @@ export default function PrintableQuestionnaire({
             PAGE 4: Section 6 (continued) + Section 7 (Additional Info)
             ================================================================ */}
         <PrintPage>
-          <div style={{ position: 'relative', height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <div className="mb-1 border-b border-[#1a365d] pb-0.5">
               <p className="text-[8pt] font-semibold text-[#1a365d] uppercase">Section 6 — Assets & Liabilities (continued)</p>
             </div>
@@ -604,7 +601,7 @@ export default function PrintableQuestionnaire({
             PAGE 5: Distribution Wishes (attorney consultation)
             ================================================================ */}
         <PrintPage isLast>
-          <div style={{ position: 'relative', height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <SectionHeader title="Distribution Wishes (To be completed with your attorney)" />
             <p className="text-[8pt] text-gray-500 mb-3">
               This section is intended to be completed during your consultation. Your attorney will
