@@ -5,8 +5,9 @@
  *
  * - HTML/DOCX-derived content → renders the `editorContent` field in a
  *   legal-document-style pane (same font/margin feel as the editor).
- * - PDF uploads → fetches a temporary download URL from Firebase Storage
- *   and embeds the file in an <iframe>.
+ * - PDF uploads → gets a Firebase Storage download URL and renders it in
+ *   an <object> tag. NOTE: X-Frame-Options only restricts <iframe>, not
+ *   <object>/<embed>, so no blob conversion is needed.
  * - Falls back gracefully if neither field is present.
  */
 
@@ -23,17 +24,10 @@ import { type Document } from '@/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-// Gets a blob:// URL for a storage path using the Firebase SDK (avoids CORS issues with raw fetch())
-async function getPdfBlobUrl(storagePath: string): Promise<{ blobUrl: string; downloadUrl: string }> {
-  const { ref, getDownloadURL, getBlob } = await import('firebase/storage');
+async function getStorageDownloadUrl(storagePath: string): Promise<string> {
+  const { ref, getDownloadURL } = await import('firebase/storage');
   const { storage } = await import('@/config/firebase');
-  const storageRef = ref(storage, storagePath);
-  // Get both: blob for iframe embed, download URL for "Open in tab"
-  const [blob, downloadUrl] = await Promise.all([
-    getBlob(storageRef),
-    getDownloadURL(storageRef),
-  ]);
-  return { blobUrl: URL.createObjectURL(blob), downloadUrl };
+  return getDownloadURL(ref(storage, storagePath));
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -47,52 +41,42 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
-  // blob:// URL used in the iframe (bypasses X-Frame-Options: SAMEORIGIN on storage URLs)
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  // Original download URL kept for "Open in tab" only
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
-  const isPdf = doc?.mimeType === 'application/pdf' || doc?.fileName?.toLowerCase().endsWith('.pdf');
+  const isPdf =
+    doc?.mimeType === 'application/pdf' ||
+    doc?.fileName?.toLowerCase().endsWith('.pdf');
 
-  const docWithExtra = doc as (Document & { editorContent?: string; content?: string }) | null;
+  const docWithExtra = doc as (Document & {
+    editorContent?: string;
+    content?: string;
+  }) | null;
 
-  // The HTML content field (what the editor uses)
   const htmlContent = docWithExtra?.editorContent || docWithExtra?.content || '';
 
-  // ── Load PDF as blob when dialog opens ──
+  // ── Fetch download URL when dialog opens for PDFs ──
   useEffect(() => {
-    if (!open || !doc || !isPdf || !doc.storagePath) {
-      setPdfBlobUrl(null);
+    if (!open || !isPdf || !doc?.storagePath) {
       setPdfDownloadUrl(null);
       setPdfError('');
       return;
     }
 
     let cancelled = false;
-    let blobUrl: string | null = null;
     setPdfLoading(true);
     setPdfError('');
 
-    getPdfBlobUrl(doc.storagePath)
-      .then(({ blobUrl: url, downloadUrl }: { blobUrl: string; downloadUrl: string }) => {
-        if (cancelled) return;
-        blobUrl = url;
-        setPdfBlobUrl(url);
-        setPdfDownloadUrl(downloadUrl);
-      })
+    getStorageDownloadUrl(doc.storagePath)
+      .then((url) => { if (!cancelled) setPdfDownloadUrl(url); })
       .catch((err: unknown) => {
-        console.error('[DocumentPreviewDialog] Failed to load PDF:', err);
+        console.error('[DocumentPreviewDialog] Failed to get download URL:', err);
         if (!cancelled) setPdfError('Could not load the PDF. The file may have been moved or deleted.');
       })
       .finally(() => { if (!cancelled) setPdfLoading(false); });
 
-    return () => {
-      cancelled = true;
-      // Revoke blob URL to free memory when dialog closes
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
+    return () => { cancelled = true; };
   }, [open, doc?.storagePath, isPdf]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!doc) return null;
@@ -137,7 +121,7 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
 
         {/* ── Body ── */}
         <div className="flex-1 overflow-hidden bg-gray-100">
-          {/* ── PDF preview ── */}
+          {/* ── PDF preview via <object> (not subject to X-Frame-Options) ── */}
           {isPdf && (
             <>
               {pdfLoading && (
@@ -150,16 +134,38 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                 <div className="flex h-full items-center justify-center">
                   <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
                     <p className="text-sm font-medium text-red-700">{pdfError}</p>
+                    {doc.storagePath && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Use "Open in tab" to view the file directly.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
-              {pdfBlobUrl && !pdfLoading && (
-                <iframe
-                  src={pdfBlobUrl}
-                  title={doc.displayName}
-                  className="w-full h-full border-0"
+              {pdfDownloadUrl && !pdfLoading && (
+                // <object> bypasses X-Frame-Options (which only applies to <iframe>)
+                <object
+                  data={pdfDownloadUrl}
+                  type="application/pdf"
+                  className="w-full h-full"
                   aria-label={`Preview of ${doc.displayName}`}
-                />
+                >
+                  {/* Fallback if browser can't embed — offer the download link */}
+                  <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
+                    <FileText className="h-12 w-12 text-gray-300" />
+                    <p className="text-sm text-gray-500 text-center">
+                      Your browser can't display this PDF inline.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => window.open(pdfDownloadUrl, '_blank')}
+                      className="gap-1.5"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open PDF in new tab
+                    </Button>
+                  </div>
+                </object>
               )}
             </>
           )}
@@ -183,16 +189,14 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                   <div
                     className="mx-auto bg-white shadow-lg rounded-sm"
                     style={{
-                      maxWidth: '816px',          // ~letter width at 96dpi
-                      minHeight: '1056px',         // ~letter height
-                      padding: '96px 96px',        // 1-inch margins
+                      maxWidth: '816px',
+                      minHeight: '1056px',
+                      padding: '96px 96px',
                       fontFamily: '"Times New Roman", Times, Georgia, serif',
                       fontSize: '12pt',
                       lineHeight: '1.6',
                       color: '#1a1a1a',
                     }}
-                    // Safe: content is AI-extracted from attorney-uploaded documents
-                    // eslint-disable-next-line react/no-danger
                     dangerouslySetInnerHTML={{ __html: htmlContent }}
                   />
                 </div>
