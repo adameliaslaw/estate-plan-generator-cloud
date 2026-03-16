@@ -127,10 +127,28 @@ function formatRelativeTime(timestamp: { toDate?: () => Date } | Date | string |
 function formatDate(dateStr: string | undefined): string {
   if (!dateStr) return '—';
   try {
+    // ISO YYYY-MM-DD strings are parsed as UTC midnight by the Date constructor.
+    // Passing them directly to toLocaleDateString() shifts the date back one day
+    // in any US timezone (UTC-4 through UTC-8). Parse the parts directly instead.
+    const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const [, year, month, day] = isoMatch;
+      return new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+      ).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'America/New_York',
+      });
+    }
     return new Date(dateStr).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'America/New_York',
     });
   } catch {
     return dateStr;
