@@ -137,13 +137,13 @@ export const generateDocuments = functions
     );
 
     // ------------------------------------------------------------------
-    // 3. Generate each document via unified generator
+    // 3. Generate all documents concurrently via unified generator
     // ------------------------------------------------------------------
     const allResults: UnifiedGenerateResult[] = [];
 
-    for (const docType of documentsToGenerate) {
-      try {
-        const results = await generateDocumentWithPropertyExpansion({
+    const settled = await Promise.allSettled(
+      documentsToGenerate.map((docType) =>
+        generateDocumentWithPropertyExpansion({
           firmId,
           clientId,
           docType,
@@ -153,14 +153,21 @@ export const generateDocuments = functions
           createdBy: auth.uid,
           triggerSource: 'batch',
           modelOverride,
-        });
-        allResults.push(...results);
-      } catch (error) {
-        console.error(`[generateDocuments] Fatal error generating ${docType}:`, error);
+        }),
+      ),
+    );
+
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i];
+      const docType = documentsToGenerate[i];
+      if (result.status === 'fulfilled') {
+        allResults.push(...result.value);
+      } else {
+        console.error(`[generateDocuments] Fatal error generating ${docType}:`, result.reason);
         allResults.push({
           docType,
           title: `Error — ${getDocTypeDisplayName(docType)}`,
-          content: `<p>An unexpected error occurred while generating this document: ${error instanceof Error ? error.message : 'Unknown error'}</p>`,
+          content: `<p>An unexpected error occurred while generating this document: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}</p>`,
           status: 'error',
           docId: docType,
           isNew: false,

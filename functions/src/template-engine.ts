@@ -734,8 +734,23 @@ export async function generateFromTemplate(
     );
   }
 
-  // Render template
-  const renderedHtml = renderTemplate(template.content, ctx);
+  // Render template — guard against invalid Handlebars syntax in uploaded templates
+  let renderedHtml: string;
+  try {
+    renderedHtml = renderTemplate(template.content, ctx);
+  } catch (renderErr) {
+    const errMsg = renderErr instanceof Error ? renderErr.message : String(renderErr);
+    console.warn(
+      `[template-engine] Handlebars render failed for docType="${docType}" ` +
+      `(template="${template.name}"): ${errMsg.slice(0, 200)}`,
+    );
+    if (mode === 'hybrid' && aiGeneratorFn) {
+      // Template has invalid HBS syntax — fall back to AI entirely
+      return aiGeneratorFn();
+    }
+    // In template mode, serve the raw unrendered HTML so the user gets something
+    renderedHtml = template.content;
+  }
   const title = `${template.name} — ${ctx.computed.clientFullName}`;
 
   if (mode === 'template') {

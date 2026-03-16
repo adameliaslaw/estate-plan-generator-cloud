@@ -230,7 +230,11 @@ export async function recordDraftHistory(
   if (snap.exists) {
     // Append to draftHistory (keep last 50)
     const data = snap.data() as ClientMemory;
-    const history = [...(data.draftHistory ?? []), entry].slice(-50);
+    // Strip undefined fields — Firestore rejects undefined values in nested objects
+    const sanitizedEntry = Object.fromEntries(
+      Object.entries(entry).filter(([, v]) => v !== undefined),
+    ) as DraftHistoryEntry;
+    const history = [...(data.draftHistory ?? []), sanitizedEntry].slice(-50);
     await ref.update({
       draftHistory: history,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
