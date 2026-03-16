@@ -161,15 +161,7 @@ function FiduciaryBlock({ role, subtitle }: { role: string; subtitle?: string })
 
 function PageFooter({ pageNum, totalPages }: { pageNum: number; totalPages: number }) {
   return (
-    <div
-      style={{
-        marginTop: 'auto',
-        textAlign: 'center',
-        fontSize: '7pt',
-        color: '#999',
-        paddingTop: '8px',
-      }}
-    >
+    <div className="mt-12 border-t border-gray-300 pt-2 text-center text-[7pt] text-gray-400">
       Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200 — Page {pageNum} of {totalPages}
     </div>
   );
@@ -235,8 +227,12 @@ export default function PrintableQuestionnaire({
                 </div>
               </div>
 
-              {/* Client Name / Date / Referral */}
-              <div className="mt-2 grid grid-cols-[1.5fr_1fr_2.5fr] gap-3 rounded border border-gray-300 p-1.5">
+              {/* Date / Client Name / Referral */}
+              <div className="mt-2 grid grid-cols-[1fr_1.5fr_2fr] gap-3 rounded border border-gray-300 p-1.5">
+                <div>
+                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
+                  <BlankLine />
+                </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
                   {clientName ? (
@@ -244,10 +240,6 @@ export default function PrintableQuestionnaire({
                   ) : (
                     <BlankLine />
                   )}
-                </div>
-                <div>
-                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
-                  <BlankLine />
                 </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">How did you hear about us?</p>
@@ -372,6 +364,7 @@ export default function PrintableQuestionnaire({
               <LabeledField label="Alternate Phone" />
             </div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
+              <div>{/* Empty column to match alignment with Marital Status in Section 1 */}</div>
               <div>
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
                 <div className="space-y-0.5">
@@ -460,9 +453,34 @@ export default function PrintableQuestionnaire({
                 ])}
               </tbody>
             </table>
-            <p className="text-[7pt] text-gray-400 italic mt-3">
+            <p className="text-[7pt] text-gray-400 italic mt-3 mb-4">
               Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child/grandchild has special needs requiring a trust.
             </p>
+
+            {/* SECTION 3.5: PETS */}
+            <div className="mt-2">
+              <SectionHeader title="Section 3.5 — Pets" />
+              <table className="w-full text-[9pt] border-collapse mt-2">
+                <thead>
+                  <tr className="border-b-2 border-gray-400">
+                    <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-4">#</th>
+                    <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-48">Pet Name</th>
+                    <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-32">Type / Breed</th>
+                    <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1">Primary Caretaker</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2].map((n) => (
+                    <tr key={`pet-${n}`} className={n === 1 ? "border-b border-gray-200" : ""}>
+                      <td className="py-2.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
+                      <td className="py-2.5 pr-2"><BlankLine /></td>
+                      <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
+                      <td className="py-2.5"><BlankLine width="100%" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
           </div>
