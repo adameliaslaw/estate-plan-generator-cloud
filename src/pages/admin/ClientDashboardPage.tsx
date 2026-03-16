@@ -506,12 +506,15 @@ export default function ClientDashboardPage() {
               className="gap-2 border-emerald-600 text-emerald-600 hover:bg-emerald-50"
               onClick={() => {
                 if (!firmId || !clientId) return;
-                navigate(`/questionnaire/${firmId}/${clientId}`);
+                const isComplete = qProgress?.status === 'completed';
+                navigate(
+                  `/questionnaire/${firmId}/${clientId}${isComplete ? '?edit=1' : ''}`,
+                );
               }}
             >
               <FileEdit className="h-4 w-4" />
               {qProgress?.status === 'completed'
-                ? 'View Questionnaire'
+                ? 'Edit Questionnaire'
                 : qProgress?.status === 'in_progress'
                   ? 'Continue Questionnaire'
                   : 'Start Questionnaire'}

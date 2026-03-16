@@ -21,13 +21,14 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
   Clock,
   Save,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -50,6 +51,37 @@ import { logSystemActivity } from '@/utils/activity-logger';
 // ============================================================================
 
 type Phase = 'questionnaire' | 'package' | 'complete';
+
+// ============================================================================
+// Edit-mode banner
+// ============================================================================
+
+function EditModeBanner({ onSaveAndClose, isSaving }: { onSaveAndClose: () => void; isSaving: boolean }) {
+  return (
+    <div className="sticky top-0 z-20 bg-amber-50 border-b-2 border-amber-400">
+      <div className="mx-auto max-w-2xl px-4 py-2.5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Pencil className="h-4 w-4 text-amber-700 shrink-0" />
+          <p className="text-sm font-semibold text-amber-800">
+            Edit Mode — you are editing a completed questionnaire
+          </p>
+        </div>
+        <button
+          onClick={onSaveAndClose}
+          disabled={isSaving}
+          className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-700 transition-colors disabled:opacity-60 shrink-0"
+        >
+          {isSaving ? (
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
+          Save & Close
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================================
 // Progress bar component
@@ -175,7 +207,11 @@ function ThankYouScreen() {
 // Main shell
 // ============================================================================
 
-export function QuestionnaireShell() {
+interface QuestionnaireShellProps {
+  isEditMode?: boolean;
+}
+
+export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellProps) {
   const {
     currentStepDef,
     currentStep,
@@ -194,6 +230,7 @@ export function QuestionnaireShell() {
 
   const { firmId, clientId } = useParams<{ firmId: string; clientId: string }>();
   const { userProfile } = useAuth();
+  const navigate = useNavigate();
 
   // ── Phase state ───────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('questionnaire');
@@ -218,7 +255,8 @@ export function QuestionnaireShell() {
 
   // ── Detect questionnaire completion ───────────────────────────────────────
   // When all steps are done (currentStepDef is null after loading), advance to package phase
-  const allStepsDone = !isLoading && !currentStepDef && phase === 'questionnaire';
+  // In edit mode, skip this transition so staff can navigate all steps freely.
+  const allStepsDone = !isEditMode && !isLoading && !currentStepDef && phase === 'questionnaire';
 
   useEffect(() => {
     if (allStepsDone) {
@@ -322,6 +360,18 @@ export function QuestionnaireShell() {
     }
   }
 
+  // ── Edit-mode save & close ────────────────────────────────────────────────
+  async function handleSaveAndClose() {
+    try {
+      await saveProgress();
+      toast.success('Questionnaire changes saved.');
+      navigate(-1);
+    } catch (err) {
+      console.error('Save error:', err);
+      toast.error('Failed to save changes.');
+    }
+  }
+
   // ── Loading state ─────────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -336,8 +386,9 @@ export function QuestionnaireShell() {
   }
 
   // ── Submitted ─────────────────────────────────────────────────────────────
+  // In edit mode, staff never see the thank-you screen.
 
-  if (submitted) {
+  if (submitted && !isEditMode) {
     return <ThankYouScreen />;
   }
 
@@ -386,6 +437,10 @@ export function QuestionnaireShell() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Edit-mode banner */}
+      {isEditMode && (
+        <EditModeBanner onSaveAndClose={() => void handleSaveAndClose()} isSaving={isSaving} />
+      )}
       {/* ── Top header: progress + meta ────────────────────────────────── */}
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-2xl px-4 py-3">
