@@ -179,9 +179,9 @@ const packageBadge: Record<string, string> = {
 };
 
 const packageLabel: Record<string, string> = {
-  foundation: 'Foundation',
-  guardian: 'Guardian',
-  fortress: 'Fortress',
+  foundation: 'Basic Estate Plan',
+  guardian: 'Revocable Trust',
+  fortress: 'Irrevocable Trust',
 };
 
 // ── Activity feed ──────────────────────────────────────────────────────────────

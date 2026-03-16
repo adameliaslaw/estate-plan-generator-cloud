@@ -189,7 +189,7 @@ export function calculateRecommendation(data: QuestionnaireData): PackageRecomme
   const allPackages: PackageOption[] = [
     {
       type: 'foundation',
-      name: 'The Foundation Plan',
+      name: 'Basic Estate Plan Package',
       tagline: 'Will-Based Estate Plan',
       description:
         'A comprehensive will-based estate plan for individuals and couples with straightforward estate planning needs. Your Last Will and Testament directs how your assets are distributed, while a Durable Power of Attorney and Advance Directive protect you during your lifetime. Probate, when needed, is handled in NJ Surrogate Court — typically a smooth process for well-drafted wills. This plan is the right fit when your estate is manageable, you own NJ property only, and you don\'t need the advanced asset-protection features of a trust.',
@@ -205,7 +205,7 @@ export function calculateRecommendation(data: QuestionnaireData): PackageRecomme
     },
     {
       type: 'guardian',
-      name: 'The Guardian Plan',
+      name: 'Revocable Trust Package',
       tagline: 'Revocable Living Trust Plan',
       description:
         'A trust-centered estate plan that avoids probate, manages out-of-state real estate, and gives you precise control over how and when beneficiaries inherit. Your Revocable Living Trust holds your assets during your lifetime and distributes them seamlessly at death — without court involvement. A Pour-Over Will acts as a backstop for any assets not yet in the trust. Trust Transfer Deeds are prepared to retitle real estate into the trust, eliminating the need for probate in every state where you own property. This plan is ideal for families with real estate, minor children, or blended-family situations.',
@@ -226,7 +226,7 @@ export function calculateRecommendation(data: QuestionnaireData): PackageRecomme
     },
     {
       type: 'fortress',
-      name: 'The Fortress Plan',
+      name: 'Irrevocable Trust Package',
       tagline: 'Irrevocable Trust / Asset Protection Plan',
       description:
         'An advanced estate plan built around an irrevocable trust for clients with Medicaid planning goals, special-needs beneficiaries, significant life insurance, or large taxable estates. Unlike a revocable trust, an irrevocable trust removes assets from your estate — protecting them from Medicaid spend-down requirements, creditors, and estate taxes. The most common type for NJ clients is the Medicaid Asset Protection Trust (MAPT), but the trust type is tailored to your specific goals. A Pour-Over Will, full suite of planning documents, and real estate transfer documents are included.',

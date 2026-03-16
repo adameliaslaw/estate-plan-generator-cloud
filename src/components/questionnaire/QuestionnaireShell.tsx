@@ -391,7 +391,15 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
   const [selectedTrustType, setSelectedTrustType] = useState<string | undefined>(undefined);
   const [submitted, setSubmitted] = useState(false);
 
-  // ── Section banner / fade ─────────────────────────────────────────────────
+  // ── Edit-mode: snapshot initial data to detect which sections changed ─────
+  // Captured once after loading completes so we have a baseline to diff against.
+  const initialDataSnapshot = useRef<string | null>(null);
+  useEffect(() => {
+    if (isEditMode && !isLoading && initialDataSnapshot.current === null) {
+      initialDataSnapshot.current = JSON.stringify(data);
+    }
+  }, [isEditMode, isLoading, data]);
+
   const prevSectionRef = useRef<string | null>(null);
   const [showSectionBanner, setShowSectionBanner] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
@@ -530,16 +538,46 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
       });
 
       try {
-        const clientName = (data as { personalInfo?: { firstName?: string; lastName?: string } })
-          ?.personalInfo
-          ? `${(data as { personalInfo: { firstName?: string } }).personalInfo.firstName ?? ''} ${(data as { personalInfo: { lastName?: string } }).personalInfo.lastName ?? ''}`.trim()
+        const clientName = data.personalInfo
+          ? `${data.personalInfo.firstName ?? ''} ${data.personalInfo.lastName ?? ''}`.trim()
           : 'Unknown';
-        await logSystemActivity(firmId, userProfile, 'editing questionnaire', {
+
+        // Map section titles → the QuestionnaireData fields they own,
+        // so we can diff the snapshot and report exactly what changed.
+        const SECTION_FIELDS: Record<string, string[]> = {
+          'About You':              ['personalInfo', 'isFemale', 'referralSource'],
+          'Spouse / Partner':       ['spouseInfo'],
+          'Children & Dependents':  ['hasChildren', 'numberOfChildren', 'children', 'hasOtherDependents', 'otherDependents', 'guardianPrimary', 'guardianAlternate'],
+          'Assets':                 ['assets'],
+          'Liabilities':            ['liabilities'],
+          'Fiduciaries':            ['fiduciaries'],
+          'Wishes':                 ['distributionPlan', 'distribution'],
+          'Healthcare Preferences': ['healthcarePreferences', 'burialPreference', 'burialDetails'],
+          'Additional Information': ['additionalNotes', 'hasExistingDocuments', 'existingDocumentsDetails', 'existingDocumentsDate', 'hasPendingLegalMatters', 'pendingLegalDetails'],
+        };
+
+        const changedSections: string[] = [];
+        if (initialDataSnapshot.current) {
+          const before = JSON.parse(initialDataSnapshot.current) as Record<string, unknown>;
+          const after = data as unknown as Record<string, unknown>;
+          for (const [sectionTitle, fields] of Object.entries(SECTION_FIELDS)) {
+            if (fields.some((f) => JSON.stringify(before[f]) !== JSON.stringify(after[f]))) {
+              changedSections.push(sectionTitle);
+            }
+          }
+        }
+
+        const action = changedSections.length > 0
+          ? `editing questionnaire — changed: ${changedSections.join(', ')}`
+          : 'editing questionnaire';
+
+        await logSystemActivity(firmId, userProfile, action, {
           clientId,
           clientName: clientName || 'Unknown',
+          changedSections,
         });
       } catch {
-        // Non-fatal
+        // Non-fatal — save still succeeded
       }
 
       toast.success('Questionnaire changes saved.');

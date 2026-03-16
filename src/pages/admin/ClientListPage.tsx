@@ -47,9 +47,9 @@ import BulkImportModal from '@/components/clients/BulkImportModal';
 // ── Badge / label maps ─────────────────────────────────────────────────────────
 
 const packageLabel: Record<PackageType, string> = {
-  foundation: 'Foundation',
-  guardian: 'Guardian',
-  fortress: 'Fortress',
+  foundation: 'Basic Estate Plan',
+  guardian: 'Revocable Trust',
+  fortress: 'Irrevocable Trust',
 };
 
 const packageBadge: Record<PackageType, string> = {
@@ -361,9 +361,9 @@ export default function ClientListPage() {
             className="h-10 rounded-lg border border-gray-300 bg-white px-3 pr-8 text-sm text-gray-700 focus:border-[#2b6cb0] focus:outline-none focus:ring-2 focus:ring-[#2b6cb0]/20"
           >
             <option value="all">All Packages</option>
-            <option value="foundation">Foundation</option>
-            <option value="guardian">Guardian</option>
-            <option value="fortress">Fortress</option>
+            <option value="foundation">Basic Estate Plan</option>
+            <option value="guardian">Revocable Trust</option>
+            <option value="fortress">Irrevocable Trust</option>
           </select>
           <select
             value={qFilter}

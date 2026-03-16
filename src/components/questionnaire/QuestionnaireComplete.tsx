@@ -44,17 +44,17 @@ interface QuestionnaireCompleteProps {
 
 const PACKAGE_LABELS: Record<PackageType, { name: string; tagline: string; color: string }> = {
   foundation: {
-    name: 'The Foundation Plan',
+    name: 'Basic Estate Plan Package',
     tagline: 'Will-Based Estate Plan',
     color: 'bg-blue-100 text-blue-800 border-blue-200',
   },
   guardian: {
-    name: 'The Guardian Plan',
+    name: 'Revocable Trust Package',
     tagline: 'Revocable Living Trust Plan',
     color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   },
   fortress: {
-    name: 'The Fortress Plan',
+    name: 'Irrevocable Trust Package',
     tagline: 'Irrevocable Trust / Asset Protection',
     color: 'bg-purple-100 text-purple-800 border-purple-200',
   },
