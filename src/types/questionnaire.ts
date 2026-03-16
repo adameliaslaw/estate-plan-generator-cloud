@@ -83,7 +83,7 @@ export interface ValidationRule {
 
 export interface StepCondition {
   field: string; // dot-path to check in QuestionnaireData
-  operator: 'equals' | 'notEquals' | 'includes' | 'gt' | 'lt' | 'exists' | 'notExists';
+  operator: 'equals' | 'notEquals' | 'includes' | 'gt' | 'lt' | 'exists' | 'notExists' | 'hasMinorChild';
   value?: unknown;
 }
 
@@ -150,6 +150,8 @@ export interface QuestionnaireData {
   hasChildren: boolean;
   numberOfChildren?: number;
   children: Partial<Child>[];
+  hasGrandchildren?: boolean;
+  grandchildren?: Array<{ name: string; dob?: string; parentName?: string; gender?: string; specialNeeds?: boolean; specialNeedsDetails?: string }>;
   hasOtherDependents: boolean;
   otherDependents: Array<{ name: string; relationship: string; notes?: string }>;
   guardianPrimary?: Partial<FiduciaryPerson>;
@@ -208,6 +210,8 @@ export function createEmptyQuestionnaireData(): QuestionnaireData {
     personalInfo: {},
     hasChildren: false,
     children: [],
+    hasGrandchildren: false,
+    grandchildren: [],
     hasOtherDependents: false,
     otherDependents: [],
     assets: {
@@ -485,7 +489,6 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'personalInfo.citizenship',
         label: 'Citizenship Status',
         type: 'radio',
-        required: true,
         width: 'full',
         options: [
           { label: 'US Citizen', value: 'US Citizen' },
@@ -608,7 +611,6 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'spouseInfo.citizenship',
         label: 'Citizenship Status',
         type: 'select',
-        required: true,
         width: 'half',
         options: [
           { label: 'US Citizen', value: 'US Citizen' },
@@ -714,12 +716,95 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
   },
 
   {
+    id: 'children_grandchildren_ask',
+    section: 'children',
+    title: 'Do you have any grandchildren?',
+    condition: { field: 'hasChildren', operator: 'equals', value: true },
+    estimatedMinutes: 1,
+    fields: [
+      {
+        name: 'hasGrandchildren',
+        label: 'Do you have grandchildren?',
+        type: 'yesno',
+        width: 'full',
+      },
+    ],
+  },
+
+  {
+    id: 'children_grandchildren_list',
+    section: 'children',
+    title: 'Tell us about your grandchildren',
+    condition: { field: 'hasGrandchildren', operator: 'equals', value: true },
+    estimatedMinutes: 2,
+    fields: [
+      {
+        name: 'grandchildren',
+        label: 'Grandchildren',
+        type: 'repeater',
+        itemLabel: 'Grandchild',
+        width: 'full',
+        innerFields: [
+          {
+            name: 'name',
+            label: 'Full Name',
+            type: 'text',
+            placeholder: "Grandchild's full legal name",
+            required: true,
+            width: 'half',
+          },
+          {
+            name: 'dob',
+            label: 'Date of Birth',
+            type: 'date',
+            required: true,
+            width: 'half',
+          },
+          {
+            name: 'parentName',
+            label: "Parent's Name (your child)",
+            type: 'text',
+            placeholder: "Which of your children is the parent?",
+            width: 'half',
+          },
+          {
+            name: 'gender',
+            label: 'Gender',
+            type: 'radio',
+            width: 'half',
+            options: [
+              { label: 'Male', value: 'male' },
+              { label: 'Female', value: 'female' },
+            ],
+          },
+          {
+            name: 'specialNeeds',
+            label: 'Special Needs?',
+            type: 'yesno',
+            defaultValue: false,
+            width: 'third',
+          },
+          {
+            name: 'specialNeedsDetails',
+            label: 'Special Needs Details',
+            type: 'textarea',
+            placeholder: 'Describe special needs or disability…',
+            rows: 2,
+            width: 'full',
+            condition: { field: 'specialNeeds', operator: 'equals', value: true },
+          },
+        ],
+      },
+    ],
+  },
+
+  {
     id: 'children_guardian',
     section: 'children',
     title: 'Who should be guardian of your minor children?',
     subtitle:
-      'If you and your spouse both pass away, who would you like to care for your minor children?',
-    condition: { field: 'hasChildren', operator: 'equals', value: true },
+      'If you and your spouse both pass away, who would you like to care for your minor children? If you are not sure who should be your guardian, you can skip this step and discuss it during your consultation.',
+    condition: { field: 'children', operator: 'hasMinorChild', value: true },
     estimatedMinutes: 1,
     fields: [
       {
@@ -733,15 +818,42 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         label: 'Full Name',
         type: 'text',
         placeholder: "Guardian's full name",
-        required: true,
         width: 'half',
       },
       {
         name: 'guardianPrimary.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g. Sister, Friend',
+        type: 'select',
         width: 'half',
+        options: [
+          { label: 'Spouse', value: 'Spouse' },
+          { label: 'Parent', value: 'Parent' },
+          { label: 'Mother', value: 'Mother' },
+          { label: 'Father', value: 'Father' },
+          { label: 'Son', value: 'Son' },
+          { label: 'Daughter', value: 'Daughter' },
+          { label: 'Child', value: 'Child' },
+          { label: 'Sibling', value: 'Sibling' },
+          { label: 'Brother', value: 'Brother' },
+          { label: 'Sister', value: 'Sister' },
+          { label: 'Grandparent', value: 'Grandparent' },
+          { label: 'Grandmother', value: 'Grandmother' },
+          { label: 'Grandfather', value: 'Grandfather' },
+          { label: 'Grandchild', value: 'Grandchild' },
+          { label: 'Uncle', value: 'Uncle' },
+          { label: 'Aunt', value: 'Aunt' },
+          { label: 'Nephew', value: 'Nephew' },
+          { label: 'Niece', value: 'Niece' },
+          { label: 'First Cousin', value: 'First Cousin' },
+          { label: 'Mother-in-Law', value: 'Mother-in-Law' },
+          { label: 'Father-in-Law', value: 'Father-in-Law' },
+          { label: 'Brother-in-Law', value: 'Brother-in-Law' },
+          { label: 'Sister-in-Law', value: 'Sister-in-Law' },
+          { label: 'Stepparent', value: 'Stepparent' },
+          { label: 'Domestic Partner', value: 'Domestic Partner' },
+          { label: 'Friend', value: 'Friend' },
+          { label: 'Other', value: 'Other' },
+        ],
       },
       {
         name: 'guardianPrimary.phone',
@@ -772,9 +884,37 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'guardianAlternate.relationship',
         label: 'Relationship to You',
-        type: 'text',
-        placeholder: 'e.g. Brother, Cousin',
+        type: 'select',
         width: 'half',
+        options: [
+          { label: 'Spouse', value: 'Spouse' },
+          { label: 'Parent', value: 'Parent' },
+          { label: 'Mother', value: 'Mother' },
+          { label: 'Father', value: 'Father' },
+          { label: 'Son', value: 'Son' },
+          { label: 'Daughter', value: 'Daughter' },
+          { label: 'Child', value: 'Child' },
+          { label: 'Sibling', value: 'Sibling' },
+          { label: 'Brother', value: 'Brother' },
+          { label: 'Sister', value: 'Sister' },
+          { label: 'Grandparent', value: 'Grandparent' },
+          { label: 'Grandmother', value: 'Grandmother' },
+          { label: 'Grandfather', value: 'Grandfather' },
+          { label: 'Grandchild', value: 'Grandchild' },
+          { label: 'Uncle', value: 'Uncle' },
+          { label: 'Aunt', value: 'Aunt' },
+          { label: 'Nephew', value: 'Nephew' },
+          { label: 'Niece', value: 'Niece' },
+          { label: 'First Cousin', value: 'First Cousin' },
+          { label: 'Mother-in-Law', value: 'Mother-in-Law' },
+          { label: 'Father-in-Law', value: 'Father-in-Law' },
+          { label: 'Brother-in-Law', value: 'Brother-in-Law' },
+          { label: 'Sister-in-Law', value: 'Sister-in-Law' },
+          { label: 'Stepparent', value: 'Stepparent' },
+          { label: 'Domestic Partner', value: 'Domestic Partner' },
+          { label: 'Friend', value: 'Friend' },
+          { label: 'Other', value: 'Other' },
+        ],
       },
     ],
   },
@@ -1243,7 +1383,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
     section: 'fiduciaries',
     title: 'Who should be the Executor of your estate?',
     subtitle:
-      'Your Executor (called a "Personal Representative" in NJ) will administer your estate after you pass. Choose someone you trust, such as a spouse, sibling, or adult child.',
+      'Your Executor (called a "Personal Representative" in NJ) will administer your estate after you pass. Choose someone you trust, such as a spouse, sibling, or adult child. If you are not sure who should be your executor, you can skip this step and discuss it during your consultation.',
     estimatedMinutes: 1,
     fields: [
       {
@@ -1549,7 +1689,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
     section: 'fiduciaries',
     title: 'Who should be your Power of Attorney agent?',
     subtitle:
-      'Your POA agent will manage your finances and legal affairs if you become incapacitated.',
+      'Your POA agent will manage your finances and legal affairs if you become incapacitated. If you are not sure who should be your POA agent, you can skip this step and discuss it during your consultation.',
     estimatedMinutes: 1,
     fields: [
       {
@@ -1721,7 +1861,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
     section: 'fiduciaries',
     title: 'Who should be your Healthcare Representative?',
     subtitle:
-      'Your healthcare representative will make medical decisions for you if you are unable to communicate.',
+      'Your healthcare representative will make medical decisions for you if you are unable to communicate. If you are not sure who should be your healthcare representative, you can skip this step and discuss it during your consultation.',
     estimatedMinutes: 1,
     fields: [
       {
@@ -1734,7 +1874,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'fiduciaries.healthcareProxy.agent.name',
         label: 'Full Name',
         type: 'text',
-        placeholder: "Representative's full legal name",
+        placeholder: "Healthcare representative's full legal name",
         width: 'half',
       },
       {
@@ -1809,7 +1949,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'fiduciaries.healthcareProxy.alternateAgent.name',
         label: 'Full Name',
         type: 'text',
-        placeholder: "Alternate representative's full name",
+        placeholder: "Alternate healthcare representative's full name",
         width: 'half',
       },
       {
@@ -1864,7 +2004,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       },
       {
         name: 'fiduciaries.healthcareProxy.hipaaAuthorization',
-        label: 'Authorize representative to receive medical records (HIPAA)?',
+        label: 'Authorize healthcare representative to receive medical records (HIPAA)?',
         type: 'yesno',
         defaultValue: true,
         width: 'full',

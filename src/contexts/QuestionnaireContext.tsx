@@ -106,6 +106,24 @@ export function evaluateCondition(
       return value != null && value !== '' && value !== false;
     case 'notExists':
       return value == null || value === '' || value === false;
+    case 'hasMinorChild': {
+      // Check if any child in the children array has a DOB that makes them under 18
+      const children = getNestedValue(data as unknown as Record<string, unknown>, 'children');
+      if (!Array.isArray(children) || children.length === 0) return false;
+      const now = new Date();
+      return children.some((child: Record<string, unknown>) => {
+        const dob = child?.dob;
+        if (!dob || typeof dob !== 'string') return false;
+        const birthDate = new Date(dob);
+        if (isNaN(birthDate.getTime())) return false;
+        const age = now.getFullYear() - birthDate.getFullYear();
+        const monthDiff = now.getMonth() - birthDate.getMonth();
+        const adjustedAge = monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())
+          ? age - 1
+          : age;
+        return adjustedAge < 18;
+      });
+    }
     default:
       return true;
   }
