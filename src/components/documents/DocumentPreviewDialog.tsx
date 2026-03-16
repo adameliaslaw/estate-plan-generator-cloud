@@ -40,7 +40,10 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  // blob:// URL used in the iframe (bypasses X-Frame-Options: SAMEORIGIN on storage URLs)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  // Original download URL kept for "Open in tab" only
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
@@ -51,26 +54,43 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   // The HTML content field (what the editor uses)
   const htmlContent = docWithExtra?.editorContent || docWithExtra?.content || '';
 
-  // ── Load PDF download URL when dialog opens ──
+  // ── Load PDF as blob when dialog opens ──
   useEffect(() => {
     if (!open || !doc || !isPdf || !doc.storagePath) {
-      setPdfUrl(null);
+      setPdfBlobUrl(null);
+      setPdfDownloadUrl(null);
       setPdfError('');
       return;
     }
 
     let cancelled = false;
+    let blobUrl: string | null = null;
     setPdfLoading(true);
     setPdfError('');
+
     getStorageDownloadUrl(doc.storagePath)
-      .then((url) => { if (!cancelled) setPdfUrl(url); })
+      .then(async (downloadUrl) => {
+        if (cancelled) return;
+        setPdfDownloadUrl(downloadUrl);
+        // Fetch as blob to get a same-origin blob:// URL (avoids X-Frame-Options block)
+        const response = await fetch(downloadUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (cancelled) return;
+        blobUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(blobUrl);
+      })
       .catch((err) => {
-        console.error('[DocumentPreviewDialog] Failed to load PDF URL:', err);
+        console.error('[DocumentPreviewDialog] Failed to load PDF:', err);
         if (!cancelled) setPdfError('Could not load the PDF. The file may have been moved or deleted.');
       })
       .finally(() => { if (!cancelled) setPdfLoading(false); });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Revoke blob URL to free memory when dialog closes
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
   }, [open, doc?.storagePath, isPdf]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!doc) return null;
@@ -90,12 +110,12 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {pdfUrl && (
+            {pdfDownloadUrl && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1.5 text-xs text-gray-500 hover:text-[#2b6cb0]"
-                onClick={() => window.open(pdfUrl, '_blank')}
+                onClick={() => window.open(pdfDownloadUrl, '_blank')}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open in tab
@@ -131,9 +151,9 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                   </div>
                 </div>
               )}
-              {pdfUrl && !pdfLoading && (
+              {pdfBlobUrl && !pdfLoading && (
                 <iframe
-                  src={pdfUrl}
+                  src={pdfBlobUrl}
                   title={doc.displayName}
                   className="w-full h-full border-0"
                   aria-label={`Preview of ${doc.displayName}`}
