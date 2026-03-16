@@ -67,6 +67,9 @@ async function saveUploadedDraftToVault(params: {
     docType: params.docType,
     displayName: params.displayName,
     status: 'draft',
+    // editorContent is what DocumentEditor reads on open (TipTap loads this field)
+    editorContent: params.content,
+    // content kept for reference / template engine
     content: params.content,
     storagePath: params.storagePath,
     fileName: params.fileName,
@@ -81,8 +84,8 @@ async function saveUploadedDraftToVault(params: {
     tags: ['uploaded-draft'],
     isConfidential: true,
     changeNotes: 'Uploaded existing draft',
-    createdAt: serverTimestamp(),   // top-level only — valid here
-    updatedAt: serverTimestamp(),   // top-level only — valid here
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
     createdBy: params.createdBy,
     updatedBy: params.createdBy,
   });

@@ -25,6 +25,7 @@ import {
   Search,
   SlidersHorizontal,
   FileText,
+  Eye,
   FileSignature,
   Loader2,
   AlertCircle,
@@ -78,6 +79,7 @@ import ExportButton from './ExportButton';
 import BatchExportButton from './BatchExportButton';
 import ESignatureDialog from './ESignatureDialog';
 import UploadDraftDialog from './UploadDraftDialog';
+import DocumentPreviewDialog from './DocumentPreviewDialog';
 import { cn } from '@/lib/utils';
 
 // ── Doc type display names ────────────────────────────────────────────────────
@@ -193,6 +195,7 @@ interface RowActionsProps {
   firmId: string;
   clientId: string;
   isStale?: boolean;
+  onPreview: (doc: Document) => void;
   onReview: (doc: Document) => void;
   onApprove: (doc: Document) => void;
   onDelete: (doc: Document) => void;
@@ -202,11 +205,26 @@ interface RowActionsProps {
   onVersionHistory: (doc: Document) => void;
 }
 
-function RowActions({ doc, firmId, clientId, isStale, onReview, onApprove, onDelete, onSendSignature, onEdit, onRegenerate, onVersionHistory }: RowActionsProps) {
+function RowActions({ doc, firmId, clientId, isStale, onPreview, onReview, onApprove, onDelete, onSendSignature, onEdit, onRegenerate, onVersionHistory }: RowActionsProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex items-center gap-1">
-        {/* Edit — Phase 4 placeholder */}
+        {/* Preview */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-gray-400 hover:text-[#2b6cb0]"
+              onClick={() => onPreview(doc)}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Preview document</TooltipContent>
+        </Tooltip>
+
+        {/* Edit */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -413,6 +431,7 @@ export default function DocumentVault({
   const [showFlexGen, setShowFlexGen] = useState(false);
   const [showSingleGen, setShowSingleGen] = useState(false);
   const [showUploadDraft, setShowUploadDraft] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [versionHistoryDoc, setVersionHistoryDoc] = useState<Document | null>(null);
 
   // ── Derived / filtered list ──────────────────────────────────────────────
@@ -808,6 +827,7 @@ export default function DocumentVault({
                           !!(doc.createdAt as { seconds: number } | undefined)?.seconds &&
                           clientUpdatedAt.seconds > (doc.createdAt as { seconds: number }).seconds
                         }
+                        onPreview={(d) => setPreviewDoc(d)}
                         onReview={handleAiReview}
                         onApprove={(d) => setApproveDoc(d)}
                         onDelete={(d) => setDeleteTarget(d)}
@@ -937,6 +957,13 @@ export default function DocumentVault({
         onClose={() => setShowUploadDraft(false)}
         firmId={firmId}
         clientId={clientId}
+      />
+
+      {/* ── Document Preview Dialog ──────────────────────────────────────────── */}
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        open={!!previewDoc}
+        onClose={() => setPreviewDoc(null)}
       />
     </div>
   );
