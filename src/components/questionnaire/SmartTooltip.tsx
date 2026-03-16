@@ -130,6 +130,13 @@ export const TOOLTIP_CONTENT: Record<string, TooltipEntry> = {
     example:
       'Example: You leave $200,000 in a special needs trust for your son with autism. He continues to receive Medicaid and SSI while the trust pays for therapies and activities.',
   },
+  ilit: {
+    title: 'Irrevocable Life Insurance Trust (ILIT)',
+    explanation:
+      'An ILIT is a trust designed to own your life insurance policy so the death benefit is excluded from your taxable estate. Once transferred, you no longer own the policy — the trust does. This can significantly reduce estate taxes for larger estates.',
+    example:
+      'Example: You transfer a $1M life insurance policy to an ILIT. When you pass, the $1M death benefit goes to the trust beneficiaries free of estate tax.',
+  },
 
   // --- Distribution concepts ---
   beneficiary: {
