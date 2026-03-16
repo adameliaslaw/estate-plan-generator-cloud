@@ -19,6 +19,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { type Document } from '@/types';
+// Vite ?url import resolves to the correct versioned path at build time
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -56,7 +58,7 @@ function PdfViewer({ downloadUrl }: PdfCanvasProps) {
         // Lazy-load pdfjs-dist to keep initial bundle small
         const pdfjs = await import('pdfjs-dist');
         // Serve worker from the same origin (avoids CSP script-src CDN restrictions)
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
         const loadingTask = pdfjs.getDocument({
           url: downloadUrl,
