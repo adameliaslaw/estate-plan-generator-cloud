@@ -335,7 +335,7 @@ Generate the complete document now.
 `.trim();
 
   const raw = await callAI(systemPrompt, userPrompt, firmData, {
-    model: 'gpt-4o',
+    model: 'gpt-5.4',
     temperature: docType === 'letterOfInstruction' || docType === 'coverLetter' ? 0.3 : 0.15,
     maxTokens: 6144,
     jsonMode: true,

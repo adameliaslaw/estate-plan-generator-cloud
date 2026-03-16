@@ -215,7 +215,7 @@ Generate the complete estate plan summary. Use the client's actual names through
 `.trim();
 
   const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-4o',
+    model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.3, // Slightly higher — this is client-friendly prose
     maxTokens: 8192,
     jsonMode: true,

@@ -338,7 +338,7 @@ export const summarizeTranscription = functions
     let aiSummary: string;
     try {
       aiSummary = await callAI(systemPrompt, userPrompt, firmData, {
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
         temperature: 0.2,
         maxTokens: 1024,
       });

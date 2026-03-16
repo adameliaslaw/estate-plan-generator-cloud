@@ -110,7 +110,7 @@ async function _callOpenAI(
   }
 
   const client = new OpenAI({ apiKey });
-  const model = options.model ?? 'gpt-4o'; // Updated to latest model (March 2026)
+  const model = options.model ?? 'gpt-5.4'; // Updated to latest model (March 2026)
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 

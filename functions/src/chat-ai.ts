@@ -389,12 +389,12 @@ export const chatAi = functions
         { regex: /\buse\s+opus\b/i, model: 'claude-opus-4-6' },
         { regex: /\busing\s+sonnet\b/i, model: 'claude-sonnet-4-6' },
         { regex: /\bwith\s+sonnet\b/i, model: 'claude-sonnet-4-6' },
-        { regex: /\busing\s+gpt-?5\b/i, model: 'gpt-4o' },
-        { regex: /\bwith\s+gpt-?5\b/i, model: 'gpt-4o' },
+        { regex: /\busing\s+gpt-?5\b/i, model: 'gpt-5.4' },
+        { regex: /\bwith\s+gpt-?5\b/i, model: 'gpt-5.4' },
         { regex: /\busing\s+gemini\b/i, model: 'gemini-2.5-flash' },
         { regex: /\bwith\s+gemini\b/i, model: 'gemini-2.5-flash' },
-        { regex: /\busing\s+gpt-?4\b/i, model: 'gpt-4o' },
-        { regex: /\bwith\s+gpt-?4\b/i, model: 'gpt-4o' },
+        { regex: /\busing\s+gpt-?4\b/i, model: 'gpt-5.4' },
+        { regex: /\bwith\s+gpt-?4\b/i, model: 'gpt-5.4' },
       ];
       for (const { regex, model } of modelPatterns) {
         if (regex.test(message)) {

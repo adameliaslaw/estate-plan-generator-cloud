@@ -29,7 +29,7 @@ interface GenerateRequest {
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
   generationMode?: GenerationMode;
-  /** Optional model override (e.g. 'gpt-4o', 'claude-sonnet-4-6') */
+  /** Optional model override (e.g. 'gpt-5.4', 'claude-sonnet-4-6') */
   modelOverride?: string;
   /** Optional software source filter for template selection */
   softwareSource?: string;
