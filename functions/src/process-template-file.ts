@@ -432,6 +432,14 @@ Respond with a valid JSON object (no markdown fences):
       if (hasVariables && looksLikeHtml) {
         templatizedHtml = templatizeResult;
         console.log(`[processTemplateFile] Phase 1: AI templatization successful (${templatizedHtml.length} chars output)`);
+
+        // Strip legacy [OBJ:...] / [OBJ ...] object codes from source drafting software
+        const beforeStrip = templatizedHtml.length;
+        templatizedHtml = templatizedHtml.replace(/\s*\[OBJ[:\s][^\]]*\]\s*/gi, ' ').replace(/  +/g, ' ');
+        const stripped = beforeStrip - templatizedHtml.length;
+        if (stripped > 0) {
+          console.log(`[processTemplateFile] Stripped legacy OBJ codes (${stripped} chars removed)`);
+        }
       } else {
         console.warn(`[processTemplateFile] Phase 1: AI output doesn't look right (hasVars=${hasVariables}, hasHtml=${looksLikeHtml}). Keeping original HTML.`);
       }
