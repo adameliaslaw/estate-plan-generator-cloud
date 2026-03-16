@@ -736,9 +736,10 @@ export default function PrintableQuestionnaire({
             padding: 0.65in;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
             background: #fff;
-            height: 11in;
+            height: 11in !important;
+            max-height: 11in !important;
             box-sizing: border-box;
-            overflow: hidden;
+            overflow: hidden !important;
           }
         }
       `}</style>
