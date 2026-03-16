@@ -567,7 +567,8 @@ Respond with JSON (no markdown fences):
   ]
 }`;
 
-        const missedRaw = await callAI(missedPrompt, '', firmData, {
+        const missedUserPrompt = `Map these names to template variables: ${missedNames.join(', ')}`;
+        const missedRaw = await callAI(missedPrompt, missedUserPrompt, firmData, {
           temperature: 0,
           maxTokens: 2000,
           jsonMode: true,
