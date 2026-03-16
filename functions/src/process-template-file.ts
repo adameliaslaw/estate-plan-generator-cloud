@@ -476,24 +476,31 @@ Respond with a valid JSON object (no markdown fences):
 
       for (const v of sorted) {
         if (!v.originalText || !v.suggestedVariable) continue;
-        // Skip very short matches (< 2 chars) to avoid replacing "I", "a", etc.
-        if (v.originalText.length < 2) continue;
+        // Skip very short matches (< 3 chars) to avoid replacing "I", "he", "my" etc.
+        if (v.originalText.length < 3) continue;
 
         const tag = `{{${v.suggestedVariable}}}`;
         // Escape special regex characters in the match text
         const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-        // CRITICAL: Use \b word boundaries to prevent replacing substrings
-        // within larger words (e.g. "her" inside "whether", "other", "there")
-        const regex = new RegExp(`\\b${escaped}\\b`, 'g');
+        // Build a smart word-boundary pattern:
+        // - Use \b for text that starts/ends with word characters
+        // - Use lookahead/lookbehind for text starting/ending with non-word chars (e.g. #)
+        const startsWithWord = /^\w/.test(v.originalText);
+        const endsWithWord = /\w$/.test(v.originalText);
+        const prefix = startsWithWord ? '\\b' : '(?<![\\w])';
+        const suffix = endsWithWord ? '\\b' : '(?![\\w])';
+
+        // CASE-INSENSITIVE: AI may return "Sean Byrnes" but HTML has "SEAN BYRNES"
+        const regex = new RegExp(`${prefix}${escaped}${suffix}`, 'gi');
         const before = templatizedHtml;
         templatizedHtml = templatizedHtml.replace(regex, tag);
         if (before === templatizedHtml) {
-          // No match found — log HTML context to diagnose tag splitting
+          // No match found — log context for debugging
           const plainIdx = templatizedHtml.toLowerCase().indexOf(v.originalText.toLowerCase());
           if (plainIdx >= 0) {
-            const snippet = templatizedHtml.slice(Math.max(0, plainIdx - 30), plainIdx + v.originalText.length + 30);
-            console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — case mismatch? HTML context: "${snippet}"`);
+            const snippet = templatizedHtml.slice(Math.max(0, plainIdx - 40), plainIdx + v.originalText.length + 40).replace(/<[^>]*>/g, '');
+            console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — HTML tags splitting? Context: "${snippet}"`);
           } else {
             console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — text not found in HTML at all`);
           }
@@ -514,30 +521,37 @@ Respond with a valid JSON object (no markdown fences):
     try {
       // Strip out existing {{...}} tags to avoid false positives, then scan for proper names
       const textWithoutTags = templatizedHtml.replace(/\{\{[^}]+\}\}/g, '___VAR___');
+      // Document codes and legal boilerplate to exclude
+      const excludePatterns = [
+        /^OBJ\b/i, /^STD\b/i, /^STDSPA\b/i, /^ARTICLE\b/i,
+        /LAST WILL/i, /SELF.PROVING/i, /NEW JERSEY/i, /NEW YORK/i,
+        /STATE OF/i, /WITNESS WHEREOF/i, /NO CONTEST/i, /RESIDUARY ESTATE/i,
+        /PROVING AFFIDAVIT/i, /MIDDLESEX COUNTY/i, /^WILL\b/i,
+        /Family Information/i, /Funeral Representative/i, /Executor Appointments/i,
+        /Fiduciary (Provisions|Powers)/i, /General Provisions/i,
+        /Disabled Person/i, /Regarding Changes/i, /Other Proceedings/i,
+        /Additional General/i, /Provisions Regarding/i, /Reliance Upon/i,
+        /Attempted Contest/i, /Does Not/i, /Last Resort/i, /First Level/i,
+        /Second Level/i, /Third Level/i, /Initial Executor/i, /Successor Executor/i,
+        /Wife (Survives|Does)/i, /Husband (Survives|Does)/i,
+      ];
+      const isExcluded = (name: string) => excludePatterns.some(p => p.test(name)) || name.length <= 4;
+
       // Match ALL-CAPS names (2+ words) like "ANTHONY ESERNIO" or "JEANA ESERNIO"
       const allCapsNames = [...new Set(
-        (textWithoutTags.match(/\b[A-Z][A-Z]+(?:\s+[A-Z][A-Z]+)+\b/g) ?? [])
-          .filter((n: string) => {
-            const lower = n.toLowerCase();
-            // Filter out legal boilerplate / section headers
-            return !lower.includes('article') && !lower.includes('last will')
-              && !lower.includes('self-proving') && !lower.includes('new jersey')
-              && !lower.includes('state of') && !lower.includes('witness whereof')
-              && !lower.includes('no contest') && !lower.includes('residuary estate')
-              && n.length > 4;
-          }),
+        (textWithoutTags.match(/\b[A-Z][A-Z]+(?:[\s.]+[A-Z][A-Z.]+)+\b/g) ?? [])
+          .filter((n: string) => !isExcluded(n)),
       )];
       // Match mixed-case proper names (First Last or First M. Last patterns)
       const mixedCaseNames = [...new Set(
         (textWithoutTags.match(/\b[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z]+\b/g) ?? [])
           .filter((n: string) => {
-            // Filter out common legal phrases and short matches
             const lower = n.toLowerCase();
-            return !lower.includes('article') && !lower.includes('section')
-              && !lower.includes('new jersey') && !lower.includes('united states')
-              && n.length > 5 && !lower.startsWith('if ') && !lower.startsWith('in ')
+            return !isExcluded(n) && n.length > 5
+              && !lower.startsWith('if ') && !lower.startsWith('in ')
               && !lower.startsWith('my ') && !lower.startsWith('the ')
-              && !lower.startsWith('no ') && !lower.startsWith('to ');
+              && !lower.startsWith('no ') && !lower.startsWith('to ')
+              && !lower.startsWith('an ') && !lower.startsWith('or ');
           }),
       )];
 
@@ -582,10 +596,12 @@ Respond with JSON (no markdown fences):
   ]
 }`;
 
-        const missedUserPrompt = `Map these names to template variables: ${missedNames.join(', ')}`;
+        // Limit to top 20 names to avoid overwhelming the AI and causing JSON truncation
+        const namesToProcess = missedNames.slice(0, 20);
+        const missedUserPrompt = `Map these ${namesToProcess.length} names to template variables: ${namesToProcess.join(', ')}`;
         const missedRaw = await callAI(missedPrompt, missedUserPrompt, firmData, {
           temperature: 0,
-          maxTokens: 2000,
+          maxTokens: 4000,
           jsonMode: true,
         });
 
@@ -607,7 +623,11 @@ Respond with JSON (no markdown fences):
             if (!v.originalText || !v.suggestedVariable) continue;
             const tag = `{{${v.suggestedVariable}}}`;
             const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`\\b${escaped}\\b`, 'g');
+            const startsWord = /^\w/.test(v.originalText);
+            const endsWord = /\w$/.test(v.originalText);
+            const pfx = startsWord ? '\\b' : '(?<![\\w])';
+            const sfx = endsWord ? '\\b' : '(?![\\w])';
+            const regex = new RegExp(`${pfx}${escaped}${sfx}`, 'gi');
             const before = templatizedHtml;
             templatizedHtml = templatizedHtml.replace(regex, tag);
             if (templatizedHtml !== before) {
