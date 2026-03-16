@@ -142,16 +142,21 @@ CRITICAL MAPPING RULES — SUCCESSOR FIDUCIARIES:
 - Hardcoded addresses (street addresses like "315 East 72nd Street, Apt. PH, New York, New York") next to fiduciary names are client data — ALWAYS detect them as variables using the .address field.
 
 CRITICAL MAPPING RULES — GUARDIANS:
-- Guardian appointments are a SEPARATE fiduciary role from executors. They MUST use fiduciaries.guardian.* paths — NEVER fiduciaries.executor.* paths.
-- Even if the same person serves as both executor and guardian, the variables must use SEPARATE field paths because different clients may appoint different people to each role.
+- Guardian appointments are a SEPARATE fiduciary role from executors AND trustees. They MUST use fiduciaries.guardian.* paths — NEVER fiduciaries.executor.* or fiduciaries.trustee.* paths.
+- Even if the SAME PERSON serves as both executor/trustee AND guardian, the guardian appointment MUST use guardian field paths. Different clients may appoint different people to each role.
 - CORRECT guardian variable paths:
   - Primary guardian: fiduciaries.guardian.primary.name / .relationship / .address
-  - Alternate/successor guardian: fiduciaries.guardian.alternate.name / .relationship / .address
-  - Second successor guardian: fiduciaries.guardian.successor.name / .relationship / .address
-- NEVER use fiduciaries.executor.alternate.name, fiduciaries.executor.successor.name, or fiduciaries.executor.secondSuccessor.name for guardian appointments.
-- "I appoint X as guardian" → fiduciaries.guardian.primary.name (+ .relationship)
-- "I appoint Y as co-guardian" or "second guardian" → fiduciaries.guardian.alternate.name (+ .relationship)
-- "I appoint Z as successor guardian" → fiduciaries.guardian.successor.name (+ .relationship)
+  - Alternate/co-guardian: fiduciaries.guardian.alternate.name / .relationship / .address
+  - Successor guardian: fiduciaries.guardian.successor.name / .relationship / .address
+- NEVER use fiduciaries.executor.* or fiduciaries.trustee.* paths for any person named in a guardian appointment — even if that person appears elsewhere as executor or trustee.
+- RELATIONSHIP WORDS IN GUARDIAN SECTIONS: Every relationship descriptor before a guardian's name MUST be templatized:
+  - WRONG: "my parents, {{fiduciaries.guardian.primary.name}}" — "my parents" is hardcoded
+  - CORRECT: "my {{fiduciaries.guardian.primary.relationship}}, {{fiduciaries.guardian.primary.name}}"
+  - WRONG: "my brother, {{fiduciaries.trustee.primary.name}}" — wrong path AND hardcoded relationship
+  - CORRECT: "my {{fiduciaries.guardian.successor.relationship}}, {{fiduciaries.guardian.successor.name}}"
+  - WRONG: "my sister-in-law, {{name}}" — hardcoded relationship
+  - CORRECT: "my {{fiduciaries.guardian.alternate.relationship}}, {{fiduciaries.guardian.alternate.name}}"
+- Scan the ENTIRE guardian article for relationship words (parent, brother, sister, uncle, aunt, cousin, friend, etc.) followed by a name — ALL must be templatized.
 
 CRITICAL MAPPING RULES — WITNESSES AND FIRM DATA:
 - Witness names in execution/attestation/self-proving affidavit sections are NOT the client — they are firm staff.
