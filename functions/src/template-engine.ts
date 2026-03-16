@@ -524,49 +524,57 @@ export async function getTemplate(
     if (!snap.exists) return null;
     rawData = snap.data();
   } else {
-    // Build query by docType + variant or default
-    const buildQuery = (withSoftware: boolean) => {
-      let q = col
-        .where('docType', '==', docType)
-        .where('isActive', '==', true);
+    // Build a base query for docType + isActive
+    const buildBaseQuery = () =>
+      col.where('docType', '==', docType).where('isActive', '==', true);
 
-      if (variant) {
-        q = q.where('variant', '==', variant);
-      } else {
-        q = q.where('isDefault', '==', true);
-      }
-
-      if (withSoftware && softwareSource) {
-        q = q.where('softwareSource', '==', softwareSource);
-      }
-
-      return q;
-    };
-
-    // Try with softwareSource filter first
     if (softwareSource) {
-      const snap = await buildQuery(true).limit(1).get();
-      if (!snap.empty) {
-        rawData = snap.docs[0].data();
+      // When a specific software source is requested, find ANY active template
+      // for that source (no isDefault requirement — bulk-uploaded templates are
+      // often not marked as default).
+      const sourceSnap = await buildBaseQuery()
+        .where('softwareSource', '==', softwareSource)
+        .limit(1)
+        .get();
+
+      if (!sourceSnap.empty) {
+        rawData = sourceSnap.docs[0].data();
       } else {
-        // Auto-fallback: query without software filter
+        // No template for this software source — fall back to isDefault=true
+        // without the software filter.
         console.info(
           `[getTemplate] No template found for docType="${docType}" softwareSource="${softwareSource}", falling back.`,
         );
-        const fallbackSnap = await buildQuery(false).limit(1).get();
+        const fallbackSnap = await buildBaseQuery()
+          .where('isDefault', '==', true)
+          .limit(1)
+          .get();
         if (!fallbackSnap.empty) {
           rawData = fallbackSnap.docs[0].data();
         }
       }
+    } else if (variant) {
+      // Specific variant requested
+      const snap = await buildBaseQuery()
+        .where('variant', '==', variant)
+        .limit(1)
+        .get();
+      if (!snap.empty) rawData = snap.docs[0].data();
     } else {
-      const snap = await buildQuery(false).limit(1).get();
-      if (!snap.empty) {
-        rawData = snap.docs[0].data();
-      }
+      // No software source or variant — use the default template
+      const snap = await buildBaseQuery()
+        .where('isDefault', '==', true)
+        .limit(1)
+        .get();
+      if (!snap.empty) rawData = snap.docs[0].data();
     }
   }
 
-  // Runtime validation: ensure required fields exist
+  // Runtime validation: ensure required fields exist.
+  // Support both 'content' (canonical) and 'editorContent' (editor-saved) field names.
+  if (rawData && !rawData.content?.trim() && rawData.editorContent?.trim()) {
+    rawData = { ...rawData, content: rawData.editorContent };
+  }
   if (!rawData || typeof rawData.content !== 'string' || !rawData.content.trim()) {
     console.error(
       `[getTemplate] Template for docType="${docType}" is missing required "content" field. ` +

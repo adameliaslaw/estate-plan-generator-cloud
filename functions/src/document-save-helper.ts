@@ -147,7 +147,7 @@ export async function saveDocumentToVault(
     notarized: requiresNotarization(params.docType),
     changeNotes,
     tags: existing.exists
-      ? admin.firestore.FieldValue.arrayUnion(...allTags)
+      ? (allTags.length > 0 ? admin.firestore.FieldValue.arrayUnion(...allTags) : (existing.data()?.tags ?? []))
       : allTags,
     isConfidential: true,
     updatedAt: now,
