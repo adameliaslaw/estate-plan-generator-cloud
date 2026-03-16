@@ -321,17 +321,17 @@ export default function PrintableQuestionnaire({
 
             {/* SECTION 2: SPOUSE */}
             <SectionHeader title="Section 2 — Spouse / Domestic Partner" />
-            <p className="text-[8pt] text-gray-500 italic mb-2">
+            <p className="text-[8pt] text-gray-500 italic mb-1">
               Complete only if married or in a domestic partnership.
             </p>
 
-            <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-1">
               <LabeledField label="First Name" />
               <LabeledField label="Middle Name" />
               <LabeledField label="Last Name" />
               <LabeledField label="Suffix" />
             </div>
-            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
               <LabeledField label="Date of Birth" />
               <LabeledField label="Last 4 SSN" width="60%" />
               <div className="col-span-2">
@@ -342,27 +342,27 @@ export default function PrintableQuestionnaire({
                 </div>
               </div>
             </div>
-            <div className="mt-2">
-              <div className="flex items-center gap-4 mb-1">
+            <div className="mt-1">
+              <div className="flex items-center gap-4 mb-0.5">
                 <CheckOption label="Same address as client above" />
                 <span className="text-[8pt] text-gray-400 italic">If not, complete below:</span>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-y-2 mt-1">
+            <div className="grid grid-cols-1 gap-y-1 mt-0.5">
               <LabeledField label="Street Address" />
             </div>
-            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
               <LabeledField label="City" />
               <LabeledField label="State" />
               <LabeledField label="ZIP Code" />
               <LabeledField label="County" />
             </div>
-            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
               <LabeledField label="Email" />
               <LabeledField label="Phone" />
               <LabeledField label="Alternate Phone" />
             </div>
-            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
               <div>
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
                 <div className="space-y-0.5">
@@ -371,7 +371,7 @@ export default function PrintableQuestionnaire({
                   <CheckOption label="Non-Resident" />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <LabeledField label="Occupation" />
                 <LabeledField label="Employer" />
               </div>
@@ -693,7 +693,8 @@ export default function PrintableQuestionnaire({
             margin: 0 !important;
             box-sizing: border-box;
             overflow: hidden;
-            position: relative;
+            display: flex !important;
+            flex-direction: column !important;
             page-break-after: always;
             page-break-inside: avoid;
             break-after: page;
@@ -735,8 +736,9 @@ export default function PrintableQuestionnaire({
             padding: 0.65in;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
             background: #fff;
-            min-height: 11in;
+            height: 11in;
             box-sizing: border-box;
+            overflow: hidden;
           }
         }
       `}</style>
