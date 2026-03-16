@@ -491,7 +491,6 @@ export default function PrintableQuestionnaire({
                   <CheckOption label="Burial" />
                   <CheckOption label="Cremation" />
                   <CheckOption label="No preference" />
-                  <CheckOption label="Other" />
                 </div>
               </div>
               <div>
