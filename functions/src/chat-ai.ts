@@ -263,7 +263,29 @@ async function buildContextString(
 }
 
 // ---------------------------------------------------------------------------
-// Detect generation intent in AI response
+// Detect generation intent in USER MESSAGE (pre-LLM short-circuit)
+// ---------------------------------------------------------------------------
+
+/**
+ * Patterns that indicate the user is explicitly requesting document generation.
+ * When matched in draft mode, we skip the chat LLM call and go straight to
+ * the unified generator — eliminating the double-LLM-call bottleneck.
+ */
+const USER_GENERATION_PATTERNS: RegExp[] = [
+  /\b(?:draft|generate|create|produce|write|prepare|make)\s+(?:a\s+|the\s+|my\s+)?(?:will|trust|poa|power\s+of\s+attorney|deed|advance\s+directive|living\s+will|document)/i,
+  /\b(?:draft|generate|create|produce)\s+(?:it|this|the\s+document|the\s+draft)/i,
+  /\bgo\s+ahead\s+and\s+(?:draft|generate|create)/i,
+  /\b(?:please\s+)?(?:draft|generate)\b.*\btemplate\b/i,
+  /\bready\s+to\s+(?:draft|generate)/i,
+  /\blet'?s\s+(?:draft|generate|create)/i,
+];
+
+function detectUserGenerationIntent(message: string): boolean {
+  return USER_GENERATION_PATTERNS.some((p) => p.test(message));
+}
+
+// ---------------------------------------------------------------------------
+// Detect generation intent in AI response (fallback for conversational flow)
 // ---------------------------------------------------------------------------
 
 interface GenerationAction {
@@ -315,7 +337,7 @@ function detectGenerationIntent(raw: string, draftDocType?: string): GenerationA
 // ---------------------------------------------------------------------------
 
 export const chatAi = functions
-  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
   .region('us-east1')
   .https.onCall(
   async (data: ChatAiRequest, context: functions.https.CallableContext) => {
@@ -337,12 +359,15 @@ export const chatAi = functions
     }
 
     try {
+      const t0 = Date.now();
+
       // 2. Fetch firm data (for API keys and provider)
       const firmDoc = await admin.firestore().collection('firms').doc(firmId).get();
       if (!firmDoc.exists) {
         throw new functions.https.HttpsError('not-found', 'Firm not found.');
       }
       const firmData = firmDoc.data() as FirmData;
+      console.log(`[chatAi] Firm fetch: ${Date.now() - t0}ms`);
 
       // 3. Load existing conversation if resuming
       let resolvedHistory = history.slice(-20); // Cap history to prevent unbounded prompt growth
@@ -356,14 +381,7 @@ export const chatAi = functions
         }
       }
 
-      // 4. Build context (full aggregation for both modes)
-      // Pass user message for vector search when no client is selected
-      const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, {
-        ...contextParams,
-        __userMessage: message,
-      });
-
-      // 4b. Detect model override in user message
+      // 3b. Detect model override in user message
       let modelOverride: string | undefined;
       const modelPatterns: Array<{ regex: RegExp; model: string }> = [
         { regex: /\busing\s+opus\b/i, model: 'claude-opus-4-6' },
@@ -385,7 +403,84 @@ export const chatAi = functions
         }
       }
 
-      // 5. Fetch template awareness, learning context, and memory (parallel)
+      // =====================================================================
+      // 4. SHORT-CIRCUIT: If the user explicitly requests generation in draft
+      //    mode with a client selected, skip the chat LLM call entirely and
+      //    route directly to the unified generator. This eliminates the
+      //    double-LLM-call that was causing timeouts.
+      // =====================================================================
+      if (mode === 'draft' && clientId && detectUserGenerationIntent(message)) {
+        const targetDocType = draftDocType ?? 'will';
+        console.log(`[chatAi] Short-circuit: user explicitly requested ${targetDocType} generation, skipping chat LLM call`);
+
+        // Aggregate context once (will be reused by the generator)
+        let preloadedContext: Awaited<ReturnType<typeof aggregateClientContext>> | undefined;
+        try {
+          preloadedContext = await aggregateClientContext(firmId, clientId, targetDocType);
+          console.log(`[chatAi] Context aggregation: ${Date.now() - t0}ms`);
+        } catch (ctxErr) {
+          console.warn('[chatAi] Context aggregation failed for short-circuit:', ctxErr);
+        }
+
+        try {
+          const genResult = await generateDocument({
+            firmId,
+            clientId,
+            docType: targetDocType,
+            generationMode: 'hybrid',
+            customInstructions: message, // Pass the user's full message as instructions
+            createdBy: context.auth.uid,
+            triggerSource: 'chat-draft',
+            modelOverride,
+            preloadedContext,
+          });
+          console.log(`[chatAi] Short-circuit generation complete: ${Date.now() - t0}ms`);
+
+          const reply = `I've generated your ${targetDocType} and saved it to the Document Vault as "${genResult.title}" (version ${genResult.currentVersion}).`;
+
+          // Save conversation
+          const allMessages: ConversationMessage[] = [
+            ...resolvedHistory.map((m) => ({
+              role: m.role,
+              content: m.content,
+              timestamp: new Date().toISOString(),
+            })),
+            { role: 'user' as const, content: message, timestamp: new Date().toISOString() },
+            {
+              role: 'assistant' as const,
+              content: `[Document draft saved to vault: "${genResult.title}"]`,
+              timestamp: new Date().toISOString(),
+              isDraft: true,
+              draftTitle: genResult.title,
+            },
+          ];
+          const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
+
+          return {
+            reply,
+            draftContent: genResult.content,
+            draftTitle: genResult.title,
+            conversationId: convId,
+          } as ChatAiResponse;
+        } catch (genErr) {
+          console.error('[chatAi] Short-circuit generation failed:', genErr);
+          // Fall through to normal chat flow so the user gets a helpful error message
+        }
+      }
+
+      // =====================================================================
+      // 5. Normal flow: Build context, call LLM, detect generation intent
+      // =====================================================================
+
+      // Build context (full aggregation for both modes)
+      // Pass user message for vector search when no client is selected
+      const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, {
+        ...contextParams,
+        __userMessage: message,
+      });
+      console.log(`[chatAi] Context build: ${Date.now() - t0}ms`);
+
+      // Fetch template awareness, learning context, and memory (parallel)
       const [templateSummary, learningCtx, memoryPromptStr] = await Promise.all([
         getTemplateSummary(firmId),
         getLearningContext(firmId).catch(() => null),
@@ -394,7 +489,7 @@ export const chatAi = functions
 
       const learningPromptStr = learningCtx ? formatLearningPrompt(learningCtx) : '';
 
-      // 6. Build prompt (now includes memory context)
+      // Build prompt (now includes memory context)
       const systemPrompt = buildChatSystemPrompt(
         mode,
         draftDocType,
@@ -415,7 +510,7 @@ export const chatAi = functions
         userPrompt = message;
       }
 
-      // 7. Call the LLM
+      // Call the LLM
       // Draft mode uses documentDraftingModel for higher quality; chat uses chatbotModel
       const effectiveModel = mode === 'draft'
         ? (modelOverride ?? firmData?.documentDraftingModel ?? firmData?.chatbotModel ?? undefined)
@@ -425,6 +520,7 @@ export const chatAi = functions
         temperature: mode === 'draft' ? 0.2 : 0.4,
         maxTokens: mode === 'draft' ? 16000 : 8000,
       });
+      console.log(`[chatAi] LLM call complete: ${Date.now() - t0}ms`);
 
       // 8. Build the conversation messages for persistence
       const allMessages: ConversationMessage[] = [
@@ -450,7 +546,7 @@ export const chatAi = functions
           // instead of parsing the AI's response as the document
           const targetDocType = genAction.docType ?? draftDocType ?? 'custom';
 
-          console.log(`[chatAi] Generation intent detected for ${targetDocType}, routing to unified generator`);
+          console.log(`[chatAi] Generation intent detected for ${targetDocType}, routing to unified generator (${Date.now() - t0}ms elapsed)`);
 
           try {
             const genResult = await generateDocument({

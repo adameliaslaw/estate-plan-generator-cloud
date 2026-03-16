@@ -21,7 +21,7 @@
 import * as admin from 'firebase-admin';
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
-import { aggregateClientContext } from './client-context-aggregator';
+import { aggregateClientContext, ClientContext } from './client-context-aggregator';
 import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper';
 import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
@@ -71,6 +71,8 @@ export interface UnifiedGenerateParams {
   additionalData?: Record<string, unknown>;
   /** Model override */
   modelOverride?: string;
+  /** Pre-loaded client context — skips redundant aggregation when caller already has it */
+  preloadedContext?: ClientContext;
 }
 
 export interface UnifiedGenerateResult {
@@ -231,12 +233,15 @@ export async function generateDocument(
 
   // ------------------------------------------------------------------
   // 2. Aggregate context (always — not just for template/hybrid)
+  //    Reuse preloadedContext when available to avoid redundant Firestore reads
   // ------------------------------------------------------------------
-  let clientContext: Awaited<ReturnType<typeof aggregateClientContext>> | null = null;
-  try {
-    clientContext = await aggregateClientContext(firmId, clientId, docType);
-  } catch (ctxErr) {
-    console.warn(`[unifiedGenerator] Context aggregation failed for ${docType}:`, ctxErr);
+  let clientContext: ClientContext | null = params.preloadedContext ?? null;
+  if (!clientContext) {
+    try {
+      clientContext = await aggregateClientContext(firmId, clientId, docType);
+    } catch (ctxErr) {
+      console.warn(`[unifiedGenerator] Context aggregation failed for ${docType}:`, ctxErr);
+    }
   }
 
   // ------------------------------------------------------------------
