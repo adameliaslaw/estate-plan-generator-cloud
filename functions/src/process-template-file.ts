@@ -118,6 +118,17 @@ CRITICAL MAPPING RULES — RELATIONSHIP WORDS vs NAMES:
 - Only actual NAMES (e.g., "John Smith", "Jane Doe") should map to name fields like clientFullName, spouseFullName, children[0].name
 - Phrases like "my husband, Sean Byrnes" contain TWO variables: "my husband" → spouseTitle, "Sean Byrnes" → spouseFullName
 
+CRITICAL MAPPING RULES — COMPOUND RELATIONSHIP TITLES:
+- Relationship titles like "sister-in-law", "brother-in-law", "mother-in-law", "father-in-law", "daughter-in-law", "son-in-law" are SINGLE relationship values.
+- NEVER split a compound title into a variable + literal suffix (e.g., WRONG: {{relationship}}-in-law). The ENTIRE compound title is ONE variable: {{relationship}} = "sister-in-law".
+- The .relationship field stores the FULL relationship descriptor from the client's perspective, including "-in-law" when applicable.
+- "my sister-in-law, Olivia Esernio" → TWO variables: "my sister-in-law" → the relationship title, "Olivia Esernio" → the name field.
+
+CRITICAL — EVERY PROPER NAME MUST BE DETECTED:
+- Every capitalized proper name (person's full name) in the document MUST be detected as a variable. No hardcoded names allowed.
+- If a name appears that you cannot match to an existing field, use the CLOSEST available field path.
+- Scan the ENTIRE document for proper names — do not skip any section.
+
 CRITICAL MAPPING RULES — SUCCESSOR FIDUCIARIES:
 - Estate planning documents often appoint MULTIPLE levels of successor executors/trustees. Each level MUST use a DIFFERENT variable path.
 - "First Successor Executor" → fiduciaries.executor.alternate.name (+ .relationship, .address)
