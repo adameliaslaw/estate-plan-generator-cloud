@@ -250,11 +250,18 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const isDocx = doc?.mimeType?.includes('word') || doc?.fileName?.toLowerCase().endsWith('.docx') || doc?.fileName?.toLowerCase().endsWith('.doc');
   const isHtmlFile = doc?.storagePath?.toLowerCase().endsWith('.html') || doc?.mimeType === 'text/html' || doc?.fileName?.toLowerCase().endsWith('.html');
   
-  // Extract inline HTML, but ignore it if it's just a blank placeholder paragraph
-  let inlineHtml = docWithExtra?.editorContent || docWithExtra?.content || '';
-  const strippedHtml = inlineHtml.replace(/<[^>]*>/g, '').trim();
-  if (!strippedHtml) {
-    inlineHtml = ''; // Treat as empty if there's no actual text content inside the HTML tags
+  // Extract inline HTML. Strip tags to check if each field has real text content.
+  // editorContent can be "<p></p>" (empty) even when the real AI content is in `content`.
+  // So we validate each field independently and prefer whichever has actual text.
+  const hasRealText = (html: string) => !!html.replace(/<[^>]*>/g, '').trim();
+  const rawEditorContent = docWithExtra?.editorContent || '';
+  const rawContent = docWithExtra?.content || '';
+  // Prefer content over editorContent when editorContent is empty/blank
+  let inlineHtml = '';
+  if (hasRealText(rawEditorContent)) {
+    inlineHtml = rawEditorContent;
+  } else if (hasRealText(rawContent)) {
+    inlineHtml = rawContent;
   }
 
   // Show inline HTML if we already have it (AI-extracted on upload)
@@ -337,11 +344,14 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                  return;
                }
                const data = snap.data();
-               const content = data?.editorContent || data?.content || '';
+               const stripTags = (html: string) => html.replace(/<[^>]*>/g, '').trim();
+               const editorHtml = typeof data?.editorContent === 'string' && stripTags(data.editorContent) ? data.editorContent : '';
+               const bodyHtml = typeof data?.content === 'string' && stripTags(data.content) ? data.content : '';
+               const content = editorHtml || bodyHtml;
                if (!content) {
-                 setLoadError('Document is empty.');
+                 setLoadError('Document is empty — please regenerate it.');
                } else {
-                 setFetchedHtml(content as string);
+                 setFetchedHtml(content);
                }
             })
             .catch(err => {
