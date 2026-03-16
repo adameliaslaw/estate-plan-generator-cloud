@@ -124,13 +124,13 @@ const TYPE_BADGE: Record<string, string> = {
 
 // ── Date formatter ────────────────────────────────────────────────────────────
 
-function formatDate(ts: { seconds: number } | null | undefined): string {
-  if (!ts) return '—';
-  return new Date(ts.seconds * 1000).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+function formatDate(ts: { seconds: number } | null | undefined): { date: string; time: string } | null {
+  if (!ts?.seconds) return null;
+  const d = new Date(ts.seconds * 1000);
+  return {
+    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+  };
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
@@ -784,8 +784,16 @@ export default function DocumentVault({
                     </td>
 
                     {/* Last modified */}
-                    <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                      {formatDate(doc.updatedAt as { seconds: number } | null)}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {(() => {
+                        const dt = formatDate(doc.updatedAt as { seconds: number } | null);
+                        return dt ? (
+                          <>
+                            <p className="text-sm text-gray-700">{dt.date}</p>
+                            <p className="text-xs text-gray-400">{dt.time}</p>
+                          </>
+                        ) : <span className="text-sm text-gray-400">—</span>;
+                      })()}
                     </td>
 
                     {/* Actions */}
