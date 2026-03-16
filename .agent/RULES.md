@@ -37,3 +37,7 @@ Never stop or pause an active task to address a new user message unless it is di
 - If the user sends an unrelated message mid-task, acknowledge it briefly but continue the current work to completion first.
 - Only pivot if the message indicates a critical issue with the current task (e.g., "stop, that's breaking things").
 - Queue unrelated requests and address them after the current task is fully deployed and verified.
+
+## Debugging
+
+- **Never guess at root causes.** Always go straight to the source of truth first — check logs, read error messages, inspect actual data. Do not hypothesize and deploy speculative fixes. Pull the logs, read them, identify the exact failure point, then fix it.
