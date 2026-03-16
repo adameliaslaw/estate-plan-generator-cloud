@@ -485,11 +485,15 @@ Respond with a valid JSON object (no markdown fences):
         let fixCount = 0;
 
         const correctedParagraphs = paragraphs.map((para) => {
+          // Strip out handlebars variables before checking context so we don't accidentally match
+          // the word "executor" inside a leaked {{fiduciaries.executor.foo}} variable.
+          const textOnly = para.replace(/\{\{[^}]+\}\}/g, '');
+
           // Determine what fiduciary role this paragraph is about
           let detectedRole: typeof fiduciaryRoles[0] | null = null;
           for (const role of fiduciaryRoles) {
-            // Only match context if the paragraph mentions the role AND contains fiduciary variables
-            if (role.contextPatterns.some((p) => p.test(para)) && /\{\{fiduciaries\./.test(para)) {
+            // Only match context if the PLAIN text mentions the role AND the original para contains fiduciary variables
+            if (role.contextPatterns.some((p) => p.test(textOnly)) && /\{\{fiduciaries\./.test(para)) {
               detectedRole = role;
               break;
             }
