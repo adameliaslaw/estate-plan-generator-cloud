@@ -248,16 +248,27 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const docWithExtra = doc as (Document & { editorContent?: string; content?: string }) | null;
   const isPdf = doc?.mimeType === 'application/pdf' || doc?.fileName?.toLowerCase().endsWith('.pdf');
   const isDocx = doc?.mimeType?.includes('word') || doc?.fileName?.toLowerCase().endsWith('.docx') || doc?.fileName?.toLowerCase().endsWith('.doc');
-  const isHtmlFile = doc?.storagePath?.toLowerCase().endsWith('.html') || doc?.mimeType === 'text/html';
+  const isHtmlFile = doc?.storagePath?.toLowerCase().endsWith('.html') || doc?.mimeType === 'text/html' || doc?.fileName?.toLowerCase().endsWith('.html');
   const inlineHtml = docWithExtra?.editorContent || docWithExtra?.content || '';
   // Show inline HTML if we already have it (AI-extracted on upload)
   const canShowHtmlDirectly = !isPdf && !!inlineHtml;
   // Need to download bytes if it's a PDF, DOCX without extracted HTML, or HTML file without inline content BUT has a storage path
   const needsStorageDownload = !!doc?.storagePath && (isPdf || (isDocx && !canShowHtmlDirectly) || (isHtmlFile && !canShowHtmlDirectly));
   // Need to fetch full doc from Firestore if it's an HTML file, has no inline content, and NO storage path (e.g. AI generated docs from the list view)
-  const needsFirestoreFetch = !isPdf && !isDocx && !inlineHtml && !doc?.storagePath && !!doc?.id;
+  const needsFirestoreFetch = !isPdf && !isDocx && !inlineHtml && !doc?.storagePath && !!doc?.id && isHtmlFile;
 
   useEffect(() => {
+    console.log('[DocumentPreviewDialog DEBUG]', {
+      open,
+      docId: doc?.id,
+      docType: doc?.docType,
+      fileName: doc?.fileName,
+      storagePath: doc?.storagePath,
+      hasInlineHtml: !!inlineHtml,
+      needsStorageDownload,
+      needsFirestoreFetch,
+    });
+
     if (!open) {
       setFileBytes(null);
       setDownloadUrl(null);
@@ -417,7 +428,7 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
             <DocxViewer bytes={fileBytes} />
           )}
 
-          {/* No content available */}
+          {/* No content available fallback - only if NOT loading, NO error, NOT pdf, NO html to show, NOT a docx */}
           {!loading && !loadError && !isPdf && !canShowHtmlDirectly && !fetchedHtml && !isDocx && (
             <div className="flex h-full items-center justify-center bg-gray-100">
               <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center max-w-sm">
