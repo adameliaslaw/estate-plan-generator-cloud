@@ -404,4 +404,29 @@ export const templateService = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return res.data as any;
   },
+
+  /**
+   * Update only the tags on an existing template.
+   * Re-uses the `uploadTemplate` Cloud Function which supports partial updates
+   * when a `templateId` is provided (content is optional for updates).
+   */
+  async updateTemplateTags(
+    firmId: string,
+    template: TemplateVariant,
+    tags: string[],
+  ): Promise<{ templateId: string; version: number }> {
+    const fn = httpsCallable(functions, 'uploadTemplate');
+    const res = await fn({
+      firmId,
+      templateId: template.id,
+      docType: template.docType,
+      name: template.name,
+      description: template.description,
+      variant: template.variant,
+      complexity: template.complexity,
+      isDefault: template.isDefault,
+      tags,
+    });
+    return res.data as { templateId: string; version: number };
+  },
 };

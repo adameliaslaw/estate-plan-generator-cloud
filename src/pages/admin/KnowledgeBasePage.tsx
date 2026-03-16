@@ -15,6 +15,7 @@ import {
   Edit,
   FileText,
   Scale,
+  Tag,
   Eye,
   BookMarked,
   ClipboardList,
@@ -41,6 +42,7 @@ import { AddTemplateDialog } from '@/components/knowledge/AddTemplateDialog';
 import { BulkTemplateUploadDialog } from '@/components/knowledge/BulkTemplateUploadDialog';
 import { BulkImportDialog } from '@/components/knowledge/KBBulkImportDialog';
 import { TemplatePreviewDialog } from '@/components/knowledge/TemplatePreviewDialog';
+import { EditTemplateTagsDialog } from '@/components/knowledge/EditTemplateTagsDialog';
 import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sources';
 
 // ---------------------------------------------------------------------------
@@ -144,6 +146,7 @@ export default function KnowledgeBasePage() {
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ id: string; name: string } | null>(null);
+  const [editingTemplateTags, setEditingTemplateTags] = useState<TemplateVariant | null>(null);
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
   const [templateEmbeddingState, setTemplateEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
 
@@ -761,6 +764,12 @@ export default function KnowledgeBasePage() {
                       <Eye className="h-3 w-3" /> Preview
                     </button>
                     <button
+                      onClick={() => setEditingTemplateTags(t)}
+                      className="flex items-center gap-1 rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                    >
+                      <Tag className="h-3 w-3" /> Edit Tags
+                    </button>
+                    <button
                       onClick={() => handleDeleteTemplate(t.id)}
                       className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
                     >
@@ -815,6 +824,15 @@ export default function KnowledgeBasePage() {
         templateId={previewTemplate?.id ?? ''}
         templateName={previewTemplate?.name ?? ''}
         onSaved={() => fetchTemplates()}
+      />
+
+      {/* Edit Template Tags Dialog */}
+      <EditTemplateTagsDialog
+        open={!!editingTemplateTags}
+        onClose={() => setEditingTemplateTags(null)}
+        firmId={firmId ?? ''}
+        template={editingTemplateTags}
+        onSaved={() => { setEditingTemplateTags(null); fetchTemplates(); }}
       />
     </div>
   );
