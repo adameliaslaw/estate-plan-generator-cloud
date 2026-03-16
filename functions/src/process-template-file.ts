@@ -423,10 +423,12 @@ Respond with a valid JSON object (no markdown fences):
         if (v.originalText.length < 2) continue;
 
         const tag = `{{${v.suggestedVariable}}}`;
-        // Use a regex for case-sensitive whole-word-ish matching
         // Escape special regex characters in the match text
         const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escaped, 'g');
+
+        // CRITICAL: Use \b word boundaries to prevent replacing substrings
+        // within larger words (e.g. "her" inside "whether", "other", "there")
+        const regex = new RegExp(`\\b${escaped}\\b`, 'g');
         templatizedHtml = templatizedHtml.replace(regex, tag);
       }
 
