@@ -434,8 +434,8 @@ export default function PrintableQuestionnaire({
             <div className="space-y-0">
               <FiduciaryBlock role="Trustee" />
               <FiduciaryBlock role="Executor" />
-              <FiduciaryBlock role="POA Agent" />
-              <FiduciaryBlock role="Healthcare Rep" />
+              <FiduciaryBlock role="Power of Attorney (Agent)" />
+              <FiduciaryBlock role="Healthcare Representative" />
               <FiduciaryBlock role="Guardian" subtitle="(If Children or grandchildren under 18)" />
             </div>
 
