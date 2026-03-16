@@ -86,7 +86,7 @@ OUTPUT FORMAT — JSON only:
 export async function generatePOA(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
-  packageType: string,
+  _packageType: string,
   _trustTypes?: string[],
 ): Promise<GeneratedDoc> {
   const safe = sanitizeObject(clientData);
@@ -166,6 +166,14 @@ Generate the complete Durable POA now. Include all enumerated powers, the exact 
   });
 
   const parsed = parseAIJson<{ title: string; content: string }>(raw);
+
+  // Guard: content must be non-trivially populated
+  if (!parsed.content || parsed.content.trim().length < 200) {
+    throw new Error(
+      `[generatePOA] AI returned empty or near-empty content (${parsed.content?.length ?? 0} chars). ` +
+      `Title was: "${parsed.title}". Raw response (first 300): ${raw.slice(0, 300)}`,
+    );
+  }
 
   return {
     docType: 'poa',

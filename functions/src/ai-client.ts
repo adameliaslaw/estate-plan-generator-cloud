@@ -465,17 +465,36 @@ export async function callAIWithVision(
 export function parseAIJson<T>(raw: string): T {
   let cleaned = raw.trim();
 
-  // Strip opening markdown fence: ```json or ``` (possibly with leading whitespace/newlines)
-  cleaned = cleaned.replace(/^\s*```(?:json)?\s*\n?/i, '');
-  // Strip closing markdown fence
-  cleaned = cleaned.replace(/\n?\s*```\s*$/i, '');
-  cleaned = cleaned.trim();
+  // Strip ALL markdown code fences (handles CRLF, multiple passes, nested fences).
+  // Some models wrap the entire response in ```json ... ```, sometimes with \r\n.
+  let prev = '';
+  while (prev !== cleaned) {
+    prev = cleaned;
+    // Strip leading fence (e.g. ```json\n, ```\r\n, ``` )
+    cleaned = cleaned.replace(/^[ \t]*`{3,}(?:json)?[ \t]*[\r\n]+/i, '');
+    // Strip trailing fence
+    cleaned = cleaned.replace(/[\r\n]+[ \t]*`{3,}[ \t]*$/i, '');
+    cleaned = cleaned.trim();
+  }
 
-  // If the result still doesn't start with { or [, try to extract JSON from the text
+  // If the result still doesn't start with { or [, try to extract JSON from the text.
+  // This covers models that add preamble text before the JSON object.
   if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
     const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     if (jsonMatch) {
       cleaned = jsonMatch[1];
+    }
+  }
+
+  // Last resort: find the first { or [ in the raw text (handles prose + JSON mixed responses)
+  if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
+    const firstBrace = raw.indexOf('{');
+    const firstBracket = raw.indexOf('[');
+    const start = firstBrace === -1 ? firstBracket
+      : firstBracket === -1 ? firstBrace
+      : Math.min(firstBrace, firstBracket);
+    if (start !== -1) {
+      cleaned = raw.slice(start).trim();
     }
   }
 
