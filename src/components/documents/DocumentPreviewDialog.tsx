@@ -252,11 +252,13 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const inlineHtml = docWithExtra?.editorContent || docWithExtra?.content || '';
   // Show inline HTML if we already have it (AI-extracted on upload)
   const canShowHtmlDirectly = !isPdf && !!inlineHtml;
-  // Need to download bytes if it's a PDF, DOCX without extracted HTML, or HTML file without inline content
-  const needsDownload = !!doc?.storagePath && (isPdf || (isDocx && !canShowHtmlDirectly) || (isHtmlFile && !canShowHtmlDirectly));
+  // Need to download bytes if it's a PDF, DOCX without extracted HTML, or HTML file without inline content BUT has a storage path
+  const needsStorageDownload = !!doc?.storagePath && (isPdf || (isDocx && !canShowHtmlDirectly) || (isHtmlFile && !canShowHtmlDirectly));
+  // Need to fetch full doc from Firestore if it's an HTML file, has no inline content, and NO storage path (e.g. AI generated docs from the list view)
+  const needsFirestoreFetch = !isPdf && !isDocx && !inlineHtml && !doc?.storagePath && !!doc?.id;
 
   useEffect(() => {
-    if (!open || !needsDownload || !doc?.storagePath) {
+    if (!open) {
       setFileBytes(null);
       setDownloadUrl(null);
       setFetchedHtml('');
@@ -265,29 +267,77 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
     }
 
     let cancelled = false;
-    setLoading(true);
-    setLoadError('');
 
-    getFileBytes(doc.storagePath)
-      .then(({ bytes, downloadUrl: url }) => {
-        if (cancelled) return;
-        setFileBytes(bytes);
-        setDownloadUrl(url);
-        // If it's an HTML file, decode the bytes as text
-        if (isHtmlFile) {
-          const decoder = new TextDecoder('utf-8');
-          setFetchedHtml(decoder.decode(bytes));
-        }
-      })
-      .catch((err: unknown) => {
-        console.error('[DocumentPreviewDialog] getFileBytes error:', err);
-        if (!cancelled) setLoadError('Could not load file from storage.');
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    if (needsStorageDownload && doc?.storagePath) {
+      setLoading(true);
+      setLoadError('');
+
+      getFileBytes(doc.storagePath)
+        .then(({ bytes, downloadUrl: url }) => {
+          if (cancelled) return;
+          setFileBytes(bytes);
+          setDownloadUrl(url);
+          // If it's an HTML file, decode the bytes as text
+          if (isHtmlFile) {
+            const decoder = new TextDecoder('utf-8');
+            setFetchedHtml(decoder.decode(bytes));
+          }
+        })
+        .catch((err: unknown) => {
+          console.error('[DocumentPreviewDialog] getFileBytes error:', err);
+          if (!cancelled) setLoadError('Could not load file from storage.');
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    } else if (needsFirestoreFetch && doc) {
+      // It's an AI document where the content is stored in Firestore, but the vault list
+      // doesn't return the 'content' field to save bandwidth. We must fetch the single doc.
+      setLoading(true);
+      setLoadError('');
+
+      import('firebase/firestore').then(({ doc: firestoreDoc, getDoc }) => {
+        import('@/config/firebase').then(({ db }) => {
+          // Document path: firms/{firmId}/clients/{clientId}/documents/{docId}
+          // The `doc` object provided to this component usually has firmId and clientId as it comes from the vault
+          const unknownDoc = doc as unknown as Record<string, unknown>;
+          const firmId = typeof unknownDoc.firmId === 'string' ? unknownDoc.firmId : '';
+          const clientId = typeof unknownDoc.clientId === 'string' ? unknownDoc.clientId : '';
+          
+          if (!firmId || !clientId) {
+             if (!cancelled) {
+               setLoadError('Missing firm/client ID to fetch document content.');
+               setLoading(false);
+             }
+             return;
+          }
+          
+          const docRef = firestoreDoc(db, 'firms', firmId, 'clients', clientId, 'documents', doc.id);
+          getDoc(docRef)
+            .then(snap => {
+               if (cancelled) return;
+               if (!snap.exists()) {
+                 setLoadError('Document content not found in database.');
+                 return;
+               }
+               const data = snap.data();
+               const content = data?.editorContent || data?.content || '';
+               if (!content) {
+                 setLoadError('Document is empty.');
+               } else {
+                 setFetchedHtml(content as string);
+               }
+            })
+            .catch(err => {
+               console.error('[DocumentPreviewDialog] Fetch firestore doc error:', err);
+               if (!cancelled) setLoadError('Could not load document content from database.');
+            })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        });
+      });
+    }
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, doc?.storagePath, needsDownload]);
+  }, [open, doc?.storagePath, needsStorageDownload, needsFirestoreFetch, doc?.id]);
 
   if (!doc) return null;
 
