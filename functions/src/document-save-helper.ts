@@ -142,7 +142,7 @@ export async function saveDocumentToVault(
     mimeType: 'text/html',
     currentVersion,
     generatedByAI: true,
-    aiModel: params.aiModel ?? 'gpt-5.4',
+    aiModel: params.aiModel ?? 'gpt-4o',
     requiresSignature: requiresSignature(params.docType),
     notarized: requiresNotarization(params.docType),
     changeNotes,

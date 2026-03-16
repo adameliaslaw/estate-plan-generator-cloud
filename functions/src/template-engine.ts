@@ -887,7 +887,7 @@ Generate the complete HTML document now. Return ONLY the HTML.`;
 
   try {
     const result = await callAI(systemPrompt, userPrompt, safeFirm, {
-      model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+      model: safeFirm?.documentDraftingModel || 'gpt-4o',
       temperature: 0.15,
       maxTokens: 12000,
     });
@@ -959,7 +959,7 @@ Return the enhanced HTML document.`;
 
   try {
     const enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
-      model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+      model: safeFirm?.documentDraftingModel || 'gpt-4o',
       temperature: 0.15,
       maxTokens: 12000,
     });

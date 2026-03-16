@@ -209,7 +209,7 @@ Check this document against all applicable NJ statutory requirements as describe
     let rawResponse: string;
     try {
       rawResponse = await callAI(COMPLIANCE_SYSTEM_PROMPT, userPrompt, firmData, {
-        model: 'gpt-5.4',
+        model: 'gpt-4o',
         temperature: 0.1, // Maximum accuracy for legal compliance
         maxTokens: 3000,
         jsonMode: true,
