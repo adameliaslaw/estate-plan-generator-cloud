@@ -67,7 +67,9 @@ fiduciaries.healthcareProxy.alternate.name
 fiduciaries.healthcareProxy.lifeSupport, fiduciaries.healthcareProxy.nutrition
 fiduciaries.healthcareProxy.painManagement, fiduciaries.healthcareProxy.organDonation
 
-fiduciaries.guardian.primary.name, fiduciaries.guardian.alternate.name
+fiduciaries.guardian.primary.name, fiduciaries.guardian.primary.relationship, fiduciaries.guardian.primary.address
+fiduciaries.guardian.alternate.name, fiduciaries.guardian.alternate.relationship, fiduciaries.guardian.alternate.address
+fiduciaries.guardian.successor.name, fiduciaries.guardian.successor.relationship, fiduciaries.guardian.successor.address
 
 distribution.residualDistributions[] — { recipient, recipientRelationship, percentage, perStirpes, alternateRecipient }
 distribution.specificBequests[] — { description, recipient, condition, alternateRecipient }
@@ -140,10 +142,16 @@ CRITICAL MAPPING RULES — SUCCESSOR FIDUCIARIES:
 - Hardcoded addresses (street addresses like "315 East 72nd Street, Apt. PH, New York, New York") next to fiduciary names are client data — ALWAYS detect them as variables using the .address field.
 
 CRITICAL MAPPING RULES — GUARDIANS:
-- Guardian appointments MUST use fiduciaries.guardian.primary.name / .alternate.name — NOT executor paths.
-- Even if the same person serves as both executor and guardian, the variables must be distinct because different clients may appoint different people.
-- "I appoint X as guardian" → fiduciaries.guardian.primary.name
-- "I appoint Y as successor guardian" → fiduciaries.guardian.alternate.name
+- Guardian appointments are a SEPARATE fiduciary role from executors. They MUST use fiduciaries.guardian.* paths — NEVER fiduciaries.executor.* paths.
+- Even if the same person serves as both executor and guardian, the variables must use SEPARATE field paths because different clients may appoint different people to each role.
+- CORRECT guardian variable paths:
+  - Primary guardian: fiduciaries.guardian.primary.name / .relationship / .address
+  - Alternate/successor guardian: fiduciaries.guardian.alternate.name / .relationship / .address
+  - Second successor guardian: fiduciaries.guardian.successor.name / .relationship / .address
+- NEVER use fiduciaries.executor.alternate.name, fiduciaries.executor.successor.name, or fiduciaries.executor.secondSuccessor.name for guardian appointments.
+- "I appoint X as guardian" → fiduciaries.guardian.primary.name (+ .relationship)
+- "I appoint Y as co-guardian" or "second guardian" → fiduciaries.guardian.alternate.name (+ .relationship)
+- "I appoint Z as successor guardian" → fiduciaries.guardian.successor.name (+ .relationship)
 
 CRITICAL MAPPING RULES — WITNESSES AND FIRM DATA:
 - Witness names in execution/attestation/self-proving affidavit sections are NOT the client — they are firm staff.
@@ -151,7 +159,9 @@ CRITICAL MAPPING RULES — WITNESSES AND FIRM DATA:
 - Witness addresses → firm.witness1Address, firm.witness2Address
 - The attorney's name (e.g., "Adam J. Elias, Esq.") → firm.attorneyName
 - The attorney's ID number (e.g., "#050452014") → firm.attorneyId
-- The firm's own address (office address that appears in signature blocks or letterhead) should be LEFT AS LITERAL TEXT — it is constant, not client data.
+- The firm's name (e.g., "Elias Counsel, LLC") → firm.name
+- The firm's office address (street, city, state, zip in signature blocks or letterhead) → firm.address, firm.city, firm.state, firm.zip
+- The firm's phone number → firm.phone
 
 CRITICAL MAPPING RULES — FUNERAL/SPECIAL PROVISIONS:
 - Funeral wishes, burial preferences, or cremation instructions (e.g., "To be cremated") → specialConsiderations.funeralWishes (NOT petDetails)
@@ -305,7 +315,7 @@ REPLACEMENT RULES:
 7. Replace fiduciary addresses with the corresponding .address field.
 8. Replace witness names with {{firm.witness1Name}} / {{firm.witness2Name}} and their addresses with {{firm.witness1Address}} / {{firm.witness2Address}}.
 9. Replace the attorney name with {{firm.attorneyName}} and bar ID with {{firm.attorneyId}}.
-10. The firm's own office address (in signature blocks, letterhead) should be LEFT AS LITERAL TEXT — it is not client-specific.
+10. The firm's name, office address, and phone number (in signature blocks, letterhead, cover pages) should be replaced with {{firm.name}}, {{firm.address}}, {{firm.city}}, {{firm.state}}, {{firm.zip}}, and {{firm.phone}}.
 11. Replace specific dates in headers, execution clauses, and signature blocks with {{todayFormatted}}.
 12. Replace funeral/cremation/burial instructions with {{specialConsiderations.funeralWishes}}.
 13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables: {{children[0].name}}, {{children[1].name}}, etc. Use {{childrenWithTitles[0].childTitle}} for "son"/"daughter".
