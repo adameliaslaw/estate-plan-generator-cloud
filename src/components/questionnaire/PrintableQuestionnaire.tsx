@@ -625,10 +625,18 @@ export default function PrintableQuestionnaire({
           .print\\:!hidden { display: none !important; }
           .hidden.print\\:block { display: block !important; }
 
+          /* Hide screen-only toolbar — must come BEFORE the container reset */
+          .printable-questionnaire-wrapper > .print\\:hidden {
+            display: none !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+          }
+
           /* Reset ALL containers to be transparent */
           #root,
           .printable-questionnaire-wrapper,
-          .printable-questionnaire-wrapper > div,
           #printable-questionnaire {
             display: block !important;
             width: auto !important;
