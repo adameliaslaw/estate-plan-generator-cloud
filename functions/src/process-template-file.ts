@@ -14,6 +14,7 @@ import mammoth from 'mammoth';
 const { PDFParse } = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
+import { extractTemplateVariables } from './template-engine';
 
 // ---------------------------------------------------------------------------
 // Helper: truncate text at a word boundary
@@ -280,83 +281,54 @@ export const processTemplateFile = onCall(
     const learningCtx = await getLearningContext(firmId);
     const learningPrompt = formatLearningPrompt(learningCtx);
 
-    // Use AI to detect template variables and suggest mappings
     // -----------------------------------------------------------------------
-    // Hybrid detection strategy:
-    //   ≤ 30K chars → single AI call with full text (no truncation)
-    //   > 30K chars → parallel chunked analysis (20K chunks, 4K overlap)
+    // PHASE 1: Direct HTML Templatization — send extracted HTML to AI, get
+    // templatized HTML back with all client-specific data replaced by
+    // {{handlebarsVariables}}. No JSON intermediary, no regex replacement.
     // -----------------------------------------------------------------------
-    const SINGLE_PASS_LIMIT = 30000;
-    const CHUNK_SIZE = 20000;
-    const CHUNK_OVERLAP = 4000;
+    // PHASE 3 (metadata) runs IN PARALLEL with Phase 1 for speed.
+    // -----------------------------------------------------------------------
 
-    const chunks: string[] = [];
-    if (extractedText.length <= SINGLE_PASS_LIMIT) {
-      // Single pass — send entire document text, no truncation
-      chunks.push(extractedText);
-    } else {
-      // Multi-pass — split into overlapping chunks for large documents (e.g., trusts)
-      let offset = 0;
-      while (offset < extractedText.length) {
-        const end = Math.min(offset + CHUNK_SIZE, extractedText.length);
-        chunks.push(extractedText.slice(offset, end));
-        if (end >= extractedText.length) break;
-        offset += CHUNK_SIZE - CHUNK_OVERLAP;
-      }
-    }
+    const templatizeSystemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
 
-    console.log(`[processTemplateFile] Analyzing ${chunks.length} chunk(s) (text length: ${extractedText.length} chars)`);
+You will receive HTML extracted from a ${ext.toUpperCase()} file. This is a FILLED-IN legal document containing real client data (names, addresses, dates, etc.).
 
-    const systemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
+YOUR TASK: Replace ALL client-specific data in the HTML with Handlebars {{variables}} using the field paths listed below. Return ONLY the modified HTML — no JSON, no explanation, no markdown fences.
 
-Analyze the following document text extracted from a ${ext.toUpperCase()} file. Your job is to identify EVERY piece of client-specific data that would need to be replaced when using this document as a template for a different client.
+REPLACEMENT RULES:
+1. Replace every person's proper name with the appropriate variable (e.g., "Jessica A. Byrnes" → {{clientFullName}}, "Sean M. Byrnes" → {{spouseFullName}}).
+2. Replace client addresses, cities, counties, states, ZIP codes with the corresponding field variables.
+3. Replace relationship words ("my husband", "my wife", "my son", "my daughter") with title variables (e.g., {{spouseTitle}}, {{childrenWithTitles.[0].childTitle}}).
+4. Replace gendered pronouns referring to the client with {{clientPronouns.subject}}, {{clientPronouns.object}}, {{clientPronouns.possessive}}.
+5. Replace gendered pronouns referring to the spouse with {{spousePronouns.subject}}, {{spousePronouns.object}}, {{spousePronouns.possessive}}.
+6. Replace names of fiduciaries (executors, trustees, guardians, POA agents, healthcare proxies) with the appropriate fiduciary field path.
+7. Replace fiduciary addresses with the corresponding .address field.
+8. Replace witness names with {{firm.witness1Name}} / {{firm.witness2Name}} and their addresses with {{firm.witness1Address}} / {{firm.witness2Address}}.
+9. Replace the attorney name with {{firm.attorneyName}} and bar ID with {{firm.attorneyId}}.
+10. The firm's own office address (in signature blocks, letterhead) should be LEFT AS LITERAL TEXT — it is not client-specific.
+11. Replace specific dates in headers, execution clauses, and signature blocks with {{todayFormatted}}.
+12. Replace funeral/cremation/burial instructions with {{specialConsiderations.funeralWishes}}.
+13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables: {{children[0].name}}, {{children[1].name}}, etc. Use {{childrenWithTitles[0].childTitle}} for "son"/"daughter".
+14. Compound relationship titles like "sister-in-law", "father-in-law" are SINGLE values. NEVER split them (WRONG: {{relationship}}-in-law). The FULL compound title IS the variable value.
 
-DETECTION STRATEGIES (use ALL of these):
+CRITICAL: Replace EVERY instance of client-specific data. Do not leave any proper names (other than firm/attorney names in the signature block). Scan the ENTIRE document.
 
-1. **Explicit Placeholders** — formatted as fill-in fields:
-   - Handlebars variables: {{variableName}} or {{path.to.field}}
-   - Bracket placeholders: [CLIENT NAME], [DATE], [ADDRESS]
-   - Underline fill-ins: _______________ (blank lines)
-   - ALL-CAPS placeholders: FULL LEGAL NAME, CLIENT ADDRESS
-   - Angle-bracket placeholders: <name>, <date>
-   - Word merge fields: «FieldName»
-
-2. **Contextual / Semantic Detection** (CRITICAL — most attorney templates are filled-in examples):
-   - **Repeated proper names**: If a specific person's name (e.g., "John A. Smith") appears multiple times throughout the document, it is almost certainly the client's name used as sample data. Detect it.
-   - **Legal preamble patterns**: Phrases like "I, [Full Name], residing at [Address], County of [County], State of [State]" — even when filled with real values like "I, Jane Doe, residing at 456 Oak Avenue" — should be detected. The name, address, county, and state are all template variables.
-   - **Named roles**: People named as executor, trustee, agent, guardian, beneficiary, witness, etc. These are all client-specific data, even if written as real names like "my son, Michael Smith."
-   - **Dates**: Specific dates like "March 15, 2024" or "03/15/2024" in the document header, execution lines, or signature blocks are template variables.
-   - **Addresses**: Full street addresses, cities, ZIP codes that appear in the document body (not in statutory citations) are client data.
-   - **Financial amounts**: Specific dollar amounts in bequests, trust funding, etc.
-   - **Relationship references**: "my wife, [Name]", "my daughter, [Name]" — the names are variables.
-   - **Cross-referencing**: If you see "John Smith" in the preamble AND later as "Mr. Smith" or "the Grantor," these all refer to the same template variable (clientFullName).
-
-3. **Structural Detection**:
-   - Signature blocks with names, dates, notary sections
-   - Witness name fields
-   - Acknowledgment/notarization sections with county, state, date blanks
-
-For each detected variable, suggest the best matching questionnaire field from the available fields list. Set "confidence" based on:
-- "high": Explicit placeholder OR clear legal context (e.g., name in "I, [Name], hereby declare")
-- "medium": Likely sample data based on context (e.g., a name after "appointed [Name] as Executor")
-- "low": Could be sample data but uncertain (e.g., appears only once with ambiguous context)
+PRESERVE: All HTML tags, all structural formatting, all statutory references (e.g., N.J.S.A. citations), all section headings, all legal boilerplate text that is NOT client-specific.
 
 ${AVAILABLE_FIELDS}
-${AVAILABLE_TAGS}
+
 ${learningPrompt}
+
+Return ONLY the templatized HTML. Do not wrap in markdown fences or JSON.`;
+
+    const metadataSystemPrompt = `You are an expert legal document analyst. Analyze the following document text and provide metadata about it.
+
+${AVAILABLE_TAGS}
+
 Respond with a valid JSON object (no markdown fences):
 {
-  "detectedVariables": [
-    {
-      "originalText": "the exact text found in the document",
-      "suggestedVariable": "the Handlebars variable path to use (e.g., personalInfo.firstName)",
-      "fieldLabel": "human-readable label (e.g., Client First Name)",
-      "confidence": "high" | "medium" | "low",
-      "context": "brief context of where this appears in the document"
-    }
-  ],
   "suggestedDocType": "one of: will, pourOverWill, trust, poa, livingWill, deed, affidavitOfConsideration, gitRep3, estatePlanSummary, actionSteps",
-  "suggestedTags": ["array of tag values from the AVAILABLE TEMPLATE TAGS list above that match this document"],
+  "suggestedTags": ["array of tag values from the AVAILABLE TEMPLATE TAGS list above"],
   "documentSummary": "one paragraph summary of what this template is for"
 }`;
 
@@ -370,290 +342,126 @@ Respond with a valid JSON object (no markdown fences):
     let suggestedDocType = '';
     let suggestedTags: string[] = [];
     let documentSummary = '';
-
-    const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    let templatizedHtml = extractedHtml;
 
     try {
-      if (chunks.length === 1) {
-        // Single-pass — one AI call for the full document
-        const userPrompt = `Analyze this document and detect all template variables/placeholders:\n\n${chunks[0]}`;
+      // For large HTML documents (>30K chars), split at paragraph boundaries
+      const HTML_SINGLE_PASS_LIMIT = 60000; // HTML is more compact per semantic unit
 
-        const raw = await callAI(systemPrompt, userPrompt, firmData, {
-          temperature: 0,
-          maxTokens: 8192,
-          jsonMode: true,
-        });
+      // Run Phase 1 (templatization) and Phase 3 (metadata) in parallel
+      const metadataPromise = callAI(
+        metadataSystemPrompt,
+        `Analyze this document and provide metadata:\n\n${truncateAtWordBoundary(extractedText, 10000)}`,
+        firmData,
+        { temperature: 0, maxTokens: 1024, jsonMode: true },
+      );
 
-        const parsed = parseAIJson<{
-          detectedVariables: typeof detectedVariables;
+      let templatizeResult: string;
+
+      if (extractedHtml.length <= HTML_SINGLE_PASS_LIMIT) {
+        // Single pass — send entire HTML
+        console.log(`[processTemplateFile] Phase 1: Single-pass HTML templatization (${extractedHtml.length} chars)`);
+        templatizeResult = await callAI(
+          templatizeSystemPrompt,
+          extractedHtml,
+          firmData,
+          { temperature: 0, maxTokens: 16384 },
+        );
+      } else {
+        // Multi-pass — split HTML at paragraph boundaries (<p>, </p>)
+        console.log(`[processTemplateFile] Phase 1: Multi-pass HTML templatization (${extractedHtml.length} chars)`);
+        const CHUNK_TARGET = 25000;
+        const htmlChunks: string[] = [];
+        const paragraphs = extractedHtml.split(/(?=<p[ >])/i);
+        let currentChunk = '';
+
+        for (const para of paragraphs) {
+          if (currentChunk.length + para.length > CHUNK_TARGET && currentChunk.length > 0) {
+            htmlChunks.push(currentChunk);
+            currentChunk = para;
+          } else {
+            currentChunk += para;
+          }
+        }
+        if (currentChunk) htmlChunks.push(currentChunk);
+
+        console.log(`[processTemplateFile] Split into ${htmlChunks.length} HTML chunks`);
+
+        // Process chunks sequentially to maintain context consistency
+        const processedChunks: string[] = [];
+        for (let ci = 0; ci < htmlChunks.length; ci++) {
+          const chunkPrompt = `This is part ${ci + 1} of ${htmlChunks.length} of a legal document. Apply the same templatization rules to this section:\n\n${htmlChunks[ci]}`;
+          const result = await callAI(
+            templatizeSystemPrompt,
+            chunkPrompt,
+            firmData,
+            { temperature: 0, maxTokens: 16384 },
+          );
+          processedChunks.push(result);
+          console.log(`[processTemplateFile] Phase 1: Chunk ${ci + 1}/${htmlChunks.length} processed`);
+        }
+        templatizeResult = processedChunks.join('');
+      }
+
+      // Clean up AI output — strip any markdown fences the model may add
+      templatizeResult = templatizeResult.trim();
+      if (templatizeResult.startsWith('```html')) {
+        templatizeResult = templatizeResult.replace(/^```html\s*\n?/i, '');
+      }
+      if (templatizeResult.startsWith('```')) {
+        templatizeResult = templatizeResult.replace(/^```\s*\n?/, '');
+      }
+      if (templatizeResult.endsWith('```')) {
+        templatizeResult = templatizeResult.replace(/\n?```\s*$/, '');
+      }
+
+      // Validate the AI output contains handlebars variables and looks like HTML
+      const hasVariables = /\{\{[^}]+\}\}/.test(templatizeResult);
+      const looksLikeHtml = /<[a-z][\s\S]*>/i.test(templatizeResult);
+
+      if (hasVariables && looksLikeHtml) {
+        templatizedHtml = templatizeResult;
+        console.log(`[processTemplateFile] Phase 1: AI templatization successful (${templatizedHtml.length} chars output)`);
+      } else {
+        console.warn(`[processTemplateFile] Phase 1: AI output doesn't look right (hasVars=${hasVariables}, hasHtml=${looksLikeHtml}). Keeping original HTML.`);
+      }
+
+      // -----------------------------------------------------------------------
+      // PHASE 2: Programmatic Variable Extraction — scan templatized HTML for
+      // {{...}} patterns using the existing extractTemplateVariables function.
+      // No AI needed — this is instant and deterministic.
+      // -----------------------------------------------------------------------
+      const extractedVarPaths = extractTemplateVariables(templatizedHtml);
+      detectedVariables = extractedVarPaths.map((varPath) => ({
+        originalText: `{{${varPath}}}`,
+        suggestedVariable: varPath,
+        fieldLabel: varPath.split('.').pop() ?? varPath,
+        confidence: 'high',
+        context: 'Extracted from AI-templatized HTML',
+      }));
+
+      console.log(`[processTemplateFile] Phase 2: Extracted ${detectedVariables.length} unique variables from templatized HTML`);
+
+      // -----------------------------------------------------------------------
+      // PHASE 3: Await metadata result (was running in parallel with Phase 1)
+      // -----------------------------------------------------------------------
+      try {
+        const metadataRaw = await metadataPromise;
+        const metadata = parseAIJson<{
           suggestedDocType: string;
           suggestedTags: string[];
           documentSummary: string;
-        }>(raw);
-
-        detectedVariables = parsed.detectedVariables ?? [];
-        suggestedDocType = parsed.suggestedDocType ?? '';
-        suggestedTags = parsed.suggestedTags ?? [];
-        documentSummary = parsed.documentSummary ?? '';
-      } else {
-        // Multi-pass — process chunks in PARALLEL for speed
-        const chunkPromises = chunks.map((chunk, ci) => {
-          const chunkLabel = ` (chunk ${ci + 1}/${chunks.length})`;
-          const userPrompt = `Analyze this document${chunkLabel} and detect all template variables/placeholders:\n\n${chunk}`;
-
-          return callAI(systemPrompt, userPrompt, firmData, {
-            temperature: 0,
-            maxTokens: 8192,
-            jsonMode: true,
-          });
-        });
-
-        const rawResults = await Promise.all(chunkPromises);
-
-        for (let ci = 0; ci < rawResults.length; ci++) {
-          const parsed = parseAIJson<{
-            detectedVariables: typeof detectedVariables;
-            suggestedDocType: string;
-            suggestedTags: string[];
-            documentSummary: string;
-          }>(rawResults[ci]);
-
-          const chunkVars = parsed.detectedVariables ?? [];
-
-          if (ci === 0) {
-            // First chunk — take docType, tags, and summary
-            suggestedDocType = parsed.suggestedDocType ?? '';
-            suggestedTags = parsed.suggestedTags ?? [];
-            documentSummary = parsed.documentSummary ?? '';
-            detectedVariables = chunkVars;
-          } else {
-            // Merge: deduplicate by originalText, keep higher-confidence
-            for (const newVar of chunkVars) {
-              const existingIdx = detectedVariables.findIndex(
-                (v) => v.originalText.toLowerCase() === newVar.originalText.toLowerCase(),
-              );
-              if (existingIdx >= 0) {
-                const existing = detectedVariables[existingIdx];
-                const existingRank = confidenceRank[existing.confidence] ?? 0;
-                const newRank = confidenceRank[newVar.confidence] ?? 0;
-                if (newRank > existingRank) {
-                  detectedVariables[existingIdx] = newVar;
-                }
-              } else {
-                detectedVariables.push(newVar);
-              }
-            }
-          }
-
-          console.log(`[processTemplateFile] Chunk ${ci + 1}/${chunks.length}: detected ${chunkVars.length} variables (total unique: ${detectedVariables.length})`);
-        }
+        }>(metadataRaw);
+        suggestedDocType = metadata.suggestedDocType ?? '';
+        suggestedTags = metadata.suggestedTags ?? [];
+        documentSummary = metadata.documentSummary ?? '';
+        console.log(`[processTemplateFile] Phase 3: Metadata extracted — docType="${suggestedDocType}", ${suggestedTags.length} tags`);
+      } catch (metaErr) {
+        console.error('[processTemplateFile] Phase 3 metadata error (non-fatal):', metaErr);
       }
     } catch (err) {
-      console.error('[processTemplateFile] AI analysis error:', err);
-      // Continue without AI analysis — still return the extracted content
-    }
-
-    // -----------------------------------------------------------------------
-    // Step 2: Templatize content — replace detected literal text with
-    // Handlebars variable tags in the extracted HTML
-    // -----------------------------------------------------------------------
-    let templatizedHtml = extractedHtml;
-
-    if (detectedVariables.length > 0) {
-      // Log all detected variables for debugging
-      console.log(`[processTemplateFile] Detected ${detectedVariables.length} variables:`);
-      for (const v of detectedVariables) {
-        console.log(`  - "${v.originalText}" → {{${v.suggestedVariable}}} (${v.confidence})`);
-      }
-
-      // Sort by originalText length descending so longer matches are replaced
-      // first (prevents partial replacements, e.g., "Jack" inside "Jack Byrnes")
-      const sorted = [...detectedVariables].sort(
-        (a, b) => b.originalText.length - a.originalText.length,
-      );
-
-      let replacedCount = 0;
-
-      for (const v of sorted) {
-        if (!v.originalText || !v.suggestedVariable) continue;
-        // Skip very short matches (< 3 chars) to avoid replacing "I", "he", "my" etc.
-        if (v.originalText.length < 3) continue;
-
-        const tag = `{{${v.suggestedVariable}}}`;
-        // Escape special regex characters in the match text
-        const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-        // Build a smart word-boundary pattern:
-        // - Use \b for text that starts/ends with word characters
-        // - Use lookahead/lookbehind for text starting/ending with non-word chars (e.g. #)
-        const startsWithWord = /^\w/.test(v.originalText);
-        const endsWithWord = /\w$/.test(v.originalText);
-        const prefix = startsWithWord ? '\\b' : '(?<![\\w])';
-        const suffix = endsWithWord ? '\\b' : '(?![\\w])';
-
-        // CASE-INSENSITIVE: AI may return "Sean Byrnes" but HTML has "SEAN BYRNES"
-        const regex = new RegExp(`${prefix}${escaped}${suffix}`, 'gi');
-        const before = templatizedHtml;
-        templatizedHtml = templatizedHtml.replace(regex, tag);
-        if (before === templatizedHtml) {
-          // No match found — log context for debugging
-          const plainIdx = templatizedHtml.toLowerCase().indexOf(v.originalText.toLowerCase());
-          if (plainIdx >= 0) {
-            const snippet = templatizedHtml.slice(Math.max(0, plainIdx - 40), plainIdx + v.originalText.length + 40).replace(/<[^>]*>/g, '');
-            console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — HTML tags splitting? Context: "${snippet}"`);
-          } else {
-            console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — text not found in HTML at all`);
-          }
-        } else {
-          replacedCount++;
-        }
-      }
-
-      console.log(`[processTemplateFile] Templatized content: ${replacedCount} of ${sorted.length} variables replaced in HTML`);
-    }
-
-    // -----------------------------------------------------------------------
-    // Step 2.5: Validation pass — detect remaining hardcoded proper names
-    // that the AI missed in Step 1. This catches ALL-CAPS names like
-    // "ANTHONY ESERNIO" and mixed-case names like "Olivia Esernio" that
-    // appear outside of {{}} variable tags.
-    // -----------------------------------------------------------------------
-    try {
-      // Strip out existing {{...}} tags to avoid false positives, then scan for proper names
-      const textWithoutTags = templatizedHtml.replace(/\{\{[^}]+\}\}/g, '___VAR___');
-      // Document codes and legal boilerplate to exclude
-      const excludePatterns = [
-        /^OBJ\b/i, /^STD\b/i, /^STDSPA\b/i, /^ARTICLE\b/i,
-        /LAST WILL/i, /SELF.PROVING/i, /NEW JERSEY/i, /NEW YORK/i,
-        /STATE OF/i, /WITNESS WHEREOF/i, /NO CONTEST/i, /RESIDUARY ESTATE/i,
-        /PROVING AFFIDAVIT/i, /MIDDLESEX COUNTY/i, /^WILL\b/i,
-        /Family Information/i, /Funeral Representative/i, /Executor Appointments/i,
-        /Fiduciary (Provisions|Powers)/i, /General Provisions/i,
-        /Disabled Person/i, /Regarding Changes/i, /Other Proceedings/i,
-        /Additional General/i, /Provisions Regarding/i, /Reliance Upon/i,
-        /Attempted Contest/i, /Does Not/i, /Last Resort/i, /First Level/i,
-        /Second Level/i, /Third Level/i, /Initial Executor/i, /Successor Executor/i,
-        /Wife (Survives|Does)/i, /Husband (Survives|Does)/i,
-      ];
-      const isExcluded = (name: string) => excludePatterns.some(p => p.test(name)) || name.length <= 4;
-
-      // Match ALL-CAPS names (2+ words) like "ANTHONY ESERNIO" or "JEANA ESERNIO"
-      const allCapsNames = [...new Set(
-        (textWithoutTags.match(/\b[A-Z][A-Z]+(?:[\s.]+[A-Z][A-Z.]+)+\b/g) ?? [])
-          .filter((n: string) => !isExcluded(n)),
-      )];
-      // Match mixed-case proper names (First Last or First M. Last patterns)
-      const mixedCaseNames = [...new Set(
-        (textWithoutTags.match(/\b[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z]+\b/g) ?? [])
-          .filter((n: string) => {
-            const lower = n.toLowerCase();
-            return !isExcluded(n) && n.length > 5
-              && !lower.startsWith('if ') && !lower.startsWith('in ')
-              && !lower.startsWith('my ') && !lower.startsWith('the ')
-              && !lower.startsWith('no ') && !lower.startsWith('to ')
-              && !lower.startsWith('an ') && !lower.startsWith('or ');
-          }),
-      )];
-
-      const missedNames = [...allCapsNames, ...mixedCaseNames];
-
-      if (missedNames.length > 0) {
-        console.log(`[processTemplateFile] Step 2.5: Found ${missedNames.length} potential missed names: ${missedNames.join(', ')}`);
-
-        // Make a focused second AI call to map these specific names
-        const missedPrompt = `You are an expert at mapping names in legal estate planning documents to template variables.
-
-The following names were found in a document that has already been partially templatized. These names were NOT converted to template variables and may need to be.
-
-NAMES FOUND: ${missedNames.join(', ')}
-
-CONTEXT: This is a Last Will and Testament / estate planning document. Names may correspond to:
-- Executors (primary, alternate, successor, secondSuccessor)
-- Trustees (primary, alternate)
-- Guardians (primary, alternate)
-- POA agents
-- Healthcare proxies
-- Children
-- Beneficiaries
-- Attorney / firm staff (these should use firm.* fields)
-
-${AVAILABLE_FIELDS}
-
-For each name, determine:
-1. Is this a person's name that should be a template variable? (Yes/No)
-2. If yes, what is the correct variable path?
-3. If no, why not? (e.g., it's a legal term, section heading, etc.)
-
-IMPORTANT: Relationship titles like "sister-in-law" that were split from a variable (e.g., appearing as just "-in-law" after a {{variable}}) should be noted.
-
-Respond with JSON (no markdown fences):
-{
-  "missedVariables": [
-    { "originalText": "EXACT NAME", "suggestedVariable": "field.path", "reason": "why this mapping" }
-  ],
-  "notVariables": [
-    { "text": "THE TEXT", "reason": "why it's not a variable" }
-  ]
-}`;
-
-        // Limit to top 20 names to avoid overwhelming the AI and causing JSON truncation
-        const namesToProcess = missedNames.slice(0, 20);
-        const missedUserPrompt = `Map these ${namesToProcess.length} names to template variables: ${namesToProcess.join(', ')}`;
-        const missedRaw = await callAI(missedPrompt, missedUserPrompt, firmData, {
-          temperature: 0,
-          maxTokens: 4000,
-          jsonMode: true,
-        });
-
-        const missedParsed = parseAIJson<{
-          missedVariables?: { originalText: string; suggestedVariable: string; reason: string }[];
-          notVariables?: { text: string; reason: string }[];
-        }>(missedRaw);
-
-        const newVars = missedParsed.missedVariables ?? [];
-        if (newVars.length > 0) {
-          console.log(`[processTemplateFile] Step 2.5: AI identified ${newVars.length} additional variables to replace`);
-
-          // Sort by length descending for safe replacement
-          const sortedNew = [...newVars].sort(
-            (a, b) => b.originalText.length - a.originalText.length,
-          );
-
-          for (const v of sortedNew) {
-            if (!v.originalText || !v.suggestedVariable) continue;
-            const tag = `{{${v.suggestedVariable}}}`;
-            const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const startsWord = /^\w/.test(v.originalText);
-            const endsWord = /\w$/.test(v.originalText);
-            const pfx = startsWord ? '\\b' : '(?<![\\w])';
-            const sfx = endsWord ? '\\b' : '(?![\\w])';
-            const regex = new RegExp(`${pfx}${escaped}${sfx}`, 'gi');
-            const before = templatizedHtml;
-            templatizedHtml = templatizedHtml.replace(regex, tag);
-            if (templatizedHtml !== before) {
-              console.log(`  - Replaced "${v.originalText}" → {{${v.suggestedVariable}}}`);
-              // Also add to detectedVariables for the response
-              detectedVariables.push({
-                originalText: v.originalText,
-                suggestedVariable: v.suggestedVariable,
-                fieldLabel: v.reason,
-                confidence: 'high',
-                context: 'Caught by validation pass',
-              });
-            }
-          }
-        }
-
-        if (missedParsed.notVariables?.length) {
-          for (const nv of missedParsed.notVariables) {
-            console.log(`  - Kept literal: "${nv.text}" — ${nv.reason}`);
-          }
-        }
-      } else {
-        console.log('[processTemplateFile] Step 2.5: No missed proper names found — all names templatized');
-      }
-    } catch (err) {
-      console.error('[processTemplateFile] Step 2.5 validation error (non-fatal):', err);
+      console.error('[processTemplateFile] AI templatization error:', err);
+      // Continue with original HTML — still return content for manual editing
     }
 
     // -----------------------------------------------------------------------
@@ -744,7 +552,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
 // ---------------------------------------------------------------------------
 
 export const consolidateTemplateVariables = onCall(
-  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 120 },
+  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -766,78 +574,30 @@ export const consolidateTemplateVariables = onCall(
       throw new HttpsError('permission-denied', 'Only attorneys and administrators can process templates.');
     }
 
-    // Fetch firm data and learning context
-    const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() ?? {};
-    const learningCtx = await getLearningContext(firmId);
-    const learningPrompt = formatLearningPrompt(learningCtx);
-
     console.log(`[consolidateTemplateVariables] Consolidating ${files.length} "${docType}" templates for firm ${firmId}`);
 
-    // Build the consolidated prompt
-    const systemPrompt = `You are an expert legal document analyst specializing in estate planning templates.
+    // With the new direct-HTML-templatization architecture, each template's
+    // extractedText may already contain {{variables}} from the AI pass.
+    // Extract variables programmatically from each template and union them.
+    const allVars = new Set<string>();
 
-Your job is to identify EVERY piece of client-specific data that would need to be replaced when using these documents as templates.
-You are being provided with text from MULTIPLE templates of the same document type (e.g., paired wills for spouses).
-They are separated by "--- DOCUMENT [N] ---".
-
-CRITICAL: Because these are paired templates, you must identify a single, unified list of DO NOT duplicate variables that mean the same thing. Return ONE canonical list of unique variables found across ALL the provided documents.
-
-DETECTION STRATEGIES (use ALL of these):
-1. **Explicit Placeholders** (Handlebars, bracket placeholders, underlines, etc.)
-2. **Contextual / Semantic Detection** (Repeated proper names, specific addresses, relationship references, etc.)
-3. **Structural Detection** (Signature blocks, notary sections, etc.)
-
-For each detected variable, suggest the best matching questionnaire field from the available fields list. Set "confidence" based on:
-- "high": Explicit placeholder OR clear legal context
-- "medium": Likely sample data based on context
-- "low": Could be sample data but uncertain
-
-${AVAILABLE_FIELDS}
-${learningPrompt}
-Respond with a valid JSON object (no markdown fences):
-{
-  "detectedVariables": [
-    {
-      "originalText": "the exact text found in the document(s)",
-      "suggestedVariable": "the Handlebars variable path to use (e.g., personalInfo.firstName)",
-      "fieldLabel": "human-readable label (e.g., Client First Name)",
-      "confidence": "high" | "medium" | "low"
+    for (const f of files) {
+      const vars = extractTemplateVariables(f.extractedText);
+      console.log(`[consolidateTemplateVariables] "${f.fileName}": ${vars.length} variables`);
+      for (const v of vars) allVars.add(v);
     }
-  ]
-}`;
 
-    // Concatenate all document texts, truncated to avoid blowing up the context window
-    const MAX_CHARS_PER_DOC = 15000;
-    const combinedText = files
-      .map((f, i) => `--- DOCUMENT ${i + 1}: ${f.fileName} ---\n${truncateAtWordBoundary(f.extractedText, MAX_CHARS_PER_DOC)}`)
-      .join('\n\n');
+    const unionVars = Array.from(allVars).sort();
+    console.log(`[consolidateTemplateVariables] Union: ${unionVars.length} unique variables across ${files.length} templates`);
 
-    const userPrompt = `Identify the unified list of template variables across these ${files.length} documents:\n\n${combinedText}`;
+    const detectedVariables = unionVars.map((varPath) => ({
+      originalText: `{{${varPath}}}`,
+      suggestedVariable: varPath,
+      fieldLabel: varPath.split('.').pop() ?? varPath,
+      confidence: 'high' as const,
+    }));
 
-    try {
-      const raw = await callAI(systemPrompt, userPrompt, firmData, {
-        temperature: 0,
-        maxTokens: 4096,
-        jsonMode: true,
-      });
-
-      const parsed = parseAIJson<{
-        detectedVariables: {
-          originalText: string;
-          suggestedVariable: string;
-          fieldLabel: string;
-          confidence: string;
-        }[];
-      }>(raw);
-
-      const vars = parsed.detectedVariables ?? [];
-      console.log(`[consolidateTemplateVariables] Success: AI identified ${vars.length} unified variables`);
-      return { success: true, detectedVariables: vars };
-    } catch (err) {
-      console.error('[consolidateTemplateVariables] AI analysis error:', err);
-      throw new HttpsError('internal', 'AI consolidation failed.');
-    }
+    return { success: true, detectedVariables };
   },
 );
 
