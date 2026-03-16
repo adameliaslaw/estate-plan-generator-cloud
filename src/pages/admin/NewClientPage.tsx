@@ -306,9 +306,9 @@ export default function NewClientPage() {
                 className={cn(inputBase, 'cursor-pointer')}
               >
                 <option value="">— Select a package (optional) —</option>
-                <option value="foundation">Foundation — Will, POA, Living Will</option>
-                <option value="guardian">Guardian — Foundation + Summary &amp; Action Steps</option>
-                <option value="fortress">Fortress — Trust-based comprehensive plan</option>
+                <option value="foundation">Basic Estate Plan Package — Will, POA, Living Will</option>
+                <option value="guardian">Revocable Trust Package — Trust-centered estate plan</option>
+                <option value="fortress">Irrevocable Trust Package — Advanced asset protection</option>
               </select>
             </Field>
 

@@ -46,9 +46,9 @@ import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sour
 // ── Package display helpers ───────────────────────────────────────────────────
 
 const PACKAGE_LABELS: Record<string, string> = {
-  foundation: 'Foundation',
-  guardian: 'Guardian',
-  fortress: 'Fortress',
+  foundation: 'Basic Estate Plan',
+  guardian: 'Revocable Trust',
+  fortress: 'Irrevocable Trust',
 };
 
 const PACKAGE_BADGE: Record<string, string> = {

@@ -183,9 +183,9 @@ const PACKAGE_BADGE: Record<string, string> = {
 };
 
 const PACKAGE_LABEL: Record<string, string> = {
-  foundation: 'Foundation',
-  guardian: 'Guardian',
-  fortress: 'Fortress',
+  foundation: 'Basic Estate Plan',
+  guardian: 'Revocable Trust',
+  fortress: 'Irrevocable Trust',
 };
 
 // ── Questionnaire status helpers ─────────────────────────────────────────────

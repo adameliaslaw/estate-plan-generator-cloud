@@ -250,7 +250,7 @@ function OverviewTab({
 }: OverviewTabProps) {
   const pkg = client.packageDetails?.packageType ?? 'foundation';
   const packageLabel =
-    pkg === 'fortress' ? 'Fortress Plan' : pkg === 'guardian' ? 'Guardian Plan' : 'Foundation Plan';
+    pkg === 'fortress' ? 'Irrevocable Trust Package' : pkg === 'guardian' ? 'Revocable Trust Package' : 'Basic Estate Plan Package';
 
   return (
     <div className="space-y-6">

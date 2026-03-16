@@ -212,19 +212,19 @@ export function AnalyticsWidgets({ clients, loading }: Props) {
           </div>
           <div className="space-y-2">
             <HorizontalBar
-              label="Foundation"
+              label="Basic Estate Plan"
               value={stats.packages.foundation}
               total={totalClients}
               color="bg-slate-400"
             />
             <HorizontalBar
-              label="Guardian"
+              label="Revocable Trust"
               value={stats.packages.guardian}
               total={totalClients}
               color="bg-[#2b6cb0]"
             />
             <HorizontalBar
-              label="Fortress"
+              label="Irrevocable Trust"
               value={stats.packages.fortress}
               total={totalClients}
               color="bg-indigo-600"
