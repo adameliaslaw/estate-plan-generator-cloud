@@ -514,9 +514,34 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
   }
 
   // ── Edit-mode save & close ────────────────────────────────────────────────
+  // After saving, explicitly re-stamp status as 'completed' since performSave
+  // always writes 'in_progress'. No client notifications fire here —
+  // sendQuestionnaireCompleteNotification is only called from handleSubmit.
   async function handleSaveAndClose() {
     try {
+      if (!firmId || !clientId) throw new Error('Missing route params');
       await saveProgress();
+
+      const updaterName = `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
+      await updateDoc(doc(db, `firms/${firmId}/clients/${clientId}`), {
+        'questionnaireProgress.status': 'completed',
+        'questionnaireProgress.lastUpdatedBy': updaterName,
+        'questionnaireProgress.lastUpdatedAt': serverTimestamp(),
+      });
+
+      try {
+        const clientName = (data as { personalInfo?: { firstName?: string; lastName?: string } })
+          ?.personalInfo
+          ? `${(data as { personalInfo: { firstName?: string } }).personalInfo.firstName ?? ''} ${(data as { personalInfo: { lastName?: string } }).personalInfo.lastName ?? ''}`.trim()
+          : 'Unknown';
+        await logSystemActivity(firmId, userProfile, 'editing questionnaire', {
+          clientId,
+          clientName: clientName || 'Unknown',
+        });
+      } catch {
+        // Non-fatal
+      }
+
       toast.success('Questionnaire changes saved.');
       navigate(-1);
     } catch (err) {

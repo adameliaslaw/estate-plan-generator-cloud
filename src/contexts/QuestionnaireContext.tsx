@@ -404,8 +404,12 @@ export function QuestionnaireProvider({
               ? SECTION_META.find((s) => s.id === currentVisibleStep.section)
               : null;
 
+            // Clients move status to 'in_progress'; staff edits preserve 'completed'
+            // so the questionnaire never reverts during an edit session.
+            const saveStatus = userProfile?.role === 'client' ? 'in_progress' : 'completed';
+
             await updateDoc(doc(db, docPath), {
-              'questionnaireProgress.status': 'in_progress',
+              'questionnaireProgress.status': saveStatus,
               'questionnaireProgress.percentComplete': percentComplete,
               'questionnaireProgress.sectionsCompleted': sectionsCompleted,
               'questionnaireProgress.currentStepIndex': stepIndex,

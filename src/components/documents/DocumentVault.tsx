@@ -77,6 +77,7 @@ import VersionHistoryDialog from './VersionHistoryDialog';
 import ExportButton from './ExportButton';
 import BatchExportButton from './BatchExportButton';
 import ESignatureDialog from './ESignatureDialog';
+import UploadDraftDialog from './UploadDraftDialog';
 import { cn } from '@/lib/utils';
 
 // ── Doc type display names ────────────────────────────────────────────────────
@@ -411,6 +412,7 @@ export default function DocumentVault({
 
   const [showFlexGen, setShowFlexGen] = useState(false);
   const [showSingleGen, setShowSingleGen] = useState(false);
+  const [showUploadDraft, setShowUploadDraft] = useState(false);
   const [versionHistoryDoc, setVersionHistoryDoc] = useState<Document | null>(null);
 
   // ── Derived / filtered list ──────────────────────────────────────────────
@@ -529,6 +531,15 @@ export default function DocumentVault({
           <Button
             variant="outline"
             size="sm"
+            className="gap-2 text-gray-600 hover:border-[#2b6cb0] hover:text-[#2b6cb0]"
+            onClick={() => setShowUploadDraft(true)}
+          >
+            <Upload className="h-4 w-4" />
+            Upload Draft
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
             onClick={() => setShowSingleGen(true)}
           >
@@ -557,6 +568,12 @@ export default function DocumentVault({
           clientId={clientId}
           open={showSingleGen}
           onClose={() => setShowSingleGen(false)}
+        />
+        <UploadDraftDialog
+          open={showUploadDraft}
+          onClose={() => setShowUploadDraft(false)}
+          firmId={firmId}
+          clientId={clientId}
         />
       </>
     );
@@ -622,14 +639,12 @@ export default function DocumentVault({
 
         {/* Right: action buttons */}
         <div className="flex items-center gap-2">
-          {/* Upload external doc — Phase 4 placeholder */}
+          {/* Upload external draft */}
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 text-gray-600"
-            onClick={() => {
-              // Phase 4: upload external document
-            }}
+            className="gap-2 text-gray-600 hover:border-[#2b6cb0] hover:text-[#2b6cb0]"
+            onClick={() => setShowUploadDraft(true)}
           >
             <Upload className="h-4 w-4" />
             Upload
@@ -662,13 +677,9 @@ export default function DocumentVault({
                 <Sparkles className="mr-2 h-4 w-4 text-[#2b6cb0]" />
                 Generate Supplementary Document
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  // Phase 4: upload external
-                }}
-              >
+              <DropdownMenuItem onClick={() => setShowUploadDraft(true)}>
                 <Upload className="mr-2 h-4 w-4 text-gray-500" />
-                Upload external document
+                Upload existing draft
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -911,6 +922,14 @@ export default function DocumentVault({
           onClose={() => setVersionHistoryDoc(null)}
         />
       )}
+
+      {/* ── Upload Draft Dialog ─────────────────────────────────────────────── */}
+      <UploadDraftDialog
+        open={showUploadDraft}
+        onClose={() => setShowUploadDraft(false)}
+        firmId={firmId}
+        clientId={clientId}
+      />
     </div>
   );
 }

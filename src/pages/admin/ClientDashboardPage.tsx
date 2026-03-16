@@ -3,13 +3,14 @@
  *
  * Full client matter management page with:
  *   - Client summary header (name, package, questionnaire status, documents status, balance)
- *   - Five tabs: Client Information | Document Vault | Notes | Payments | Calendar
+ *   - Tabs: Client Information | Document Vault | Notes | Payments | Calendar | Tasks | Activity
  *
  * Data is fetched in real-time from:
  *   /firms/{firmId}/clients/{clientId}
  */
 
-import { useState } from 'react';
+
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { documentService } from '@/services/document-service';
@@ -46,8 +47,15 @@ import {
   Info,
   CreditCard,
   Circle,
+  Activity,
+  FileQuestion,
+  FilePen,
+  Banknote,
+  CalendarCheck,
+  ListTodo,
+  UserPlus,
 } from 'lucide-react';
-import { collection, setDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, setDoc, serverTimestamp, doc, where, orderBy, limit } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -56,7 +64,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 
-import { useDocument } from '@/hooks/useFirestore';
+import { useDocument, useCollection } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { type Client } from '@/types';
@@ -654,6 +662,13 @@ export default function ClientDashboardPage() {
             <CheckCircle2 className="h-4 w-4" />
             Tasks
           </TabsTrigger>
+          <TabsTrigger
+            value="activity"
+            className="gap-2 data-[state=active]:bg-white data-[state=active]:text-[#1a365d] data-[state=active]:shadow-sm"
+          >
+            <Activity className="h-4 w-4" />
+            Activity
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Tab 1: Client Information ──────────────────────────────────── */}
@@ -1002,7 +1017,13 @@ export default function ClientDashboardPage() {
             clientName={displayHeading}
           />
         </TabsContent>
+
+        {/* ── Tab 7: Activity ────────────────────────────────────────────── */}
+        <TabsContent value="activity">
+          <ClientActivityFeed firmId={firmId ?? ''} clientId={clientId ?? ''} />
+        </TabsContent>
       </Tabs>
+
 
       <AudioRecorderModal
         open={isRecordModalOpen}

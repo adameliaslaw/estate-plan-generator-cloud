@@ -18,6 +18,7 @@ export type ActivityAction =
 
 export interface ActivityContext {
     clientName?: string;
+    clientId?: string;
     documentName?: string;
     appointmentTitle?: string;
     taskTitle?: string;
@@ -59,6 +60,7 @@ export async function logSystemActivity(
             action,
             description,
             context: context || null,
+            clientId: context?.clientId ?? null,
             timestamp: serverTimestamp(),
         };
 
