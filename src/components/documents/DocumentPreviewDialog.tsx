@@ -3,16 +3,14 @@
  *
  * Read-only document preview for all vault document types.
  *
- * - HTML/DOCX-derived content → renders the `editorContent` field in a
- *   legal-document-style pane (same font/margin feel as the editor).
- * - PDF uploads → gets a Firebase Storage download URL and renders it in
- *   an <object> tag. NOTE: X-Frame-Options only restricts <iframe>, not
- *   <object>/<embed>, so no blob conversion is needed.
- * - Falls back gracefully if neither field is present.
+ * - HTML/DOCX-derived content → renders `editorContent` in a legal-doc styled pane.
+ * - PDF uploads → uses PDF.js to render each page as a <canvas> element.
+ *   This approach is fully in-browser and bypasses all X-Frame-Options, CSP,
+ *   and CORS restrictions that block iframe/object embedding of storage URLs.
  */
 
-import { useState, useEffect } from 'react';
-import { X, FileText, Loader2, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, FileText, Loader2, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -30,6 +28,150 @@ async function getStorageDownloadUrl(storagePath: string): Promise<string> {
   return getDownloadURL(ref(storage, storagePath));
 }
 
+// ── PDF Canvas Renderer ────────────────────────────────────────────────────────
+
+interface PdfCanvasProps {
+  downloadUrl: string;
+}
+
+function PdfViewer({ downloadUrl }: PdfCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [numPages, setNumPages] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rendering, setRendering] = useState(false);
+  const [renderError, setRenderError] = useState('');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pdfDocRef = useRef<{ numPages: number; getPage: (n: number) => Promise<unknown> } | null>(null);
+
+  // Load the PDF document
+  useEffect(() => {
+    if (!downloadUrl) return;
+
+    let cancelled = false;
+    setRendering(true);
+    setRenderError('');
+
+    (async () => {
+      try {
+        // Lazy-load pdfjs-dist to keep initial bundle small
+        const pdfjs = await import('pdfjs-dist');
+        // Use a CDN worker to avoid bundling the heavy worker file
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+
+        const loadingTask = pdfjs.getDocument({
+          url: downloadUrl,
+          withCredentials: false,
+        });
+
+        const pdfDoc = await loadingTask.promise;
+        if (cancelled) return;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pdfDocRef.current = pdfDoc as any;
+        setNumPages(pdfDoc.numPages);
+        setCurrentPage(1);
+      } catch (err) {
+        console.error('[PdfViewer] Failed to load PDF:', err);
+        if (!cancelled) setRenderError('Failed to load the PDF document.');
+      } finally {
+        if (!cancelled) setRendering(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [downloadUrl]);
+
+  // Render the current page whenever it changes
+  useEffect(() => {
+    if (!pdfDocRef.current || !canvasRef.current || numPages === 0) return;
+
+    let cancelled = false;
+    setRendering(true);
+
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const page: any = await (pdfDocRef.current as any).getPage(currentPage);
+        if (cancelled) return;
+
+        const canvas = canvasRef.current!;
+        const containerWidth = containerRef.current?.clientWidth ?? 800;
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = Math.min((containerWidth - 32) / viewport.width, 2);
+        const scaledViewport = page.getViewport({ scale });
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+
+        const ctx = canvas.getContext('2d')!;
+        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+      } catch (err) {
+        console.error('[PdfViewer] Render error:', err);
+        if (!cancelled) setRenderError('Failed to render this page.');
+      } finally {
+        if (!cancelled) setRendering(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentPage, numPages]);
+
+  if (renderError) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
+          <p className="text-sm font-medium text-red-700">{renderError}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Page navigation */}
+      {numPages > 1 && (
+        <div className="flex items-center justify-center gap-3 py-2 border-b border-gray-200 bg-white flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={currentPage <= 1 || rendering}
+            onClick={() => setCurrentPage((p) => p - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs text-gray-500">
+            Page {currentPage} of {numPages}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={currentPage >= numPages || rendering}
+            onClick={() => setCurrentPage((p) => p + 1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Canvas area */}
+      <div ref={containerRef} className="flex-1 overflow-auto bg-gray-100 flex flex-col items-center py-4 px-2">
+        {rendering && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100/80 z-10">
+            <Loader2 className="h-6 w-6 animate-spin text-[#2b6cb0]" />
+          </div>
+        )}
+        <canvas
+          ref={canvasRef}
+          className="shadow-lg bg-white"
+          style={{ maxWidth: '100%' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -38,12 +180,12 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Main Dialog ───────────────────────────────────────────────────────────────
 
 export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState('');
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlError, setUrlError] = useState('');
 
   const isPdf =
     doc?.mimeType === 'application/pdf' ||
@@ -56,25 +198,25 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
 
   const htmlContent = docWithExtra?.editorContent || docWithExtra?.content || '';
 
-  // ── Fetch download URL when dialog opens for PDFs ──
+  // Fetch the download URL once when dialog opens
   useEffect(() => {
     if (!open || !isPdf || !doc?.storagePath) {
       setPdfDownloadUrl(null);
-      setPdfError('');
+      setUrlError('');
       return;
     }
 
     let cancelled = false;
-    setPdfLoading(true);
-    setPdfError('');
+    setUrlLoading(true);
+    setUrlError('');
 
     getStorageDownloadUrl(doc.storagePath)
       .then((url) => { if (!cancelled) setPdfDownloadUrl(url); })
       .catch((err: unknown) => {
-        console.error('[DocumentPreviewDialog] Failed to get download URL:', err);
-        if (!cancelled) setPdfError('Could not load the PDF. The file may have been moved or deleted.');
+        console.error('[DocumentPreviewDialog] Failed to get URL:', err);
+        if (!cancelled) setUrlError('Could not access the file.');
       })
-      .finally(() => { if (!cancelled) setPdfLoading(false); });
+      .finally(() => { if (!cancelled) setUrlLoading(false); });
 
     return () => { cancelled = true; };
   }, [open, doc?.storagePath, isPdf]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,52 +262,25 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
         </DialogHeader>
 
         {/* ── Body ── */}
-        <div className="flex-1 overflow-hidden bg-gray-100">
-          {/* ── PDF preview via <object> (not subject to X-Frame-Options) ── */}
+        <div className="flex-1 overflow-hidden relative">
+          {/* ── PDF preview via PDF.js canvas rendering ── */}
           {isPdf && (
             <>
-              {pdfLoading && (
+              {urlLoading && (
                 <div className="flex h-full items-center justify-center gap-3">
                   <Loader2 className="h-6 w-6 animate-spin text-[#2b6cb0]" />
                   <span className="text-sm text-gray-500">Loading PDF…</span>
                 </div>
               )}
-              {pdfError && (
+              {urlError && (
                 <div className="flex h-full items-center justify-center">
                   <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
-                    <p className="text-sm font-medium text-red-700">{pdfError}</p>
-                    {doc.storagePath && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Use "Open in tab" to view the file directly.
-                      </p>
-                    )}
+                    <p className="text-sm font-medium text-red-700">{urlError}</p>
                   </div>
                 </div>
               )}
-              {pdfDownloadUrl && !pdfLoading && (
-                // <object> bypasses X-Frame-Options (which only applies to <iframe>)
-                <object
-                  data={pdfDownloadUrl}
-                  type="application/pdf"
-                  className="w-full h-full"
-                  aria-label={`Preview of ${doc.displayName}`}
-                >
-                  {/* Fallback if browser can't embed — offer the download link */}
-                  <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-                    <FileText className="h-12 w-12 text-gray-300" />
-                    <p className="text-sm text-gray-500 text-center">
-                      Your browser can't display this PDF inline.
-                    </p>
-                    <Button
-                      size="sm"
-                      onClick={() => window.open(pdfDownloadUrl, '_blank')}
-                      className="gap-1.5"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Open PDF in new tab
-                    </Button>
-                  </div>
-                </object>
+              {pdfDownloadUrl && !urlLoading && (
+                <PdfViewer downloadUrl={pdfDownloadUrl} />
               )}
             </>
           )}
@@ -174,7 +289,7 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
           {!isPdf && (
             <>
               {!htmlContent ? (
-                <div className="flex h-full items-center justify-center">
+                <div className="flex h-full items-center justify-center bg-gray-100">
                   <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center max-w-sm">
                     <FileText className="mx-auto h-10 w-10 text-gray-300 mb-3" />
                     <p className="text-sm font-medium text-gray-500">No preview available</p>
@@ -184,8 +299,7 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                   </div>
                 </div>
               ) : (
-                <div className="h-full overflow-y-auto py-8 px-4">
-                  {/* Legal document page */}
+                <div className="h-full overflow-y-auto bg-gray-100 py-8 px-4">
                   <div
                     className="mx-auto bg-white shadow-lg rounded-sm"
                     style={{
