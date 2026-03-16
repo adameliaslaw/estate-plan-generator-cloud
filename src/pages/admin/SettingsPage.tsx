@@ -93,6 +93,7 @@ import {
   ColorPickerRow,
   maskApiKey,
 } from '@/components/settings/SettingsHelpers';
+import { TeamTab } from '@/components/settings/TeamTab';
 
 // ---------------------------------------------------------------------------
 // Google OAuth Config
@@ -763,6 +764,11 @@ export default function SettingsPage() {
 
           {/* ── Tab content ── */}
           <div className="min-w-0 flex-1">
+            {/* ════════════════════════════════════════════════════════════
+                TAB: TEAM
+            ════════════════════════════════════════════════════════════ */}
+            {activeTab === 'team' && <TeamTab firmId={firmId} />}
+
             {/* ════════════════════════════════════════════════════════════
                 TAB 1 — FIRM PROFILE
             ════════════════════════════════════════════════════════════ */}
