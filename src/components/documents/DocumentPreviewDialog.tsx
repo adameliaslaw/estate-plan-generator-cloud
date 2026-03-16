@@ -249,7 +249,14 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const isPdf = doc?.mimeType === 'application/pdf' || doc?.fileName?.toLowerCase().endsWith('.pdf');
   const isDocx = doc?.mimeType?.includes('word') || doc?.fileName?.toLowerCase().endsWith('.docx') || doc?.fileName?.toLowerCase().endsWith('.doc');
   const isHtmlFile = doc?.storagePath?.toLowerCase().endsWith('.html') || doc?.mimeType === 'text/html' || doc?.fileName?.toLowerCase().endsWith('.html');
-  const inlineHtml = docWithExtra?.editorContent || docWithExtra?.content || '';
+  
+  // Extract inline HTML, but ignore it if it's just a blank placeholder paragraph
+  let inlineHtml = docWithExtra?.editorContent || docWithExtra?.content || '';
+  const strippedHtml = inlineHtml.replace(/<[^>]*>/g, '').trim();
+  if (!strippedHtml) {
+    inlineHtml = ''; // Treat as empty if there's no actual text content inside the HTML tags
+  }
+
   // Show inline HTML if we already have it (AI-extracted on upload)
   const canShowHtmlDirectly = !isPdf && !!inlineHtml;
   // Need to download bytes if it's a PDF, DOCX without extracted HTML, or HTML file without inline content BUT has a storage path
