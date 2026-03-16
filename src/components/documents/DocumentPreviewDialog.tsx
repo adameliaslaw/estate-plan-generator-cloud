@@ -23,10 +23,17 @@ import { type Document } from '@/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-async function getStorageDownloadUrl(path: string): Promise<string> {
-  const { ref, getDownloadURL } = await import('firebase/storage');
+// Gets a blob:// URL for a storage path using the Firebase SDK (avoids CORS issues with raw fetch())
+async function getPdfBlobUrl(storagePath: string): Promise<{ blobUrl: string; downloadUrl: string }> {
+  const { ref, getDownloadURL, getBlob } = await import('firebase/storage');
   const { storage } = await import('@/config/firebase');
-  return getDownloadURL(ref(storage, path));
+  const storageRef = ref(storage, storagePath);
+  // Get both: blob for iframe embed, download URL for "Open in tab"
+  const [blob, downloadUrl] = await Promise.all([
+    getBlob(storageRef),
+    getDownloadURL(storageRef),
+  ]);
+  return { blobUrl: URL.createObjectURL(blob), downloadUrl };
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -68,19 +75,14 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
     setPdfLoading(true);
     setPdfError('');
 
-    getStorageDownloadUrl(doc.storagePath)
-      .then(async (downloadUrl) => {
+    getPdfBlobUrl(doc.storagePath)
+      .then(({ blobUrl: url, downloadUrl }: { blobUrl: string; downloadUrl: string }) => {
         if (cancelled) return;
+        blobUrl = url;
+        setPdfBlobUrl(url);
         setPdfDownloadUrl(downloadUrl);
-        // Fetch as blob to get a same-origin blob:// URL (avoids X-Frame-Options block)
-        const response = await fetch(downloadUrl);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        if (cancelled) return;
-        blobUrl = URL.createObjectURL(blob);
-        setPdfBlobUrl(blobUrl);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('[DocumentPreviewDialog] Failed to load PDF:', err);
         if (!cancelled) setPdfError('Could not load the PDF. The file may have been moved or deleted.');
       })
