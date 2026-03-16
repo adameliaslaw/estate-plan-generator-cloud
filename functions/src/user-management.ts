@@ -17,6 +17,7 @@ interface CreateFirmUserRequest {
   firstName: string;
   lastName: string;
   role: 'admin' | 'attorney' | 'paralegal' | 'staff';
+  capabilities?: string[];
 }
 
 /**
@@ -30,7 +31,7 @@ export const createFirmUser = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in to create users.');
     }
 
-    const { firmId, email, firstName, lastName, role } = request.data as CreateFirmUserRequest;
+    const { firmId, email, firstName, lastName, role, capabilities } = request.data as CreateFirmUserRequest;
 
     if (!firmId || !email || !firstName || !lastName || !role) {
       throw new HttpsError('invalid-argument', 'Missing required fields: firmId, email, firstName, lastName, role.');
@@ -38,19 +39,37 @@ export const createFirmUser = onCall(
 
     const callerUid = request.auth.uid;
     const db = admin.firestore();
-    const callerProfileSnap = await db.doc(`users/${callerUid}`).get();
+    
+    let callerData: admin.firestore.DocumentData | undefined;
+    const callerProfileSnap = await db.doc(`firms/${firmId}/users/${callerUid}`).get();
 
-    if (!callerProfileSnap.exists) {
-      throw new HttpsError('permission-denied', 'Caller profile not found.');
+    if (callerProfileSnap.exists) {
+      callerData = callerProfileSnap.data();
+    } else {
+      // Fallback to legacy root users collection
+      const legacyProfileSnap = await db.doc(`users/${callerUid}`).get();
+      if (legacyProfileSnap.exists) {
+        callerData = legacyProfileSnap.data();
+      } else {
+        // Ultimate fallback: check custom claims on the token
+        const tokenRole = request.auth.token.role;
+        const tokenFirmId = request.auth.token.firmId;
+        
+        if (tokenRole && tokenFirmId) {
+          callerData = { role: tokenRole, firmId: tokenFirmId };
+        } else {
+          throw new HttpsError('permission-denied', 'Caller profile not found and token lacks claims.');
+        }
+      }
     }
 
-    const callerData = callerProfileSnap.data()!;
+    const effectiveCallerFirmId = callerData?.firmId || callerData?.firm_id; // in case of snake_case legacy
     
     // Authorization: Must belong to the same firm, and must be an admin.
-    if (callerData.firmId !== firmId) {
-      throw new HttpsError('permission-denied', 'Cannot create users for a different firm.');
+    if (effectiveCallerFirmId !== firmId) {
+      throw new HttpsError('permission-denied', `Cannot create users for a different firm. (Caller Firm: ${effectiveCallerFirmId})`);
     }
-    if (callerData.role !== 'admin') {
+    if (callerData?.role !== 'admin') {
       throw new HttpsError('permission-denied', 'Only firm administrators can create new users.');
     }
 
@@ -66,14 +85,15 @@ export const createFirmUser = onCall(
       newUserId = userRecord.uid;
 
       // 2. Set custom claims for RBAC in rules and front-end
-      await auth.setCustomUserClaims(newUserId, { firmId, role });
+      await auth.setCustomUserClaims(newUserId, { firmId, role, capabilities: capabilities || [] });
 
       // 3. Create user profile in Firestore
-      await db.doc(`users/${newUserId}`).set({
+      await db.doc(`firms/${firmId}/users/${newUserId}`).set({
         email,
         firstName,
         lastName,
         role,
+        customCapabilities: capabilities || [],
         firmId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         isActive: true,
@@ -131,6 +151,90 @@ ${ctaButton('Set Your Password', resetLink, branding.primaryColor)}
       }
       logger.error(`[createFirmUser] Unknown error creating user`, error);
       throw new HttpsError('internal', `Failed to create user.`);
+    }
+  }
+);
+
+interface UpdateUserCapabilitiesRequest {
+  firmId: string;
+  userId: string;
+  capabilities: string[];
+}
+
+/**
+ * Updates an existing user's capabilities.
+ * Must be requested by a Firm Administrator.
+ */
+export const updateUserCapabilities = onCall(
+  { region: 'us-east1', invoker: 'public', cors: true },
+  async (request: CallableRequest) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'You must be logged in to update users.');
+    }
+
+    const { firmId, userId, capabilities } = request.data as UpdateUserCapabilitiesRequest;
+
+    if (!firmId || !userId || !capabilities) {
+      throw new HttpsError('invalid-argument', 'Missing required fields: firmId, userId, capabilities.');
+    }
+
+    const callerUid = request.auth.uid;
+    const db = admin.firestore();
+
+    let callerData: admin.firestore.DocumentData | undefined;
+    const callerProfileSnap = await db.doc(`firms/${firmId}/users/${callerUid}`).get();
+
+    if (callerProfileSnap.exists) {
+      callerData = callerProfileSnap.data();
+    } else {
+      const legacyProfileSnap = await db.doc(`users/${callerUid}`).get();
+      if (legacyProfileSnap.exists) {
+        callerData = legacyProfileSnap.data();
+      } else {
+        const tokenRole = request.auth.token.role;
+        const tokenFirmId = request.auth.token.firmId;
+        if (tokenRole && tokenFirmId) {
+          callerData = { role: tokenRole, firmId: tokenFirmId };
+        } else {
+          throw new HttpsError('permission-denied', 'Caller profile not found and token lacks claims.');
+        }
+      }
+    }
+
+    const effectiveCallerFirmId = callerData?.firmId || callerData?.firm_id;
+
+    if (effectiveCallerFirmId !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot update users for a different firm.');
+    }
+    if (callerData?.role !== 'admin') {
+      throw new HttpsError('permission-denied', 'Only firm administrators can update user capabilities.');
+    }
+
+    try {
+      const auth = admin.auth();
+      const userRecord = await auth.getUser(userId);
+
+      // Preserve existing custom claims (like firmId, role) while updating capabilities
+      const currentClaims = userRecord.customClaims || {};
+      const newClaims = {
+        ...currentClaims,
+        capabilities,
+      };
+
+      await auth.setCustomUserClaims(userId, newClaims);
+
+      // Also update the Firestore profile
+      await db.doc(`firms/${firmId}/users/${userId}`).update({
+        customCapabilities: capabilities,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      logger.info(`[updateUserCapabilities] Successfully updated capabilities for user ${userId}.`);
+
+      return { success: true };
+    } catch (error: unknown) {
+      logger.error(`[updateUserCapabilities] Error updating user`, error);
+      throw new HttpsError('internal', `Failed to update user capabilities.`);
     }
   }
 );

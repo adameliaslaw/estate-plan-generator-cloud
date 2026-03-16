@@ -81,6 +81,7 @@ import { COLLECTIONS } from '@/config/constants';
 import { type Document, type DocStatus } from '@/types';
 import { serverTimestamp } from 'firebase/firestore';
 import { logSystemActivity } from '@/utils/activity-logger';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Editor subcomponents
 import EditorToolbar from './EditorToolbar';
@@ -116,6 +117,7 @@ export default function DocumentEditor({
   readOnly: readOnlyProp = false,
 }: DocumentEditorProps) {
   const { userProfile } = useAuth();
+  const { canManageDocuments, isAttorney, isAdmin } = usePermissions();
 
   // ── Firestore path helpers ──
   const docPath = `${COLLECTIONS.DOCUMENTS(firmId, clientId)}/${documentId}`;
@@ -144,7 +146,7 @@ export default function DocumentEditor({
   const isReadOnly =
     readOnlyProp ||
     (document?.status === 'final' && !docUnlocked) ||
-    (userProfile?.role === 'client');
+    !canManageDocuments;
 
   // ── TipTap editor ──
   const editor = useEditor({
@@ -253,40 +255,6 @@ export default function DocumentEditor({
     }
   }, [document, editor, contentLoaded]);
 
-  // ── Auto-save (debounced) ──
-  const scheduleAutoSave = useCallback(
-    (html: string) => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-
-      autoSaveTimerRef.current = setTimeout(async () => {
-        setSaveStatus('saving');
-        try {
-          await updateDoc<Document & { editorContent: string }>(docPath, {
-            editorContent: html,
-            updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
-          });
-
-          // Periodic versioning
-          autoSaveCountRef.current += 1;
-
-          if (autoSaveCountRef.current % VERSION_EVERY_N_SAVES === 0) {
-            await saveVersion(html, 'Auto-saved checkpoint');
-          }
-
-          setSaveStatus('saved');
-          setLastSavedAt(new Date());
-          setHasUnsavedChanges(false);
-        } catch (err) {
-          console.error('[DocumentEditor] Auto-save error:', err);
-          setSaveStatus('error');
-        }
-      }, AUTO_SAVE_DEBOUNCE_MS);
-    },
-    [docPath, userProfile],
-  );
-
   // ── Save a version snapshot ──
   const saveVersion = useCallback(
     async (html: string, changeNotes?: string) => {
@@ -322,7 +290,41 @@ export default function DocumentEditor({
         throw err;
       }
     },
-    [document, versionsPath, docPath, userProfile],
+    [document, versionsPath, docPath, userProfile, firmId],
+  );
+
+  // ── Auto-save (debounced) ──
+  const scheduleAutoSave = useCallback(
+    (html: string) => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+
+      autoSaveTimerRef.current = setTimeout(async () => {
+        setSaveStatus('saving');
+        try {
+          await updateDoc<Document & { editorContent: string }>(docPath, {
+            editorContent: html,
+            updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
+          });
+
+          // Periodic versioning
+          autoSaveCountRef.current += 1;
+
+          if (autoSaveCountRef.current % VERSION_EVERY_N_SAVES === 0) {
+            await saveVersion(html, 'Auto-saved checkpoint');
+          }
+
+          setSaveStatus('saved');
+          setLastSavedAt(new Date());
+          setHasUnsavedChanges(false);
+        } catch (err) {
+          console.error('[DocumentEditor] Auto-save error:', err);
+          setSaveStatus('error');
+        }
+      }, AUTO_SAVE_DEBOUNCE_MS);
+    },
+    [docPath, userProfile, saveVersion],
   );
 
   // ── Manual save version (called from VersionHistory) ──
@@ -542,7 +544,7 @@ export default function DocumentEditor({
 
           {/* Unlock final document (attorney only) */}
           {status === 'final' &&
-            (userProfile?.role === 'attorney' || userProfile?.role === 'admin') && (
+            (isAttorney || isAdmin) && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -598,7 +600,7 @@ export default function DocumentEditor({
             This document has been finalized and is <strong>locked for execution</strong>. Attorneys
             can unlock it to make amendments.
           </span>
-          {(userProfile?.role === 'attorney' || userProfile?.role === 'admin') && (
+          {(isAttorney || isAdmin) && (
             <Button
               variant="ghost"
               size="sm"

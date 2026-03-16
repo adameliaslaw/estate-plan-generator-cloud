@@ -6,6 +6,7 @@ const GlobalAiWidget = lazy(() => import('@/components/ai/GlobalAiWidget').then(
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ROUTES } from '@/config/constants';
 import type { UserRole } from '@/types';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ interface AppLayoutProps {
 export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayoutProps) {
   const { loading } = useRequireAuth(allowedRoles);
   const { userProfile, signOut } = useAuth();
+  const { canManageFirmSettings, canManageUsers } = usePermissions();
   const navigate = useNavigate();
   const pageTitle = usePageTitle();
 
@@ -192,16 +194,18 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
                     </p>
                     <p className="text-xs text-gray-500 truncate">{userProfile?.email}</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setDropdownOpen(false);
-                      navigate(ROUTES.SETTINGS);
-                    }}
-                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <User className="h-4 w-4" />
-                    Profile & Settings
-                  </button>
+                  {(canManageFirmSettings || canManageUsers) && (
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        navigate(ROUTES.SETTINGS);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <User className="h-4 w-4" />
+                      Firm Settings
+                    </button>
+                  )}
                   <div className="border-t border-gray-100 mt-1 pt-1">
                     <button
                       onClick={() => {

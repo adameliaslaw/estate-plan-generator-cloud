@@ -84,6 +84,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Timestamp, addDoc, collection } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import type { EmailTemplate, EmailTrigger, Notary } from '@/types';
+import { usePermissions } from '@/hooks/usePermissions';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import {
   GoogleLoginButton,
@@ -196,12 +197,14 @@ const TABS: TabDef[] = [
 // ---------------------------------------------------------------------------
 
 /** Derive initial tab from window.location.pathname. */
-function getInitialTab(): TabId {
+function getInitialTab(canManageFirmSettings: boolean, canManageUsers: boolean): TabId {
   const path = window.location.pathname;
-  if (path.includes('/settings/firm')) return 'firm';
-  if (path.includes('/settings/users')) return 'firm';
-  if (path.includes('/settings/billing')) return 'integrations';
-  return 'firm';
+  if (path.includes('/settings/firm') && canManageFirmSettings) return 'firm';
+  if (path.includes('/settings/users') && canManageUsers) return 'team';
+  if (path.includes('/settings/billing') && canManageFirmSettings) return 'integrations';
+  if (canManageFirmSettings) return 'firm';
+  if (canManageUsers) return 'team';
+  return 'firm'; // Default fallback, but UI will block access entirely if both are false
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +213,7 @@ function getInitialTab(): TabId {
 
 export default function SettingsPage() {
   const { userProfile } = useAuth();
+  const { canManageFirmSettings, canManageUsers } = usePermissions();
   const firmId = userProfile?.firmId ?? '';
 
   const firmPath = firmId ? `${COLLECTIONS.FIRMS}/${firmId}` : null;
@@ -219,7 +223,7 @@ export default function SettingsPage() {
   const templatesPath = firmId ? `${COLLECTIONS.FIRMS}/${firmId}/emailTemplates` : null;
   const { data: emailTemplates } = useCollection<EmailTemplate>(templatesPath);
 
-  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
+  const [activeTab, setActiveTab] = useState<TabId>(() => getInitialTab(canManageFirmSettings, canManageUsers));
 
   // ── Tab 1: Firm Profile ──────────────────────────────────────────────────
   const [firmProfile, setFirmProfile] = useState({
@@ -725,6 +729,16 @@ export default function SettingsPage() {
     );
   }
 
+  if (!canManageFirmSettings && !canManageUsers) {
+    return (
+      <Alert className="border-red-200 bg-red-50">
+        <AlertDescription className="text-red-800">
+          You do not have permission to view or manage firm settings.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <TooltipProvider>
       <div className="space-y-4">
@@ -740,7 +754,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           {/* ── Sidebar tabs (desktop) / horizontal tabs (mobile) ── */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-52 lg:flex-col lg:overflow-visible">
-            {TABS.map((tab) => (
+            {TABS.filter(tab => tab.id === 'team' ? canManageUsers : canManageFirmSettings).map((tab) => (
               <button
                 key={tab.id}
                 type="button"

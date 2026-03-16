@@ -22,6 +22,7 @@ import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { logSystemActivity } from '@/utils/activity-logger';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -150,6 +151,7 @@ function SortIcon({
 
 export default function ClientListPage() {
   const { user, userProfile } = useAuth();
+  const { canManageClients } = usePermissions();
   const navigate = useNavigate();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -236,7 +238,7 @@ export default function ClientListPage() {
     });
 
     return result;
-  }, [clients, searchQuery, packageFilter, qFilter, sortField, sortDir]);
+  }, [clients, searchQuery, packageFilter, qFilter, sortField, sortDir, showArchived]);
 
   const hasFilters = searchQuery.trim() !== '' || packageFilter !== 'all' || qFilter !== 'all';
 
@@ -318,20 +320,24 @@ export default function ClientListPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-[#2b6cb0] bg-white px-4 py-2.5 text-sm font-semibold text-[#2b6cb0] shadow-sm hover:bg-[#ebf4ff] transition-colors"
-          >
-            <Upload className="h-4 w-4" />
-            Import CSV
-          </button>
-          <button
-            onClick={() => navigate(ROUTES.CLIENT_NEW)}
-            className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e407a] transition-colors"
-          >
-            <UserPlus className="h-4 w-4" />
-            Add Client
-          </button>
+          {canManageClients && (
+            <>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="flex items-center gap-2 rounded-lg border border-[#2b6cb0] bg-white px-4 py-2.5 text-sm font-semibold text-[#2b6cb0] shadow-sm hover:bg-[#ebf4ff] transition-colors"
+              >
+                <Upload className="h-4 w-4" />
+                Import CSV
+              </button>
+              <button
+                onClick={() => navigate(ROUTES.CLIENT_NEW)}
+                className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e407a] transition-colors"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add Client
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -442,13 +448,15 @@ export default function ClientListPage() {
                 <p className="text-sm text-gray-500">
                   Get started by adding your first client.
                 </p>
-                <button
-                  onClick={() => navigate(ROUTES.CLIENT_NEW)}
-                  className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1e407a] transition-colors"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Add Client
-                </button>
+                {canManageClients && (
+                  <button
+                    onClick={() => navigate(ROUTES.CLIENT_NEW)}
+                    className="flex items-center gap-2 rounded-lg bg-[#1a365d] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1e407a] transition-colors"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Add Client
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -568,26 +576,30 @@ export default function ClientListPage() {
                                     ? 'Continue Questionnaire'
                                     : 'Start Questionnaire'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleArchive(client.id, !!client.isArchived);
-                                }}
-                              >
-                                <Archive className="mr-2 h-4 w-4" />
-                                {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setIsDeleting(client.id);
-                                }}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Client
-                              </DropdownMenuItem>
+                              {canManageClients && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleArchive(client.id, !!client.isArchived);
+                                    }}
+                                  >
+                                    <Archive className="mr-2 h-4 w-4" />
+                                    {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsDeleting(client.id);
+                                    }}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete Client
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -672,26 +684,31 @@ export default function ClientListPage() {
                               ? 'Continue Questionnaire'
                               : 'Start Questionnaire'}
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleArchive(client.id, !!client.isArchived);
-                          }}
-                        >
-                          <Archive className="mr-2 h-4 w-4" />
-                          {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsDeleting(client.id);
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete Client
-                        </DropdownMenuItem>
+                        {canManageClients && (
+                          <>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleArchive(client.id, !!client.isArchived);
+                              }}
+                            >
+                              <Archive className="mr-2 h-4 w-4" />
+                              {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsDeleting(client.id);
+                              }}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Client
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

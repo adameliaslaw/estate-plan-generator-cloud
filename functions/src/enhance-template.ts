@@ -79,7 +79,7 @@ export const enhanceTemplate = onCall(
     const db = admin.firestore();
 
     // Verify user belongs to firm
-    const userSnap = await db.doc(`users/${request.auth.uid}`).get();
+    const userSnap = await db.doc(`firms/${firmId}/users/${request.auth.uid}`).get();
     const userData = userSnap.data();
     if (!userData || userData.firmId !== firmId) {
       throw new HttpsError('permission-denied', 'Not authorized for this firm.');

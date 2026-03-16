@@ -164,6 +164,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         phone: firestoreData?.phone,
         recentActivityExpanded: firestoreData?.recentActivityExpanded ?? false,
         onboarded: firestoreData?.onboarded ?? false,
+        customCapabilities: firestoreData?.customCapabilities ?? [],
         createdAt: firestoreData?.createdAt ?? new Date(),
         updatedAt: firestoreData?.updatedAt ?? new Date(),
       } as AppUserProfile;

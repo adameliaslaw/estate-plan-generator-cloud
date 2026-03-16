@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS } from '@/config/constants';
 import { where } from 'firebase/firestore';
-import type { User, UserRole } from '@/types';
+import type { User, UserRole, UserCapability } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Card,
   CardContent,
@@ -29,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, Plus, Loader2, Mail, Shield } from 'lucide-react';
+import { Users, Plus, Loader2, Mail, Shield, Settings2 } from 'lucide-react';
 import { functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
@@ -37,6 +38,21 @@ import { toast } from 'sonner';
 interface TeamTabProps {
   firmId: string;
 }
+
+const CAPABILITY_OPTIONS: { id: UserCapability; label: string; description: string }[] = [
+  { id: 'manage_firm_settings', label: 'Manage Firm Settings', description: 'Edit firm profile, branding, and integrations.' },
+  { id: 'manage_users', label: 'Manage Users', description: 'Invite and manage other staff members.' },
+  { id: 'manage_clients', label: 'Manage Clients', description: 'Create, edit, archive, and delete clients.' },
+  { id: 'manage_documents', label: 'Manage Documents', description: 'Draft, edit, and finalize legal documents.' },
+  { id: 'manage_billing', label: 'Manage Billing', description: 'View, create, and delete payment records.' },
+];
+
+const DEFAULT_ROLE_CAPABILITIES: Record<UserRole, UserCapability[]> = {
+  admin: ['manage_firm_settings', 'manage_users', 'manage_clients', 'manage_documents', 'manage_billing'],
+  attorney: ['manage_clients', 'manage_documents', 'manage_billing'],
+  paralegal: ['manage_documents'],
+  client: [],
+};
 
 export function TeamTab({ firmId }: TeamTabProps) {
   const { data: users, loading } = useCollection<User>(COLLECTIONS.USERS(firmId), [
@@ -46,11 +62,29 @@ export function TeamTab({ firmId }: TeamTabProps) {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   
+  
   // New user form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('paralegal');
+  const [capabilities, setCapabilities] = useState<UserCapability[]>(DEFAULT_ROLE_CAPABILITIES['paralegal']);
+
+  // Edit user capabilities state
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editCapabilities, setEditCapabilities] = useState<UserCapability[]>([]);
+
+  // Function to handle role change
+  const handleRoleChange = (val: UserRole, isEdit: boolean = false) => {
+    if (isEdit) {
+      // In edit mode we just don't change the role for now, as updating capabilities is separate.
+    } else {
+      setRole(val);
+      setCapabilities([...DEFAULT_ROLE_CAPABILITIES[val]]);
+    }
+  };
 
   const handleCreateUser = async () => {
     if (!firstName || !lastName || !email) {
@@ -66,6 +100,7 @@ export function TeamTab({ firmId }: TeamTabProps) {
         firstName,
         lastName,
         role,
+        capabilities,
         firmId,
       });
 
@@ -76,6 +111,7 @@ export function TeamTab({ firmId }: TeamTabProps) {
       setLastName('');
       setEmail('');
       setRole('paralegal');
+      setCapabilities([...DEFAULT_ROLE_CAPABILITIES['paralegal']]);
     } catch (err: unknown) {
       console.error('Error creating user:', err);
       toast.error((err as Error).message || 'Failed to create staff member.');
@@ -84,18 +120,49 @@ export function TeamTab({ firmId }: TeamTabProps) {
     }
   };
 
+  const handleEditClick = (user: User) => {
+    setEditingUser(user);
+    if (user.customCapabilities) {
+      setEditCapabilities([...user.customCapabilities]);
+    } else {
+      setEditCapabilities([...DEFAULT_ROLE_CAPABILITIES[user.role]]);
+    }
+    setIsEditUserOpen(true);
+  };
+
+  const handleUpdateCapabilities = async () => {
+    if (!editingUser) return;
+    setIsUpdating(true);
+    try {
+      const updateUserCapabilities = httpsCallable(functions, 'updateUserCapabilities');
+      await updateUserCapabilities({
+        userId: editingUser.id,
+        capabilities: editCapabilities,
+      });
+
+      toast.success(`${editingUser.firstName}'s capabilities updated successfully.`);
+      setIsEditUserOpen(false);
+    } catch (err: unknown) {
+      console.error('Error updating user capabilities:', err);
+      toast.error((err as Error).message || 'Failed to update user capabilities.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
-    <Card className="border-gray-200 shadow-sm">
-      <CardHeader className="flex flex-row items-start justify-between">
-        <div>
-          <CardTitle className="flex items-center gap-2 text-[#1a365d]">
-            <Users className="h-5 w-5" />
-            Team Members
-          </CardTitle>
-          <CardDescription>
-            Manage attorneys and staff with access to your firm.
-          </CardDescription>
-        </div>
+    <>
+      <Card className="border-gray-200 shadow-sm">
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-[#1a365d]">
+              <Users className="h-5 w-5" />
+              Team Members
+            </CardTitle>
+            <CardDescription>
+              Manage attorneys and staff with access to your firm.
+            </CardDescription>
+          </div>
         <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]">
@@ -143,7 +210,7 @@ export function TeamTab({ firmId }: TeamTabProps) {
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
-                <Select value={role} onValueChange={(val: UserRole) => setRole(val)}>
+                <Select value={role} onValueChange={(val: UserRole) => handleRoleChange(val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
@@ -153,6 +220,40 @@ export function TeamTab({ firmId }: TeamTabProps) {
                     <SelectItem value="paralegal">Paralegal</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Matrix display for Creation Modal */}
+              <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-medium text-gray-900">Custom Capabilities</h4>
+                  <p className="text-xs text-gray-500">Fine-tune the access permissions for this member.</p>
+                </div>
+                <div className="space-y-3 pl-1">
+                  {CAPABILITY_OPTIONS.map((cap) => (
+                    <div key={cap.id} className="flex items-start space-x-3">
+                      <Checkbox
+                        id={`new-${cap.id}`}
+                        checked={capabilities.includes(cap.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setCapabilities((prev) => [...prev, cap.id]);
+                          } else {
+                            setCapabilities((prev) => prev.filter((c) => c !== cap.id));
+                          }
+                        }}
+                      />
+                      <div className="space-y-1 leading-none">
+                        <label
+                          htmlFor={`new-${cap.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          {cap.label}
+                        </label>
+                        <p className="text-xs text-gray-500">{cap.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -207,7 +308,7 @@ export function TeamTab({ firmId }: TeamTabProps) {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                       user.isActive
@@ -217,6 +318,15 @@ export function TeamTab({ firmId }: TeamTabProps) {
                   >
                     {user.isActive ? 'Active' : 'Inactive'}
                   </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => handleEditClick(user)}
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Access
+                  </Button>
                 </div>
               </div>
             ))}
@@ -232,5 +342,68 @@ export function TeamTab({ firmId }: TeamTabProps) {
         )}
       </CardContent>
     </Card>
+
+    {/* Edit Capabilities Dialog */}
+    <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit User Capabilities</DialogTitle>
+          <DialogDescription>
+            Modify {editingUser?.firstName}'s specific access capabilities within the firm.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-1 mb-4">
+            <h4 className="text-sm font-medium text-gray-900">Custom Capabilities Checklist</h4>
+            <p className="text-xs text-gray-500">
+              Users inherit default capabilities unless overridden here.
+            </p>
+          </div>
+
+          <div className="space-y-3 border rounded-lg p-4 bg-gray-50/50">
+            {CAPABILITY_OPTIONS.map((cap) => (
+              <div key={cap.id} className="flex items-start space-x-3">
+                <Checkbox
+                  id={`edit-${cap.id}`}
+                  checked={editCapabilities.includes(cap.id)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setEditCapabilities((prev) => [...prev, cap.id]);
+                    } else {
+                      setEditCapabilities((prev) => prev.filter((c) => c !== cap.id));
+                    }
+                  }}
+                />
+                <div className="space-y-1 leading-none">
+                  <label
+                    htmlFor={`edit-${cap.id}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {cap.label}
+                  </label>
+                  <p className="text-xs text-gray-500">{cap.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsEditUserOpen(false)} disabled={isUpdating}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleUpdateCapabilities}
+            className="bg-[#2b6cb0] hover:bg-[#1a365d]"
+            disabled={isUpdating}
+          >
+            {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save Access
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

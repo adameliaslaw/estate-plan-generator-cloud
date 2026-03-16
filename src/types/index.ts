@@ -13,6 +13,13 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type UserRole = 'admin' | 'attorney' | 'paralegal' | 'client';
 
+export type UserCapability =
+  | 'manage_firm_settings'
+  | 'manage_users'
+  | 'manage_clients'
+  | 'manage_documents'
+  | 'manage_billing';
+
 export type PackageType = 'foundation' | 'guardian' | 'fortress';
 
 export type DocType =
@@ -267,6 +274,7 @@ export interface User {
   firstName: string;
   lastName: string;
   role: UserRole;
+  customCapabilities?: UserCapability[];
   phone?: string;
   photoUrl?: string;
   barNumber?: string;           // for attorneys
@@ -275,6 +283,14 @@ export interface User {
   lastLoginAt?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface UserProfile extends Omit<User, 'createdAt' | 'updatedAt' | 'lastLoginAt'> {
+  uid: string;
+  onboarded: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLoginAt?: Date;
 }
 
 // ============================================================================

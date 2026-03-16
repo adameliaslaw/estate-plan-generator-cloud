@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 
 import { useCollectionGroup, useCollection, deleteDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { COLLECTIONS } from '@/config/constants';
 import { cn } from '@/lib/utils';
 import type { Payment, Client } from '@/types';
@@ -84,6 +85,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
 
 export default function PaymentsPage() {
     const { userProfile } = useAuth();
+    const { canManageBilling, isAdmin } = usePermissions();
     const navigate = useNavigate();
     const firmId = userProfile?.firmId ?? '';
 
@@ -202,21 +204,25 @@ export default function PaymentsPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={() => setShowRecordDialog(true)}
-                        className="border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#2b6cb0]/5"
-                    >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Record Payment
-                    </Button>
-                    <Button
-                        onClick={() => setShowSendDialog(true)}
-                        className="bg-[#2b6cb0] text-white hover:bg-[#2563a8]"
-                    >
-                        <Send className="mr-2 h-4 w-4" />
-                        Send Payment Request
-                    </Button>
+                    {canManageBilling && (
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowRecordDialog(true)}
+                                className="border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#2b6cb0]/5"
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Record Payment
+                            </Button>
+                            <Button
+                                onClick={() => setShowSendDialog(true)}
+                                className="bg-[#2b6cb0] text-white hover:bg-[#2563a8]"
+                            >
+                                <Send className="mr-2 h-4 w-4" />
+                                Send Payment Request
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -363,14 +369,16 @@ export default function PaymentsPage() {
                                                 {formatDate(p.paidAt ?? p.createdAt)}
                                             </td>
                                             <td className="whitespace-nowrap px-3 py-3.5 text-right">
-                                                <button
-                                                    onClick={() => setConfirmDeletePayment(p)}
-                                                    disabled={deletingId === p.id}
-                                                    className="rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                                                    title="Delete payment"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                {isAdmin && (
+                                                    <button
+                                                        onClick={() => setConfirmDeletePayment(p)}
+                                                        disabled={deletingId === p.id}
+                                                        className="rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                                        title="Delete payment"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
