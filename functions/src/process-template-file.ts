@@ -463,47 +463,59 @@ Respond with a valid JSON object (no markdown fences):
 
     if (hasIndexedChildren) {
       try {
-        const loopPrompt = `You are a Handlebars template expert. The following HTML template has been partially converted — it contains indexed child references like {{children[0].name}}, {{children[1].name}}, {{childrenWithTitles[0].childTitle}}, etc.
+        // Extract only the section(s) containing indexed children references
+        // to avoid sending the entire 20K+ document to the AI.
+        const childRefPattern = /children\[\d+\]|childrenWithTitles\[\d+\]/;
+        const lines = templatizedHtml.split('\n');
+        let firstChildRef = -1;
+        let lastChildRef = -1;
+        for (let i = 0; i < lines.length; i++) {
+          if (childRefPattern.test(lines[i])) {
+            if (firstChildRef === -1) firstChildRef = i;
+            lastChildRef = i;
+          }
+        }
 
-Your job: find the REPEATING sections that reference individual children by index (children[0], children[1], children[2], childrenWithTitles[0], etc.) and convert them into a single {{#each childrenWithTitles}} loop block.
+        if (firstChildRef >= 0) {
+          // Add some context lines around the matching region
+          const contextLines = 5;
+          const sectionStart = Math.max(0, firstChildRef - contextLines);
+          const sectionEnd = Math.min(lines.length - 1, lastChildRef + contextLines);
+          const childSection = lines.slice(sectionStart, sectionEnd + 1).join('\n');
+
+          console.log(`[processTemplateFile] Loop detection: processing lines ${sectionStart}-${sectionEnd} (${childSection.length} chars) out of ${templatizedHtml.length} total`);
+
+          const loopPrompt = `You are a Handlebars template expert. The following HTML snippet contains indexed child references like {{children[0].name}}, {{children[1].name}}, {{childrenWithTitles[0].childTitle}}, etc.
+
+Your job: convert the indexed child references into {{#each childrenWithTitles}} loop blocks.
 
 RULES:
-1. Identify THE SMALLEST repeating unit — the clause or paragraph that repeats for each child.
-2. Replace ALL indexed instances of that clause with a SINGLE {{#each childrenWithTitles}} block.
-3. Inside the block, use {{this.childTitle}} for "son"/"daughter", {{this.name}} for the child's name, and {{this.dob}}, {{this.relationship}}, etc. for other child fields.
-4. For comma-separated lists of children (e.g., "Alice, Bob, and Charlie"), use {{#each childrenWithTitles}}{{this.name}}{{#unless @last}}, {{/unless}}{{#if @last}} and {{/if}}{{/each}}
-5. Do NOT touch sections that reference children collectively (e.g., "my children") — leave those as literal text.
-6. Do NOT modify any other part of the template — only the repeating child sections.
-7. Preserve all HTML structure and formatting.
-8. If children references are NOT repeating (e.g., just one child mentioned), leave them as indexed references.
+1. Identify repeating clauses that reference individual children by index and consolidate into a single {{#each childrenWithTitles}} block.
+2. Inside the block, use {{this.childTitle}} for "son"/"daughter", {{this.name}} for the child's name.
+3. For comma-separated lists of children, use: {{#each childrenWithTitles}}{{this.name}}{{#unless @last}}, {{/unless}}{{#if @last}} and {{/if}}{{/each}}
+4. Do NOT modify any text that does not contain indexed child references.
+5. Preserve all HTML structure.
 
 CRITICAL — ONLY USE STANDARD HANDLEBARS SYNTAX:
 - Allowed: {{#each}}, {{/each}}, {{#if}}, {{/if}}, {{#unless}}, {{/unless}}, {{@index}}, {{@first}}, {{@last}}, {{this.fieldName}}
-- FORBIDDEN: Custom helpers like (eq ...), (plus ...), (lookup ...), (array ...), (gt ...), (subtract ...).
-  Do NOT use any parenthetical helper expressions.
-- For "and" before the last item, use: {{#if @last}} and {{/if}}
-- For commas between items: {{#unless @last}}, {{/unless}}
+- FORBIDDEN: Custom helpers like (eq ...), (plus ...), (lookup ...), (array ...), (gt ...), (subtract ...). Do NOT use any parenthetical helper expressions.
 
-Return ONLY the modified HTML (no JSON wrapper, no markdown fences, no explanation).`;
+Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no explanation).`;
 
-        // Send the FULL templatized HTML to preserve all content.
-        // Increase maxTokens to handle the full document length.
-        const loopResult = await callAI(loopPrompt, templatizedHtml, firmData, {
-          temperature: 0.05,
-          maxTokens: 32000,
-        });
+          const loopResult = await callAI(loopPrompt, childSection, firmData, {
+            temperature: 0.05,
+            maxTokens: 8000,
+          });
 
-        // Validate the AI returned something reasonable:
-        // 1. Must contain the {{#each}} block
-        // 2. Must be at least 80% of original length (prevents silent truncation)
-        const minLength = Math.floor(templatizedHtml.length * 0.8);
-        if (loopResult && loopResult.trim().length > minLength && loopResult.includes('{{#each')) {
-          templatizedHtml = loopResult;
-          console.log('[processTemplateFile] AI loop detection: converted indexed children to {{#each}} block');
-        } else if (loopResult && loopResult.includes('{{#each')) {
-          console.log(`[processTemplateFile] AI loop detection: response too short (${loopResult.trim().length} vs ${templatizedHtml.length} original) — content may be truncated, skipping`);
-        } else {
-          console.log('[processTemplateFile] AI loop detection: no repeating pattern found or AI returned unchanged content');
+          if (loopResult && loopResult.includes('{{#each')) {
+            // Splice the processed section back into the full document
+            const before = lines.slice(0, sectionStart).join('\n');
+            const after = lines.slice(sectionEnd + 1).join('\n');
+            templatizedHtml = [before, loopResult.trim(), after].filter(Boolean).join('\n');
+            console.log('[processTemplateFile] AI loop detection: converted indexed children to {{#each}} block');
+          } else {
+            console.log('[processTemplateFile] AI loop detection: no {{#each}} in response, keeping original');
+          }
         }
       } catch (err) {
         console.error('[processTemplateFile] AI loop detection error (non-fatal):', err);
