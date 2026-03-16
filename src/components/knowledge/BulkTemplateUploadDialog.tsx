@@ -146,7 +146,7 @@ export function BulkTemplateUploadDialog({
           description: processed.documentSummary || '',
           tags: processed.suggestedTags || [],
           content: processed.extractedHtml || processed.extractedText || '',
-          rawText: (processed as any).rawExtractedText || processed.extractedText || '',
+          rawText: (processed as { rawExtractedText?: string }).rawExtractedText || processed.extractedText || '',
         });
       } catch (err) {
         console.error(`Bulk template processing failed for ${file.name}:`, err);

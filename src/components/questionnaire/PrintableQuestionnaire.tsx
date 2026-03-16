@@ -120,32 +120,32 @@ function PrintPage({ children, isLast = false }: { children: React.ReactNode; is
 
 function FiduciaryBlock({ role, subtitle }: { role: string; subtitle?: string }) {
   return (
-    <div className="border-b border-gray-300 pb-1 mb-1">
-      <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">
+    <div className="border-b border-gray-300 pb-3 mb-3">
+      <p className="text-[9pt] font-bold text-gray-700 uppercase tracking-wide mb-1">
         {role}
         {subtitle && <span className="ml-1 font-normal text-gray-500 normal-case">{subtitle}</span>}
       </p>
-      <div className="grid grid-cols-2 gap-x-4">
+      <div className="grid grid-cols-2 gap-x-6">
         {/* Primary */}
         <div>
-          <p className="text-[7pt] text-gray-400 uppercase">Primary</p>
-          <div className="grid grid-cols-2 gap-x-2">
+          <p className="text-[7pt] text-gray-400 uppercase font-semibold mb-1">Primary</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
             <LabeledField label="Full Name" />
             <LabeledField label="Relationship" />
           </div>
-          <div className="grid grid-cols-2 gap-x-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2">
             <LabeledField label="Address" />
             <LabeledField label="Phone" />
           </div>
         </div>
         {/* Alternate */}
         <div>
-          <p className="text-[7pt] text-gray-400 uppercase">Alternate</p>
-          <div className="grid grid-cols-2 gap-x-2">
+          <p className="text-[7pt] text-gray-400 uppercase font-semibold mb-1">Alternate</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
             <LabeledField label="Full Name" />
             <LabeledField label="Relationship" />
           </div>
-          <div className="grid grid-cols-2 gap-x-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2">
             <LabeledField label="Address" />
             <LabeledField label="Phone" />
           </div>
@@ -427,7 +427,7 @@ export default function PrintableQuestionnaire({
 
             {/* SECTION 4: FIDUCIARIES */}
             <SectionHeader title="Section 4 — Your Fiduciaries" />
-            <p className="text-[8pt] text-gray-500 italic mb-1">
+            <p className="text-[8pt] text-gray-500 italic mb-3">
               Name the people you trust to carry out your wishes. Provide primary and alternate for each role.
             </p>
 
@@ -435,6 +435,22 @@ export default function PrintableQuestionnaire({
               <FiduciaryBlock role="Trustee" />
               <FiduciaryBlock role="Executor" />
               <FiduciaryBlock role="Power of Attorney (Agent)" />
+            </div>
+
+            <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
+          </div>
+        </PrintPage>
+
+        {/* ================================================================
+            PAGE 3: Section 4 (cont) + Section 5 (Healthcare Preferences)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <div className="mb-3 border-b border-[#1a365d] pb-0.5 mt-1">
+              <p className="text-[8pt] font-semibold text-[#1a365d] uppercase">Section 4 — Your Fiduciaries (continued)</p>
+            </div>
+
+            <div className="space-y-0 mb-6">
               <FiduciaryBlock role="Healthcare Representative" />
               <FiduciaryBlock role="Guardian" subtitle="(If Children or grandchildren under 18)" />
             </div>
@@ -506,12 +522,21 @@ export default function PrintableQuestionnaire({
               </div>
             </div>
 
-            <div>
+            <div className="flex-1">
               <SubHeader title="Additional Healthcare Instructions" />
               <BlankLines count={3} />
             </div>
 
-            {/* SECTION 6 starts on same page */}
+            <PageFooter pageNum={3} totalPages={TOTAL_PAGES} />
+          </div>
+        </PrintPage>
+
+        {/* ================================================================
+            PAGE 4: Section 6 (Assets) + Section 7 (Additional Info)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            
             <SectionHeader title="Section 6 — Assets & Liabilities (Summary)" />
             <p className="text-[8pt] text-gray-500 italic mb-2">
               Please list your major assets and liabilities below. Our office will gather detailed
@@ -522,26 +547,13 @@ export default function PrintableQuestionnaire({
             <p className="text-[7pt] text-gray-400 mb-0.5">
               List each property: address, estimated value, how titled (joint, individual, trust)
             </p>
-            <BlankLines count={4} />
+            <BlankLines count={3} />
 
             <SubHeader title="Financial Accounts" />
             <p className="text-[7pt] text-gray-400 mb-0.5">
               Bank accounts, investments, retirement (401k, IRA), life insurance
             </p>
-            <BlankLines count={4} />
-
-            <PageFooter pageNum={3} totalPages={TOTAL_PAGES} />
-          </div>
-        </PrintPage>
-
-        {/* ================================================================
-            PAGE 4: Section 6 (continued) + Section 7 (Additional Info)
-            ================================================================ */}
-        <PrintPage>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <div className="mb-1 border-b border-[#1a365d] pb-0.5">
-              <p className="text-[8pt] font-semibold text-[#1a365d] uppercase">Section 6 — Assets & Liabilities (continued)</p>
-            </div>
+            <BlankLines count={3} />
 
             <SubHeader title="Business Interests" />
             <BlankLines count={3} />
@@ -552,37 +564,41 @@ export default function PrintableQuestionnaire({
             </p>
             <BlankLines count={3} />
 
-            {/* SECTION 7: ADDITIONAL INFORMATION */}
-            <SectionHeader title="Section 7 — Additional Information" />
+            <div className="mt-6">
+              {/* SECTION 7: ADDITIONAL INFORMATION */}
+              <SectionHeader title="Section 7 — Additional Information" />
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
-                  Do you have existing estate planning documents?
-                </p>
-                <div className="flex gap-4">
-                  <CheckOption label="Yes" />
-                  <CheckOption label="No" />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
+                <div>
+                  <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+                    Do you have existing estate planning documents?
+                  </p>
+                  <div className="flex gap-4">
+                    <CheckOption label="Yes" />
+                    <CheckOption label="No" />
+                  </div>
+                  <LabeledField label="If yes, describe (type and approximate date)" />
                 </div>
-                <LabeledField label="If yes, describe (type and approximate date)" />
+                <div>
+                  <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+                    Any pending legal matters?
+                  </p>
+                  <div className="flex gap-4">
+                    <CheckOption label="Yes" />
+                    <CheckOption label="No" />
+                  </div>
+                  <LabeledField label="If yes, describe" />
+                </div>
               </div>
-              <div>
-                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
-                  Any pending legal matters?
+
+              <div className="mt-4">
+                <SubHeader title="Additional Notes" />
+                <p className="text-[7pt] text-gray-400 mb-0.5">
+                  Special circumstances, family dynamics, concerns about a specific beneficiary, pets, property in other states, etc.
                 </p>
-                <div className="flex gap-4">
-                  <CheckOption label="Yes" />
-                  <CheckOption label="No" />
-                </div>
-                <LabeledField label="If yes, describe" />
+                <BlankLines count={5} />
               </div>
             </div>
-
-            <SubHeader title="Additional Notes" />
-            <p className="text-[7pt] text-gray-400 mb-0.5">
-              Special circumstances, family dynamics, concerns about a specific beneficiary, pets, property in other states, etc.
-            </p>
-            <BlankLines count={5} />
 
             <div className="mt-2">
               <p className="text-[8pt] font-medium text-gray-600 mb-0.5">How did you hear about us?</p>
