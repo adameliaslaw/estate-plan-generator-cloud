@@ -322,7 +322,7 @@ export const templateService = {
       dictionarySize: number;
     };
   }> {
-    const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 300000 });
+    const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 540000 });
     const res = await fn({ firmId, storagePath, fileName });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = res.data as any;

@@ -216,7 +216,7 @@ Jurisdiction tags:
 // ---------------------------------------------------------------------------
 
 export const processTemplateFile = onCall(
-  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 300 },
+  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 540 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -402,19 +402,23 @@ Respond with a valid JSON object (no markdown fences):
 
         console.log(`[processTemplateFile] Split into ${htmlChunks.length} HTML chunks`);
 
-        // Process chunks sequentially to maintain context consistency
-        const processedChunks: string[] = [];
-        for (let ci = 0; ci < htmlChunks.length; ci++) {
-          const chunkPrompt = `This is part ${ci + 1} of ${htmlChunks.length} of a legal document. Apply the same templatization rules to this section:\n\n${htmlChunks[ci]}`;
-          const result = await callAI(
+        // Process chunks in PARALLEL to avoid timeout on large documents
+        const chunkPromises = htmlChunks.map((chunk, ci) => {
+          const chunkPrompt = `This is part ${ci + 1} of ${htmlChunks.length} of a legal document. Apply the same templatization rules to this section:\n\n${chunk}`;
+          return callAI(
             templatizeSystemPrompt,
             chunkPrompt,
             firmData,
             { temperature: 0, maxTokens: 16384 },
-          );
-          processedChunks.push(result);
-          console.log(`[processTemplateFile] Phase 1: Chunk ${ci + 1}/${htmlChunks.length} processed`);
-        }
+          ).then((result) => {
+            console.log(`[processTemplateFile] Phase 1: Chunk ${ci + 1}/${htmlChunks.length} processed`);
+            return result;
+          }).catch((err) => {
+            console.error(`[processTemplateFile] Phase 1: Chunk ${ci + 1}/${htmlChunks.length} failed:`, err);
+            return chunk; // Fallback to original HTML for failed chunks
+          });
+        });
+        const processedChunks = await Promise.all(chunkPromises);
         templatizeResult = processedChunks.join('');
       }
 

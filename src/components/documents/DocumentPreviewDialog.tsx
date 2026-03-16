@@ -1,12 +1,13 @@
 /**
  * DocumentPreviewDialog.tsx
  *
- * Read-only document preview for all vault document types.
+ * Read-only preview for all vault document types.
  *
- * - HTML/DOCX-derived content → renders `editorContent` in a legal-doc styled pane.
- * - PDF uploads → uses PDF.js to render each page as a <canvas> element.
- *   This approach is fully in-browser and bypasses all X-Frame-Options, CSP,
- *   and CORS restrictions that block iframe/object embedding of storage URLs.
+ * Strategy (avoids all CORS/CSP/X-Frame issues):
+ *   - PDF  → Firebase SDK getBytes() → ArrayBuffer → PDF.js canvas rendering
+ *   - DOCX → If editorContent exists, render HTML directly.
+ *             If not (e.g. AI extraction failed), Firebase SDK getBytes() → mammoth.js → HTML
+ *   - getBytes() is auth-aware and works cross-origin without CORS config on the bucket.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -19,71 +20,73 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { type Document } from '@/types';
-// Vite ?url import resolves to the correct versioned path at build time
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Firebase storage helper ────────────────────────────────────────────────────
 
-async function getStorageDownloadUrl(storagePath: string): Promise<string> {
-  const { ref, getDownloadURL } = await import('firebase/storage');
+async function getFileBytes(storagePath: string): Promise<{ bytes: ArrayBuffer; downloadUrl: string }> {
+  const { ref, getBytes, getDownloadURL } = await import('firebase/storage');
   const { storage } = await import('@/config/firebase');
-  return getDownloadURL(ref(storage, storagePath));
+  const storageRef = ref(storage, storagePath);
+  const [bytes, downloadUrl] = await Promise.all([
+    getBytes(storageRef),
+    getDownloadURL(storageRef),
+  ]);
+  return { bytes, downloadUrl };
 }
 
-// ── PDF Canvas Renderer ────────────────────────────────────────────────────────
+// ── PDF canvas renderer ────────────────────────────────────────────────────────
 
-interface PdfCanvasProps {
+interface PdfViewerProps {
+  bytes: ArrayBuffer;
   downloadUrl: string;
+  displayName: string;
 }
 
-function PdfViewer({ downloadUrl }: PdfCanvasProps) {
+function PdfViewer({ bytes, downloadUrl, displayName }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfDocRef = useRef<any>(null);
   const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [rendering, setRendering] = useState(false);
+  const [rendering, setRendering] = useState(true);
   const [renderError, setRenderError] = useState('');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pdfDocRef = useRef<{ numPages: number; getPage: (n: number) => Promise<unknown> } | null>(null);
 
-  // Load the PDF document
+  // Load PDF from ArrayBuffer
   useEffect(() => {
-    if (!downloadUrl) return;
-
     let cancelled = false;
     setRendering(true);
     setRenderError('');
 
     (async () => {
       try {
-        // Lazy-load pdfjs-dist to keep initial bundle small
         const pdfjs = await import('pdfjs-dist');
-        // Serve worker from the same origin (avoids CSP script-src CDN restrictions)
         pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-        const loadingTask = pdfjs.getDocument({
-          url: downloadUrl,
-          withCredentials: false,
-        });
-
-        const pdfDoc = await loadingTask.promise;
+        // Use data: ArrayBuffer — zero CORS issues, SDK handles auth
+        const loadingTask = pdfjs.getDocument({ data: bytes });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pdfDoc: any = await loadingTask.promise;
         if (cancelled) return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        pdfDocRef.current = pdfDoc as any;
+        pdfDocRef.current = pdfDoc;
         setNumPages(pdfDoc.numPages);
         setCurrentPage(1);
       } catch (err) {
-        console.error('[PdfViewer] Failed to load PDF:', err);
-        if (!cancelled) setRenderError('Failed to load the PDF document.');
+        console.error('[PdfViewer] Load error:', err);
+        if (!cancelled) setRenderError('Failed to render the PDF.');
       } finally {
         if (!cancelled) setRendering(false);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [downloadUrl]);
+  // bytes identity is stable per open — eslint exhaustive-deps not needed here
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bytes]);
 
-  // Render the current page whenever it changes
+  // Render the current page
   useEffect(() => {
     if (!pdfDocRef.current || !canvasRef.current || numPages === 0) return;
 
@@ -92,16 +95,15 @@ function PdfViewer({ downloadUrl }: PdfCanvasProps) {
 
     (async () => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const page: any = await (pdfDocRef.current as any).getPage(currentPage);
+        const page = await pdfDocRef.current.getPage(currentPage);
         if (cancelled) return;
 
-        const canvas = canvasRef.current!;
         const containerWidth = containerRef.current?.clientWidth ?? 800;
         const viewport = page.getViewport({ scale: 1 });
         const scale = Math.min((containerWidth - 32) / viewport.width, 2);
         const scaledViewport = page.getViewport({ scale });
 
+        const canvas = canvasRef.current!;
         canvas.width = scaledViewport.width;
         canvas.height = scaledViewport.height;
 
@@ -109,7 +111,7 @@ function PdfViewer({ downloadUrl }: PdfCanvasProps) {
         await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
       } catch (err) {
         console.error('[PdfViewer] Render error:', err);
-        if (!cancelled) setRenderError('Failed to render this page.');
+        if (!cancelled) setRenderError('Failed to render page.');
       } finally {
         if (!cancelled) setRendering(false);
       }
@@ -123,6 +125,9 @@ function PdfViewer({ downloadUrl }: PdfCanvasProps) {
       <div className="flex h-full items-center justify-center">
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
           <p className="text-sm font-medium text-red-700">{renderError}</p>
+          <Button size="sm" className="mt-3 gap-1.5" onClick={() => window.open(downloadUrl, '_blank')}>
+            <ExternalLink className="h-3.5 w-3.5" /> Open in tab
+          </Button>
         </div>
       </div>
     );
@@ -130,46 +135,95 @@ function PdfViewer({ downloadUrl }: PdfCanvasProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Page navigation */}
       {numPages > 1 && (
         <div className="flex items-center justify-center gap-3 py-2 border-b border-gray-200 bg-white flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
+          <Button variant="ghost" size="icon" className="h-7 w-7"
             disabled={currentPage <= 1 || rendering}
-            onClick={() => setCurrentPage((p) => p - 1)}
-          >
+            onClick={() => setCurrentPage((p) => p - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-xs text-gray-500">
-            Page {currentPage} of {numPages}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
+          <span className="text-xs text-gray-500">Page {currentPage} of {numPages}</span>
+          <Button variant="ghost" size="icon" className="h-7 w-7"
             disabled={currentPage >= numPages || rendering}
-            onClick={() => setCurrentPage((p) => p + 1)}
-          >
+            onClick={() => setCurrentPage((p) => p + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       )}
-
-      {/* Canvas area */}
-      <div ref={containerRef} className="flex-1 overflow-auto bg-gray-100 flex flex-col items-center py-4 px-2">
+      <div ref={containerRef} className="flex-1 overflow-auto bg-gray-100 flex flex-col items-center py-4 px-2 relative">
         {rendering && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100/80 z-10">
             <Loader2 className="h-6 w-6 animate-spin text-[#2b6cb0]" />
           </div>
         )}
-        <canvas
-          ref={canvasRef}
-          className="shadow-lg bg-white"
-          style={{ maxWidth: '100%' }}
-        />
+        <canvas ref={canvasRef} className="shadow-lg bg-white" style={{ maxWidth: '100%' }}
+          aria-label={`PDF preview of ${displayName}`} />
       </div>
+    </div>
+  );
+}
+
+// ── DOCX renderer (mammoth.js) ─────────────────────────────────────────────────
+
+interface DocxViewerProps {
+  bytes: ArrayBuffer;
+}
+
+function DocxViewer({ bytes }: DocxViewerProps) {
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      try {
+        const mammoth = await import('mammoth');
+        const result = await mammoth.convertToHtml({ arrayBuffer: bytes });
+        if (!cancelled) setHtml(result.value);
+      } catch (err) {
+        console.error('[DocxViewer] Conversion error:', err);
+        if (!cancelled) setError('Could not convert this Word document for preview.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bytes]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center gap-3 bg-gray-100">
+        <Loader2 className="h-6 w-6 animate-spin text-[#2b6cb0]" />
+        <span className="text-sm text-gray-500">Converting document…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center bg-gray-100">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
+          <p className="text-sm font-medium text-red-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto bg-gray-100 py-8 px-4">
+      <div className="mx-auto bg-white shadow-lg rounded-sm"
+        style={{
+          maxWidth: '816px', minHeight: '1056px', padding: '96px 96px',
+          fontFamily: '"Times New Roman", Times, Georgia, serif',
+          fontSize: '12pt', lineHeight: '1.6', color: '#1a1a1a',
+        }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </div>
   );
 }
@@ -182,53 +236,60 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Main Dialog ───────────────────────────────────────────────────────────────
+// ── Main dialog ───────────────────────────────────────────────────────────────
 
 export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
-  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
-  const [urlLoading, setUrlLoading] = useState(false);
-  const [urlError, setUrlError] = useState('');
+  const [fileBytes, setFileBytes] = useState<ArrayBuffer | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  const isPdf =
-    doc?.mimeType === 'application/pdf' ||
-    doc?.fileName?.toLowerCase().endsWith('.pdf');
-
-  const docWithExtra = doc as (Document & {
-    editorContent?: string;
-    content?: string;
-  }) | null;
-
+  const docWithExtra = doc as (Document & { editorContent?: string; content?: string }) | null;
+  const isPdf = doc?.mimeType === 'application/pdf' || doc?.fileName?.toLowerCase().endsWith('.pdf');
+  const isDocx = doc?.mimeType?.includes('word') || doc?.fileName?.toLowerCase().endsWith('.docx') || doc?.fileName?.toLowerCase().endsWith('.doc');
   const htmlContent = docWithExtra?.editorContent || docWithExtra?.content || '';
+  // Show raw HTML if we already have it (AI-extracted on upload)
+  const canShowHtmlDirectly = !isPdf && !!htmlContent;
+  // Need to download bytes if it's a PDF, or a DOCX without extracted HTML
+  const needsDownload = !!doc?.storagePath && (isPdf || (isDocx && !canShowHtmlDirectly));
 
-  // Fetch the download URL once when dialog opens
   useEffect(() => {
-    if (!open || !isPdf || !doc?.storagePath) {
-      setPdfDownloadUrl(null);
-      setUrlError('');
+    if (!open || !needsDownload || !doc?.storagePath) {
+      setFileBytes(null);
+      setDownloadUrl(null);
+      setLoadError('');
       return;
     }
 
     let cancelled = false;
-    setUrlLoading(true);
-    setUrlError('');
+    setLoading(true);
+    setLoadError('');
 
-    getStorageDownloadUrl(doc.storagePath)
-      .then((url) => { if (!cancelled) setPdfDownloadUrl(url); })
-      .catch((err: unknown) => {
-        console.error('[DocumentPreviewDialog] Failed to get URL:', err);
-        if (!cancelled) setUrlError('Could not access the file.');
+    getFileBytes(doc.storagePath)
+      .then(({ bytes, downloadUrl: url }) => {
+        if (cancelled) return;
+        setFileBytes(bytes);
+        setDownloadUrl(url);
       })
-      .finally(() => { if (!cancelled) setUrlLoading(false); });
+      .catch((err: unknown) => {
+        console.error('[DocumentPreviewDialog] getFileBytes error:', err);
+        if (!cancelled) setLoadError('Could not load file from storage.');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [open, doc?.storagePath, isPdf]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, doc?.storagePath, needsDownload]);
 
   if (!doc) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        {/* ── Header ── */}
+      <DialogContent
+        aria-describedby={undefined}
+        className="max-w-4xl w-full h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
+      >
+        {/* Header */}
         <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between px-5 py-3 border-b border-gray-200 bg-white">
           <div className="flex items-center gap-2.5 min-w-0">
             <FileText className="h-4 w-4 shrink-0 text-[#2b6cb0]" />
@@ -240,84 +301,73 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {pdfDownloadUrl && (
-              <Button
-                variant="ghost"
-                size="sm"
+            {downloadUrl && (
+              <Button variant="ghost" size="sm"
                 className="h-7 gap-1.5 text-xs text-gray-500 hover:text-[#2b6cb0]"
-                onClick={() => window.open(pdfDownloadUrl, '_blank')}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open in tab
+                onClick={() => window.open(downloadUrl, '_blank')}>
+                <ExternalLink className="h-3.5 w-3.5" /> Open in tab
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
+            <Button variant="ghost" size="icon"
               className="h-7 w-7 text-gray-400 hover:text-gray-700"
-              onClick={onClose}
-              aria-label="Close preview"
-            >
+              onClick={onClose} aria-label="Close preview">
               <X className="h-4 w-4" />
             </Button>
           </div>
         </DialogHeader>
 
-        {/* ── Body ── */}
+        {/* Body */}
         <div className="flex-1 overflow-hidden relative">
-          {/* ── PDF preview via PDF.js canvas rendering ── */}
-          {isPdf && (
-            <>
-              {urlLoading && (
-                <div className="flex h-full items-center justify-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#2b6cb0]" />
-                  <span className="text-sm text-gray-500">Loading PDF…</span>
-                </div>
-              )}
-              {urlError && (
-                <div className="flex h-full items-center justify-center">
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
-                    <p className="text-sm font-medium text-red-700">{urlError}</p>
-                  </div>
-                </div>
-              )}
-              {pdfDownloadUrl && !urlLoading && (
-                <PdfViewer downloadUrl={pdfDownloadUrl} />
-              )}
-            </>
+          {/* Loading state (downloading bytes) */}
+          {loading && (
+            <div className="flex h-full items-center justify-center gap-3 bg-gray-100">
+              <Loader2 className="h-6 w-6 animate-spin text-[#2b6cb0]" />
+              <span className="text-sm text-gray-500">Loading file…</span>
+            </div>
           )}
 
-          {/* ── HTML / DOCX content preview ── */}
-          {!isPdf && (
-            <>
-              {!htmlContent ? (
-                <div className="flex h-full items-center justify-center bg-gray-100">
-                  <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center max-w-sm">
-                    <FileText className="mx-auto h-10 w-10 text-gray-300 mb-3" />
-                    <p className="text-sm font-medium text-gray-500">No preview available</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Open the document in the editor to view its contents.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full overflow-y-auto bg-gray-100 py-8 px-4">
-                  <div
-                    className="mx-auto bg-white shadow-lg rounded-sm"
-                    style={{
-                      maxWidth: '816px',
-                      minHeight: '1056px',
-                      padding: '96px 96px',
-                      fontFamily: '"Times New Roman", Times, Georgia, serif',
-                      fontSize: '12pt',
-                      lineHeight: '1.6',
-                      color: '#1a1a1a',
-                    }}
-                    dangerouslySetInnerHTML={{ __html: htmlContent }}
-                  />
-                </div>
-              )}
-            </>
+          {/* Error state */}
+          {loadError && !loading && (
+            <div className="flex h-full items-center justify-center bg-gray-100">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center max-w-sm">
+                <p className="text-sm font-medium text-red-700">{loadError}</p>
+              </div>
+            </div>
+          )}
+
+          {/* PDF preview */}
+          {!loading && !loadError && isPdf && fileBytes && (
+            <PdfViewer bytes={fileBytes} downloadUrl={downloadUrl ?? ''} displayName={doc.displayName} />
+          )}
+
+          {/* DOCX — use extracted HTML if available */}
+          {!loading && !loadError && !isPdf && canShowHtmlDirectly && (
+            <div className="h-full overflow-y-auto bg-gray-100 py-8 px-4">
+              <div className="mx-auto bg-white shadow-lg rounded-sm"
+                style={{
+                  maxWidth: '816px', minHeight: '1056px', padding: '96px 96px',
+                  fontFamily: '"Times New Roman", Times, Georgia, serif',
+                  fontSize: '12pt', lineHeight: '1.6', color: '#1a1a1a',
+                }}
+                dangerouslySetInnerHTML={{ __html: htmlContent }}
+              />
+            </div>
+          )}
+
+          {/* DOCX — no extracted HTML, convert with mammoth */}
+          {!loading && !loadError && !isPdf && !canShowHtmlDirectly && isDocx && fileBytes && (
+            <DocxViewer bytes={fileBytes} />
+          )}
+
+          {/* No content available */}
+          {!loading && !loadError && !isPdf && !canShowHtmlDirectly && !isDocx && (
+            <div className="flex h-full items-center justify-center bg-gray-100">
+              <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center max-w-sm">
+                <FileText className="mx-auto h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-sm font-medium text-gray-500">No preview available</p>
+                <p className="text-xs text-gray-400 mt-1">Open the document in the editor to view its contents.</p>
+              </div>
+            </div>
           )}
         </div>
       </DialogContent>
