@@ -20,11 +20,11 @@ import { Button } from '@/components/ui/button';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function BlankLine({ width = '100%' }: { width?: string }) {
+function BlankLine({ width = '100%', height = '1.25rem' }: { width?: string; height?: string }) {
   return (
     <div
       className="border-b border-gray-400"
-      style={{ height: '1.25rem', width }}
+      style={{ height, width }}
     />
   );
 }
@@ -161,7 +161,7 @@ function FiduciaryBlock({ role, subtitle }: { role: string; subtitle?: string })
 
 function PageFooter({ pageNum, totalPages }: { pageNum: number; totalPages: number }) {
   return (
-    <div className="mt-12 border-t border-gray-300 pt-2 text-center text-[7pt] text-gray-400">
+    <div className="mt-auto border-t border-gray-300 pt-2 text-center text-[7pt] text-gray-400">
       Estate Planning Questionnaire — Elias Counsel, LLC — (609) 655-3200 — Page {pageNum} of {totalPages}
     </div>
   );
@@ -228,18 +228,16 @@ export default function PrintableQuestionnaire({
               </div>
 
               {/* Date / Client Name / Referral */}
-              <div className="mt-2 grid grid-cols-[1fr_1.5fr_2fr] gap-3 rounded border border-gray-300 p-1.5">
+              <div className="mt-2 grid grid-cols-[1.5fr_1fr_2.5fr] gap-3 rounded border border-gray-300 p-1.5">
+                <div>
+                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
+                  <div className="border-b border-gray-400 flex items-end pb-[2px]" style={{ height: '1.25rem' }}>
+                    {clientName && <span className="text-[10pt] font-medium text-gray-900 leading-none">{clientName}</span>}
+                  </div>
+                </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
                   <BlankLine />
-                </div>
-                <div>
-                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
-                  {clientName ? (
-                    <p className="text-[10pt] font-medium text-gray-900 mt-0.5">{clientName}</p>
-                  ) : (
-                    <BlankLine />
-                  )}
                 </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">How did you hear about us?</p>
@@ -405,12 +403,12 @@ export default function PrintableQuestionnaire({
               <tbody>
                 {[1, 2, 3, 4].flatMap((n) => [
                   <tr key={`child-${n}`}>
-                    <td className="py-2.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
-                    <td className="py-2.5 pr-2"><BlankLine /></td>
-                    <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
-                    <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
-                    <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
-                    <td className="py-2.5">
+                    <td className="py-1.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
+                    <td className="py-1.5 pr-2"><BlankLine height="1.15rem" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
+                    <td className="py-1.5">
                       <div className="flex gap-2">
                         <CheckOption label="Y" />
                         <CheckOption label="N" />
@@ -419,30 +417,30 @@ export default function PrintableQuestionnaire({
                   </tr>,
                   <tr key={`spouse-${n}`}>
                     <td></td>
-                    <td className="py-1.5 pr-2">
+                    <td className="py-0.5 pr-2">
                       <div className="flex items-end">
                         <span className="text-[7pt] text-gray-500 italic w-[64px] text-right pr-2 pb-[1px]">Spouse:</span>
-                        <div className="flex-1"><BlankLine /></div>
+                        <div className="flex-1"><BlankLine height="1rem" /></div>
                       </div>
                     </td>
-                    <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
-                    <td className="py-1.5 pr-2"></td>
-                    <td className="py-1.5"></td>
+                    <td className="py-0.5 pr-2"><BlankLine width="100%" height="1rem" /></td>
+                    <td className="py-0.5 pr-2"><BlankLine width="100%" height="1rem" /></td>
+                    <td className="py-0.5 pr-2"></td>
+                    <td className="py-0.5"></td>
                   </tr>,
                   ...[1, 2, 3].map((g) => (
                     <tr key={`gc-${n}-${g}`} className={g === 3 && n !== 4 ? "border-b border-gray-300" : ""}>
                       <td></td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-0.5 pr-2">
                         <div className="flex items-end">
                           <span className="text-[7pt] text-gray-500 italic w-[64px] text-right pr-2 pb-[1px] whitespace-nowrap">Grandchild {g}:</span>
-                          <div className="flex-1"><BlankLine /></div>
+                          <div className="flex-1"><BlankLine height="1rem" /></div>
                         </div>
                       </td>
-                      <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
-                      <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
-                      <td className="py-1.5 pr-2"></td>
-                      <td className="py-1.5">
+                      <td className="py-0.5 pr-2"><BlankLine width="100%" height="1rem" /></td>
+                      <td className="py-0.5 pr-2"><BlankLine width="100%" height="1rem" /></td>
+                      <td className="py-0.5 pr-2"></td>
+                      <td className="py-0.5">
                         <div className="flex gap-2">
                           <CheckOption label="Y" />
                           <CheckOption label="N" />
@@ -453,7 +451,7 @@ export default function PrintableQuestionnaire({
                 ])}
               </tbody>
             </table>
-            <p className="text-[7pt] text-gray-400 italic mt-3 mb-4">
+            <p className="text-[7pt] text-gray-400 italic mt-1 mb-2">
               Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child/grandchild has special needs requiring a trust.
             </p>
 
@@ -472,10 +470,10 @@ export default function PrintableQuestionnaire({
                 <tbody>
                   {[1, 2].map((n) => (
                     <tr key={`pet-${n}`} className={n === 1 ? "border-b border-gray-200" : ""}>
-                      <td className="py-2.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
-                      <td className="py-2.5 pr-2"><BlankLine /></td>
-                      <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
-                      <td className="py-2.5"><BlankLine width="100%" /></td>
+                      <td className="py-1.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
+                      <td className="py-1.5 pr-2"><BlankLine height="1.15rem" /></td>
+                      <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
+                      <td className="py-1.5"><BlankLine width="100%" height="1.15rem" /></td>
                     </tr>
                   ))}
                 </tbody>
