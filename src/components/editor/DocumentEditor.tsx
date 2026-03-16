@@ -236,12 +236,20 @@ export default function DocumentEditor({
     if (!document || contentLoaded) return;
     setLocalTitle(document.displayName ?? '');
 
-    // Load HTML content from the document's generationPrompt field
-    // (In this app, the editor stores HTML content in a dedicated field)
-    const htmlContent =
-      (document as Document & { editorContent?: string; content?: string }).editorContent ??
-      (document as Document & { editorContent?: string; content?: string }).content ??
-      '';
+    const docWithContent = document as Document & { editorContent?: string; content?: string };
+    const rawEditorContent = docWithContent.editorContent ?? '';
+    const rawContent = docWithContent.content ?? '';
+
+    // Strip HTML tags before checking for real text content.
+    // An auto-saved empty TipTap node like "<p></p>" (truthy, 33 chars) must
+    // not win over the real AI-generated content in the `content` field.
+    const hasRealText = (html: string) => !!html.replace(/<[^>]*>/g, '').trim();
+    let htmlContent = '';
+    if (hasRealText(rawEditorContent)) {
+      htmlContent = rawEditorContent;
+    } else if (hasRealText(rawContent)) {
+      htmlContent = rawContent;
+    }
 
     if (htmlContent && editor) {
       editor.commands.setContent(htmlContent, { emitUpdate: false });
@@ -255,6 +263,8 @@ export default function DocumentEditor({
     } else if (!htmlContent) {
       setContentLoaded(true);
     }
+    // If htmlContent exists but editor is not ready yet, the effect will
+    // re-run when editor initializes (editor is in the dependency array).
   }, [document, editor, contentLoaded]);
 
   // ── Save a version snapshot ──
