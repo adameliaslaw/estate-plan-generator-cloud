@@ -120,11 +120,11 @@ function PrintPage({ children, isLast = false }: { children: React.ReactNode; is
 
 function FiduciaryBlock({ role }: { role: string }) {
   return (
-    <div className="border-b border-gray-300 pb-1.5 mb-1.5">
+    <div className="border-b border-gray-300 pb-1 mb-1">
       <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">{role}</p>
       <div className="grid grid-cols-2 gap-x-4">
         {/* Primary */}
-        <div className="space-y-0.5">
+        <div>
           <p className="text-[7pt] text-gray-400 uppercase">Primary</p>
           <div className="grid grid-cols-2 gap-x-2">
             <LabeledField label="Full Name" />
@@ -136,7 +136,7 @@ function FiduciaryBlock({ role }: { role: string }) {
           </div>
         </div>
         {/* Alternate */}
-        <div className="space-y-0.5">
+        <div>
           <p className="text-[7pt] text-gray-400 uppercase">Alternate</p>
           <div className="grid grid-cols-2 gap-x-2">
             <LabeledField label="Full Name" />
@@ -215,8 +215,8 @@ export default function PrintableQuestionnaire({
         <PrintPage>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             {/* HEADER */}
-            <header className="mb-3">
-              <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-2">
+            <header className="mb-2">
+              <div className="flex items-start justify-between border-b-4 border-[#1a365d] pb-1.5">
                 <div>
                   <h1 className="text-[14pt] font-bold text-[#1a365d]">
                     Estate Planning Questionnaire
@@ -233,7 +233,7 @@ export default function PrintableQuestionnaire({
               </div>
 
               {/* Client / Date / File No */}
-              <div className="mt-3 grid grid-cols-3 gap-3 rounded border border-gray-300 p-2">
+              <div className="mt-2 grid grid-cols-3 gap-2 rounded border border-gray-300 p-1.5">
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
                   {clientName ? (
@@ -252,7 +252,7 @@ export default function PrintableQuestionnaire({
                 </div>
               </div>
 
-              <p className="mt-2 text-[8pt] text-gray-500 italic">
+              <p className="mt-1 text-[8pt] text-gray-500 italic">
                 Please complete all applicable sections using black or blue ink.
                 Leave blank any items that do not apply. Continue on a separate
                 sheet if needed, noting the section number. CONFIDENTIAL.
@@ -262,13 +262,13 @@ export default function PrintableQuestionnaire({
             {/* SECTION 1: CLIENT INFORMATION */}
             <SectionHeader title="Section 1 — About You" />
 
-            <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-1">
               <LabeledField label="First Name" />
               <LabeledField label="Middle Name" />
               <LabeledField label="Last Name" />
               <LabeledField label="Suffix" />
             </div>
-            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
               <LabeledField label="Date of Birth" />
               <LabeledField label="Last 4 SSN" width="60%" />
               <div className="col-span-2">
@@ -279,21 +279,21 @@ export default function PrintableQuestionnaire({
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-y-2 mt-2">
+            <div className="grid grid-cols-1 gap-y-1 mt-1">
               <LabeledField label="Street Address" />
             </div>
-            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
               <LabeledField label="City" />
               <LabeledField label="State" />
               <LabeledField label="ZIP Code" />
               <LabeledField label="County" />
             </div>
-            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
               <LabeledField label="Email" />
               <LabeledField label="Phone" />
               <LabeledField label="Alternate Phone" />
             </div>
-            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
               <div>
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Marital Status</p>
                 <div className="space-y-0.5">
@@ -313,7 +313,7 @@ export default function PrintableQuestionnaire({
                   <CheckOption label="Non-Resident" />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <LabeledField label="Occupation" />
                 <LabeledField label="Employer" />
               </div>
