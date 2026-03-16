@@ -463,27 +463,23 @@ Respond with a valid JSON object (no markdown fences):
 
     if (hasIndexedChildren) {
       try {
-        // Extract only the section(s) containing indexed children references
-        // to avoid sending the entire 20K+ document to the AI.
-        const childRefPattern = /children\[\d+\]|childrenWithTitles\[\d+\]/;
-        const lines = templatizedHtml.split('\n');
-        let firstChildRef = -1;
-        let lastChildRef = -1;
-        for (let i = 0; i < lines.length; i++) {
-          if (childRefPattern.test(lines[i])) {
-            if (firstChildRef === -1) firstChildRef = i;
-            lastChildRef = i;
-          }
-        }
+        // Find character positions of all indexed children references.
+        // HTML from DOCX extraction is typically a single line, so line-based
+        // splitting doesn't work — use character positions instead.
+        const allRefs = [...templatizedHtml.matchAll(/children(?:WithTitles)?\[\d+\]/g)];
 
-        if (firstChildRef >= 0) {
-          // Add some context lines around the matching region
-          const contextLines = 5;
-          const sectionStart = Math.max(0, firstChildRef - contextLines);
-          const sectionEnd = Math.min(lines.length - 1, lastChildRef + contextLines);
-          const childSection = lines.slice(sectionStart, sectionEnd + 1).join('\n');
+        if (allRefs.length > 0) {
+          const firstPos = allRefs[0].index!;
+          const lastMatch = allRefs[allRefs.length - 1];
+          const lastPos = lastMatch.index! + lastMatch[0].length;
 
-          console.log(`[processTemplateFile] Loop detection: processing lines ${sectionStart}-${sectionEnd} (${childSection.length} chars) out of ${templatizedHtml.length} total`);
+          // Extract a window: 500 chars before first ref, 500 chars after last ref
+          const contextChars = 500;
+          const sectionStart = Math.max(0, firstPos - contextChars);
+          const sectionEnd = Math.min(templatizedHtml.length, lastPos + contextChars);
+          const childSection = templatizedHtml.slice(sectionStart, sectionEnd);
+
+          console.log(`[processTemplateFile] Loop detection: processing chars ${sectionStart}-${sectionEnd} (${childSection.length} chars) out of ${templatizedHtml.length} total`);
 
           const loopPrompt = `You are a Handlebars template expert. The following HTML snippet contains indexed child references like {{children[0].name}}, {{children[1].name}}, {{childrenWithTitles[0].childTitle}}, etc.
 
@@ -504,14 +500,14 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
 
           const loopResult = await callAI(loopPrompt, childSection, firmData, {
             temperature: 0.05,
-            maxTokens: 8000,
+            maxTokens: 4000,
           });
 
           if (loopResult && loopResult.includes('{{#each')) {
             // Splice the processed section back into the full document
-            const before = lines.slice(0, sectionStart).join('\n');
-            const after = lines.slice(sectionEnd + 1).join('\n');
-            templatizedHtml = [before, loopResult.trim(), after].filter(Boolean).join('\n');
+            const before = templatizedHtml.slice(0, sectionStart);
+            const after = templatizedHtml.slice(sectionEnd);
+            templatizedHtml = before + loopResult.trim() + after;
             console.log('[processTemplateFile] AI loop detection: converted indexed children to {{#each}} block');
           } else {
             console.log('[processTemplateFile] AI loop detection: no {{#each}} in response, keeping original');
