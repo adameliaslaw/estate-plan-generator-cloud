@@ -131,6 +131,7 @@ export const documentService = {
     const fn = httpsCallable<GenerateDocumentsRequest, GenerateDocumentsResponse>(
       functions,
       'generateDocuments',
+      { timeout: 300000 }, // 5 min — AI generation runs parallel but still takes ~2 min
     );
     const result = await fn(params);
     return result.data;
