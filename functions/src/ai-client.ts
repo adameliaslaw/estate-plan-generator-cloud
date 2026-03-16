@@ -481,9 +481,50 @@ export function parseAIJson<T>(raw: string): T {
 
   try {
     return JSON.parse(cleaned) as T;
-  } catch (err) {
+  } catch (_err) {
+    // ── Truncated JSON recovery ──
+    // When AI output exceeds maxTokens, JSON gets cut off mid-string.
+    // Try to salvage complete objects from the truncated detectedVariables array.
+    if (cleaned.includes('"detectedVariables"')) {
+      try {
+        // Find the detectedVariables array start
+        const arrStart = cleaned.indexOf('[', cleaned.indexOf('"detectedVariables"'));
+        if (arrStart >= 0) {
+          // Extract all complete JSON objects from the truncated array
+          const completeObjects: unknown[] = [];
+          const objectRegex = /\{[^{}]*"originalText"\s*:\s*"[^"]*"[^{}]*"suggestedVariable"\s*:\s*"[^"]*"[^{}]*\}/g;
+          const arrContent = cleaned.slice(arrStart);
+          let match: RegExpExecArray | null;
+          while ((match = objectRegex.exec(arrContent)) !== null) {
+            try {
+              completeObjects.push(JSON.parse(match[0]));
+            } catch {
+              // Skip malformed objects
+            }
+          }
+
+          if (completeObjects.length > 0) {
+            console.log(`[parseAIJson] Recovered ${completeObjects.length} variables from truncated JSON`);
+            // Try to extract other top-level fields
+            const docTypeMatch = cleaned.match(/"suggestedDocType"\s*:\s*"([^"]*)"/);
+            const summaryMatch = cleaned.match(/"documentSummary"\s*:\s*"([^"]*)"/);
+            const tagsMatch = cleaned.match(/"suggestedTags"\s*:\s*\[([^\]]*)\]/);
+            const result: Record<string, unknown> = {
+              detectedVariables: completeObjects,
+              suggestedDocType: docTypeMatch?.[1] ?? '',
+              documentSummary: summaryMatch?.[1] ?? '',
+              suggestedTags: tagsMatch ? tagsMatch[1].split(',').map(t => t.trim().replace(/"/g, '')).filter(Boolean) : [],
+            };
+            return result as T;
+          }
+        }
+      } catch {
+        // Recovery failed, fall through to throw
+      }
+    }
+
     throw new Error(
-      `Failed to parse AI JSON response: ${(err as Error).message}. ` +
+      `Failed to parse AI JSON response: ${(_err as Error).message}. ` +
       `Raw (first 500 chars): ${raw.slice(0, 500)}`,
     );
   }

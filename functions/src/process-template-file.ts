@@ -380,7 +380,7 @@ Respond with a valid JSON object (no markdown fences):
 
         const raw = await callAI(systemPrompt, userPrompt, firmData, {
           temperature: 0,
-          maxTokens: 4096,
+          maxTokens: 8192,
           jsonMode: true,
         });
 
@@ -403,7 +403,7 @@ Respond with a valid JSON object (no markdown fences):
 
           return callAI(systemPrompt, userPrompt, firmData, {
             temperature: 0,
-            maxTokens: 4096,
+            maxTokens: 8192,
             jsonMode: true,
           });
         });
