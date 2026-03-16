@@ -744,9 +744,21 @@ export async function generateFromTemplate(
       `[template-engine] Handlebars render failed for docType="${docType}" ` +
       `(template="${template.name}"): ${errMsg.slice(0, 200)}`,
     );
-    if (mode === 'hybrid' && aiGeneratorFn) {
-      // Template has invalid HBS syntax — fall back to AI entirely
-      return aiGeneratorFn();
+    if (mode === 'hybrid') {
+      // Template has invalid HBS syntax — use the raw template as a formatting
+      // reference for AI generation instead of falling back to standalone AI
+      console.info(`[template-engine] Using raw template as formatting reference for ${docType}`);
+      const templateGuided = await generateFromTemplateReference(
+        template.content,
+        ctx,
+        docType,
+      );
+      return {
+        docType,
+        title: `${template.name} — ${ctx.computed.clientFullName}`,
+        content: templateGuided,
+        status: 'draft',
+      };
     }
     // In template mode, serve the raw unrendered HTML so the user gets something
     renderedHtml = template.content;
@@ -775,6 +787,120 @@ export async function generateFromTemplate(
 
   // Should not reach here
   return { docType, title, content: renderedHtml, status: 'draft' };
+}
+
+// ---------------------------------------------------------------------------
+// Template-referenced AI generation (when Handlebars can't compile the template)
+// ---------------------------------------------------------------------------
+
+/**
+ * Use a raw template as a formatting/structure reference for AI generation.
+ * Called when Handlebars can't compile the template (common with uploaded DOCX
+ * files that contain syntax like `===` that conflicts with Handlebars).
+ *
+ * Instead of ignoring the template entirely, we pass its full HTML to the AI
+ * and instruct it to generate a new document following the same structure,
+ * formatting, headings, and legal style — but populated with the actual
+ * client's data from the questionnaire.
+ */
+async function generateFromTemplateReference(
+  rawTemplateHtml: string,
+  ctx: ClientContext,
+  docType: string,
+): Promise<string> {
+  const safeFirm = sanitizeObject(ctx.firm);
+  const templateData = buildTemplateData(ctx);
+
+  // Build a concise client data summary for the AI
+  const pi = templateData.personalInfo as Record<string, unknown> ?? {};
+  const spouse = templateData.spouseInfo as Record<string, unknown>;
+  const children = templateData.children as Array<Record<string, unknown>> ?? [];
+  const fiduciaries = templateData.fiduciaries as Record<string, unknown> ?? {};
+  const distribution = templateData.distribution as Record<string, unknown> ?? {};
+  const healthPrefs = templateData.healthcarePreferences as Record<string, unknown> ?? {};
+
+  const clientFullName = ctx.computed.clientFullName;
+  const isFemale = ctx.client.isFemale;
+
+  const clientSummary = `
+CLIENT: ${clientFullName}
+Gender: ${isFemale ? 'Female' : 'Male'} (use ${isFemale ? 'she/her' : 'he/his'} pronouns)
+Date of Birth: ${pi.dateOfBirth ?? 'Not provided'}
+Address: ${pi.address ?? ''}, ${pi.city ?? ''}, ${pi.state ?? 'NJ'} ${pi.zip ?? ''}
+County: ${pi.county ?? ''}
+Marital Status: ${pi.maritalStatus ?? ''}
+${spouse ? `Spouse: ${(spouse as Record<string, unknown>).firstName ?? ''} ${(spouse as Record<string, unknown>).lastName ?? ''}` : ''}
+
+CHILDREN (${children.length}):
+${children.length === 0 ? 'None.' : children.map((c) =>
+    `• ${c.name ?? 'Unknown'}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [Special Needs]' : ''}`
+  ).join('\n')}
+
+FIDUCIARIES:
+${JSON.stringify(fiduciaries, null, 2).slice(0, 2000)}
+
+DISTRIBUTION:
+${JSON.stringify(distribution, null, 2).slice(0, 1500)}
+
+HEALTHCARE PREFERENCES:
+${JSON.stringify(healthPrefs, null, 2).slice(0, 800)}
+
+FIRM: ${safeFirm.firmName ?? ''}
+  Phone: ${safeFirm.firmPhone ?? ''}
+  Email: ${safeFirm.firmEmail ?? ''}
+`.trim();
+
+  // Knowledge base context
+  const kbContext = ctx.knowledgeResources
+    .map((r) => `[${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}:\n${r.content}`)
+    .join('\n\n');
+
+  const systemPrompt = `You are an expert New Jersey estate planning attorney. You are given a REFERENCE TEMPLATE — an existing legal document that defines the exact formatting, structure, headings, clause ordering, and legal style that the firm uses.
+
+Your job is to generate a NEW document of the same type for a DIFFERENT CLIENT, following the template's formatting exactly:
+- Use the SAME heading hierarchy, section ordering, and clause structure
+- Match the template's CSS styling and HTML formatting
+- Use the SAME legal language patterns and provision wording
+- Replace ALL client-specific details (names, addresses, fiduciaries, distribution plans, etc.) with the new client's actual data
+- Ensure gender-specific language matches the new client (he/she, his/her, etc.)
+- Add or remove clauses only where the new client's situation differs materially (e.g., no children section if no children)
+
+CRITICAL RULES:
+- Follow the template's formatting EXACTLY — same fonts, margins, spacing, indentation
+- Do NOT add new sections the template doesn't have
+- Do NOT remove sections unless they're truly inapplicable to this client
+- Cite the specific statute (N.J.S.A.) for every legal provision — do NOT fabricate citations
+- Return ONLY the complete HTML document — no JSON wrapper, no markdown fences
+- Preserve the professional appearance and layout of the original template
+
+KNOWLEDGE BASE (for accurate statutory references):
+${kbContext || 'No specific resources available.'}`;
+
+  const userPrompt = `Generate a complete ${docType} document for this client using the reference template below.
+
+${clientSummary}
+
+REFERENCE TEMPLATE (follow this formatting exactly):
+${rawTemplateHtml.slice(0, 15000)}
+
+Generate the complete HTML document now. Return ONLY the HTML.`;
+
+  try {
+    const result = await callAI(systemPrompt, userPrompt, safeFirm, {
+      model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+      temperature: 0.15,
+      maxTokens: 12000,
+    });
+
+    if (result && result.trim().length > 100) {
+      return result;
+    }
+    // If AI returned too little, return the raw template
+    return rawTemplateHtml;
+  } catch (err) {
+    console.error('[template-engine] Template-referenced generation failed:', err);
+    return rawTemplateHtml;
+  }
 }
 
 // ---------------------------------------------------------------------------
