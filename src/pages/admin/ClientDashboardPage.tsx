@@ -82,6 +82,98 @@ import { UploadScanModal } from '@/components/ui/upload-scan-modal';
 import { db } from '@/config/firebase';
 import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
 
+// ── Client Activity Feed ──────────────────────────────────────────────────────
+
+interface ActivityDoc {
+  id: string;
+  action: string;
+  description: string;
+  userName: string;
+  clientId: string | null;
+  timestamp: { toDate?: () => Date } | null;
+}
+
+function actionIcon(action: string) {
+  if (action.includes('questionnaire')) return <FileQuestion className="h-4 w-4 text-emerald-600" />;
+  if (action.includes('document') || action.includes('draft')) return <FilePen className="h-4 w-4 text-blue-600" />;
+  if (action.includes('payment')) return <Banknote className="h-4 w-4 text-green-600" />;
+  if (action.includes('appointment') || action.includes('scheduling')) return <CalendarCheck className="h-4 w-4 text-purple-600" />;
+  if (action.includes('task')) return <ListTodo className="h-4 w-4 text-orange-500" />;
+  if (action.includes('client')) return <UserPlus className="h-4 w-4 text-[#1a365d]" />;
+  return <Activity className="h-4 w-4 text-gray-400" />;
+}
+
+function relativeTime(ts: { toDate?: () => Date } | null): string {
+  if (!ts?.toDate) return '';
+  const d = ts.toDate();
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function ClientActivityFeed({ firmId, clientId }: { firmId: string; clientId: string }) {
+  const constraints = useMemo(
+    () => [where('clientId', '==', clientId), orderBy('timestamp', 'desc'), limit(50)],
+    [clientId],
+  );
+  const { data: activities, loading } = useCollection<ActivityDoc>(
+    firmId && clientId ? `firms/${firmId}/activities` : null,
+    constraints,
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[#1a365d]" />
+      </div>
+    );
+  }
+
+  if (activities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 py-16">
+        <Activity className="h-8 w-8 text-gray-300" />
+        <p className="text-sm font-medium text-gray-500">No activity recorded yet</p>
+        <p className="text-xs text-gray-400">Actions taken on this client's matter will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0 rounded-xl border border-gray-200 bg-white overflow-hidden">
+      {activities.map((item, i) => (
+        <div
+          key={item.id}
+          className={cn(
+            'flex items-start gap-3 px-4 py-3',
+            i !== activities.length - 1 && 'border-b border-gray-100',
+          )}
+        >
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-50 border border-gray-100">
+            {actionIcon(item.action)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-gray-900 capitalize leading-snug">
+              {item.description}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              {item.userName}
+              {item.timestamp?.toDate && (
+                <span className="ml-2 text-gray-300">·</span>
+              )}
+              {item.timestamp && (
+                <span className="ml-2">{relativeTime(item.timestamp)}</span>
+              )}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Package badge helpers ─────────────────────────────────────────────────────
 
 const PACKAGE_BADGE: Record<string, string> = {
