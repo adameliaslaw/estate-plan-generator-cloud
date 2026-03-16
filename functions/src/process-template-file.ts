@@ -472,6 +472,8 @@ Respond with a valid JSON object (no markdown fences):
         (a, b) => b.originalText.length - a.originalText.length,
       );
 
+      let replacedCount = 0;
+
       for (const v of sorted) {
         if (!v.originalText || !v.suggestedVariable) continue;
         // Skip very short matches (< 2 chars) to avoid replacing "I", "a", etc.
@@ -484,10 +486,23 @@ Respond with a valid JSON object (no markdown fences):
         // CRITICAL: Use \b word boundaries to prevent replacing substrings
         // within larger words (e.g. "her" inside "whether", "other", "there")
         const regex = new RegExp(`\\b${escaped}\\b`, 'g');
+        const before = templatizedHtml;
         templatizedHtml = templatizedHtml.replace(regex, tag);
+        if (before === templatizedHtml) {
+          // No match found — log HTML context to diagnose tag splitting
+          const plainIdx = templatizedHtml.toLowerCase().indexOf(v.originalText.toLowerCase());
+          if (plainIdx >= 0) {
+            const snippet = templatizedHtml.slice(Math.max(0, plainIdx - 30), plainIdx + v.originalText.length + 30);
+            console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — case mismatch? HTML context: "${snippet}"`);
+          } else {
+            console.log(`  ✗ NO MATCH for "${v.originalText}" → {{${v.suggestedVariable}}} — text not found in HTML at all`);
+          }
+        } else {
+          replacedCount++;
+        }
       }
 
-      console.log(`[processTemplateFile] Templatized content: replaced ${sorted.length} variable occurrences`);
+      console.log(`[processTemplateFile] Templatized content: ${replacedCount} of ${sorted.length} variables replaced in HTML`);
     }
 
     // -----------------------------------------------------------------------
