@@ -241,22 +241,25 @@ interface Props {
 export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const [fileBytes, setFileBytes] = useState<ArrayBuffer | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [fetchedHtml, setFetchedHtml] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
 
   const docWithExtra = doc as (Document & { editorContent?: string; content?: string }) | null;
   const isPdf = doc?.mimeType === 'application/pdf' || doc?.fileName?.toLowerCase().endsWith('.pdf');
   const isDocx = doc?.mimeType?.includes('word') || doc?.fileName?.toLowerCase().endsWith('.docx') || doc?.fileName?.toLowerCase().endsWith('.doc');
-  const htmlContent = docWithExtra?.editorContent || docWithExtra?.content || '';
-  // Show raw HTML if we already have it (AI-extracted on upload)
-  const canShowHtmlDirectly = !isPdf && !!htmlContent;
-  // Need to download bytes if it's a PDF, or a DOCX without extracted HTML
-  const needsDownload = !!doc?.storagePath && (isPdf || (isDocx && !canShowHtmlDirectly));
+  const isHtmlFile = doc?.storagePath?.toLowerCase().endsWith('.html') || doc?.mimeType === 'text/html';
+  const inlineHtml = docWithExtra?.editorContent || docWithExtra?.content || '';
+  // Show inline HTML if we already have it (AI-extracted on upload)
+  const canShowHtmlDirectly = !isPdf && !!inlineHtml;
+  // Need to download bytes if it's a PDF, DOCX without extracted HTML, or HTML file without inline content
+  const needsDownload = !!doc?.storagePath && (isPdf || (isDocx && !canShowHtmlDirectly) || (isHtmlFile && !canShowHtmlDirectly));
 
   useEffect(() => {
     if (!open || !needsDownload || !doc?.storagePath) {
       setFileBytes(null);
       setDownloadUrl(null);
+      setFetchedHtml('');
       setLoadError('');
       return;
     }
@@ -270,6 +273,11 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
         if (cancelled) return;
         setFileBytes(bytes);
         setDownloadUrl(url);
+        // If it's an HTML file, decode the bytes as text
+        if (isHtmlFile) {
+          const decoder = new TextDecoder('utf-8');
+          setFetchedHtml(decoder.decode(bytes));
+        }
       })
       .catch((err: unknown) => {
         console.error('[DocumentPreviewDialog] getFileBytes error:', err);
@@ -340,8 +348,8 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
             <PdfViewer bytes={fileBytes} downloadUrl={downloadUrl ?? ''} displayName={doc.displayName} />
           )}
 
-          {/* DOCX — use extracted HTML if available */}
-          {!loading && !loadError && !isPdf && canShowHtmlDirectly && (
+          {/* HTML content — inline or fetched from storage */}
+          {!loading && !loadError && !isPdf && (canShowHtmlDirectly || fetchedHtml) && (
             <div className="h-full overflow-y-auto bg-gray-100 py-8 px-4">
               <div className="mx-auto bg-white shadow-lg rounded-sm"
                 style={{
@@ -349,18 +357,18 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                   fontFamily: '"Times New Roman", Times, Georgia, serif',
                   fontSize: '12pt', lineHeight: '1.6', color: '#1a1a1a',
                 }}
-                dangerouslySetInnerHTML={{ __html: htmlContent }}
+                dangerouslySetInnerHTML={{ __html: inlineHtml || fetchedHtml }}
               />
             </div>
           )}
 
           {/* DOCX — no extracted HTML, convert with mammoth */}
-          {!loading && !loadError && !isPdf && !canShowHtmlDirectly && isDocx && fileBytes && (
+          {!loading && !loadError && !isPdf && !canShowHtmlDirectly && !fetchedHtml && isDocx && fileBytes && (
             <DocxViewer bytes={fileBytes} />
           )}
 
           {/* No content available */}
-          {!loading && !loadError && !isPdf && !canShowHtmlDirectly && !isDocx && (
+          {!loading && !loadError && !isPdf && !canShowHtmlDirectly && !fetchedHtml && !isDocx && (
             <div className="flex h-full items-center justify-center bg-gray-100">
               <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center max-w-sm">
                 <FileText className="mx-auto h-10 w-10 text-gray-300 mb-3" />
