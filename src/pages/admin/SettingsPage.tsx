@@ -29,6 +29,9 @@ import {
   Shield,
   Unplug,
   Upload,
+  Users,
+  Plus,
+  Trash2,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -80,7 +83,7 @@ import { sanitizeInput } from '@/utils/sanitize';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Timestamp, addDoc, collection } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import type { EmailTemplate, EmailTrigger } from '@/types';
+import type { EmailTemplate, EmailTrigger, Notary } from '@/types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import {
   GoogleLoginButton,
@@ -119,6 +122,8 @@ interface FirmSettings {
   barNumber: string;
 
   // Notary defaults
+  notaries?: Notary[];
+  // Legacy deprecated notary fields
   defaultNotaryName?: string;
   defaultNotaryCommission?: string;
   defaultNotaryExpiration?: string;
@@ -136,6 +141,8 @@ interface FirmSettings {
   geminiApiKey?: string;
   perplexityApiKey?: string;
   activeAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
+  chatbotAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
+  documentDraftingAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
   chatbotModel?: string;
   documentDraftingModel?: string;
   lawPayApiKey?: string;
@@ -166,7 +173,7 @@ interface FirmSettings {
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-type TabId = 'firm' | 'branding' | 'integrations' | 'security' | 'templates';
+type TabId = 'firm' | 'team' | 'branding' | 'integrations' | 'security' | 'templates';
 
 interface TabDef {
   id: TabId;
@@ -176,6 +183,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'firm', label: 'Firm Profile', icon: <Building2 className="h-4 w-4" /> },
+  { id: 'team', label: 'Team', icon: <Users className="h-4 w-4" /> },
   { id: 'branding', label: 'Branding', icon: <Palette className="h-4 w-4" /> },
   { id: 'integrations', label: 'Integrations', icon: <Zap className="h-4 w-4" /> },
   { id: 'security', label: 'Security', icon: <Shield className="h-4 w-4" /> },
@@ -229,6 +237,7 @@ export default function SettingsPage() {
     defaultNotaryType: 'attorney' as 'attorney' | 'notaryPublic',
     defaultNotaryCounty: '',
     defaultNotaryAttorneyId: '',
+    notaries: [] as Notary[],
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -247,7 +256,8 @@ export default function SettingsPage() {
   const [anthropicKey, setAnthropicKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [perplexityKey, setPerplexityKey] = useState('');
-  const [activeAiProvider, setActiveAiProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'perplexity'>('openai');
+  const [chatbotAiProvider, setChatbotAiProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'perplexity'>('openai');
+  const [documentDraftingAiProvider, setDocumentDraftingAiProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'perplexity'>('openai');
 
   const [chatbotModel, setChatbotModel] = useState('');
   const [documentDraftingModel, setDocumentDraftingModel] = useState('');
@@ -262,7 +272,8 @@ export default function SettingsPage() {
   const [savingAnthropic, setSavingAnthropic] = useState(false);
   const [savingGemini, setSavingGemini] = useState(false);
   const [savingPerplexity, setSavingPerplexity] = useState(false);
-  const [savingActiveAi, setSavingActiveAi] = useState(false);
+  const [savingChatbotProvider, setSavingChatbotProvider] = useState(false);
+  const [savingDocumentDraftingProvider, setSavingDocumentDraftingProvider] = useState(false);
   const [savingChatbotModel, setSavingChatbotModel] = useState(false);
   const [savingDocumentDraftingModel, setSavingDocumentDraftingModel] = useState(false);
   const [savingLawPay, setSavingLawPay] = useState(false);
@@ -311,13 +322,15 @@ export default function SettingsPage() {
       defaultNotaryType: firmDoc.defaultNotaryType ?? 'attorney',
       defaultNotaryCounty: firmDoc.defaultNotaryCounty ?? '',
       defaultNotaryAttorneyId: firmDoc.defaultNotaryAttorneyId ?? '',
+      notaries: firmDoc.notaries ?? [],
     });
 
     if (firmDoc.logoUrl) setLogoPreview(firmDoc.logoUrl);
     setPrimaryColor(firmDoc.primaryColor ?? FIRM_DEFAULTS.primaryColor);
     setAccentColor(firmDoc.accentColor ?? FIRM_DEFAULTS.accentColor);
 
-    setActiveAiProvider(firmDoc.activeAiProvider ?? 'openai');
+    setChatbotAiProvider(firmDoc.chatbotAiProvider ?? firmDoc.activeAiProvider ?? 'openai');
+    setDocumentDraftingAiProvider(firmDoc.documentDraftingAiProvider ?? firmDoc.activeAiProvider ?? 'openai');
     setChatbotModel(firmDoc.chatbotModel ?? '');
     setDocumentDraftingModel(firmDoc.documentDraftingModel ?? '');
 
@@ -353,6 +366,13 @@ export default function SettingsPage() {
         defaultNotaryType: firmProfile.defaultNotaryType,
         defaultNotaryCounty: sanitizeInput(firmProfile.defaultNotaryCounty),
         defaultNotaryAttorneyId: sanitizeInput(firmProfile.defaultNotaryAttorneyId),
+        notaries: firmProfile.notaries.map(n => ({
+          ...n,
+          name: sanitizeInput(n.name),
+          commission: sanitizeInput(n.commission || ''),
+          county: sanitizeInput(n.county || ''),
+          attorneyId: sanitizeInput(n.attorneyId || ''),
+        })),
         updatedBy: userProfile?.uid ?? '',
       });
       toast.success('Firm profile saved.');
@@ -445,22 +465,30 @@ export default function SettingsPage() {
     [firmDocPath, userProfile],
   );
 
-  const handleSaveActiveAiProvider = useCallback(
-    async (provider: 'openai' | 'anthropic' | 'gemini' | 'perplexity') => {
+  const handleSaveAiProvider = useCallback(
+    async (
+      field: 'chatbotAiProvider' | 'documentDraftingAiProvider',
+      provider: 'openai' | 'anthropic' | 'gemini' | 'perplexity',
+      setSaving: (v: boolean) => void
+    ) => {
       if (!firmDocPath) return;
-      setSavingActiveAi(true);
-      setActiveAiProvider(provider);
+      setSaving(true);
+      if (field === 'chatbotAiProvider') {
+        setChatbotAiProvider(provider);
+      } else {
+        setDocumentDraftingAiProvider(provider);
+      }
       try {
         await updateDoc(firmDocPath, {
-          activeAiProvider: provider,
+          [field]: provider,
           updatedBy: userProfile?.uid ?? '',
         });
-        toast.success(`Active AI provider set to ${provider.charAt(0).toUpperCase() + provider.slice(1)}.`);
+        toast.success(`${field === 'chatbotAiProvider' ? 'Chatbot' : 'Document Drafting'} AI provider set to ${provider.charAt(0).toUpperCase() + provider.slice(1)}.`);
       } catch (err) {
         console.error(err);
-        toast.error('Failed to update active AI provider.');
+        toast.error(`Failed to update ${field === 'chatbotAiProvider' ? 'Chatbot' : 'Document Drafting'} AI provider.`);
       } finally {
-        setSavingActiveAi(false);
+        setSaving(false);
       }
     },
     [firmDocPath, userProfile]
@@ -890,88 +918,137 @@ export default function SettingsPage() {
                   {/* Notary / Attorney Certification Defaults */}
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-sm font-semibold text-[#1a365d]">Notarization / Attorney Certification</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">Pre-filled on all documents requiring notarization (POAs, deeds, affidavits, self-proving affidavits).</p>
+                      <h3 className="text-sm font-semibold text-[#1a365d]">Notaries & Certifications</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Manage attorneys and notaries that can be selected for document execution.</p>
                     </div>
 
-                    {/* Notary type selector */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <Label className="text-[#1a365d]">Certification Type</Label>
-                        <Select
-                          value={firmProfile.defaultNotaryType}
-                          onValueChange={(v) => setFirmProfile((p) => ({ ...p, defaultNotaryType: v as 'attorney' | 'notaryPublic' }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="attorney">Attorney at Law (self-certifying)</SelectItem>
-                            <SelectItem value="notaryPublic">Notary Public</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-gray-400">NJ attorneys may notarize documents they prepare.</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="defaultNotaryCounty" className="text-[#1a365d]">County</Label>
-                        <Input
-                          id="defaultNotaryCounty"
-                          value={firmProfile.defaultNotaryCounty}
-                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryCounty: e.target.value }))}
-                          placeholder="Middlesex"
-                        />
-                      </div>
-                    </div>
+                    <div className="space-y-4">
+                      {firmProfile.notaries.map((notary, index) => (
+                        <div key={notary.id} className="relative rounded-lg border border-gray-200 bg-gray-50/50 p-4 pt-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-2 h-6 w-6 text-gray-400 hover:text-red-500"
+                            onClick={() => {
+                              const updated = [...firmProfile.notaries];
+                              updated.splice(index, 1);
+                              setFirmProfile((p) => ({ ...p, notaries: updated }));
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
 
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="defaultNotaryName" className="text-[#1a365d]">
-                          {firmProfile.defaultNotaryType === 'attorney' ? 'Attorney Name' : 'Notary Name'}
-                        </Label>
-                        <Input
-                          id="defaultNotaryName"
-                          value={firmProfile.defaultNotaryName}
-                          onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryName: e.target.value }))}
-                          placeholder={firmProfile.defaultNotaryType === 'attorney' ? 'Adam M. Elias, Esq.' : 'Jane Smith'}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="defaultNotaryAttorneyId" className="text-[#1a365d]">
-                          {firmProfile.defaultNotaryType === 'attorney' ? 'Attorney ID Number' : 'Commission Number'}
-                        </Label>
-                        <Input
-                          id="defaultNotaryAttorneyId"
-                          value={firmProfile.defaultNotaryType === 'attorney' ? firmProfile.defaultNotaryAttorneyId : firmProfile.defaultNotaryCommission}
-                          onChange={(e) => {
-                            if (firmProfile.defaultNotaryType === 'attorney') {
-                              setFirmProfile((p) => ({ ...p, defaultNotaryAttorneyId: e.target.value }));
-                            } else {
-                              setFirmProfile((p) => ({ ...p, defaultNotaryCommission: e.target.value }));
-                            }
-                          }}
-                          placeholder={firmProfile.defaultNotaryType === 'attorney' ? '050422014' : '2387651'}
-                        />
-                      </div>
-                      {firmProfile.defaultNotaryType === 'notaryPublic' && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="defaultNotaryExpiration" className="text-[#1a365d]">Commission Expiration</Label>
-                          <Input
-                            id="defaultNotaryExpiration"
-                            type="date"
-                            value={firmProfile.defaultNotaryExpiration}
-                            onChange={(e) => setFirmProfile((p) => ({ ...p, defaultNotaryExpiration: e.target.value }))}
-                          />
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label className="text-[#1a365d]">Certification Type</Label>
+                              <Select
+                                value={notary.type}
+                                onValueChange={(v) => {
+                                  const updated = [...firmProfile.notaries];
+                                  updated[index].type = v as 'attorney' | 'notaryPublic';
+                                  setFirmProfile((p) => ({ ...p, notaries: updated }));
+                                }}
+                              >
+                                <SelectTrigger className="bg-white">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="attorney">Attorney at Law (self-certifying)</SelectItem>
+                                  <SelectItem value="notaryPublic">Notary Public</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[#1a365d]">County</Label>
+                              <Input
+                                value={notary.county || ''}
+                                onChange={(e) => {
+                                  const updated = [...firmProfile.notaries];
+                                  updated[index].county = e.target.value;
+                                  setFirmProfile((p) => ({ ...p, notaries: updated }));
+                                }}
+                                placeholder="Middlesex"
+                                className="bg-white"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-[#1a365d]">
+                                {notary.type === 'attorney' ? 'Attorney Name' : 'Notary Name'}
+                              </Label>
+                              <Input
+                                value={notary.name}
+                                onChange={(e) => {
+                                  const updated = [...firmProfile.notaries];
+                                  updated[index].name = e.target.value;
+                                  setFirmProfile((p) => ({ ...p, notaries: updated }));
+                                }}
+                                placeholder={notary.type === 'attorney' ? 'Adam M. Elias, Esq.' : 'Jane Smith'}
+                                className="bg-white"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[#1a365d]">
+                                {notary.type === 'attorney' ? 'Attorney ID Number' : 'Commission Number'}
+                              </Label>
+                              <Input
+                                value={notary.type === 'attorney' ? notary.attorneyId || '' : notary.commission || ''}
+                                onChange={(e) => {
+                                  const updated = [...firmProfile.notaries];
+                                  if (notary.type === 'attorney') {
+                                    updated[index].attorneyId = e.target.value;
+                                  } else {
+                                    updated[index].commission = e.target.value;
+                                  }
+                                  setFirmProfile((p) => ({ ...p, notaries: updated }));
+                                }}
+                                placeholder={notary.type === 'attorney' ? '050422014' : '2387651'}
+                                className="bg-white"
+                              />
+                            </div>
+                            {notary.type === 'notaryPublic' && (
+                              <div className="space-y-1.5">
+                                <Label className="text-[#1a365d]">Commission Expiration</Label>
+                                <Input
+                                  type="date"
+                                  value={notary.expiration || ''}
+                                  onChange={(e) => {
+                                    const updated = [...firmProfile.notaries];
+                                    updated[index].expiration = e.target.value;
+                                    setFirmProfile((p) => ({ ...p, notaries: updated }));
+                                  }}
+                                  className="bg-white"
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      ))}
 
-                    {firmProfile.defaultNotaryType === 'attorney' && (
-                      <Alert className="border-blue-100 bg-blue-50/50">
-                        <AlertDescription className="text-xs text-blue-700">
-                          Documents will include: <em>"Before me, <strong>{firmProfile.defaultNotaryName || '[Attorney Name]'}</strong>, an Attorney at Law of the State of New Jersey, Attorney ID No. <strong>{firmProfile.defaultNotaryAttorneyId || firmProfile.barNumber || '[ID]'}</strong>"</em>
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full border-dashed text-[#2b6cb0] hover:bg-[#ebf4ff] hover:text-[#1a365d]"
+                        onClick={() => {
+                          setFirmProfile((p) => ({
+                            ...p,
+                            notaries: [
+                              ...p.notaries,
+                              {
+                                id: crypto.randomUUID(),
+                                name: '',
+                                type: 'notaryPublic',
+                              },
+                            ],
+                          }));
+                        }}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Notary / Attorney
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="flex justify-end pt-2">
@@ -1147,58 +1224,42 @@ export default function SettingsPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {/* Active Provider Selector */}
-                    <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
-                      <Label className="text-sm font-medium text-[#1a365d]">Active AI Provider</Label>
-                      <p className="text-xs text-gray-500 mb-3">
-                        Choose which language model powers document drafting and chat features.
-                      </p>
+                    {/* Chatbot and Drafting Provider Selectors */}
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+                        <Label className="text-sm font-medium text-[#1a365d]">Chatbot AI Provider</Label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Select the AI provider for chat interactions.
+                        </p>
+                        <Select disabled={savingChatbotProvider} value={chatbotAiProvider} onValueChange={(v: 'openai' | 'anthropic' | 'gemini' | 'perplexity') => handleSaveAiProvider('chatbotAiProvider', v, setSavingChatbotProvider)}>
+                          <SelectTrigger className="w-full bg-white text-sm">
+                            <SelectValue placeholder="Select provider..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                            <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                            <SelectItem value="gemini">Google (Gemini)</SelectItem>
+                            <SelectItem value="perplexity">Perplexity (Sonar)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="activeAi"
-                            className="h-4 w-4 text-[#2b6cb0]"
-                            checked={activeAiProvider === 'openai'}
-                            onChange={() => handleSaveActiveAiProvider('openai')}
-                            disabled={savingActiveAi}
-                          />
-                          <span className="text-sm">OpenAI (GPT-5.4)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="activeAi"
-                            className="h-4 w-4 text-[#2b6cb0]"
-                            checked={activeAiProvider === 'anthropic'}
-                            onChange={() => handleSaveActiveAiProvider('anthropic')}
-                            disabled={savingActiveAi}
-                          />
-                          <span className="text-sm">Anthropic (Claude 4.6)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="activeAi"
-                            className="h-4 w-4 text-[#2b6cb0]"
-                            checked={activeAiProvider === 'gemini'}
-                            onChange={() => handleSaveActiveAiProvider('gemini')}
-                            disabled={savingActiveAi}
-                          />
-                          <span className="text-sm">Google (Gemini 2.5 Pro)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="activeAi"
-                            className="h-4 w-4 text-[#2b6cb0]"
-                            checked={activeAiProvider === 'perplexity'}
-                            onChange={() => handleSaveActiveAiProvider('perplexity')}
-                            disabled={savingActiveAi}
-                          />
-                          <span className="text-sm">Perplexity (Sonar)</span>
-                        </label>
+                      <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+                        <Label className="text-sm font-medium text-[#1a365d]">Document Drafting AI Provider</Label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Select the AI provider for drafting documents.
+                        </p>
+                        <Select disabled={savingDocumentDraftingProvider} value={documentDraftingAiProvider} onValueChange={(v: 'openai' | 'anthropic' | 'gemini' | 'perplexity') => handleSaveAiProvider('documentDraftingAiProvider', v, setSavingDocumentDraftingProvider)}>
+                          <SelectTrigger className="w-full bg-white text-sm">
+                            <SelectValue placeholder="Select provider..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                            <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                            <SelectItem value="gemini">Google (Gemini)</SelectItem>
+                            <SelectItem value="perplexity">Perplexity (Sonar)</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
@@ -1214,7 +1275,7 @@ export default function SettingsPage() {
                               <SelectValue placeholder="Select a model..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {activeAiProvider === 'openai' && (
+                              {chatbotAiProvider === 'openai' && (
                                 <>
                                   <SelectItem value="gpt-5.4">gpt-5.4</SelectItem>
                                   <SelectItem value="gpt-5.4-pro">gpt-5.4-pro</SelectItem>
@@ -1223,20 +1284,20 @@ export default function SettingsPage() {
                                   <SelectItem value="o3">o3</SelectItem>
                                 </>
                               )}
-                              {activeAiProvider === 'anthropic' && (
+                              {chatbotAiProvider === 'anthropic' && (
                                 <>
                                   <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
                                   <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
                                 </>
                               )}
-                              {activeAiProvider === 'gemini' && (
+                              {chatbotAiProvider === 'gemini' && (
                                 <>
                                   <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
                                   <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
                                   <SelectItem value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</SelectItem>
                                 </>
                               )}
-                              {activeAiProvider === 'perplexity' && (
+                              {chatbotAiProvider === 'perplexity' && (
                                 <>
                                   <SelectItem value="sonar-deep-research">sonar-deep-research</SelectItem>
                                   <SelectItem value="sonar-reasoning-pro">sonar-reasoning-pro</SelectItem>
@@ -1263,7 +1324,7 @@ export default function SettingsPage() {
                               <SelectValue placeholder="Select a model..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {activeAiProvider === 'openai' && (
+                              {documentDraftingAiProvider === 'openai' && (
                                 <>
                                   <SelectItem value="gpt-5.4">gpt-5.4</SelectItem>
                                   <SelectItem value="gpt-5.4-pro">gpt-5.4-pro</SelectItem>
@@ -1272,20 +1333,20 @@ export default function SettingsPage() {
                                   <SelectItem value="o3">o3</SelectItem>
                                 </>
                               )}
-                              {activeAiProvider === 'anthropic' && (
+                              {documentDraftingAiProvider === 'anthropic' && (
                                 <>
                                   <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
                                   <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
                                 </>
                               )}
-                              {activeAiProvider === 'gemini' && (
+                              {documentDraftingAiProvider === 'gemini' && (
                                 <>
                                   <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
                                   <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
                                   <SelectItem value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</SelectItem>
                                 </>
                               )}
-                              {activeAiProvider === 'perplexity' && (
+                              {documentDraftingAiProvider === 'perplexity' && (
                                 <>
                                   <SelectItem value="sonar-deep-research">sonar-deep-research</SelectItem>
                                   <SelectItem value="sonar-reasoning-pro">sonar-reasoning-pro</SelectItem>

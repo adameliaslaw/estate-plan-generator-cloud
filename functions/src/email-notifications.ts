@@ -56,7 +56,7 @@ interface SendGridPayload {
  * Read the firm document from Firestore. Throws `not-found` if it doesn't
  * exist, and `failed-precondition` if SendGrid is not configured.
  */
-async function getFirmData(firmId: string): Promise<admin.firestore.DocumentData> {
+export async function getFirmData(firmId: string): Promise<admin.firestore.DocumentData> {
   const db = admin.firestore();
   const snap = await db.doc(`firms/${firmId}`).get();
   if (!snap.exists) {
@@ -69,7 +69,7 @@ async function getFirmData(firmId: string): Promise<admin.firestore.DocumentData
  * Extract SendGrid API key from firm data. Throws `failed-precondition` if
  * the key is missing so the caller gets an actionable error message.
  */
-function getSendGridKey(firmData: admin.firestore.DocumentData): string {
+export function getSendGridKey(firmData: admin.firestore.DocumentData): string {
   const key = firmData.sendGridApiKey as string | undefined;
   if (!key || key.trim() === '') {
     throw new HttpsError(
@@ -84,7 +84,7 @@ function getSendGridKey(firmData: admin.firestore.DocumentData): string {
  * Extract branding fields from a firm document, providing sensible defaults
  * for any values that may be missing.
  */
-function extractBranding(firmData: admin.firestore.DocumentData): FirmBranding {
+export function extractBranding(firmData: admin.firestore.DocumentData): FirmBranding {
   return {
     firmName: (firmData.firmName as string) || 'Your Estate Planning Firm',
     firmPhone: (firmData.firmPhone as string) || '',
@@ -101,7 +101,7 @@ function extractBranding(firmData: admin.firestore.DocumentData): FirmBranding {
  * @param branding     Firm branding values.
  * @param preheader    Short plain-text summary shown in email client previews.
  */
-function buildEmailHtml(
+export function buildEmailHtml(
   bodyHtml: string,
   branding: FirmBranding,
   preheader = '',
@@ -188,7 +188,7 @@ function buildEmailHtml(
 /**
  * Render a CTA button as an HTML table (VML-compatible for Outlook).
  */
-function ctaButton(label: string, url: string, color: string): string {
+export function ctaButton(label: string, url: string, color: string): string {
   return `
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
   <tr>
@@ -217,7 +217,7 @@ function formatCurrency(cents: number): string {
  *
  * @throws `HttpsError('internal', ...)` on non-2xx responses.
  */
-async function sendViaSendGrid(
+export async function sendViaSendGrid(
   apiKey: string,
   payload: SendGridPayload,
 ): Promise<void> {

@@ -167,6 +167,17 @@ export type TrustType =
 // Firm — /firms/{firmId}
 // ============================================================================
 
+export interface Notary {
+  id: string;
+  name: string;
+  commission?: string;
+  expiration?: string;
+  type: 'attorney' | 'notaryPublic';
+  county?: string;
+  attorneyId?: string;
+}
+
+
 export interface FirmBranding {
   primaryColor: string;
   accentColor: string;
@@ -186,7 +197,10 @@ export interface FirmSettings {
   anthropicApiKey?: string;
   geminiApiKey?: string;
   perplexityApiKey?: string;
-  activeAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
+  activeAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity'; // Deprecated, keep for backward compatibility
+  chatbotAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
+  documentDraftingAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
+  notaries?: Notary[];
   // Levitate Contacts
   levitateApiKey?: string;
   levitateWebhookUrl?: string;
