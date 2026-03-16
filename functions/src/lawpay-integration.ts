@@ -245,11 +245,26 @@ export const createPaymentRequest = functions
     } = data;
 
     // ------------------------------------------------------------------
-    // 2. Validate input
+    // 2. Validate input and permissions
     // ------------------------------------------------------------------
     if (!firmId || !clientId) {
       throw new functions.https.HttpsError('invalid-argument', 'firmId and clientId are required.');
     }
+    
+    // Check firm access
+    if (context.auth.token.firmId !== firmId && context.auth.token.role !== 'admin') {
+      throw new functions.https.HttpsError('permission-denied', 'You do not have access to this firm.');
+    }
+
+    // Check billing capability
+    const role = context.auth.token.role;
+    const capabilities = context.auth.token.capabilities || [];
+    const canManageBilling = role === 'admin' || role === 'attorney' || capabilities.includes('manage_billing');
+
+    if (!canManageBilling) {
+      throw new functions.https.HttpsError('permission-denied', 'You do not have permission to manage billing.');
+    }
+
     if (!amount || amount <= 0) {
       throw new functions.https.HttpsError('invalid-argument', 'amount must be a positive integer (in cents).');
     }

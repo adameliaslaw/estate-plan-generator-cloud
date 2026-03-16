@@ -66,6 +66,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { useCollection, createDoc, deleteDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { COLLECTIONS } from '@/config/constants';
 import { sanitizeInput } from '@/utils/sanitize';
 import type { Payment, PaymentMethod, PaymentStatus } from '@/types';
@@ -692,6 +693,7 @@ export default function PaymentsTab({
 }: PaymentsTabProps) {
   const { userProfile } = useAuth();
   const uid = userProfile?.uid ?? '';
+  const { canManageBilling } = usePermissions();
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [showRecordDialog, setShowRecordDialog] = useState(false);
@@ -788,23 +790,27 @@ export default function PaymentsTab({
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
-            onClick={() => setShowRequestDialog(true)}
-          >
-            <Send className="h-4 w-4" />
-            Send Payment Request
-          </Button>
-          <Button
-            size="sm"
-            className="gap-2 bg-[#1a365d] text-white hover:bg-[#1e407a]"
-            onClick={() => setShowRecordDialog(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Record Payment
-          </Button>
+          {canManageBilling && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+              onClick={() => setShowRequestDialog(true)}
+            >
+              <Send className="h-4 w-4" />
+              Send Payment Request
+            </Button>
+          )}
+          {canManageBilling && (
+            <Button
+              size="sm"
+              className="gap-2 bg-[#1a365d] text-white hover:bg-[#1e407a]"
+              onClick={() => setShowRecordDialog(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Record Payment
+            </Button>
+          )}
         </div>
       </div>
 
@@ -826,7 +832,7 @@ export default function PaymentsTab({
                 ? 'Record a payment or send a payment request to get started.'
                 : `No payments with status "${filterStatus}" found. Try switching the filter above.`}
             </p>
-            {filterStatus === 'all' && (
+            {filterStatus === 'all' && canManageBilling && (
               <div className="mt-5 flex items-center gap-2">
                 <Button
                   size="sm"
@@ -969,59 +975,61 @@ export default function PaymentsTab({
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-gray-400 hover:text-gray-700"
-                              disabled={isDeleting}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {payment.lawPayPaymentUrl && (
-                              <>
-                                <DropdownMenuItem asChild>
-                                  <a
-                                    href={payment.lawPayPaymentUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                    Open LawPay Link
-                                  </a>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                              </>
-                            )}
-                            {payment.receiptUrl && (
-                              <>
-                                <DropdownMenuItem asChild>
-                                  <a
-                                    href={payment.receiptUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                    View Receipt
-                                  </a>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                              </>
-                            )}
-                            <DropdownMenuItem
-                              className="flex items-center gap-2 text-red-600 focus:bg-red-50 focus:text-red-700"
-                              onClick={() => handleDelete(payment)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete Record
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {canManageBilling && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-gray-400 hover:text-gray-700"
+                                disabled={isDeleting}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {payment.lawPayPaymentUrl && (
+                                <>
+                                  <DropdownMenuItem asChild>
+                                    <a
+                                      href={payment.lawPayPaymentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2"
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                      Open LawPay Link
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
+                              {payment.receiptUrl && (
+                                <>
+                                  <DropdownMenuItem asChild>
+                                    <a
+                                      href={payment.receiptUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2"
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                      View Receipt
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 text-red-600 focus:bg-red-50 focus:text-red-700"
+                                onClick={() => handleDelete(payment)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete Record
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </td>
                     </tr>
                   );

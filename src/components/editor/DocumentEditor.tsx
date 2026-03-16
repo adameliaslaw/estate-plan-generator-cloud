@@ -239,7 +239,9 @@ export default function DocumentEditor({
     // Load HTML content from the document's generationPrompt field
     // (In this app, the editor stores HTML content in a dedicated field)
     const htmlContent =
-      (document as Document & { editorContent?: string }).editorContent ?? '';
+      (document as Document & { editorContent?: string; content?: string }).editorContent ??
+      (document as Document & { editorContent?: string; content?: string }).content ??
+      '';
 
     if (htmlContent && editor) {
       editor.commands.setContent(htmlContent, { emitUpdate: false });
