@@ -24,7 +24,7 @@ function BlankLine({ width = '100%', height = '1.25rem' }: { width?: string; hei
   return (
     <input
       type="text"
-      className="border-b border-gray-400 bg-transparent outline-none ring-0 w-full text-[10pt] text-blue-900 font-medium pb-0.5 print:text-black"
+      className="border-b border-gray-400 bg-transparent outline-none ring-0 w-full text-[10pt] text-blue-900 font-medium pb-0.5 hover:bg-blue-50/50 hover:border-blue-400 focus:bg-blue-50/50 focus:border-blue-600 transition-colors print:text-black print:bg-transparent print:border-gray-400 print:hover:bg-transparent"
       style={{ height, minWidth: width, maxWidth: width }}
     />
   );
@@ -42,10 +42,10 @@ function BlankLines({ count = 1 }: { count?: number }) {
 
 function CheckOption({ label }: { label: string }) {
   return (
-    <label className="flex items-center gap-1.5 cursor-pointer group">
+    <label className="flex items-center gap-1.5 cursor-pointer group hover:bg-blue-50/50 pr-1 rounded transition-colors print:hover:bg-transparent">
       <input 
         type="checkbox" 
-        className="flex-shrink-0 border-gray-500 rounded-sm outline-none ring-0 print:border-gray-500 print:bg-white text-blue-600 print:text-black cursor-pointer"
+        className="flex-shrink-0 border-gray-500 rounded-sm outline-none ring-0 accent-blue-600 cursor-pointer print:border-gray-500 print:bg-white print:accent-black"
       />
       <span className="text-[9pt] leading-none text-gray-800 group-hover:text-black">{label}</span>
     </label>
