@@ -463,11 +463,21 @@ export async function callAIWithVision(
  * Strips markdown code fences that the model may erroneously include.
  */
 export function parseAIJson<T>(raw: string): T {
-  // Strip ```json ... ``` wrappers
-  const cleaned = raw
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/i, '')
-    .trim();
+  let cleaned = raw.trim();
+
+  // Strip opening markdown fence: ```json or ``` (possibly with leading whitespace/newlines)
+  cleaned = cleaned.replace(/^\s*```(?:json)?\s*\n?/i, '');
+  // Strip closing markdown fence
+  cleaned = cleaned.replace(/\n?\s*```\s*$/i, '');
+  cleaned = cleaned.trim();
+
+  // If the result still doesn't start with { or [, try to extract JSON from the text
+  if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
+    const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[1];
+    }
+  }
 
   try {
     return JSON.parse(cleaned) as T;

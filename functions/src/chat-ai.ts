@@ -464,7 +464,21 @@ export const chatAi = functions
           } as ChatAiResponse;
         } catch (genErr) {
           console.error('[chatAi] Short-circuit generation failed:', genErr);
-          // Fall through to normal chat flow so the user gets a helpful error message
+          // Return a friendly error instead of falling through to the full 
+          // (slow) chat+generation pipeline that caused the original timeout
+          const errMsg = (genErr as Error).message ?? 'Unknown error';
+          const reply = `I tried to generate your ${targetDocType} but ran into an issue: ${errMsg}. Please try again — if the problem persists, try a simpler request or check that the client profile has the necessary data filled in.`;
+          const allMessages: ConversationMessage[] = [
+            ...resolvedHistory.map((m) => ({
+              role: m.role,
+              content: m.content,
+              timestamp: new Date().toISOString(),
+            })),
+            { role: 'user' as const, content: message, timestamp: new Date().toISOString() },
+            { role: 'assistant' as const, content: reply, timestamp: new Date().toISOString() },
+          ];
+          const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
+          return { reply, conversationId: convId } as ChatAiResponse;
         }
       }
 

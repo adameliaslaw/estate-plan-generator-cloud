@@ -168,7 +168,7 @@ Jurisdiction tags:
 // ---------------------------------------------------------------------------
 
 export const processTemplateFile = onCall(
-  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 150 },
+  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 300 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -532,7 +532,7 @@ Return ONLY the modified HTML (no JSON wrapper, no markdown fences, no explanati
 // ---------------------------------------------------------------------------
 
 export const consolidateTemplateVariables = onCall(
-  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 60 },
+  { region: 'us-east1', memory: '1GiB', timeoutSeconds: 120 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
