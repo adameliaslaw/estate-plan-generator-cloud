@@ -29,6 +29,12 @@ import {
   Save,
   CheckCircle2,
   Pencil,
+  User,
+  Users,
+  Building2,
+  Shield,
+  Info,
+  Circle,
 } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -53,18 +59,32 @@ import { logSystemActivity } from '@/utils/activity-logger';
 type Phase = 'questionnaire' | 'package' | 'complete';
 
 // ============================================================================
-// Edit-mode banner
+// Edit-mode banner + navigator
 // ============================================================================
 
-function EditModeBanner({ onSaveAndClose, isSaving }: { onSaveAndClose: () => void; isSaving: boolean }) {
+interface EditModeBannerProps {
+  onSaveAndClose: () => void;
+  isSaving: boolean;
+  showNav: boolean;
+  onToggleNav: () => void;
+}
+
+function EditModeBanner({ onSaveAndClose, isSaving, showNav, onToggleNav }: EditModeBannerProps) {
   return (
     <div className="sticky top-0 z-20 bg-amber-50 border-b-2 border-amber-400">
-      <div className="mx-auto max-w-2xl px-4 py-2.5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+      <div className="mx-auto max-w-4xl px-4 py-2.5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
           <Pencil className="h-4 w-4 text-amber-700 shrink-0" />
           <p className="text-sm font-semibold text-amber-800">
             Edit Mode — you are editing a completed questionnaire
           </p>
+          <button
+            onClick={onToggleNav}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-400 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-200 transition-colors"
+          >
+            <ChevronRight className={cn('h-3.5 w-3.5 transition-transform duration-200', showNav && 'rotate-90')} />
+            {showNav ? 'Hide Navigator' : 'Jump to Section'}
+          </button>
         </div>
         <button
           onClick={onSaveAndClose}
@@ -82,6 +102,135 @@ function EditModeBanner({ onSaveAndClose, isSaving }: { onSaveAndClose: () => vo
     </div>
   );
 }
+
+// Section-icon map for the navigator
+const SECTION_ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: string }>> = {
+  User,
+  Heart: ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  ),
+  Users,
+  Building: Building2,
+  CreditCard: ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+      <line x1="1" y1="10" x2="23" y2="10" />
+    </svg>
+  ),
+  Shield,
+  Gift: ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <polyline points="20 12 20 22 4 22 4 12" />
+      <rect x="2" y="7" width="20" height="5" />
+      <line x1="12" y1="22" x2="12" y2="7" />
+      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+    </svg>
+  ),
+  HeartPulse: ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+      <path d="M3.22 12H9.5l1.5-3 2 6 1.5-3 .5 2h5.78" />
+    </svg>
+  ),
+  Info,
+};
+
+interface EditModeNavigatorProps {
+  visibleSteps: ReturnType<typeof useQuestionnaire>['visibleSteps'];
+  currentStep: number;
+  isStepComplete: (id: string) => boolean;
+  goToStep: (index: number) => void;
+}
+
+function EditModeNavigator({ visibleSteps, currentStep, isStepComplete, goToStep }: EditModeNavigatorProps) {
+  const [openSection, setOpenSection] = useState<string | null>(
+    // Default: expand the section containing the current step
+    visibleSteps[currentStep]?.section ?? null,
+  );
+
+  const sections = SECTION_META.filter((s) => visibleSteps.some((vs) => vs.section === s.id));
+
+  return (
+    <div className="bg-white border-b border-amber-200 shadow-sm">
+      <div className="mx-auto max-w-4xl px-4 py-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+          {sections.map((section) => {
+            const sectionSteps = visibleSteps
+              .map((step, idx) => ({ step, idx }))
+              .filter(({ step }) => step.section === section.id);
+            const completedCount = sectionSteps.filter(({ step }) => isStepComplete(step.id)).length;
+            const isCurrentSection = sectionSteps.some(({ idx }) => idx === currentStep);
+            const IconComp = SECTION_ICON_COMPONENTS[section.icon] ?? Info;
+            const isOpen = openSection === section.id;
+
+            return (
+              <div key={section.id} className="flex flex-col">
+                {/* Section header button */}
+                <button
+                  onClick={() => setOpenSection(isOpen ? null : section.id)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-all',
+                    isCurrentSection
+                      ? 'border-[#1a365d] bg-[#ebf4ff] text-[#1a365d]'
+                      : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-gray-100',
+                  )}
+                >
+                  <IconComp className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 truncate leading-tight">{section.title}</span>
+                  <span className={cn(
+                    'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold',
+                    completedCount === sectionSteps.length
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : isCurrentSection
+                        ? 'bg-[#1a365d]/10 text-[#1a365d]'
+                        : 'bg-gray-200 text-gray-500',
+                  )}>
+                    {completedCount}/{sectionSteps.length}
+                  </span>
+                </button>
+
+                {/* Step list (expanded) */}
+                {isOpen && (
+                  <div className="mt-1 flex flex-col gap-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                    {sectionSteps.map(({ step, idx }) => {
+                      const isCurrent = idx === currentStep;
+                      const isDone = isStepComplete(step.id);
+                      return (
+                        <button
+                          key={step.id}
+                          onClick={() => goToStep(idx)}
+                          className={cn(
+                            'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-[11px] transition-all',
+                            isCurrent
+                              ? 'border-[#1a365d] bg-[#1a365d] text-white font-semibold'
+                              : isDone
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50',
+                          )}
+                        >
+                          {isDone && !isCurrent ? (
+                            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
+                          ) : (
+                            <Circle className="h-3 w-3 shrink-0 opacity-40" />
+                          )}
+                          <span className="leading-tight">{step.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ============================================================================
 // Progress bar component
@@ -224,7 +373,10 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
     canProceed,
     goNext,
     goBack,
+    goToStep,
     saveProgress,
+    visibleSteps,
+    isStepComplete,
     data,
   } = useQuestionnaire();
 
@@ -234,6 +386,7 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
 
   // ── Phase state ───────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('questionnaire');
+  const [showNav, setShowNav] = useState(true);
   const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(null);
   const [selectedTrustType, setSelectedTrustType] = useState<string | undefined>(undefined);
   const [submitted, setSubmitted] = useState(false);
@@ -437,9 +590,23 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Edit-mode banner */}
       {isEditMode && (
-        <EditModeBanner onSaveAndClose={() => void handleSaveAndClose()} isSaving={isSaving} />
+        <>
+          <EditModeBanner
+            onSaveAndClose={() => void handleSaveAndClose()}
+            isSaving={isSaving}
+            showNav={showNav}
+            onToggleNav={() => setShowNav((v) => !v)}
+          />
+          {showNav && (
+            <EditModeNavigator
+              visibleSteps={visibleSteps}
+              currentStep={currentStep}
+              isStepComplete={isStepComplete}
+              goToStep={goToStep}
+            />
+          )}
+        </>
       )}
       {/* ── Top header: progress + meta ────────────────────────────────── */}
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white shadow-sm">
