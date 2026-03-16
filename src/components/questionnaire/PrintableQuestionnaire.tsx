@@ -22,16 +22,17 @@ import { Button } from '@/components/ui/button';
 
 function BlankLine({ width = '100%', height = '1.25rem' }: { width?: string; height?: string }) {
   return (
-    <div
-      className="border-b border-gray-400"
-      style={{ height, width }}
+    <input
+      type="text"
+      className="border-b border-gray-400 bg-transparent outline-none ring-0 w-full text-[10pt] text-blue-900 font-medium pb-0.5 print:text-black"
+      style={{ height, minWidth: width, maxWidth: width }}
     />
   );
 }
 
 function BlankLines({ count = 1 }: { count?: number }) {
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5 w-full">
       {Array.from({ length: count }).map((_, i) => (
         <BlankLine key={i} />
       ))}
@@ -41,10 +42,13 @@ function BlankLines({ count = 1 }: { count?: number }) {
 
 function CheckOption({ label }: { label: string }) {
   return (
-    <div className="flex items-start gap-1.5">
-      <div className="mt-[2px] h-3 w-3 flex-shrink-0 border border-gray-500 rounded-sm" />
-      <span className="text-[9pt] leading-tight text-gray-800">{label}</span>
-    </div>
+    <label className="flex items-center gap-1.5 cursor-pointer group">
+      <input 
+        type="checkbox" 
+        className="flex-shrink-0 border-gray-500 rounded-sm outline-none ring-0 print:border-gray-500 print:bg-white text-blue-600 print:text-black cursor-pointer"
+      />
+      <span className="text-[9pt] leading-none text-gray-800 group-hover:text-black">{label}</span>
+    </label>
   );
 }
 
@@ -231,9 +235,13 @@ export default function PrintableQuestionnaire({
               <div className="mt-2 grid grid-cols-[1.5fr_1fr_2.5fr] gap-3 rounded border border-gray-300 p-1.5">
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
-                  <div className="border-b border-gray-400 flex items-end pb-[2px]" style={{ height: '1.25rem' }}>
-                    {clientName && <span className="text-[10pt] font-medium text-gray-900 leading-none">{clientName}</span>}
-                  </div>
+                  {clientName ? (
+                    <div className="border-b border-gray-400 flex items-end pb-[2px]" style={{ height: '1.25rem' }}>
+                      <span className="text-[10pt] font-medium text-gray-900 leading-none">{clientName}</span>
+                    </div>
+                  ) : (
+                    <BlankLine />
+                  )}
                 </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
