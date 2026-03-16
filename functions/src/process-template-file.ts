@@ -445,6 +445,76 @@ Respond with a valid JSON object (no markdown fences):
         if (stripped > 0) {
           console.log(`[processTemplateFile] Stripped legacy OBJ codes (${stripped} chars removed)`);
         }
+
+        // -------------------------------------------------------------------
+        // POST-PROCESSING: Fiduciary Path Enforcement
+        // When the same person serves in multiple fiduciary roles, the AI
+        // often reuses the first path it assigned. This step ensures each
+        // fiduciary section uses ONLY its own field paths.
+        // -------------------------------------------------------------------
+        const fiduciaryRoles = [
+          {
+            role: 'executor',
+            prefix: 'fiduciaries.executor.',
+            contextPatterns: [/\bexecutor\b/i, /\bexecutrix\b/i, /\bpersonal\s+representative\b/i, /\bappointment\s+of\s+.*executor/i],
+          },
+          {
+            role: 'trustee',
+            prefix: 'fiduciaries.trustee.',
+            contextPatterns: [/\btrustee\b/i, /\bco-trustee\b/i, /\bsuccessor\s+trustee\b/i],
+          },
+          {
+            role: 'guardian',
+            prefix: 'fiduciaries.guardian.',
+            contextPatterns: [/\bguardian\b/i, /\bguardians\b/i, /\bguardianship\b/i, /\bappointment\s+of\s+guardian/i],
+          },
+          {
+            role: 'powerOfAttorney',
+            prefix: 'fiduciaries.powerOfAttorney.',
+            contextPatterns: [/\bpower\s+of\s+attorney\b/i, /\battorney[\s-]+in[\s-]+fact\b/i, /\bagent\b.*\bpoa\b/i],
+          },
+          {
+            role: 'healthcareProxy',
+            prefix: 'fiduciaries.healthcareProxy.',
+            contextPatterns: [/\bhealthcare\s+proxy\b/i, /\bhealthcare\s+representative\b/i, /\bhealth\s+care\s+proxy\b/i, /\badvance\s+directive\b/i],
+          },
+        ];
+
+        // Split HTML into paragraphs/sections for context detection
+        const paragraphs = templatizedHtml.split(/(?=<p[\s>]|<h[1-6][\s>]|<div[\s>]|<li[\s>])/i);
+        let fixCount = 0;
+
+        const correctedParagraphs = paragraphs.map((para) => {
+          // Determine what fiduciary role this paragraph is about
+          let detectedRole: typeof fiduciaryRoles[0] | null = null;
+          for (const role of fiduciaryRoles) {
+            // Only match context if the paragraph mentions the role AND contains fiduciary variables
+            if (role.contextPatterns.some((p) => p.test(para)) && /\{\{fiduciaries\./.test(para)) {
+              detectedRole = role;
+              break;
+            }
+          }
+
+          if (!detectedRole) return para; // No fiduciary context detected, leave as-is
+
+          // In this paragraph, replace any fiduciary path that doesn't match the detected role
+          // Swap ONLY the role prefix — preserve the exact level (primary/alternate/successor/etc.) and field
+          return para.replace(/\{\{fiduciaries\.(\w+)\.((?:primary|alternate|successor|secondSuccessor|thirdSuccessor)\.\w+)\}\}/g,
+            (match, actualRole, levelAndField) => {
+              if (actualRole === detectedRole!.role) return match; // Already correct
+
+              const corrected = `{{fiduciaries.${detectedRole!.role}.${levelAndField}}}`;
+              console.log(`[processTemplateFile] Fiduciary path fix: ${match} → ${corrected} (context: ${detectedRole!.role})`);
+              fixCount++;
+              return corrected;
+            },
+          );
+        });
+
+        if (fixCount > 0) {
+          templatizedHtml = correctedParagraphs.join('');
+          console.log(`[processTemplateFile] Fiduciary path enforcement: ${fixCount} corrections applied`);
+        }
       } else {
         console.warn(`[processTemplateFile] Phase 1: AI output doesn't look right (hasVars=${hasVariables}, hasHtml=${looksLikeHtml}). Keeping original HTML.`);
       }
