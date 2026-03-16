@@ -118,10 +118,13 @@ function PrintPage({ children, isLast = false }: { children: React.ReactNode; is
 // Fiduciary block (stacked: name+relationship, then address+phone)
 // ---------------------------------------------------------------------------
 
-function FiduciaryBlock({ role }: { role: string }) {
+function FiduciaryBlock({ role, subtitle }: { role: string; subtitle?: string }) {
   return (
     <div className="border-b border-gray-300 pb-1 mb-1">
-      <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">{role}</p>
+      <p className="text-[8pt] font-bold text-gray-700 uppercase tracking-wide mb-0.5">
+        {role}
+        {subtitle && <span className="ml-1 font-normal text-gray-500 normal-case">{subtitle}</span>}
+      </p>
       <div className="grid grid-cols-2 gap-x-4">
         {/* Primary */}
         <div>
@@ -433,7 +436,7 @@ export default function PrintableQuestionnaire({
               <FiduciaryBlock role="Executor" />
               <FiduciaryBlock role="POA Agent" />
               <FiduciaryBlock role="Healthcare Rep" />
-              <FiduciaryBlock role="Guardian" />
+              <FiduciaryBlock role="Guardian" subtitle="(If Children or grandchildren under 18)" />
             </div>
 
             <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
