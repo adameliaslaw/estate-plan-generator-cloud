@@ -235,8 +235,8 @@ export default function PrintableQuestionnaire({
                 </div>
               </div>
 
-              {/* Client / Date / File No */}
-              <div className="mt-2 grid grid-cols-3 gap-2 rounded border border-gray-300 p-1.5">
+              {/* Client Name / Date / Referral */}
+              <div className="mt-2 grid grid-cols-[1.5fr_1fr_2.5fr] gap-3 rounded border border-gray-300 p-1.5">
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Client Name</p>
                   {clientName ? (
@@ -250,8 +250,14 @@ export default function PrintableQuestionnaire({
                   <BlankLine />
                 </div>
                 <div>
-                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">File No.</p>
-                  <BlankLine />
+                  <p className="text-[7pt] font-semibold text-gray-500 uppercase">How did you hear about us?</p>
+                  <div className="flex gap-2.5 flex-wrap mt-0.5">
+                    <CheckOption label="Referral" />
+                    <CheckOption label="Google" />
+                    <CheckOption label="Social Media" />
+                    <CheckOption label="Attorney" />
+                    <CheckOption label="Other" />
+                  </div>
                 </div>
               </div>
 
@@ -385,49 +391,90 @@ export default function PrintableQuestionnaire({
         </PrintPage>
 
         {/* ================================================================
-            PAGE 2: Section 3 (Children) + Section 4 (Fiduciaries)
+            PAGE 2: Section 3 (Children)
             ================================================================ */}
         <PrintPage>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             {/* SECTION 3: CHILDREN */}
             <SectionHeader title="Section 3 — Children & Dependents" />
 
-            <table className="w-full text-[9pt] border-collapse mt-1">
+            <table className="w-full text-[9pt] border-collapse mt-2">
               <thead>
-                <tr className="border-b border-gray-400">
-                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">#</th>
+                <tr className="border-b-2 border-gray-400">
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-4">#</th>
                   <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Full Name</th>
-                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">DOB</th>
-                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">M/F</th>
-                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2">Relationship</th>
-                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1">Special Needs?</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-20">DOB</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-10">M/F</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 pr-2 w-28">Relationship</th>
+                  <th className="text-left text-[7pt] font-semibold text-gray-500 uppercase pb-1 w-20">Special Needs?</th>
                 </tr>
               </thead>
               <tbody>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <tr key={n} className="border-b border-gray-300">
-                    <td className="py-1.5 pr-2 text-gray-400">{n}.</td>
-                    <td className="py-1.5 pr-2"><BlankLine /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="2rem" /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="5rem" /></td>
-                    <td className="py-1.5">
+                {[1, 2, 3, 4].flatMap((n) => [
+                  <tr key={`child-${n}`}>
+                    <td className="py-2.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
+                    <td className="py-2.5 pr-2"><BlankLine /></td>
+                    <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
+                    <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
+                    <td className="py-2.5 pr-2"><BlankLine width="100%" /></td>
+                    <td className="py-2.5">
                       <div className="flex gap-2">
                         <CheckOption label="Y" />
                         <CheckOption label="N" />
                       </div>
                     </td>
-                  </tr>
-                ))}
+                  </tr>,
+                  <tr key={`spouse-${n}`}>
+                    <td></td>
+                    <td className="py-1.5 pr-2">
+                      <div className="flex items-end">
+                        <span className="text-[7pt] text-gray-500 italic w-[64px] text-right pr-2 pb-[1px]">Spouse:</span>
+                        <div className="flex-1"><BlankLine /></div>
+                      </div>
+                    </td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
+                    <td className="py-1.5 pr-2"></td>
+                    <td className="py-1.5"></td>
+                  </tr>,
+                  ...[1, 2, 3].map((g) => (
+                    <tr key={`gc-${n}-${g}`} className={g === 3 && n !== 4 ? "border-b border-gray-300" : ""}>
+                      <td></td>
+                      <td className="py-1.5 pr-2">
+                        <div className="flex items-end">
+                          <span className="text-[7pt] text-gray-500 italic w-[64px] text-right pr-2 pb-[1px] whitespace-nowrap">Grandchild {g}:</span>
+                          <div className="flex-1"><BlankLine /></div>
+                        </div>
+                      </td>
+                      <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
+                      <td className="py-1.5 pr-2"><BlankLine width="100%" /></td>
+                      <td className="py-1.5 pr-2"></td>
+                      <td className="py-1.5">
+                        <div className="flex gap-2">
+                          <CheckOption label="Y" />
+                          <CheckOption label="N" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ])}
               </tbody>
             </table>
-            <p className="text-[7pt] text-gray-400 italic mt-1">
-              Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child has special needs requiring a special needs trust.
+            <p className="text-[7pt] text-gray-400 italic mt-3">
+              Relationship: B = Biological, A = Adopted, S = Stepchild. Special Needs: indicate Y if child/grandchild has special needs requiring a trust.
             </p>
 
-            {/* SECTION 4: FIDUCIARIES */}
+            <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
+          </div>
+        </PrintPage>
+
+        {/* ================================================================
+            PAGE 3: Section 4 (Your Fiduciaries)
+            ================================================================ */}
+        <PrintPage>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <SectionHeader title="Section 4 — Your Fiduciaries" />
-            <p className="text-[8pt] text-gray-500 italic mb-3">
+            <p className="text-[8pt] text-gray-500 italic mb-5">
               Name the people you trust to carry out your wishes. Provide primary and alternate for each role.
             </p>
 
@@ -435,96 +482,8 @@ export default function PrintableQuestionnaire({
               <FiduciaryBlock role="Trustee" />
               <FiduciaryBlock role="Executor" />
               <FiduciaryBlock role="Power of Attorney (Agent)" />
-            </div>
-
-            <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
-          </div>
-        </PrintPage>
-
-        {/* ================================================================
-            PAGE 3: Section 4 (cont) + Section 5 (Healthcare Preferences)
-            ================================================================ */}
-        <PrintPage>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <div className="mb-3 border-b border-[#1a365d] pb-0.5 mt-1">
-              <p className="text-[8pt] font-semibold text-[#1a365d] uppercase">Section 4 — Your Fiduciaries (continued)</p>
-            </div>
-
-            <div className="space-y-0 mb-6">
               <FiduciaryBlock role="Healthcare Representative" />
               <FiduciaryBlock role="Guardian" subtitle="(If Children or grandchildren under 18)" />
-            </div>
-
-            <PageFooter pageNum={2} totalPages={TOTAL_PAGES} />
-          </div>
-        </PrintPage>
-
-        {/* ================================================================
-            PAGE 3: Section 5 (Healthcare Preferences)
-            ================================================================ */}
-        <PrintPage>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <SectionHeader title="Section 5 — Healthcare Preferences" />
-
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-              <div>
-                <SubHeader title="Life-Sustaining Treatment" />
-                <div className="space-y-0.5">
-                  <CheckOption label="Provide all possible measures" />
-                  <CheckOption label="Withhold if terminally ill or permanently unconscious" />
-                  <CheckOption label="Trial period, then withdraw if no improvement" />
-                  <CheckOption label="My healthcare representative decides" />
-                </div>
-              </div>
-              <div>
-                <SubHeader title="Artificial Nutrition & Hydration" />
-                <div className="space-y-0.5">
-                  <CheckOption label="Continue in all circumstances" />
-                  <CheckOption label="Withhold if terminally ill or permanently unconscious" />
-                  <CheckOption label="My healthcare representative decides" />
-                </div>
-              </div>
-              <div>
-                <SubHeader title="Pain Management" />
-                <div className="space-y-0.5">
-                  <CheckOption label="Maximum relief, even if it may hasten death" />
-                  <CheckOption label="Relief that does not risk hastening death" />
-                  <CheckOption label="My healthcare representative decides" />
-                </div>
-              </div>
-              <div>
-                <SubHeader title="Organ Donation" />
-                <div className="space-y-0.5">
-                  <CheckOption label="Yes — all organs and tissues" />
-                  <CheckOption label="Yes — specific organs only" />
-                  <CheckOption label="No" />
-                  <CheckOption label="Already registered" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-6 mt-3">
-              <div>
-                <SubHeader title="Burial / Funeral Preference" />
-                <div className="flex gap-3">
-                  <CheckOption label="Burial" />
-                  <CheckOption label="Cremation" />
-                  <CheckOption label="No preference" />
-                </div>
-              </div>
-              <div>
-                <SubHeader title="Pregnancy Provision (if applicable)" />
-                <div className="space-y-0.5">
-                  <CheckOption label="Follow directive even if pregnant" />
-                  <CheckOption label="Do not follow if pregnant" />
-                  <CheckOption label="My representative decides" />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1">
-              <SubHeader title="Additional Healthcare Instructions" />
-              <BlankLines count={3} />
             </div>
 
             <PageFooter pageNum={3} totalPages={TOTAL_PAGES} />
@@ -532,12 +491,12 @@ export default function PrintableQuestionnaire({
         </PrintPage>
 
         {/* ================================================================
-            PAGE 4: Section 6 (Assets) + Section 7 (Additional Info)
+            PAGE 4: Section 5 (Assets) & Section 6 (Healthcare)
             ================================================================ */}
         <PrintPage>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             
-            <SectionHeader title="Section 6 — Assets & Liabilities (Summary)" />
+            <SectionHeader title="Section 5 — Assets & Liabilities (Summary)" />
             <p className="text-[8pt] text-gray-500 italic mb-2">
               Please list your major assets and liabilities below. Our office will gather detailed
               information during your consultation. Include approximate values where known.
@@ -547,67 +506,85 @@ export default function PrintableQuestionnaire({
             <p className="text-[7pt] text-gray-400 mb-0.5">
               List each property: address, estimated value, how titled (joint, individual, trust)
             </p>
-            <BlankLines count={3} />
+            <BlankLines count={2} />
 
             <SubHeader title="Financial Accounts" />
             <p className="text-[7pt] text-gray-400 mb-0.5">
               Bank accounts, investments, retirement (401k, IRA), life insurance
             </p>
-            <BlankLines count={3} />
+            <BlankLines count={2} />
 
             <SubHeader title="Business Interests" />
-            <BlankLines count={3} />
+            <BlankLines count={2} />
 
             <SubHeader title="Significant Debts" />
             <p className="text-[7pt] text-gray-400 mb-0.5">
               Mortgages, loans, credit card debt, other obligations
             </p>
-            <BlankLines count={3} />
+            <BlankLines count={2} />
 
-            <div className="mt-6">
-              {/* SECTION 7: ADDITIONAL INFORMATION */}
-              <SectionHeader title="Section 7 — Additional Information" />
+            <div className="mt-4">
+              <SectionHeader title="Section 6 — Healthcare Preferences" />
 
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 mt-1">
                 <div>
-                  <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
-                    Do you have existing estate planning documents?
-                  </p>
-                  <div className="flex gap-4">
-                    <CheckOption label="Yes" />
-                    <CheckOption label="No" />
+                  <SubHeader title="Life-Sustaining Treatment" />
+                  <div className="space-y-0.5">
+                    <CheckOption label="Provide all possible measures" />
+                    <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+                    <CheckOption label="Trial period, then withdraw if no improvement" />
+                    <CheckOption label="My healthcare representative decides" />
                   </div>
-                  <LabeledField label="If yes, describe (type and approximate date)" />
                 </div>
                 <div>
-                  <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
-                    Any pending legal matters?
-                  </p>
-                  <div className="flex gap-4">
-                    <CheckOption label="Yes" />
-                    <CheckOption label="No" />
+                  <SubHeader title="Artificial Nutrition & Hydration" />
+                  <div className="space-y-0.5">
+                    <CheckOption label="Continue in all circumstances" />
+                    <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+                    <CheckOption label="My healthcare representative decides" />
                   </div>
-                  <LabeledField label="If yes, describe" />
+                </div>
+                <div>
+                  <SubHeader title="Pain Management" />
+                  <div className="space-y-0.5">
+                    <CheckOption label="Maximum relief, even if it may hasten death" />
+                    <CheckOption label="Relief that does not risk hastening death" />
+                    <CheckOption label="My healthcare representative decides" />
+                  </div>
+                </div>
+                <div>
+                  <SubHeader title="Organ Donation" />
+                  <div className="space-y-0.5">
+                    <CheckOption label="Yes — all organs and tissues" />
+                    <CheckOption label="Yes — specific organs only" />
+                    <CheckOption label="No" />
+                    <CheckOption label="Already registered" />
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-4">
-                <SubHeader title="Additional Notes" />
-                <p className="text-[7pt] text-gray-400 mb-0.5">
-                  Special circumstances, family dynamics, concerns about a specific beneficiary, pets, property in other states, etc.
-                </p>
-                <BlankLines count={5} />
+              <div className="grid grid-cols-2 gap-x-6 mt-2">
+                <div>
+                  <SubHeader title="Burial / Funeral Preference" />
+                  <div className="flex gap-3">
+                    <CheckOption label="Burial" />
+                    <CheckOption label="Cremation" />
+                    <CheckOption label="No preference" />
+                  </div>
+                </div>
+                <div>
+                  <SubHeader title="Pregnancy Provision (if applicable)" />
+                  <div className="space-y-0.5">
+                    <CheckOption label="Follow directive even if pregnant" />
+                    <CheckOption label="Do not follow if pregnant" />
+                    <CheckOption label="My representative decides" />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="mt-2">
-              <p className="text-[8pt] font-medium text-gray-600 mb-0.5">How did you hear about us?</p>
-              <div className="flex gap-3 flex-wrap">
-                <CheckOption label="Referral" />
-                <CheckOption label="Google" />
-                <CheckOption label="Social Media" />
-                <CheckOption label="Attorney Referral" />
-                <CheckOption label="Other" />
+              <div className="mt-2">
+                <SubHeader title="Additional Healthcare Instructions" />
+                <BlankLines count={2} />
               </div>
             </div>
 
@@ -616,25 +593,57 @@ export default function PrintableQuestionnaire({
         </PrintPage>
 
         {/* ================================================================
-            PAGE 5: Distribution Wishes (attorney consultation)
+            PAGE 5: Section 7 (Additional Info) + Distribution Wishes
             ================================================================ */}
         <PrintPage isLast>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <SectionHeader title="Distribution Wishes (To be completed with your attorney)" />
-            <p className="text-[8pt] text-gray-500 mb-3">
-              This section is intended to be completed during your consultation. Your attorney will
-              discuss your options and document your wishes below.
-            </p>
+            
+            <SectionHeader title="Section 7 — Additional Information" />
 
-            {/* Lined notes area — fills remaining page */}
-            <div className="space-y-0">
-              {Array.from({ length: 32 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="border-b border-gray-300"
-                  style={{ height: '1.4rem' }}
-                />
-              ))}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+                  Do you have existing estate planning documents?
+                </p>
+                <div className="flex gap-4">
+                  <CheckOption label="Yes" />
+                  <CheckOption label="No" />
+                </div>
+                <div className="mt-2">
+                  <LabeledField label="If yes, describe (type and approximate date)" />
+                </div>
+              </div>
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">
+                  Any pending legal matters?
+                </p>
+                <div className="flex gap-4">
+                  <CheckOption label="Yes" />
+                  <CheckOption label="No" />
+                </div>
+                <div className="mt-2">
+                  <LabeledField label="If yes, describe" />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex-1 flex flex-col">
+              <SectionHeader title="Distribution Wishes (To be completed with your attorney)" />
+              <p className="text-[8pt] text-gray-500 mb-3">
+                This section is intended to be completed during your consultation. Your attorney will
+                discuss your options and document your wishes below.
+              </p>
+
+              {/* Lined notes area — fills remaining page */}
+              <div className="space-y-0 flex-1">
+                {Array.from({ length: 25 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="border-b border-gray-300"
+                    style={{ height: '1.4rem' }}
+                  />
+                ))}
+              </div>
             </div>
 
             <PageFooter pageNum={5} totalPages={TOTAL_PAGES} />
