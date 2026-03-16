@@ -39,18 +39,17 @@ async function saveUploadedDraftToVault(params: {
   mimeType: string;
   createdBy: string;
 }): Promise<string> {
-  const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+  const { collection, addDoc, serverTimestamp, Timestamp } = await import('firebase/firestore');
   const { db } = await import('@/config/firebase');
-
-  const docId = `${params.docType}_upload_${Date.now()}`;
 
   const SIGNATURE_REQUIRED = new Set(['will', 'pourOverWill', 'poa', 'livingWill', 'trust', 'deed']);
   const NOTARIZED_REQUIRED = new Set(['poa', 'deed', 'affidavitOfConsideration', 'gitRep3']);
 
-  const now = serverTimestamp();
+  // serverTimestamp() is only valid at the top level of a document — NOT inside arrays.
+  // Use Timestamp.now() for the version entry (embedded in the versions array).
   const versionEntry = {
     versionNumber: 1,
-    createdAt: now,
+    createdAt: Timestamp.now(),
     createdBy: params.createdBy,
     changeNotes: 'Uploaded existing draft',
   };
@@ -63,7 +62,6 @@ async function saveUploadedDraftToVault(params: {
   );
 
   const snap = await addDoc(ref, {
-    id: docId,
     firmId: params.firmId,
     clientId: params.clientId,
     docType: params.docType,
@@ -83,14 +81,15 @@ async function saveUploadedDraftToVault(params: {
     tags: ['uploaded-draft'],
     isConfidential: true,
     changeNotes: 'Uploaded existing draft',
-    createdAt: now,
-    updatedAt: now,
+    createdAt: serverTimestamp(),   // top-level only — valid here
+    updatedAt: serverTimestamp(),   // top-level only — valid here
     createdBy: params.createdBy,
     updatedBy: params.createdBy,
   });
 
   return snap.id;
 }
+
 
 // ── Doc type options ──────────────────────────────────────────────────────────
 
