@@ -68,9 +68,42 @@ export default function PrintableQuestionnairePage() {
             .join(' ')
         : null;
 
-    const displayHeading = spouseFullName
-        ? `${clientFullName} & ${spouseFullName}`
-        : clientFullName || 'Client';
+    // When a spouse exists, render two separate questionnaires — one per person
+    if (spouseFullName) {
+        return (
+            <>
+                <PrintableQuestionnaire clientName={clientFullName || 'Client'} />
+                {/* Page-break separator between the two questionnaires */}
+                <div
+                    className="print:hidden"
+                    style={{
+                        borderTop: '3px dashed #1a365d',
+                        margin: '2rem auto',
+                        maxWidth: '8.5in',
+                        position: 'relative',
+                        textAlign: 'center',
+                    }}
+                >
+                    <span
+                        style={{
+                            background: '#f1f5f9',
+                            padding: '0 1rem',
+                            position: 'relative',
+                            top: '-0.65rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            color: '#1a365d',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                        }}
+                    >
+                        Spouse Questionnaire Below
+                    </span>
+                </div>
+                <PrintableQuestionnaire clientName={spouseFullName} />
+            </>
+        );
+    }
 
-    return <PrintableQuestionnaire clientName={displayHeading} />;
+    return <PrintableQuestionnaire clientName={clientFullName || 'Client'} />;
 }

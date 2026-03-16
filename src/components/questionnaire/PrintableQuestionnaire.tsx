@@ -337,13 +337,47 @@ export default function PrintableQuestionnaire({
             <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
               <LabeledField label="Date of Birth" />
               <LabeledField label="Last 4 SSN" width="60%" />
-              <div className="col-span-2 flex items-end gap-4 pb-0.5">
-                <CheckOption label="Same address as above" />
-                <span className="text-[8pt] text-gray-400 italic">If not, provide address below:</span>
+              <div className="col-span-2">
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Gender</p>
+                <div className="flex gap-4">
+                  <CheckOption label="Male" />
+                  <CheckOption label="Female" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-2">
+              <div className="flex items-center gap-4 mb-1">
+                <CheckOption label="Same address as client above" />
+                <span className="text-[8pt] text-gray-400 italic">If not, complete below:</span>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-y-2 mt-1">
-              <LabeledField label="Spouse Address (if different)" />
+              <LabeledField label="Street Address" />
+            </div>
+            <div className="grid grid-cols-4 gap-x-3 gap-y-2 mt-2">
+              <LabeledField label="City" />
+              <LabeledField label="State" />
+              <LabeledField label="ZIP Code" />
+              <LabeledField label="County" />
+            </div>
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+              <LabeledField label="Email" />
+              <LabeledField label="Phone" />
+              <LabeledField label="Alternate Phone" />
+            </div>
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-2">
+              <div>
+                <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
+                <div className="space-y-0.5">
+                  <CheckOption label="U.S. Citizen" />
+                  <CheckOption label="Permanent Resident" />
+                  <CheckOption label="Non-Resident" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <LabeledField label="Occupation" />
+                <LabeledField label="Employer" />
+              </div>
             </div>
 
             <PageFooter pageNum={1} totalPages={TOTAL_PAGES} />
