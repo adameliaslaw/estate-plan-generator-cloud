@@ -414,6 +414,7 @@ export const templateService = {
     firmId: string,
     template: TemplateVariant,
     tags: string[],
+    softwareSource?: string,
   ): Promise<{ templateId: string; version: number }> {
     const fn = httpsCallable(functions, 'uploadTemplate');
     const res = await fn({
@@ -426,6 +427,7 @@ export const templateService = {
       complexity: template.complexity,
       isDefault: template.isDefault,
       tags,
+      softwareSource: softwareSource ?? template.softwareSource ?? '',
     });
     return res.data as { templateId: string; version: number };
   },

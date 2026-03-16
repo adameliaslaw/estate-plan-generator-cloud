@@ -756,7 +756,7 @@ export default function KnowledgeBasePage() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="mt-4 flex flex-wrap gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handlePreviewTemplate(t.id, t.name)}
                       className="flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"

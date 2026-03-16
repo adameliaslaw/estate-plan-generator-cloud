@@ -1,8 +1,9 @@
 /**
  * EditTemplateTagsDialog.tsx
  *
- * Lightweight dialog for editing tags on an existing template.
- * Uses the same predefined TEMPLATE_TAGS categories as AddTemplateDialog.
+ * Lightweight dialog for editing tags and software source on an existing template.
+ * Uses the same predefined TEMPLATE_TAGS categories as AddTemplateDialog,
+ * plus the SOFTWARE_SOURCES from config.
  */
 
 import { useState, useEffect } from 'react';
@@ -16,6 +17,7 @@ import {
   templateService,
   type TemplateVariant,
 } from '@/services/knowledge-base-service';
+import { SOFTWARE_SOURCES } from '@/config/software-sources';
 
 const TEMPLATE_TAGS: { category: string; tags: { value: string; label: string; color: string }[] }[] = [
   {
@@ -80,12 +82,14 @@ export function EditTemplateTagsDialog({
   onSaved: () => void;
 }) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [softwareSource, setSoftwareSource] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Sync from template prop when dialog opens
   useEffect(() => {
     if (template) {
       setSelectedTags([...(template.tags ?? [])]);
+      setSoftwareSource(template.softwareSource ?? '');
     }
   }, [template, open]);
 
@@ -93,7 +97,7 @@ export function EditTemplateTagsDialog({
     if (!template) return;
     setSaving(true);
     try {
-      await templateService.updateTemplateTags(firmId, template, selectedTags);
+      await templateService.updateTemplateTags(firmId, template, selectedTags, softwareSource);
       toast.success('Template tags updated.');
       onSaved();
     } catch {
@@ -143,6 +147,23 @@ export function EditTemplateTagsDialog({
               </div>
             </div>
           ))}
+
+          {/* Software Source */}
+          <div>
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+              Software Source
+            </span>
+            <select
+              title="Software Source"
+              value={softwareSource}
+              onChange={(e) => setSoftwareSource(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
+            >
+              {SOFTWARE_SOURCES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <DialogFooter className="mt-6">
