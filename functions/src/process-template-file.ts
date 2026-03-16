@@ -460,6 +460,12 @@ Respond with a valid JSON object (no markdown fences):
     let templatizedHtml = extractedHtml;
 
     if (detectedVariables.length > 0) {
+      // Log all detected variables for debugging
+      console.log(`[processTemplateFile] Detected ${detectedVariables.length} variables:`);
+      for (const v of detectedVariables) {
+        console.log(`  - "${v.originalText}" → {{${v.suggestedVariable}}} (${v.confidence})`);
+      }
+
       // Sort by originalText length descending so longer matches are replaced
       // first (prevents partial replacements, e.g., "Jack" inside "Jack Byrnes")
       const sorted = [...detectedVariables].sort(
@@ -482,6 +488,136 @@ Respond with a valid JSON object (no markdown fences):
       }
 
       console.log(`[processTemplateFile] Templatized content: replaced ${sorted.length} variable occurrences`);
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 2.5: Validation pass — detect remaining hardcoded proper names
+    // that the AI missed in Step 1. This catches ALL-CAPS names like
+    // "ANTHONY ESERNIO" and mixed-case names like "Olivia Esernio" that
+    // appear outside of {{}} variable tags.
+    // -----------------------------------------------------------------------
+    try {
+      // Strip out existing {{...}} tags to avoid false positives, then scan for proper names
+      const textWithoutTags = templatizedHtml.replace(/\{\{[^}]+\}\}/g, '___VAR___');
+      // Match ALL-CAPS names (2+ words) like "ANTHONY ESERNIO" or "JEANA ESERNIO"
+      const allCapsNames = [...new Set(
+        (textWithoutTags.match(/\b[A-Z][A-Z]+(?:\s+[A-Z][A-Z]+)+\b/g) ?? [])
+          .filter((n: string) => {
+            const lower = n.toLowerCase();
+            // Filter out legal boilerplate / section headers
+            return !lower.includes('article') && !lower.includes('last will')
+              && !lower.includes('self-proving') && !lower.includes('new jersey')
+              && !lower.includes('state of') && !lower.includes('witness whereof')
+              && !lower.includes('no contest') && !lower.includes('residuary estate')
+              && n.length > 4;
+          }),
+      )];
+      // Match mixed-case proper names (First Last or First M. Last patterns)
+      const mixedCaseNames = [...new Set(
+        (textWithoutTags.match(/\b[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z]+\b/g) ?? [])
+          .filter((n: string) => {
+            // Filter out common legal phrases and short matches
+            const lower = n.toLowerCase();
+            return !lower.includes('article') && !lower.includes('section')
+              && !lower.includes('new jersey') && !lower.includes('united states')
+              && n.length > 5 && !lower.startsWith('if ') && !lower.startsWith('in ')
+              && !lower.startsWith('my ') && !lower.startsWith('the ')
+              && !lower.startsWith('no ') && !lower.startsWith('to ');
+          }),
+      )];
+
+      const missedNames = [...allCapsNames, ...mixedCaseNames];
+
+      if (missedNames.length > 0) {
+        console.log(`[processTemplateFile] Step 2.5: Found ${missedNames.length} potential missed names: ${missedNames.join(', ')}`);
+
+        // Make a focused second AI call to map these specific names
+        const missedPrompt = `You are an expert at mapping names in legal estate planning documents to template variables.
+
+The following names were found in a document that has already been partially templatized. These names were NOT converted to template variables and may need to be.
+
+NAMES FOUND: ${missedNames.join(', ')}
+
+CONTEXT: This is a Last Will and Testament / estate planning document. Names may correspond to:
+- Executors (primary, alternate, successor, secondSuccessor)
+- Trustees (primary, alternate)
+- Guardians (primary, alternate)
+- POA agents
+- Healthcare proxies
+- Children
+- Beneficiaries
+- Attorney / firm staff (these should use firm.* fields)
+
+${AVAILABLE_FIELDS}
+
+For each name, determine:
+1. Is this a person's name that should be a template variable? (Yes/No)
+2. If yes, what is the correct variable path?
+3. If no, why not? (e.g., it's a legal term, section heading, etc.)
+
+IMPORTANT: Relationship titles like "sister-in-law" that were split from a variable (e.g., appearing as just "-in-law" after a {{variable}}) should be noted.
+
+Respond with JSON (no markdown fences):
+{
+  "missedVariables": [
+    { "originalText": "EXACT NAME", "suggestedVariable": "field.path", "reason": "why this mapping" }
+  ],
+  "notVariables": [
+    { "text": "THE TEXT", "reason": "why it's not a variable" }
+  ]
+}`;
+
+        const missedRaw = await callAI(missedPrompt, '', firmData, {
+          temperature: 0,
+          maxTokens: 2000,
+          jsonMode: true,
+        });
+
+        const missedParsed = parseAIJson<{
+          missedVariables?: { originalText: string; suggestedVariable: string; reason: string }[];
+          notVariables?: { text: string; reason: string }[];
+        }>(missedRaw);
+
+        const newVars = missedParsed.missedVariables ?? [];
+        if (newVars.length > 0) {
+          console.log(`[processTemplateFile] Step 2.5: AI identified ${newVars.length} additional variables to replace`);
+
+          // Sort by length descending for safe replacement
+          const sortedNew = [...newVars].sort(
+            (a, b) => b.originalText.length - a.originalText.length,
+          );
+
+          for (const v of sortedNew) {
+            if (!v.originalText || !v.suggestedVariable) continue;
+            const tag = `{{${v.suggestedVariable}}}`;
+            const escaped = v.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${escaped}\\b`, 'g');
+            const before = templatizedHtml;
+            templatizedHtml = templatizedHtml.replace(regex, tag);
+            if (templatizedHtml !== before) {
+              console.log(`  - Replaced "${v.originalText}" → {{${v.suggestedVariable}}}`);
+              // Also add to detectedVariables for the response
+              detectedVariables.push({
+                originalText: v.originalText,
+                suggestedVariable: v.suggestedVariable,
+                fieldLabel: v.reason,
+                confidence: 'high',
+                context: 'Caught by validation pass',
+              });
+            }
+          }
+        }
+
+        if (missedParsed.notVariables?.length) {
+          for (const nv of missedParsed.notVariables) {
+            console.log(`  - Kept literal: "${nv.text}" — ${nv.reason}`);
+          }
+        }
+      } else {
+        console.log('[processTemplateFile] Step 2.5: No missed proper names found — all names templatized');
+      }
+    } catch (err) {
+      console.error('[processTemplateFile] Step 2.5 validation error (non-fatal):', err);
     }
 
     // -----------------------------------------------------------------------
