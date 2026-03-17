@@ -1419,6 +1419,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         type: 'combobox',
         placeholder: 'Type to search…',
         width: 'half',
+        options: [
           // 1st degree
           { label: 'Spouse', value: 'Spouse' },
           { label: 'Parent', value: 'Parent' },

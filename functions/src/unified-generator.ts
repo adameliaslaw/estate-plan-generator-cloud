@@ -201,22 +201,32 @@ export async function generateDocument(
   const db = admin.firestore();
 
   // ------------------------------------------------------------------
-  // 1. Fetch client + firm data
+  // 1. Fetch client + firm data (skip if preloadedContext already has it)
   // ------------------------------------------------------------------
-  const [clientSnap, firmSnap] = await Promise.all([
-    db.doc(`firms/${firmId}/clients/${clientId}`).get(),
-    db.doc(`firms/${firmId}`).get(),
-  ]);
+  let clientData: admin.firestore.DocumentData;
+  let firmData: admin.firestore.DocumentData;
 
-  if (!clientSnap.exists) {
-    throw new Error(`Client ${clientId} not found in firm ${firmId}.`);
-  }
-  if (!firmSnap.exists) {
-    throw new Error(`Firm ${firmId} not found.`);
-  }
+  if (params.preloadedContext) {
+    // Reuse data from preloaded context — avoids redundant Firestore reads
+    clientData = params.preloadedContext.client;
+    firmData = params.preloadedContext.firm;
+    console.log(`[unifiedGenerator] Reusing preloaded context for ${docType} (skipped 2 Firestore reads)`);
+  } else {
+    const [clientSnap, firmSnap] = await Promise.all([
+      db.doc(`firms/${firmId}/clients/${clientId}`).get(),
+      db.doc(`firms/${firmId}`).get(),
+    ]);
 
-  let clientData = clientSnap.data()!;
-  const firmData = firmSnap.data()!;
+    if (!clientSnap.exists) {
+      throw new Error(`Client ${clientId} not found in firm ${firmId}.`);
+    }
+    if (!firmSnap.exists) {
+      throw new Error(`Firm ${firmId} not found.`);
+    }
+
+    clientData = clientSnap.data()!;
+    firmData = firmSnap.data()!;
+  }
 
   // Inject model override if specified
   if (modelOverride) {
