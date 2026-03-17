@@ -278,6 +278,9 @@ const USER_GENERATION_PATTERNS: RegExp[] = [
   /\b(?:please\s+)?(?:draft|generate)\b.*\btemplate\b/i,
   /\bready\s+to\s+(?:draft|generate)/i,
   /\blet'?s\s+(?:draft|generate|create)/i,
+  // Affirmative intent — user confirming they want generation to proceed
+  /^\s*(?:go\s+ahead|do\s+it|yes(?:\s*,?\s*please)?|sounds?\s+good|perfect|proceed|make\s+it|yes\s+go)\s*[.!]?\s*$/i,
+  /\b(?:go\s+ahead|proceed)\b/i,
 ];
 
 function detectUserGenerationIntent(message: string): boolean {
@@ -486,20 +489,20 @@ export const chatAi = functions
       // 5. Normal flow: Build context, call LLM, detect generation intent
       // =====================================================================
 
-      // Build context (full aggregation for both modes)
-      // Pass user message for vector search when no client is selected
-      const contextStr = await buildContextString(firmId, clientId, mode, draftDocType, {
-        ...contextParams,
-        __userMessage: message,
-      });
-      console.log(`[chatAi] Context build: ${Date.now() - t0}ms`);
-
-      // Fetch template awareness, learning context, and memory (parallel)
-      const [templateSummary, learningCtx, memoryPromptStr] = await Promise.all([
+      // Build context, template summary, learning context, and memory ALL in parallel
+      const contextParamsWithMsg = { ...contextParams, __userMessage: message };
+      const [contextStr, templateSummaryResult, learningCtxResult, memoryPromptResult] = await Promise.all([
+        buildContextString(firmId, clientId, mode, draftDocType, contextParamsWithMsg),
         getTemplateSummary(firmId),
         getLearningContext(firmId).catch(() => null),
         buildMemoryPrompt(firmId, clientId).catch(() => ''),
       ]);
+      console.log(`[chatAi] Context + metadata (parallel): ${Date.now() - t0}ms`);
+
+      // Results are already fetched in the parallel block above
+      const templateSummary = templateSummaryResult;
+      const learningCtx = learningCtxResult;
+      const memoryPromptStr = memoryPromptResult;
 
       const learningPromptStr = learningCtx ? formatLearningPrompt(learningCtx) : '';
 
@@ -556,29 +559,70 @@ export const chatAi = functions
         const result: ChatAiResponse = { reply: raw };
 
         if (genAction.shouldGenerate && clientId) {
-          // The AI signaled generation intent — call the unified generator
-          // instead of parsing the AI's response as the document
+          // The AI already produced document content in its response.
+          // Instead of making a SECOND LLM call through generateDocument(),
+          // extract the HTML directly and save it — eliminating the
+          // double-LLM-call bottleneck that was causing 30-90s delays.
           const targetDocType = genAction.docType ?? draftDocType ?? 'custom';
-
-          console.log(`[chatAi] Generation intent detected for ${targetDocType}, routing to unified generator (${Date.now() - t0}ms elapsed)`);
+          console.log(`[chatAi] Generation intent detected for ${targetDocType} — saving AI response directly (${Date.now() - t0}ms elapsed)`);
 
           try {
-            const genResult = await generateDocument({
+            // Extract the HTML content the AI already produced
+            let draftHtml = raw;
+
+            // If the AI returned JSON with draftContent, extract it
+            try {
+              const cleaned = raw
+                .replace(/^```(?:json)?\s*/i, '')
+                .replace(/\s*```\s*$/i, '')
+                .trim();
+              if (cleaned.startsWith('{')) {
+                const parsed = JSON.parse(cleaned);
+                if (parsed.draftContent) {
+                  draftHtml = parsed.draftContent;
+                  result.reply = parsed.reply ?? `Here's your ${targetDocType} draft.`;
+                } else if (parsed.content) {
+                  draftHtml = parsed.content;
+                  result.reply = parsed.reply ?? `Here's your ${targetDocType} draft.`;
+                }
+              }
+            } catch {
+              // Not JSON — use the raw response as HTML
+            }
+
+            // Strip markdown fences if the AI wrapped HTML in them
+            draftHtml = draftHtml
+              .replace(/^```(?:html)?\s*\n?/i, '')
+              .replace(/\n?\s*```\s*$/i, '')
+              .trim();
+
+            const { getDocTypeDisplayName } = await import('./unified-generator');
+            const displayName = getDocTypeDisplayName(targetDocType);
+            const draftTitle = `${displayName} — Draft`;
+
+            // Save directly to vault (skip the unified generator LLM call)
+            const { saveDocumentToVault } = await import('./document-save-helper');
+            const saveResult = await saveDocumentToVault({
               firmId,
               clientId,
               docType: targetDocType,
-              generationMode: 'hybrid',
-              customInstructions: genAction.instructions,
+              displayName: draftTitle,
+              content: draftHtml,
+              status: 'draft',
               createdBy: context.auth.uid,
-              triggerSource: 'chat-draft',
+              documentId: targetDocType,
+              generationMode: 'chat-draft',
+              changeNotes: 'Generated via AI drafting conversation',
+              tags: ['chat-draft'],
             });
 
-            result.draftTitle = genResult.title;
-            result.draftContent = genResult.content;
-            result.reply = `I've generated your ${targetDocType} and saved it to the Document Vault as "${genResult.title}" (version ${genResult.currentVersion}).`;
-          } catch (genErr) {
-            console.error('[chatAi] Unified generator failed:', genErr);
-            result.reply = `I tried to generate the document but encountered an error: ${genErr instanceof Error ? genErr.message : 'Unknown error'}. You can try again or use the dedicated Generate Documents button.`;
+            result.draftTitle = draftTitle;
+            result.draftContent = draftHtml;
+            result.reply = `I've generated your ${targetDocType} and saved it to the Document Vault as "${draftTitle}" (version ${saveResult.currentVersion}).`;
+            console.log(`[chatAi] Draft saved directly: ${Date.now() - t0}ms total (avoided 2nd LLM call)`);
+          } catch (saveErr) {
+            console.error('[chatAi] Direct draft save failed:', saveErr);
+            result.reply = `I drafted the document but encountered an error saving it: ${saveErr instanceof Error ? saveErr.message : 'Unknown error'}. You can try again or use the dedicated Generate Documents button.`;
           }
         }
 

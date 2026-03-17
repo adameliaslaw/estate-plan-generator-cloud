@@ -39,7 +39,7 @@ import { generateEstatePlanSummary } from './generators/summary-generator';
 import { generateActionSteps } from './generators/action-steps-generator';
 
 // Flex document generation (AI-based with doc-type-specific prompts)
-import { buildFlexSystemPrompt, generateFlexAI } from './flex-prompts';
+import { generateFlexAI } from './flex-prompts';
 
 // ---------------------------------------------------------------------------
 // Types
