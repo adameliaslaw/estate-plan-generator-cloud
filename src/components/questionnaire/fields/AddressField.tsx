@@ -171,13 +171,13 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
         </div>
       </div>
 
-      {/* NJ County — only shown when state is NJ */}
-      {isNJ && (
-        <div>
-          <label className={labelClass()}>
-            County
-            {required && <span className="ml-1 text-red-500">*</span>}
-          </label>
+      {/* County — NJ shows validated dropdown, other states show auto-filled text input */}
+      <div>
+        <label className={labelClass()}>
+          County
+          {required && isNJ && <span className="ml-1 text-red-500">*</span>}
+        </label>
+        {isNJ ? (
           <select
             value={(current['county'] as string) ?? ''}
             onChange={(e) => update('county', e.target.value)}
@@ -193,8 +193,21 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
               </option>
             ))}
           </select>
-        </div>
-      )}
+        ) : (
+          <input
+            type="text"
+            value={(current['county'] as string) ?? ''}
+            onChange={(e) => update('county', e.target.value)}
+            placeholder="Auto-detected from address"
+            className={cn(
+              'w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-base text-gray-900',
+              'placeholder:text-gray-400',
+              'focus:border-[#1a365d] focus:outline-none focus:ring-2 focus:ring-[#1a365d]/20',
+              'transition-colors',
+            )}
+          />
+        )}
+      </div>
     </div>
   );
 }

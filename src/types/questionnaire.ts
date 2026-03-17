@@ -835,7 +835,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'guardianPrimary.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -896,7 +897,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'guardianAlternate.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1414,9 +1416,9 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.executor.primary.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
-        options: [
           // 1st degree
           { label: 'Spouse', value: 'Spouse' },
           { label: 'Parent', value: 'Parent' },
@@ -1495,7 +1497,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.executor.alternate.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1570,7 +1573,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.trustee.primary.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1646,7 +1650,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.trustee.alternate.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1720,7 +1725,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.powerOfAttorney.agent.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1795,7 +1801,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.powerOfAttorney.alternateAgent.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1892,7 +1899,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.healthcareProxy.agent.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
@@ -1967,7 +1975,8 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       {
         name: 'fiduciaries.healthcareProxy.alternateAgent.relationship',
         label: 'Relationship to You',
-        type: 'select',
+        type: 'combobox',
+        placeholder: 'Type to search…',
         width: 'half',
         options: [
           { label: 'Spouse', value: 'Spouse' },
