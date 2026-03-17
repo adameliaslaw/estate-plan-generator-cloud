@@ -69,8 +69,8 @@ export const createFirmUser = onCall(
     if (effectiveCallerFirmId !== firmId) {
       throw new HttpsError('permission-denied', `Cannot create users for a different firm. (Caller Firm: ${effectiveCallerFirmId})`);
     }
-    if (callerData?.role !== 'admin') {
-      throw new HttpsError('permission-denied', 'Only firm administrators can create new users.');
+    if (!callerData?.role || !['admin', 'attorney', 'paralegal'].includes(callerData.role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can create new users.');
     }
 
     const auth = admin.auth();
@@ -206,8 +206,8 @@ export const updateUserCapabilities = onCall(
     if (effectiveCallerFirmId !== firmId) {
       throw new HttpsError('permission-denied', 'Cannot update users for a different firm.');
     }
-    if (callerData?.role !== 'admin') {
-      throw new HttpsError('permission-denied', 'Only firm administrators can update user capabilities.');
+    if (!callerData?.role || !['admin', 'attorney', 'paralegal'].includes(callerData.role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can update user capabilities.');
     }
 
     try {

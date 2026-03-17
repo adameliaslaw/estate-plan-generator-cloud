@@ -117,7 +117,7 @@ export default function DocumentEditor({
   readOnly: readOnlyProp = false,
 }: DocumentEditorProps) {
   const { userProfile } = useAuth();
-  const { canManageDocuments, isAttorney, isAdmin } = usePermissions();
+  const { canManageDocuments, isAttorney, isAdmin, isParalegal } = usePermissions();
 
   // ── Firestore path helpers ──
   const docPath = `${COLLECTIONS.DOCUMENTS(firmId, clientId)}/${documentId}`;
@@ -556,7 +556,7 @@ export default function DocumentEditor({
 
           {/* Unlock final document (attorney only) */}
           {status === 'final' &&
-            (isAttorney || isAdmin) && (
+            (isAttorney || isAdmin || isParalegal) && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -612,7 +612,7 @@ export default function DocumentEditor({
             This document has been finalized and is <strong>locked for execution</strong>. Attorneys
             can unlock it to make amendments.
           </span>
-          {(isAttorney || isAdmin) && (
+          {(isAttorney || isAdmin || isParalegal) && (
             <Button
               variant="ghost"
               size="sm"

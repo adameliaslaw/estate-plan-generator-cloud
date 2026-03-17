@@ -59,11 +59,11 @@ service cloud.firestore {
 
     // Role fallbacks + programmatic capabilities
     function canManageFirmSettings() {
-      return isAdmin() || hasCapability('manage_firm_settings');
+      return isAdmin() || hasRole('attorney') || hasRole('paralegal') || hasCapability('manage_firm_settings');
     }
 
     function canManageUsers() {
-      return isAdmin() || hasCapability('manage_users');
+      return isAdmin() || hasRole('attorney') || hasRole('paralegal') || hasCapability('manage_users');
     }
 
     function canManageClients() {
@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function canManageBilling() {
-      return isAdmin() || hasRole('attorney') || hasCapability('manage_billing');
+      return isAdmin() || hasRole('attorney') || hasRole('paralegal') || hasCapability('manage_billing');
     }
 
     // Shortcut: client role — scoped to own record only.

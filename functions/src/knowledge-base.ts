@@ -51,8 +51,8 @@ export interface KnowledgeResource {
 
 function assertFirmAccess(auth: any, firmId: string): void {
   const role = auth.token.role as string | undefined;
-  if (!role || !['admin', 'attorney'].includes(role)) {
-    throw new HttpsError('permission-denied', 'Only attorneys and administrators can manage the knowledge base.');
+  if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+    throw new HttpsError('permission-denied', 'Only staff members can manage the knowledge base.');
   }
   if (role !== 'admin') {
     const callerFirmId = auth.token.firmId as string | undefined;

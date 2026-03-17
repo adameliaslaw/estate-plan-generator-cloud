@@ -98,10 +98,10 @@ export const generateDocuments = functions
     }
 
     const role = auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
       throw new HttpsError(
         'permission-denied',
-        'Only attorneys and administrators can generate estate plan documents.',
+        'Only staff members can generate estate plan documents.',
       );
     }
 

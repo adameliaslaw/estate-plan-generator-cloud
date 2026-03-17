@@ -249,8 +249,8 @@ export const bulkProcessKnowledgeFiles = onCall(
 
     // Validate role
     const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can import knowledge resources.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can import knowledge resources.');
     }
 
     // Fetch firm data for AI provider keys

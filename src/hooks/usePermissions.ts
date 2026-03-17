@@ -26,11 +26,11 @@ export function usePermissions() {
   };
   
   return {
-    canManageFirmSettings: hasCapability('manage_firm_settings'),
-    canManageUsers: hasCapability('manage_users'),
+    canManageFirmSettings: role === 'attorney' || role === 'paralegal' || hasCapability('manage_firm_settings'),
+    canManageUsers: role === 'attorney' || role === 'paralegal' || hasCapability('manage_users'),
     canManageClients: role === 'attorney' || role === 'paralegal' || hasCapability('manage_clients'),
     canManageDocuments: role === 'attorney' || role === 'paralegal' || hasCapability('manage_documents'),
-    canManageBilling: hasCapability('manage_billing'),
+    canManageBilling: role === 'attorney' || role === 'paralegal' || hasCapability('manage_billing'),
     hasCapability,
     isAdmin,
     isAttorney: role === 'attorney',

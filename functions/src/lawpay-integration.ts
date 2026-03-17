@@ -258,7 +258,7 @@ export const createPaymentRequest = functions
     // Check billing capability
     const role = context.auth.token.role;
     const capabilities = context.auth.token.capabilities || [];
-    const canManageBilling = role === 'admin' || role === 'attorney' || capabilities.includes('manage_billing');
+    const canManageBilling = role === 'admin' || role === 'attorney' || role === 'paralegal' || capabilities.includes('manage_billing');
 
     if (!canManageBilling) {
       throw new functions.https.HttpsError('permission-denied', 'You do not have permission to manage billing.');
@@ -717,7 +717,7 @@ export const processDirectCharge = functions
     const role = context.auth.token.role as string | undefined;
     const capabilities = (context.auth.token.capabilities || []) as string[];
     const canManageBilling =
-      role === 'admin' || role === 'attorney' || capabilities.includes('manage_billing');
+      role === 'admin' || role === 'attorney' || role === 'paralegal' || capabilities.includes('manage_billing');
 
     if (!canManageBilling) {
       throw new functions.https.HttpsError(

@@ -232,8 +232,8 @@ export const processTemplateFile = onCall(
 
     // Validate role
     const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can process templates.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can process templates.');
     }
 
     const ext = fileName.toLowerCase().split('.').pop();
@@ -671,8 +671,8 @@ export const consolidateTemplateVariables = onCall(
     }
 
     const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can process templates.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can process templates.');
     }
 
     console.log(`[consolidateTemplateVariables] Consolidating ${files.length} "${docType}" templates for firm ${firmId}`);
@@ -727,8 +727,8 @@ export const recordTemplateCorrection = onCall(
     }
 
     const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can record corrections.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can record corrections.');
     }
 
     for (const correction of corrections) {
@@ -769,8 +769,8 @@ export const confirmTemplateVariables = onCall(
     }
 
     const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can confirm variables.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can confirm variables.');
     }
 
     await recordConfirmedVariables(firmId, templateName, docType, variables);

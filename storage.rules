@@ -67,7 +67,7 @@ service firebase.storage {
       // Only attorneys/admins can upload
       allow write: if request.auth != null && (
         request.auth.token.role == 'admin' ||
-        (request.auth.token.role == 'attorney' && request.auth.token.firmId == firmId)
+        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
       ) && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

@@ -429,8 +429,8 @@ export const seedKnowledgeBase = onCall(
 
     // Only admin and attorney roles
     const role = request.auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can seed the knowledge base.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can seed the knowledge base.');
     }
 
     const db = admin.firestore();

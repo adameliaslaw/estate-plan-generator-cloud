@@ -124,28 +124,52 @@ function loadHostedFieldsSdk(): Promise<void> {
   if (window.AffiniPay?.HostedFields) return Promise.resolve();
   if (sdkLoadPromise) return sdkLoadPromise;
 
-  sdkLoadPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(
+  sdkLoadPromise = new Promise<void>((resolve, reject) => {
+    // Remove any stale script tags from prior failed attempts
+    const stale = document.querySelector(
       `script[src="${HOSTED_FIELDS_SDK_URL}"]`,
     );
-    if (existing) {
-      // Script tag exists but SDK not ready yet — wait for load
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () =>
-        reject(new Error('Failed to load AffiniPay SDK')),
-      );
-      return;
-    }
+    if (stale) stale.remove();
 
     const script = document.createElement('script');
     script.src = HOSTED_FIELDS_SDK_URL;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load AffiniPay SDK'));
+    script.onload = () => {
+      // Verify the global is actually available after load
+      if (window.AffiniPay?.HostedFields) {
+        resolve();
+      } else {
+        sdkLoadPromise = null; // allow retry
+        reject(new Error('AffiniPay SDK script loaded but HostedFields global not found'));
+      }
+    };
+    script.onerror = () => {
+      script.remove();           // clean up broken tag
+      sdkLoadPromise = null;     // allow retry on next call
+      reject(new Error('Failed to load AffiniPay SDK script'));
+    };
     document.head.appendChild(script);
   });
 
   return sdkLoadPromise;
+}
+
+/** Attempt to load SDK with retries */
+async function loadHostedFieldsSdkWithRetry(maxAttempts = 3): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await loadHostedFieldsSdk();
+      return;
+    } catch (err) {
+      console.warn(
+        `[ChargePaymentDialog] SDK load attempt ${attempt}/${maxAttempts} failed:`,
+        err,
+      );
+      if (attempt === maxAttempts) throw err;
+      // Back-off before retry
+      await new Promise((r) => setTimeout(r, attempt * 500));
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -219,11 +243,7 @@ export function ChargePaymentDialog({
     setSdkReady(false);
 
     try {
-      await loadHostedFieldsSdk();
-
-      if (!window.AffiniPay?.HostedFields) {
-        throw new Error('AffiniPay SDK loaded but HostedFields not available');
-      }
+      await loadHostedFieldsSdkWithRetry();
 
       // Wait a tick for the DOM elements to be rendered
       await new Promise((r) => setTimeout(r, 100));
@@ -267,8 +287,13 @@ export function ChargePaymentDialog({
 
       const config = paymentType === 'card' ? cardConfig : bankConfig;
 
+      const af = window.AffiniPay;
+      if (!af?.HostedFields) {
+        throw new Error('AffiniPay SDK loaded but HostedFields not available');
+      }
+
       hostedFieldsRef.current =
-        window.AffiniPay.HostedFields.initializeFields(config, () => {
+        af.HostedFields.initializeFields(config, () => {
           setSdkReady(true);
         });
     } catch (err) {

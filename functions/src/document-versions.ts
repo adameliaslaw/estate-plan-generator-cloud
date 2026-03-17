@@ -101,8 +101,8 @@ export const revertDocumentVersion = onCall(
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
 
     const role = auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney'].includes(role)) {
-      throw new HttpsError('permission-denied', 'Only attorneys and administrators can revert documents.');
+    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
+      throw new HttpsError('permission-denied', 'Only staff members can revert documents.');
     }
 
     const { firmId, clientId, documentId, targetVersion } = request.data as {

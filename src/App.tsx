@@ -124,7 +124,7 @@ export default function App() {
             <Route
               path={ROUTES.SETTINGS}
               element={
-                <AppLayout allowedRoles={['admin', 'attorney']}>
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <SettingsPage />
                 </AppLayout>
               }
@@ -132,7 +132,7 @@ export default function App() {
             <Route
               path={ROUTES.SETTINGS_FIRM}
               element={
-                <AppLayout allowedRoles={['admin', 'attorney']}>
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <SettingsPage />
                 </AppLayout>
               }
@@ -140,7 +140,7 @@ export default function App() {
             <Route
               path={ROUTES.SETTINGS_USERS}
               element={
-                <AppLayout allowedRoles={['admin']}>
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <SettingsPage />
                 </AppLayout>
               }
@@ -148,7 +148,7 @@ export default function App() {
             <Route
               path={ROUTES.SETTINGS_BILLING}
               element={
-                <AppLayout allowedRoles={['admin', 'attorney']}>
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <SettingsPage />
                 </AppLayout>
               }
@@ -172,7 +172,7 @@ export default function App() {
             <Route
               path={ROUTES.KNOWLEDGE_BASE}
               element={
-                <AppLayout allowedRoles={['admin', 'attorney']}>
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <KnowledgeBasePage />
                 </AppLayout>
               }
