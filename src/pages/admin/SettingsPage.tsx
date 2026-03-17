@@ -23,6 +23,7 @@ import {
   Key,
   Lock,
   Mail,
+  Mic,
   Palette,
   RefreshCw,
   Save,
@@ -149,6 +150,8 @@ interface FirmSettings {
   documentDraftingAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
   chatbotModel?: string;
   documentDraftingModel?: string;
+  transcriptionProvider?: 'openai' | 'assemblyai';
+  assemblyaiApiKey?: string;
   lawPayApiKey?: string;
   lawPayMerchantId?: string;
   sendGridApiKey?: string;
@@ -299,6 +302,12 @@ export default function SettingsPage() {
   const [testingLawPay, setTestingLawPay] = useState(false);
   const [testingSendGrid, setTestingSendGrid] = useState(false);
 
+  // ── Transcription Provider ────────────────────────────────────────────────
+  const [transcriptionProvider, setTranscriptionProvider] = useState<'openai' | 'assemblyai'>('openai');
+  const [assemblyaiKey, setAssemblyaiKey] = useState('');
+  const [savingTranscriptionProvider, setSavingTranscriptionProvider] = useState(false);
+  const [savingAssemblyaiKey, setSavingAssemblyaiKey] = useState(false);
+
   // ── Tab 4: Security ──────────────────────────────────────────────────────
   const [sessionTimeout, setSessionTimeout] = useState(30);
   const [requireMfa, setRequireMfa] = useState(false);
@@ -356,6 +365,7 @@ export default function SettingsPage() {
 
     if (firmDoc.levitateApiKey) setLevitateKey(firmDoc.levitateApiKey);
     if (firmDoc.levitateWebhookUrl) setLevitateWebhook(firmDoc.levitateWebhookUrl);
+    setTranscriptionProvider(firmDoc.transcriptionProvider ?? 'openai');
   }, [firmDoc]);
 
   // ── Save helpers ─────────────────────────────────────────────────────────
@@ -561,6 +571,31 @@ export default function SettingsPage() {
       setSavingLawPay(false);
     }
   }, [firmDocPath, lawPayKey, lawPayMerchantId, userProfile]);
+
+  const handleSaveTranscriptionProvider = useCallback(
+    async (provider: 'openai' | 'assemblyai') => {
+      if (!firmDocPath) return;
+      setSavingTranscriptionProvider(true);
+      setTranscriptionProvider(provider);
+      try {
+        await updateDoc(firmDocPath, {
+          transcriptionProvider: provider,
+          updatedBy: userProfile?.uid ?? '',
+        });
+        toast.success(
+          `Transcription provider set to ${
+            provider === 'assemblyai' ? 'AssemblyAI' : 'OpenAI Whisper'
+          }.`,
+        );
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to update transcription provider.');
+      } finally {
+        setSavingTranscriptionProvider(false);
+      }
+    },
+    [firmDocPath, userProfile],
+  );
 
   const [connectingGoogle, setConnectingGoogle] = useState(false);
 
@@ -1702,6 +1737,70 @@ export default function SettingsPage() {
                       saving={savingLevitateWebhook}
                       description="Alternative: webhook to push new clients to Zapier/Make"
                     />
+                  </CardContent>
+                </Card>
+
+                {/* Transcription Provider */}
+                <Card className="border-gray-200 shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-[#1a365d]">
+                          <Mic className="h-5 w-5" />
+                          Transcription
+                        </CardTitle>
+                        <CardDescription>
+                          Controls how audio notes are transcribed to text.
+                        </CardDescription>
+                      </div>
+                      <StatusBadge
+                        connected={
+                          transcriptionProvider === 'openai'
+                            ? Boolean(firmDoc?.openAiApiKey)
+                            : Boolean(firmDoc?.assemblyaiApiKey)
+                        }
+                      />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-1.5 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+                      <Label className="text-sm font-medium text-[#1a365d]">Transcription Provider</Label>
+                      <p className="text-xs text-gray-500 mb-3">
+                        OpenAI Whisper is fast and accurate. AssemblyAI adds speaker diarization, entity extraction, and auto-summaries.
+                      </p>
+                      <Select
+                        disabled={savingTranscriptionProvider}
+                        value={transcriptionProvider}
+                        onValueChange={(v: 'openai' | 'assemblyai') => handleSaveTranscriptionProvider(v)}
+                      >
+                        <SelectTrigger className="w-full bg-white text-sm">
+                          <SelectValue placeholder="Select provider..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="openai">OpenAI Whisper (Default)</SelectItem>
+                          <SelectItem value="assemblyai">AssemblyAI (Enhanced)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {transcriptionProvider === 'assemblyai' && (
+                      <ApiKeyField
+                        label="AssemblyAI API Key"
+                        storedKey={firmDoc?.assemblyaiApiKey}
+                        pendingKey={assemblyaiKey}
+                        onPendingChange={setAssemblyaiKey}
+                        onSave={() =>
+                          handleSaveApiKey(
+                            'assemblyaiApiKey',
+                            assemblyaiKey,
+                            setSavingAssemblyaiKey,
+                            () => setAssemblyaiKey(''),
+                          )
+                        }
+                        saving={savingAssemblyaiKey}
+                        description="Find your key at assemblyai.com/app/account"
+                      />
+                    )}
                   </CardContent>
                 </Card>
 
