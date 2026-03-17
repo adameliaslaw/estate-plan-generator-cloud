@@ -20,6 +20,7 @@
 
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
+import { DOCUMENT_SCHEMA } from '../document-schemas';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -169,6 +170,7 @@ Generate the complete GIT/REP-3 form styled as an official NJ tax form. Clearly 
     temperature: 0.15,
     maxTokens: 3072,
     jsonMode: true,
+    jsonSchema: DOCUMENT_SCHEMA,
   });
 
   const parsed = parseAIJson<{ title: string; content: string }>(raw);

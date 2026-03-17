@@ -18,6 +18,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from './ai-client';
+import { DOCUMENT_REVIEW_SCHEMA } from './document-schemas';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -381,6 +382,7 @@ Identify all issues by severity. Be specific about location (article/section nam
       temperature: 0.1,
       maxTokens: 4096,
       jsonMode: true,
+      jsonSchema: DOCUMENT_REVIEW_SCHEMA,
     });
 
     let review: DocumentReview;

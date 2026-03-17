@@ -10,6 +10,7 @@
 
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
+import { DOCUMENT_SCHEMA } from '../document-schemas';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -225,6 +226,7 @@ Generate the complete estate plan summary. Use the client's actual names through
     temperature: 0.3, // Slightly higher — this is client-friendly prose
     maxTokens: 8192,
     jsonMode: true,
+    jsonSchema: DOCUMENT_SCHEMA,
   });
 
   const parsed = parseAIJson<{ title: string; content: string }>(raw);

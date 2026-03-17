@@ -16,6 +16,7 @@
 
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
+import { DOCUMENT_SCHEMA } from '../document-schemas';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -163,6 +164,7 @@ Generate the complete Durable POA now. Include all enumerated powers, the exact 
     temperature: 0.15,
     maxTokens: 8192,
     jsonMode: true,
+    jsonSchema: DOCUMENT_SCHEMA,
   });
 
   const parsed = parseAIJson<{ title: string; content: string }>(raw);

@@ -18,6 +18,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, parseAIJson, sanitizeObject } from './ai-client';
+import { COMPLIANCE_CHECK_SCHEMA } from './document-schemas';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -213,6 +214,7 @@ Check this document against all applicable NJ statutory requirements as describe
         temperature: 0.1, // Maximum accuracy for legal compliance
         maxTokens: 3000,
         jsonMode: true,
+        jsonSchema: COMPLIANCE_CHECK_SCHEMA,
       });
     } catch (err) {
       console.error('[checkDocumentCompliance] AI call failed:', err);

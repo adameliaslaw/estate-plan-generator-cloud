@@ -18,6 +18,7 @@
 
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
+import { DOCUMENT_SCHEMA } from '../document-schemas';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -152,6 +153,7 @@ Generate the complete affidavit. Include the state/county caption, deponent ID, 
     temperature: 0.15,
     maxTokens: 4096,
     jsonMode: true,
+    jsonSchema: DOCUMENT_SCHEMA,
   });
 
   const parsed = parseAIJson<{ title: string; content: string }>(raw);

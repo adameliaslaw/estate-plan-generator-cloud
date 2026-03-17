@@ -20,6 +20,14 @@ export interface CallAIOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  /**
+   * OpenAI Structured Outputs JSON Schema.
+   * When provided (and the provider is OpenAI), the response is guaranteed
+   * to conform to this schema — no parse recovery needed.
+   * Pass the full schema object from document-schemas.ts.
+   * For non-OpenAI providers, the schema is included in the system prompt.
+   */
+  jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean };
 }
 
 /** Subset of Firm data used by the AI client for provider selection and API keys. */
@@ -184,7 +192,17 @@ async function _callOpenAI(
     max_completion_tokens: maxTokens,
   };
 
-  if (options.jsonMode) {
+  if (options.jsonSchema) {
+    // Structured Outputs — guarantees valid JSON matching the schema
+    requestParams.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: options.jsonSchema.name,
+        schema: options.jsonSchema.schema,
+        strict: options.jsonSchema.strict ?? true,
+      },
+    } as unknown as OpenAI.Chat.ChatCompletionCreateParams['response_format'];
+  } else if (options.jsonMode) {
     requestParams.response_format = { type: 'json_object' };
   }
 
@@ -209,7 +227,9 @@ async function _callAnthropic(
 
   // If JSON mode is requested, explicitly instruct Claude to output ONLY JSON
   let finalSystemPrompt = systemPrompt;
-  if (options.jsonMode) {
+  if (options.jsonSchema) {
+    finalSystemPrompt += `\n\nIMPORTANT: You must output ONLY a valid JSON object conforming to this exact JSON Schema:\n${JSON.stringify(options.jsonSchema.schema, null, 2)}\n\nDo not include any markdown formatting, preamble, or conversational text. Start directly with { and end with }.`;
+  } else if (options.jsonMode) {
     finalSystemPrompt += '\n\nIMPORTANT: You must output ONLY a valid JSON object. Do not include any markdown formatting, preamble, or conversational text. Start directly with { and end with }';
   }
 
@@ -275,8 +295,11 @@ async function _callGemini(
     }
   };
 
-  if (options.jsonMode) {
-    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = "application/json";
+  if (options.jsonSchema) {
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
+    (requestBody.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema.schema;
+  } else if (options.jsonMode) {
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
   }
 
   const response = await fetchWithRetry(endpoint, {

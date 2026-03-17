@@ -14,6 +14,7 @@
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
+import { DOCUMENT_SCHEMA } from './document-schemas';
 
 // ---------------------------------------------------------------------------
 // System prompts per flex document type
@@ -339,6 +340,7 @@ Generate the complete document now.
     temperature: docType === 'letterOfInstruction' || docType === 'coverLetter' ? 0.3 : 0.15,
     maxTokens: 6144,
     jsonMode: true,
+    jsonSchema: DOCUMENT_SCHEMA,
   });
 
   try {
