@@ -162,7 +162,7 @@ Generate the complete Durable POA now. Include all enumerated powers, the exact 
   const raw = await callAI(POA_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
-    maxTokens: 8192,
+    maxTokens: 16384,
     jsonMode: true,
     jsonSchema: DOCUMENT_SCHEMA,
   });

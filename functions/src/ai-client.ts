@@ -207,6 +207,13 @@ async function _callOpenAI(
   }
 
   const response = await client.chat.completions.create(requestParams);
+  const finishReason = response.choices[0]?.finish_reason;
+  if (finishReason === 'length') {
+    console.warn(
+      `[ai-client] OpenAI response truncated (finish_reason=length). ` +
+      `Model: ${model}, maxTokens: ${maxTokens}. Consider increasing maxTokens.`,
+    );
+  }
   return response.choices[0]?.message?.content ?? '';
 }
 
@@ -642,7 +649,75 @@ export function parseAIJson<T>(raw: string): T {
   } catch (_err) {
     // ── Truncated JSON recovery ──
     // When AI output exceeds maxTokens, JSON gets cut off mid-string.
-    // Try to salvage complete objects from the truncated detectedVariables array.
+
+    // Recovery path 1: Truncated document response (title + content)
+    // The most common truncation case: a legal document with { title, content }
+    // gets cut off mid-HTML in the content field.
+    if (cleaned.includes('"title"') && cleaned.includes('"content"')) {
+      try {
+        const titleMatch = cleaned.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        const contentStart = cleaned.indexOf('"content"');
+        if (titleMatch && contentStart >= 0) {
+          // Find the start of the content string value
+          const valueStart = cleaned.indexOf('"', contentStart + '"content"'.length);
+          if (valueStart >= 0) {
+            // Extract everything after the opening quote of the content value
+            let contentValue = cleaned.slice(valueStart + 1);
+            // Remove any trailing incomplete JSON (closing braces, commas, etc.)
+            // Find the last properly closed HTML tag to truncate cleanly
+            const lastClosingTag = contentValue.lastIndexOf('</div>');
+            const lastClosingP = contentValue.lastIndexOf('</p>');
+            const lastClosingH = contentValue.lastIndexOf('</h');
+            const lastClosingTable = contentValue.lastIndexOf('</table>');
+            const cutPoint = Math.max(lastClosingTag, lastClosingP, lastClosingH, lastClosingTable);
+            if (cutPoint > 0) {
+              // Find the end of the closing tag
+              const tagEnd = contentValue.indexOf('>', cutPoint) + 1;
+              if (tagEnd > 0) {
+                contentValue = contentValue.slice(0, tagEnd);
+              }
+            } else {
+              // No clean HTML cut point found — strip trailing incomplete escape/quote
+              contentValue = contentValue.replace(/\\?"?[^"]*$/, '');
+            }
+            // Unescape JSON string escapes in the content
+            contentValue = contentValue
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, '\\')
+              .replace(/\\t/g, '\t');
+
+            const title = titleMatch[1]
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, '\\');
+
+            console.warn(
+              `[parseAIJson] Recovered truncated document. Title: "${title.slice(0, 60)}", ` +
+              `content length: ${contentValue.length} chars. The original response was likely ` +
+              `truncated due to maxTokens limit.`,
+            );
+
+            const result: Record<string, unknown> = {
+              title,
+              content: contentValue,
+              metadata: {
+                wordCount: 0,
+                estimatedPages: 0,
+                executionRequirements: [],
+                witnessRequired: false,
+                notarizationRequired: false,
+              },
+            };
+            return result as T;
+          }
+        }
+      } catch {
+        // Recovery failed, fall through to other recovery paths
+      }
+    }
+
+    // Recovery path 2: Truncated detectedVariables array
     if (cleaned.includes('"detectedVariables"')) {
       try {
         // Find the detectedVariables array start

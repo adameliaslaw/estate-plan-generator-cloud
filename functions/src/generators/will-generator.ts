@@ -186,7 +186,7 @@ Generate the complete, execution-ready will now. Include all required articles, 
   const raw = await callAI(WILL_SYSTEM_PROMPT, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
-    maxTokens: 8192,
+    maxTokens: 16384,
     jsonMode: true,
     jsonSchema: DOCUMENT_SCHEMA,
   });
