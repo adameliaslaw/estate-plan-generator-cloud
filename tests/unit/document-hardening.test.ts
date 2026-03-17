@@ -103,7 +103,7 @@ describe('validateAndResolveModel — model allowlist', () => {
 
   it('falls back on unknown OpenAI model', () => {
     const result = validateAndResolveModel('gpt-99-turbo', 'openai');
-    expect(result).toBe('gpt-4.1'); // OpenAI default
+    expect(result).toBe('gpt-5.4'); // OpenAI default
   });
 
   it('falls back on unknown Anthropic model', () => {

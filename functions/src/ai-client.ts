@@ -67,7 +67,7 @@ const KNOWN_MODELS: Record<string, Set<string>> = {
 };
 
 const DEFAULT_MODELS: Record<string, string> = {
-  openai: 'gpt-4.1',
+  openai: 'gpt-5.4',
   anthropic: 'claude-sonnet-4-6',
   gemini: 'gemini-2.5-flash',
   perplexity: 'sonar-pro',
@@ -168,7 +168,7 @@ async function _callOpenAI(
   }
 
   const client = new OpenAI({ apiKey });
-  const model = options.model ?? 'gpt-4.1'; // Safe default — validated upstream in callAI
+  const model = options.model ?? 'gpt-5.4'; // Default OpenAI model — validated upstream in callAI
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 
