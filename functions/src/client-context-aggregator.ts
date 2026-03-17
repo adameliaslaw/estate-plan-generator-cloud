@@ -64,6 +64,8 @@ export interface ComputedFields {
   guardianTitle: string;
   // Children enriched with relationship titles
   childrenWithTitles: Array<Record<string, unknown> & { childTitle: string }>;
+  /** Fields missing from the client data that could cause document issues */
+  missingFields: string[];
 }
 
 export interface NoteSnapshot {
@@ -257,6 +259,7 @@ function computeFields(
       child.city = child.city || pi.city;
       child.state = child.state || pi.state;
       child.zip = child.zip || pi.zip;
+      child.county = child.county || pi.county;
     }
   }
 
@@ -390,7 +393,55 @@ function computeFields(
     healthcareRepTitle,
     guardianTitle,
     childrenWithTitles,
+    missingFields: computeMissingFields(pi, spouse, hasSpouse, realEstate),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Missing field detection — surfaces warnings during document generation
+// ---------------------------------------------------------------------------
+
+const NJ_COUNTIES = [
+  'Atlantic', 'Bergen', 'Burlington', 'Camden', 'Cape May', 'Cumberland',
+  'Essex', 'Gloucester', 'Hudson', 'Hunterdon', 'Mercer', 'Middlesex',
+  'Monmouth', 'Morris', 'Ocean', 'Passaic', 'Salem', 'Somerset',
+  'Sussex', 'Union', 'Warren',
+];
+
+function computeMissingFields(
+  pi: Record<string, unknown>,
+  spouse: Record<string, unknown> | undefined,
+  hasSpouse: boolean,
+  realEstate: Array<Record<string, unknown>>,
+): string[] {
+  const missing: string[] = [];
+
+  // County is critical for NJ estate documents (probate courts are county-based)
+  const state = (pi.state as string) ?? 'NJ';
+  if (state === 'NJ' && !pi.county) {
+    missing.push('personalInfo.county');
+  }
+  // Validate county value if present but not in the NJ list
+  if (state === 'NJ' && pi.county && !NJ_COUNTIES.includes(pi.county as string)) {
+    missing.push('personalInfo.county (invalid NJ county)');
+  }
+
+  // Spouse county for NJ
+  if (hasSpouse && spouse) {
+    const spState = (spouse.state as string) ?? state;
+    if (spState === 'NJ' && !spouse.county) {
+      missing.push('spouseInfo.county');
+    }
+  }
+
+  // Property legal descriptions — needed for deeds
+  realEstate.forEach((p, i) => {
+    if (!p.legalDescription && !p.blockLot) {
+      missing.push(`assets.realEstate[${i}].legalDescription`);
+    }
+  });
+
+  return missing;
 }
 
 // ---------------------------------------------------------------------------
