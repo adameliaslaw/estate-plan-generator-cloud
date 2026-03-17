@@ -640,7 +640,7 @@ export function ChargePaymentDialog({
                   <Label className="text-xs text-gray-500">Card Number</Label>
                   <div
                     id="af-card-number"
-                    className="h-10 rounded-md border border-gray-300 bg-white"
+                    className="hosted-field-container h-10 relative overflow-hidden rounded-md border border-gray-300 bg-white"
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
@@ -672,7 +672,7 @@ export function ChargePaymentDialog({
                     <Label className="text-xs text-gray-500">CVV</Label>
                     <div
                       id="af-card-cvv"
-                      className="h-10 rounded-md border border-gray-300 bg-white"
+                      className="hosted-field-container h-10 relative overflow-hidden rounded-md border border-gray-300 bg-white"
                     />
                   </div>
                 </div>
@@ -685,7 +685,7 @@ export function ChargePaymentDialog({
                   </Label>
                   <div
                     id="af-routing-number"
-                    className="h-10 rounded-md border border-gray-300 bg-white"
+                    className="hosted-field-container h-10 relative overflow-hidden rounded-md border border-gray-300 bg-white"
                   />
                 </div>
                 <div className="space-y-1">
@@ -694,7 +694,7 @@ export function ChargePaymentDialog({
                   </Label>
                   <div
                     id="af-account-number"
-                    className="h-10 rounded-md border border-gray-300 bg-white"
+                    className="hosted-field-container h-10 relative overflow-hidden rounded-md border border-gray-300 bg-white"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
