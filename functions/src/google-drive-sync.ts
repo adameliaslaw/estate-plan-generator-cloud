@@ -526,8 +526,9 @@ export const onDocumentWrittenSyncToDrive = onDocumentWritten(
     // ── Get client name for folder ────────────────────────────────────────
     const clientSnap = await db.doc(`firms/${firmId}/clients/${clientId}`).get();
     const clientData = clientSnap.exists ? clientSnap.data() : null;
-    const clientName = clientData
-      ? `${clientData.firstName ?? ''} ${clientData.lastName ?? ''}`.trim() || 'Unknown Client'
+    const pi = clientData?.personalInfo as Record<string, string> | undefined;
+    const clientName = pi
+      ? `${pi.lastName ?? ''}, ${pi.firstName ?? ''}`.replace(/^,\s*/, '').trim() || 'Unknown Client'
       : 'Unknown Client';
 
     // ── Generate PDF ──────────────────────────────────────────────────────
