@@ -42,6 +42,59 @@ export interface FirmData {
 }
 
 // ---------------------------------------------------------------------------
+// Model name validation / allowlist
+// ---------------------------------------------------------------------------
+
+/** Known-good models per provider. If a model isn't in this list, we fall back. */
+const KNOWN_MODELS: Record<string, Set<string>> = {
+  openai: new Set([
+    'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
+    'gpt-4.5-preview', 'gpt-5', 'gpt-5-mini', 'gpt-5.4',
+    'o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o4-mini',
+  ]),
+  anthropic: new Set([
+    'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307',
+    'claude-3.5-sonnet', 'claude-3.5-haiku', 'claude-3.7-sonnet',
+    'claude-sonnet-4-6', 'claude-4-opus',
+  ]),
+  gemini: new Set([
+    'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro',
+    'gemini-1.5-flash', 'gemini-1.5-pro',
+  ]),
+  perplexity: new Set([
+    'sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro',
+  ]),
+};
+
+const DEFAULT_MODELS: Record<string, string> = {
+  openai: 'gpt-4.1',
+  anthropic: 'claude-sonnet-4-6',
+  gemini: 'gemini-2.5-flash',
+  perplexity: 'sonar-pro',
+};
+
+/**
+ * Validate a model name against the known allowlist for a provider.
+ * If the model is unknown, logs a warning and returns the provider's default.
+ */
+export function validateAndResolveModel(model: string, provider: string): string {
+  const allowlist = KNOWN_MODELS[provider];
+  if (!allowlist) {
+    console.warn(`[ai-client] Unknown provider "${provider}", using model as-is: ${model}`);
+    return model;
+  }
+  if (allowlist.has(model)) {
+    return model;
+  }
+  const fallback = DEFAULT_MODELS[provider] ?? model;
+  console.warn(
+    `[ai-client] Model "${model}" not in ${provider} allowlist. ` +
+    `Falling back to "${fallback}". Update KNOWN_MODELS if this model is valid.`,
+  );
+  return fallback;
+}
+
+// ---------------------------------------------------------------------------
 // Core callAI helper
 // ---------------------------------------------------------------------------
 
@@ -68,6 +121,11 @@ export async function callAI(
     else if (m.startsWith('sonar')) provider = 'perplexity';
     else if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('gpt-5')) provider = 'openai';
     else provider = 'openai';
+  }
+
+  // Validate the model name against the known allowlist for this provider
+  if (options.model) {
+    options = { ...options, model: validateAndResolveModel(options.model, provider) };
   }
 
   if (provider === 'anthropic') {
@@ -110,7 +168,7 @@ async function _callOpenAI(
   }
 
   const client = new OpenAI({ apiKey });
-  const model = options.model ?? 'gpt-5.4'; // Updated to latest model (March 2026)
+  const model = options.model ?? 'gpt-4.1'; // Safe default — validated upstream in callAI
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 8192;
 

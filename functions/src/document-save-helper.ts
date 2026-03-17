@@ -85,6 +85,27 @@ export function requiresNotarization(docType: string): boolean {
 export async function saveDocumentToVault(
   params: SaveDocumentParams,
 ): Promise<SaveDocumentResult> {
+  // ── Content validation gate ────────────────────────────────────────────
+  // Never save a document with empty/blank content — this is the #1 cause
+  // of blank documents appearing in the vault. Error-status docs are
+  // allowed to have minimal content (they're informational).
+  if (params.status !== 'error') {
+    const textOnly = (params.content ?? '').replace(/<[^>]*>/g, '').trim();
+    if (textOnly.length === 0) {
+      throw new Error(
+        `[saveDocumentToVault] Refusing to save ${params.docType} with empty content. ` +
+        `firmId=${params.firmId}, clientId=${params.clientId}. ` +
+        `This usually means AI generation failed or returned malformed JSON.`,
+      );
+    }
+    if (textOnly.length < 100) {
+      console.warn(
+        `[saveDocumentToVault] Suspiciously short content for ${params.docType} ` +
+        `(${textOnly.length} chars). firmId=${params.firmId}, clientId=${params.clientId}.`,
+      );
+    }
+  }
+
   const db = admin.firestore();
   const now = admin.firestore.FieldValue.serverTimestamp();
 
@@ -142,7 +163,7 @@ export async function saveDocumentToVault(
     mimeType: 'text/html',
     currentVersion,
     generatedByAI: true,
-    aiModel: params.aiModel ?? 'gpt-5.4',
+    aiModel: params.aiModel ?? 'unknown',
     requiresSignature: requiresSignature(params.docType),
     notarized: requiresNotarization(params.docType),
     changeNotes,
