@@ -77,6 +77,9 @@ export function useGooglePlacesAutocomplete(
 ) {
     const [isReady, setIsReady] = useState(false);
     const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
+    // Use a ref for the callback so the listener always calls the latest version
+    const onChangeRef = useRef(onChange);
+    useEffect(() => { onChangeRef.current = onChange; });
 
     useEffect(() => {
         if (!apiKey) return;
@@ -99,7 +102,9 @@ export function useGooglePlacesAutocomplete(
         if (!isReady || !inputRef.current) return;
         if (autocompleteRef.current) return; // already initialized
 
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        const input = inputRef.current;
+
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(input, {
             types: ['address'],
             fields: ['address_components', 'formatted_address'],
         }) as GoogleAutocomplete;
@@ -136,7 +141,13 @@ export function useGooglePlacesAutocomplete(
                 components.streetNumber = routeName;
             }
 
-            onChange(components);
+            // Reset the input to just the street address — Google overwrites it
+            // with the full formatted address (e.g. "123 Main St, City, NJ 08831")
+            if (input && components.streetNumber) {
+                input.value = components.streetNumber;
+            }
+
+            onChangeRef.current(components);
         });
 
         return () => {
@@ -144,7 +155,7 @@ export function useGooglePlacesAutocomplete(
                 window.google.maps.event.removeListener(listener);
             }
         };
-    }, [isReady, inputRef, onChange]);
+    }, [isReady, inputRef]);
 
     return { isReady };
 }
