@@ -94,8 +94,8 @@ import {
   ApiKeyField,
   StatusBadge,
   ColorPickerRow,
-  maskApiKey,
 } from '@/components/settings/SettingsHelpers';
+import { maskApiKey } from '@/components/settings/settings-utils';
 import { TeamTab } from '@/components/settings/TeamTab';
 
 // ---------------------------------------------------------------------------

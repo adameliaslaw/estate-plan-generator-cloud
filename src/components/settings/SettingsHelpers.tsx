@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { maskApiKey } from './settings-utils';
 
 import { useGoogleLogin } from '@react-oauth/google';
 
@@ -176,11 +177,6 @@ export function ApiKeyField({
   );
 }
 
-/** Mask an API key showing only the last 4 characters. */
-export function maskApiKey(key: string | undefined): string {
-  if (!key || key.length < 4) return '';
-  return `••••••••${key.slice(-4)} `;
-}
 
 // ---------------------------------------------------------------------------
 // Status Badge
