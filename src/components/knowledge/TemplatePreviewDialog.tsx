@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
+
 import TextAlign from '@tiptap/extension-text-align';
 import Heading from '@tiptap/extension-heading';
 import { Table } from '@tiptap/extension-table';
@@ -139,7 +139,7 @@ export function TemplatePreviewDialog({
     extensions: [
       StarterKit.configure({ heading: false }),
       Heading.configure({ levels: [1, 2, 3, 4] }),
-      Underline,
+
       TextAlign.configure({
         types: ['heading', 'paragraph'],
         defaultAlignment: 'left',

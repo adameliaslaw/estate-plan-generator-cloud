@@ -136,6 +136,7 @@ export function TeamTab({ firmId }: TeamTabProps) {
     try {
       const updateUserCapabilities = httpsCallable(functions, 'updateUserCapabilities');
       await updateUserCapabilities({
+        firmId,
         userId: editingUser.id,
         capabilities: editCapabilities,
       });
