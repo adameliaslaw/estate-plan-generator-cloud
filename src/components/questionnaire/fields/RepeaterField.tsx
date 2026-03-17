@@ -21,6 +21,7 @@ import { YesNoField } from './YesNoField';
 import { RadioCardField } from './RadioCardField';
 import { CurrencyField } from './CurrencyField';
 import { DateField } from './DateField';
+import { ComboboxField } from './ComboboxField';
 
 interface RepeaterFieldProps {
   field: FieldConfig;
@@ -151,6 +152,31 @@ function InnerField({ field, itemData, onFieldChange, parentData }: InnerFieldPr
             </option>
           ))}
         </select>
+      );
+      break;
+    }
+
+    case 'combobox': {
+      // Resolve dynamic options from parentData if optionsFrom is configured
+      let comboOptions = field.options ?? [];
+      if (field.optionsFrom && parentData) {
+        const sourceArray = parentData[field.optionsFrom.source];
+        if (Array.isArray(sourceArray)) {
+          comboOptions = sourceArray
+            .filter((item: Record<string, unknown>) => item[field.optionsFrom!.labelField])
+            .map((item: Record<string, unknown>) => ({
+              label: String(item[field.optionsFrom!.labelField]),
+              value: String(item[field.optionsFrom!.valueField]),
+            }));
+        }
+      }
+      input = (
+        <ComboboxField
+          field={field}
+          value={value}
+          onChange={handleChange}
+          options={comboOptions}
+        />
       );
       break;
     }

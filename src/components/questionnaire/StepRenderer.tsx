@@ -19,6 +19,7 @@ import { CurrencyField } from './fields/CurrencyField';
 import { AddressField } from './fields/AddressField';
 import { RepeaterField } from './fields/RepeaterField';
 import { DateField } from './fields/DateField';
+import { ComboboxField } from './fields/ComboboxField';
 
 // ============================================================================
 // Props
@@ -397,6 +398,10 @@ export function StepRenderer({ step }: StepRendererProps) {
 
           case 'select':
             input = <SelectField field={field} value={value} onChange={onChange} />;
+            break;
+
+          case 'combobox':
+            input = <ComboboxField field={field} value={value} onChange={onChange} />;
             break;
 
           case 'checkbox':
