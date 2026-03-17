@@ -95,13 +95,13 @@ describe('Firestore Rules — RBAC role helper functions', () => {
     expect(rulesContain("hasRole('admin')")).toBe(true);
   });
 
-  it('defines isAttorney() helper', () => {
-    expect(rulesContain('function isAttorney()')).toBe(true);
+  it('uses hasRole("attorney") inline for attorney checks', () => {
+    // Rules use hasRole('attorney') inline rather than a dedicated isAttorney() wrapper
     expect(rulesContain("hasRole('attorney')")).toBe(true);
   });
 
-  it('defines isParalegal() helper', () => {
-    expect(rulesContain('function isParalegal()')).toBe(true);
+  it('uses hasRole("paralegal") inline for paralegal checks', () => {
+    // Rules use hasRole('paralegal') inline rather than a dedicated isParalegal() wrapper
     expect(rulesContain("hasRole('paralegal')")).toBe(true);
   });
 
@@ -158,12 +158,12 @@ describe('Firestore Rules — /firms/{firmId}/clients/{clientId}', () => {
   });
 
   it('attorney has read access to clients within their firm', () => {
-    expect(rulesContain('isAttorney()')).toBe(true);
+    expect(rulesContain("hasRole('attorney')")).toBe(true);
     expect(rulesContain('belongsToFirm(firmId)')).toBe(true);
   });
 
   it('paralegal has read access to clients within their firm', () => {
-    expect(rulesContain('isParalegal()')).toBe(true);
+    expect(rulesContain("hasRole('paralegal')")).toBe(true);
   });
 
   it('client can only read their own record (isOwnClientRecord)', () => {
@@ -210,7 +210,7 @@ describe('Firestore Rules — notes sub-collection', () => {
     const notesSection = rulesContent.match(
       /match\s+\/notes\/\{noteId\}[\s\S]*?(?=match\s+\/payments|match\s+\/calendar|\})/
     )?.[0] ?? '';
-    expect(notesSection).toMatch(/isParalegal\(\)/);
+    expect(notesSection).toMatch(/hasRole\('paralegal'\)/);
   });
 });
 
