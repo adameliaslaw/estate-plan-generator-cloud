@@ -13,7 +13,7 @@
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import { callAI, sanitizeForPrompt, type FirmData } from './ai-client';
+import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
 import {
@@ -36,8 +36,8 @@ interface ChatAiRequest {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contextParams?: Record<string, any>;
   history?: { role: 'user' | 'assistant'; content: string }[];
-  /** 'chat' for general Q&A, 'draft' for document drafting */
-  mode?: 'chat' | 'draft';
+  /** 'chat' for general Q&A, 'draft' for document drafting, 'research' for web-grounded research */
+  mode?: 'chat' | 'draft' | 'research';
   /** When mode='draft', the document type being drafted */
   draftDocType?: string;
   /** Resume an existing conversation */
@@ -52,6 +52,8 @@ interface ChatAiResponse {
   draftTitle?: string;
   /** Persistent conversation ID for resuming */
   conversationId?: string;
+  /** Source citations from Perplexity (research mode) */
+  citations?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -483,6 +485,65 @@ export const chatAi = functions
           const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
           return { reply, conversationId: convId } as ChatAiResponse;
         }
+      }
+
+      // =====================================================================
+      // 4b. RESEARCH MODE: Pure Perplexity — no client context, no KB.
+      //     Returns grounded answers with source citations.
+      // =====================================================================
+      if (mode === 'research') {
+        console.log(`[chatAi] Research mode — calling Perplexity`);
+
+        const researchSystemPrompt = `You are an expert legal research assistant specializing in estate planning, trust and estate law, elder law, and related practice areas.
+
+YOUR ROLE:
+• Provide thorough, well-researched answers grounded in current legal sources.
+• Cite specific statutes, regulations, case law, and authoritative secondary sources.
+• Focus especially on New Jersey law (N.J.S.A. Title 3B, Title 46, etc.) but cover federal and other state laws when relevant.
+• Organize your answers with clear headings and numbered citations.
+• Distinguish between current law and proposed/pending legislation.
+
+RULES:
+• Always indicate the jurisdiction of cited authorities.
+• If information may be outdated, note the date context.
+• Never fabricate citations — if you cannot find a specific source, say so.
+• Provide practical implications for estate planning practitioners where applicable.`;
+
+        let userPrompt = '';
+        if (resolvedHistory.length > 0) {
+          userPrompt += 'Previous research conversation:\n';
+          for (const msg of resolvedHistory.slice(-10)) {
+            userPrompt += `${msg.role.toUpperCase()}: ${msg.content}\n`;
+          }
+          userPrompt += `\nNEW QUESTION: ${message}`;
+        } else {
+          userPrompt = message;
+        }
+
+        const { content: researchContent, citations: researchCitations } =
+          await callPerplexityWithCitations(researchSystemPrompt, userPrompt, firmData, {
+            model: modelOverride ?? 'sonar',
+            temperature: 0.2,
+          });
+        console.log(`[chatAi] Research response received: ${researchContent.length} chars, ${researchCitations.length} citations (${Date.now() - t0}ms)`);
+
+        const allMessages: ConversationMessage[] = [
+          ...resolvedHistory.map((m) => ({
+            role: m.role,
+            content: m.content,
+            timestamp: new Date().toISOString(),
+          })),
+          { role: 'user' as const, content: message, timestamp: new Date().toISOString() },
+          { role: 'assistant' as const, content: researchContent, timestamp: new Date().toISOString() },
+        ];
+
+        const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, 'research', clientId);
+
+        return {
+          reply: researchContent,
+          citations: researchCitations,
+          conversationId: convId,
+        } as ChatAiResponse;
       }
 
       // =====================================================================

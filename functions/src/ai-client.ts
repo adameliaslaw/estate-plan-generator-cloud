@@ -281,6 +281,62 @@ async function _callPerplexity(
 }
 
 // ---------------------------------------------------------------------------
+// Perplexity with citations (for Research mode)
+// ---------------------------------------------------------------------------
+
+export interface PerplexityCitedResponse {
+  content: string;
+  citations: string[];
+}
+
+/**
+ * Call Perplexity API and return both the content AND source citations.
+ * Used by the Research tab to provide grounded, cited answers.
+ */
+export async function callPerplexityWithCitations(
+  systemPrompt: string,
+  userPrompt: string,
+  firmData: FirmData,
+  options: CallAIOptions = {},
+): Promise<PerplexityCitedResponse> {
+  const apiKey = firmData?.perplexityApiKey ?? firmData?.settings?.perplexityApiKey;
+  if (!apiKey) {
+    throw new Error('Perplexity API key is missing. Configure it in Firm Settings → AI Configuration.');
+  }
+
+  const model = options.model ?? 'sonar';
+  const temperature = options.temperature ?? 0.2;
+
+  const response = await fetchWithRetry('https://api.perplexity.ai/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await response.json() as any;
+  const content: string = data.choices?.[0]?.message?.content ?? '';
+  const citations: string[] = Array.isArray(data.citations) ? data.citations : [];
+
+  return { content, citations };
+}
+
+// ---------------------------------------------------------------------------
 // Prompt-injection sanitizer
 // ---------------------------------------------------------------------------
 

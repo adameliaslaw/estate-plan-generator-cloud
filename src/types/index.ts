@@ -847,6 +847,10 @@ export interface Document {
   reviewedBy?: string;
   reviewNotes?: string;
 
+  // Google Drive sync
+  googleDriveFileId?: string;
+  googleDriveSyncedAt?: Timestamp;
+
   // Metadata
   tags: string[];
   isConfidential: boolean;

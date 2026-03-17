@@ -14,7 +14,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen } from 'lucide-react';
+import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen, Search, ExternalLink } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
@@ -36,6 +36,7 @@ interface Message {
   timestamp: Date;
   isDraft?: boolean;
   draftTitle?: string;
+  citations?: string[];
 }
 
 interface ConversationSummary {
@@ -53,14 +54,65 @@ const DOC_TYPE_SELECT = Object.entries(DOC_TYPES).map(([, value]) => ({
   label: value.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim(),
 }));
 
-const WELCOME_MSG = (mode: 'chat' | 'draft', hasClient?: boolean): Message => ({
+const WELCOME_MSG = (mode: 'chat' | 'draft' | 'research', hasClient?: boolean): Message => ({
   id: 'welcome-' + Date.now(),
   role: 'assistant',
   content: mode === 'draft'
     ? `📝 Drafting Mode active. I'll help you draft a document. ${hasClient ? 'I can see the client context.' : 'Type **@ClientName** to connect a client, or navigate to their profile.'}\n\nSelect a document type above, then tell me what you'd like. When ready, say "generate" or "draft it" and I'll produce the document.`
-    : 'Hello! I am your Estate Planning AI Assistant. I have context about your firm, clients, knowledge base, and templates.\n\n💡 **Tip:** Type **@ClientName** to connect a client from anywhere!',
+    : mode === 'research'
+      ? '🔍 **Research Mode** — powered by Perplexity.\n\nAsk me any legal research question and I\'ll provide grounded answers with source citations. Great for:\n• Statute lookups and case law\n• Current tax thresholds and exemptions\n• Comparative state law analysis\n• Regulatory updates and pending legislation'
+      : 'Hello! I am your Estate Planning AI Assistant. I have context about your firm, clients, knowledge base, and templates.\n\n💡 **Tip:** Type **@ClientName** to connect a client from anywhere!',
   timestamp: new Date(),
 });
+
+// Collapsible citation block for research responses
+function CitationBlock({ citations }: { citations: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? citations : citations.slice(0, 3);
+  const hasMore = citations.length > 3;
+
+  return (
+    <div className="mt-2 border-t border-gray-100 pt-2">
+      <div className="flex items-center gap-1 mb-1">
+        <Search className="h-3 w-3 text-emerald-600" />
+        <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">
+          Sources ({citations.length})
+        </span>
+      </div>
+      <div className="space-y-0.5">
+        {visible.map((url, i) => {
+          let hostname = '';
+          try {
+            hostname = new URL(url).hostname.replace('www.', '');
+          } catch {
+            hostname = url.slice(0, 40);
+          }
+          return (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition-colors truncate"
+            >
+              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+              <span className="font-medium">[{i + 1}]</span>
+              <span className="truncate">{hostname}</span>
+            </a>
+          );
+        })}
+      </div>
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 text-[10px] font-medium text-gray-500 hover:text-emerald-600 transition-colors"
+        >
+          {expanded ? '▲ Show fewer' : `▼ Show all ${citations.length} sources`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function GlobalAiWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -78,7 +130,7 @@ export function GlobalAiWidget() {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Drafting mode state
-  const [mode, setMode] = useState<'chat' | 'draft'>('chat');
+  const [mode, setMode] = useState<'chat' | 'draft' | 'research'>('chat');
   const [draftDocType, setDraftDocType] = useState('will');
 
   // @mention client tagging
@@ -205,9 +257,9 @@ export function GlobalAiWidget() {
     setShowHistory(false);
   };
 
-  // Reset messages when switching modes
-  const toggleMode = () => {
-    const newMode = mode === 'chat' ? 'draft' : 'chat';
+  // Switch to a specific mode
+  const switchMode = (newMode: 'chat' | 'draft' | 'research') => {
+    if (newMode === mode) return;
     setMode(newMode);
     setConversationId(undefined);
     setMessages([WELCOME_MSG(newMode, !!clientId)]);
@@ -348,6 +400,7 @@ export function GlobalAiWidget() {
         draftContent?: string;
         draftTitle?: string;
         conversationId?: string;
+        citations?: string[];
       };
 
       // Persist the conversation ID
@@ -362,6 +415,7 @@ export function GlobalAiWidget() {
         timestamp: new Date(),
         isDraft: !!data.draftContent,
         draftTitle: data.draftTitle,
+        citations: data.citations,
       };
       setMessages((prev) => [...prev, aiMessage]);
 
@@ -465,27 +519,33 @@ export function GlobalAiWidget() {
           >
             <Plus className="h-4 w-4" />
           </button>
-          {/* Mode toggle */}
-          <button
-            onClick={toggleMode}
-            className={cn(
-              'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
-              mode === 'draft'
-                ? 'bg-amber-400 text-amber-900'
-                : 'bg-white/20 text-purple-100 hover:bg-white/30',
-            )}
-            title={mode === 'draft' ? 'Switch to Chat mode' : 'Switch to Drafting mode'}
-          >
-            {mode === 'draft' ? (
-              <>
-                <PenTool className="h-3 w-3" /> Draft
-              </>
-            ) : (
-              <>
-                <Bot className="h-3 w-3" /> Chat
-              </>
-            )}
-          </button>
+          {/* 3-tab mode switcher */}
+          <div className="flex items-center rounded-full bg-white/15 p-0.5">
+            {[
+              { key: 'chat' as const, icon: Bot, label: 'Chat' },
+              { key: 'draft' as const, icon: PenTool, label: 'Draft' },
+              { key: 'research' as const, icon: Search, label: 'Research' },
+            ].map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => switchMode(key)}
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium transition-all',
+                  mode === key
+                    ? key === 'draft'
+                      ? 'bg-amber-400 text-amber-900 shadow-sm'
+                      : key === 'research'
+                        ? 'bg-emerald-400 text-emerald-900 shadow-sm'
+                        : 'bg-white text-purple-700 shadow-sm'
+                    : 'text-purple-200 hover:text-white',
+                )}
+                title={`Switch to ${label} mode`}
+              >
+                <Icon className="h-3 w-3" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setIsMaximized(!isMaximized)}
             className="rounded p-1.5 text-purple-100 hover:bg-white/20 transition-colors"
@@ -629,6 +689,10 @@ export function GlobalAiWidget() {
                       </div>
                     )}
                     <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    {/* Citation sources (research mode) */}
+                    {msg.citations && msg.citations.length > 0 && (
+                      <CitationBlock citations={msg.citations} />
+                    )}
                     <span
                       className={cn(
                         'mt-1 block text-[10px] opacity-60',
@@ -740,7 +804,13 @@ export function GlobalAiWidget() {
             <input
               ref={inputRef}
               type="text"
-              placeholder={mode === 'draft' ? 'Describe the document you need... (use @ for clients)' : 'Ask anything... (use @ to tag a client)'}
+              placeholder={
+                mode === 'draft'
+                  ? 'Describe the document you need... (use @ for clients)'
+                  : mode === 'research'
+                    ? 'Ask a legal research question...'
+                    : 'Ask anything... (use @ to tag a client)'
+              }
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -756,7 +826,11 @@ export function GlobalAiWidget() {
           </Button>
         </div>
         <div className="mt-2 text-center text-[10px] text-gray-400 font-medium">
-          {mode === 'draft' ? '📝 Drafting Mode — Say "generate" when ready' : '🧠 Memory-augmented AI Assistant'}
+          {mode === 'draft'
+            ? '📝 Drafting Mode — Say "generate" when ready'
+            : mode === 'research'
+              ? '⚖️ Research results are AI-generated from web sources. Verify all citations independently.'
+              : '🧠 Memory-augmented AI Assistant'}
         </div>
       </div>
     </div>

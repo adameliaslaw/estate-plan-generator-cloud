@@ -31,6 +31,7 @@ import {
   AlertCircle,
   Wand2,
   History,
+  CloudCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -800,6 +801,22 @@ export default function DocumentVault({
                           clientUpdatedAt.seconds > (doc.createdAt as { seconds: number }).seconds
                         }
                       />
+                    </td>
+
+                    {/* Drive sync indicator */}
+                    <td className="px-2 py-3">
+                      {doc.googleDriveSyncedAt && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <CloudCheck className="h-4 w-4 text-green-500" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-xs">
+                              Synced to Google Drive
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </td>
 
                     {/* Last modified */}

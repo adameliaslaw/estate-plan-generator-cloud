@@ -30,6 +30,7 @@ import {
   Unplug,
   Upload,
   Users,
+  HardDrive,
   Plus,
   Trash2,
   Zap,
@@ -88,6 +89,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import {
   GoogleLoginButton,
+  GoogleDriveLoginButton,
   PageSkeleton,
   ApiKeyField,
   StatusBadge,
@@ -160,6 +162,15 @@ interface FirmSettings {
     accessToken?: string;
     refreshToken?: string;
     tokenExpiry?: number;
+  };
+
+  // Google Drive OAuth
+  googleDrive?: {
+    connected: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiry?: number;
+    rootFolderId?: string;
   };
 
   // Security
@@ -597,6 +608,54 @@ export default function SettingsPage() {
     } catch (err) {
       console.error(err);
       toast.error('Failed to disconnect Google Calendar.');
+    }
+  }, [firmDocPath, firmDoc, userProfile]);
+
+  // ── Google Drive OAuth ───────────────────────────────────────────────────
+  const [connectingDrive, setConnectingDrive] = useState(false);
+
+  const handleExchangeDriveAuthCode = useCallback(async (code: string) => {
+    if (!firmDocPath) return;
+    setConnectingDrive(true);
+    try {
+      const firmId = firmDocPath.split('/')[1];
+      const exchangeFn = httpsCallable(functions, 'connectGoogleDrive');
+      await exchangeFn({ code, redirectUri: 'postmessage', firmId });
+      toast.success('Google Drive connected successfully!');
+    } catch (err: unknown) {
+      console.error('Google Drive OAuth Exchange Error:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to connect Google Drive.');
+    } finally {
+      setConnectingDrive(false);
+    }
+  }, [firmDocPath]);
+
+  const handleDisconnectGoogleDrive = useCallback(async () => {
+    if (!firmDocPath) return;
+    try {
+      if (firmDoc?.googleDrive?.accessToken) {
+        try {
+          await fetch(
+            `https://oauth2.googleapis.com/revoke?token=${firmDoc.googleDrive.accessToken}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+          );
+        } catch {
+          // Non-critical — token may already be expired/revoked
+        }
+      }
+
+      await updateDoc(firmDocPath, {
+        'googleDrive.connected': false,
+        'googleDrive.accessToken': '',
+        'googleDrive.refreshToken': '',
+        'googleDrive.tokenExpiry': 0,
+        'googleDrive.rootFolderId': '',
+        updatedBy: userProfile?.uid ?? '',
+      });
+      toast.success('Google Drive disconnected.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to disconnect Google Drive.');
     }
   }, [firmDocPath, firmDoc, userProfile]);
 
@@ -1706,6 +1765,71 @@ export default function SettingsPage() {
                         )}
                         <p className="text-xs text-gray-400">
                           Requires OAuth setup in Firebase Console → Authentication → Sign-in providers.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Google Drive */}
+                <Card className="border-gray-200 shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-[#1a365d]">
+                          <HardDrive className="h-5 w-5" />
+                          Google Drive
+                        </CardTitle>
+                        <CardDescription>
+                          Auto-sync vault documents to Google Drive as PDFs.
+                        </CardDescription>
+                      </div>
+                      <StatusBadge connected={Boolean(firmDoc?.googleDrive?.connected)} />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {firmDoc?.googleDrive?.connected ? (
+                      <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Connected</p>
+                          <p className="text-xs text-green-600">
+                            Documents sync to Estate Plans folder automatically.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleDisconnectGoogleDrive}
+                          className="border-red-300 text-red-600 hover:bg-red-50"
+                        >
+                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                          Disconnect
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-sm text-gray-600">
+                          Connect your Google account to auto-sync vault documents. PDFs are
+                          organized into Estate Plans → Client Name folders.
+                        </p>
+                        {GOOGLE_CLIENT_ID ? (
+                          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                            <GoogleDriveLoginButton
+                              onSuccess={handleExchangeDriveAuthCode}
+                              onError={() => toast.error('Google login popup failed.')}
+                              disabled={connectingDrive}
+                            />
+                          </GoogleOAuthProvider>
+                        ) : (
+                          <Alert className="mt-2 text-sm border-red-200 bg-red-50 text-red-900 [&>svg]:text-red-900">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>
+                              Missing VITE_GOOGLE_CLIENT_ID in environment variables.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        <p className="text-xs text-gray-400">
+                          Only files created by this app are accessible (drive.file scope).
                         </p>
                       </div>
                     )}

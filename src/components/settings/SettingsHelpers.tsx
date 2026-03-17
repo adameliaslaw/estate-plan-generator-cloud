@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  HardDrive,
   RefreshCw,
   XCircle,
 } from 'lucide-react';
@@ -48,6 +49,38 @@ export function GoogleLoginButton({
     >
       {disabled ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
       Connect Google Calendar
+    </Button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Google Drive Login Button (drive.file scope)
+// ---------------------------------------------------------------------------
+
+export function GoogleDriveLoginButton({
+  onSuccess,
+  onError,
+  disabled,
+}: {
+  onSuccess: (code: string) => void;
+  onError?: (error: unknown) => void;
+  disabled?: boolean;
+}) {
+  const login = useGoogleLogin({
+    flow: 'auth-code',
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    onSuccess: (codeResponse) => onSuccess(codeResponse.code),
+    onError: (error) => onError?.(error),
+  });
+
+  return (
+    <Button
+      onClick={() => login()}
+      disabled={disabled}
+      className="gap-2 bg-[#2b6cb0] hover:bg-[#1a365d]"
+    >
+      {disabled ? <RefreshCw className="h-4 w-4 animate-spin" /> : <HardDrive className="h-4 w-4" />}
+      Connect Google Drive
     </Button>
   );
 }

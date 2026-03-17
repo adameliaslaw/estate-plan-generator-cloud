@@ -29,7 +29,7 @@ export interface Conversation {
   firmId: string;
   clientId: string | null;
   userId: string;
-  mode: 'chat' | 'draft';
+  mode: 'chat' | 'draft' | 'research';
   draftDocType: string | null;
   title: string;
   lastMessage: string;
@@ -90,7 +90,7 @@ export async function saveConversation(
   userId: string,
   conversationId: string | undefined,
   messages: ConversationMessage[],
-  mode: 'chat' | 'draft',
+  mode: 'chat' | 'draft' | 'research',
   clientId?: string,
   draftDocType?: string,
 ): Promise<string> {
