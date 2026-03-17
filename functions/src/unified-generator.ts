@@ -257,6 +257,7 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   // 3. Resolve and run the generator
   // ------------------------------------------------------------------
+  const genStartTime = Date.now();
   let generatedDoc: GeneratedDoc;
 
   if (FLEX_DOC_TYPES.has(docType)) {
@@ -325,6 +326,37 @@ export async function generateDocument(
       content: `<p>Document type "${docType}" is not yet supported.</p>`,
       status: 'error',
     };
+  }
+
+  // ------------------------------------------------------------------
+  // 3b. Observability — structured generation log
+  // ------------------------------------------------------------------
+  const genElapsedMs = Date.now() - genStartTime;
+  const contentLength = generatedDoc.content?.length ?? 0;
+  const textOnly = generatedDoc.content?.replace(/<[^>]*>/g, '').trim() ?? '';
+  const textLength = textOnly.length;
+
+  const genLog: Record<string, unknown> = {
+    event: 'document_generated',
+    docType,
+    mode: generationMode ?? 'hybrid',
+    status: generatedDoc.status,
+    contentLength,
+    textLength,
+    elapsedMs: genElapsedMs,
+    templateId: templateId ?? null,
+    firmId,
+    clientId,
+  };
+
+  if (textLength < 200 && generatedDoc.status !== 'error') {
+    genLog.warning = 'suspiciously_short';
+    console.warn(`[unifiedGenerator] ⚠ SHORT DOCUMENT: ${docType} has only ${textLength} chars of text (${genElapsedMs}ms)`, genLog);
+  } else if (textLength === 0 && generatedDoc.status !== 'error') {
+    genLog.warning = 'empty_content';
+    console.error(`[unifiedGenerator] 🚨 EMPTY DOCUMENT: ${docType} generated with no text content (${genElapsedMs}ms)`, genLog);
+  } else {
+    console.info(`[unifiedGenerator] ✓ ${docType} generated: ${textLength} chars, ${genElapsedMs}ms, mode=${generationMode ?? 'hybrid'}`);
   }
 
   // ------------------------------------------------------------------

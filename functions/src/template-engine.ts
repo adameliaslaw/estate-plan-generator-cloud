@@ -412,11 +412,20 @@ function registerHelpers(): void {
   });
 
   // Full name from a person object { firstName, middleName, lastName, suffix }
-  Handlebars.registerHelper('fullName', (person: Record<string, unknown> | null | undefined) => {
+  // Also handles flat name strings (common in fiduciary entries: { name: "John Doe" })
+  Handlebars.registerHelper('fullName', (person: Record<string, unknown> | string | null | undefined) => {
     if (!person) return '_______________';
-    return [person.firstName, person.middleName, person.lastName, person.suffix]
-      .filter(Boolean)
-      .join(' ');
+    // If it's already a string (flat name), return it directly
+    if (typeof person === 'string') return person;
+    // If the object has firstName, build the full name from parts
+    if (person.firstName) {
+      return [person.firstName, person.middleName, person.lastName, person.suffix]
+        .filter(Boolean)
+        .join(' ');
+    }
+    // Fallback: if object has a flat .name property, use that
+    if (person.name && typeof person.name === 'string') return person.name;
+    return '_______________';
   });
 
   // Currency formatting
@@ -466,9 +475,18 @@ function registerHelpers(): void {
   });
 
   // Fill-in-blank helper (underscore line if value is empty)
+  // Also extracts .name from person objects so {{fillOrBlank fiduciaries.executor.primary}} works
   Handlebars.registerHelper('fillOrBlank', (val: unknown) => {
     if (!val || (typeof val === 'string' && (val as string).trim() === '')) {
       return new Handlebars.SafeString('_______________');
+    }
+    // If value is an object, try to extract a name
+    if (typeof val === 'object' && val !== null) {
+      const obj = val as Record<string, unknown>;
+      if (obj.firstName) {
+        return [obj.firstName, obj.middleName, obj.lastName, obj.suffix].filter(Boolean).join(' ');
+      }
+      if (obj.name && typeof obj.name === 'string') return obj.name;
     }
     return val;
   });
@@ -794,6 +812,26 @@ export async function generateFromTemplate(
     // In template mode, serve the raw unrendered HTML so the user gets something
     renderedHtml = template.content;
   }
+
+  // ── Post-render: flag any unresolved {{variables}} ────────────────────────
+  // Handlebars silently outputs '' for missing variables. But if double-braces
+  // leak through (e.g. from triple-stash {{{var}}} or partial syntax), flag them
+  // so the attorney sees [MISSING: ...] instead of a silent blank.
+  const unresolvedPattern = /\{\{([^}]+)\}\}/g;
+  const unresolvedVars: string[] = [];
+  let unresolvedMatch: RegExpExecArray | null;
+  while ((unresolvedMatch = unresolvedPattern.exec(renderedHtml)) !== null) {
+    unresolvedVars.push(unresolvedMatch[1].trim());
+  }
+  if (unresolvedVars.length > 0) {
+    console.warn(
+      `[template-engine] ${unresolvedVars.length} unresolved variables in ${docType}: ` +
+      unresolvedVars.slice(0, 10).join(', '),
+    );
+    renderedHtml = renderedHtml.replace(unresolvedPattern, (_match, varName: string) =>
+      `<span style="background:#fff3cd;color:#856404;padding:0 4px;border-radius:2px;" title="Unresolved template variable">[MISSING: ${varName.trim()}]</span>`,
+    );
+  }
   const title = `${template.name} — ${ctx.computed.clientFullName}`;
 
   if (mode === 'template') {
@@ -841,6 +879,14 @@ async function generateFromTemplateReference(
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
   const templateData = buildTemplateData(ctx);
+
+  // ── Phase 3: Extract and preserve template styles ──────────────────────
+  // DOCX-uploaded templates often have <style> blocks with fonts, margins,
+  // and spacing. The AI won't reproduce these exactly, so we extract them
+  // and prepend them to the AI's output.
+  const styleRegex = /<style[^>]*>[\s\S]*?<\/style>/gi;
+  const styleBlocks = rawTemplateHtml.match(styleRegex) ?? [];
+  const preservedStyles = styleBlocks.join('\n');
 
   // Build a concise client data summary for the AI
   const pi = templateData.personalInfo as Record<string, unknown> ?? {};
@@ -903,6 +949,7 @@ CRITICAL RULES:
 - Cite the specific statute (N.J.S.A.) for every legal provision — do NOT fabricate citations
 - Return ONLY the complete HTML document — no JSON wrapper, no markdown fences
 - Preserve the professional appearance and layout of the original template
+- Do NOT include <style> blocks — they will be preserved separately
 
 KNOWLEDGE BASE (for accurate statutory references):
 ${kbContext || 'No specific resources available.'}`;
@@ -917,16 +964,34 @@ ${rawTemplateHtml.slice(0, 15000)}
 Generate the complete HTML document now. Return ONLY the HTML.`;
 
   try {
-    const result = await callAI(systemPrompt, userPrompt, safeFirm, {
+    let result = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
       maxTokens: 12000,
     });
 
     if (result && result.trim().length > 100) {
+      // ── Phase 3: Restore preserved styles ──────────────────────────
+      if (preservedStyles) {
+        // If the AI output already has a style block, don't duplicate
+        if (!styleRegex.test(result)) {
+          result = preservedStyles + '\n' + result;
+          console.info(`[template-engine] Restored ${styleBlocks.length} style block(s) from template for ${docType}`);
+        }
+      }
+
+      // ── Phase 3: Validate HTML structure ───────────────────────────
+      // If AI returned plain text with no HTML tags, wrap it in basic structure
+      const hasHtmlTags = /<(?:h[1-6]|p|div|section|article|table)\b/i.test(result);
+      if (!hasHtmlTags) {
+        console.warn(`[template-engine] AI output for ${docType} has no HTML structure, wrapping in <div>`);
+        result = `<div class="generated-document">\n${result}\n</div>`;
+      }
+
       return result;
     }
     // If AI returned too little, return the raw template
+    console.warn(`[template-engine] AI output too short for ${docType} (${result?.trim().length ?? 0} chars), using raw template`);
     return rawTemplateHtml;
   } catch (err) {
     console.error('[template-engine] Template-referenced generation failed:', err);
