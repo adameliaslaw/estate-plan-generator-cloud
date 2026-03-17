@@ -41,9 +41,10 @@ interface InnerFieldProps {
   field: FieldConfig;
   itemData: Record<string, unknown>;
   onFieldChange: (name: string, val: unknown) => void;
+  parentData?: Record<string, unknown>;
 }
 
-function InnerField({ field, itemData, onFieldChange }: InnerFieldProps) {
+function InnerField({ field, itemData, onFieldChange, parentData }: InnerFieldProps) {
   const value = itemData[field.name];
 
   // Check field-level condition against item data
@@ -120,7 +121,20 @@ function InnerField({ field, itemData, onFieldChange }: InnerFieldProps) {
       );
       break;
 
-    case 'select':
+    case 'select': {
+      // Resolve dynamic options from parentData if optionsFrom is configured
+      let resolvedOptions = field.options ?? [];
+      if (field.optionsFrom && parentData) {
+        const sourceArray = parentData[field.optionsFrom.source];
+        if (Array.isArray(sourceArray)) {
+          resolvedOptions = sourceArray
+            .filter((item: Record<string, unknown>) => item[field.optionsFrom!.labelField])
+            .map((item: Record<string, unknown>) => ({
+              label: String(item[field.optionsFrom!.labelField]),
+              value: String(item[field.optionsFrom!.valueField]),
+            }));
+        }
+      }
       input = (
         <select
           value={(value as string) ?? ''}
@@ -131,7 +145,7 @@ function InnerField({ field, itemData, onFieldChange }: InnerFieldProps) {
           <option value="" disabled>
             {field.placeholder ?? 'Select…'}
           </option>
-          {field.options?.map((opt) => (
+          {resolvedOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -139,6 +153,7 @@ function InnerField({ field, itemData, onFieldChange }: InnerFieldProps) {
         </select>
       );
       break;
+    }
 
     case 'textarea':
       input = (
@@ -220,6 +235,7 @@ export function RepeaterField({
   field,
   value,
   onChange,
+  parentData,
 }: RepeaterFieldProps) {
   const items = value ?? [];
   const innerFields = field.innerFields ?? [];
@@ -276,6 +292,7 @@ export function RepeaterField({
                 field={innerField}
                 itemData={item}
                 onFieldChange={(name, val) => updateItem(index, name, val)}
+                parentData={parentData}
               />
             ))}
           </div>

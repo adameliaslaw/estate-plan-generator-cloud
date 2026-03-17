@@ -109,6 +109,12 @@ export interface FieldConfig {
   rows?: number;                 // for textarea
   condition?: FieldCondition;    // show/hide within a step
   width?: 'full' | 'half' | 'third'; // grid width hint
+  // Dynamic options — pull options from top-level data (e.g. 'children' → children[].name)
+  optionsFrom?: {
+    source: string;              // dot-path to the array in QuestionnaireData (e.g. 'children')
+    labelField: string;          // field in each item to use as the label (e.g. 'name')
+    valueField: string;          // field in each item to use as the value (e.g. 'name')
+  };
   // For repeater fields
   itemLabel?: string;            // e.g. "Child", "Property"
   innerFields?: FieldConfig[];   // fields inside each repeater item
@@ -763,9 +769,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           {
             name: 'parentName',
             label: "Parent's Name (your child)",
-            type: 'text',
-            placeholder: "Which of your children is the parent?",
+            type: 'select',
+            placeholder: 'Select the parent…',
             width: 'half',
+            optionsFrom: {
+              source: 'children',
+              labelField: 'name',
+              valueField: 'name',
+            },
           },
           {
             name: 'gender',
