@@ -52,6 +52,17 @@ function evaluateCondition(
       return typeof fieldValue === 'number' && typeof value === 'number' && fieldValue < value;
     case 'exists':     return fieldValue !== undefined && fieldValue !== null;
     case 'notExists':  return fieldValue === undefined || fieldValue === null;
+    case 'hasMinorChild': {
+      if (!Array.isArray(fieldValue)) return false;
+      const today = new Date();
+      return fieldValue.some((child: Record<string, unknown>) => {
+        if (!child.dob || typeof child.dob !== 'string') return false;
+        const birth = new Date(child.dob as string);
+        let age = today.getFullYear() - birth.getFullYear();
+        if (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate())) age--;
+        return age < 18;
+      });
+    }
     default:           return false;
   }
 }
