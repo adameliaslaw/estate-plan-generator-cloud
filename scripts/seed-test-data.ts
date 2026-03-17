@@ -104,7 +104,7 @@ interface ClientData {
 const FIRM_ID = 'test-firm';
 const NOW = admin.firestore.FieldValue.serverTimestamp();
 
-// ── Scenario A: Single, no children (Foundation) ─────────────────────────
+// ── Scenario A: Single, no children (Basic Estate Plan) ──────────────────
 const scenarioA: ClientData = {
   clientId: 'test-single-no-children',
   firmId: FIRM_ID,
@@ -152,7 +152,7 @@ const scenarioA: ClientData = {
   updatedAt: NOW,
 };
 
-// ── Scenario B: Single, 2 children (Guardian) ────────────────────────────
+// ── Scenario B: Single, 2 children (Revocable Trust) ─────────────────────
 const scenarioB: ClientData = {
   clientId: 'test-single-with-children',
   firmId: FIRM_ID,
@@ -208,7 +208,7 @@ const scenarioB: ClientData = {
   updatedAt: NOW,
 };
 
-// ── Scenario C: Married, no children (Foundation) ────────────────────────
+// ── Scenario C: Married, no children (Basic Estate Plan) ─────────────────
 const scenarioC: ClientData = {
   clientId: 'test-married-no-children',
   firmId: FIRM_ID,
@@ -289,7 +289,7 @@ const scenarioC: ClientData = {
   updatedAt: NOW,
 };
 
-// ── Scenario D: Married, 3 children (Fortress) ───────────────────────────
+// ── Scenario D: Married, 3 children (Irrevocable Trust) ──────────────────
 const scenarioD: ClientData = {
   clientId: 'test-married-with-children',
   firmId: FIRM_ID,

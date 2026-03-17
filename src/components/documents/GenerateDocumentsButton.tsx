@@ -9,7 +9,7 @@
  *   firmId       — Firestore firm ID
  *   clientId     — Firestore client ID
  *   packageType  — 'foundation' | 'guardian' | 'fortress'
- *   trustTypes   — optional array of trust type strings (Fortress package)
+ *   trustTypes   — optional array of trust type strings (Irrevocable Trust package)
  *   clientName   — full client display name (for confirmation dialog)
  *   disabled     — external disable flag (e.g. questionnaire incomplete)
  *   onSuccess    — callback after successful generation

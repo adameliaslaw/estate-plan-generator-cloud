@@ -152,12 +152,18 @@ export async function generateEstatePlanSummary(
     )
     .join('; ');
 
+  const packageDisplayNames: Record<string, string> = {
+    foundation: 'Basic Estate Plan',
+    guardian: 'Revocable Trust',
+    fortress: 'Irrevocable Trust',
+  };
+
   const userPrompt = `
 Generate a complete plain-English Estate Plan Summary for this client:
 
 CLIENT: ${clientFullName}
 Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-Package: ${packageType.charAt(0).toUpperCase() + packageType.slice(1)} Package
+Package: ${packageDisplayNames[packageType] ?? packageType} Package
 ${hasSpouse && spouse ? `Spouse: ${[spouse.firstName, spouse.lastName].filter(Boolean).join(' ')}` : ''}
 
 DOCUMENTS IN THIS PACKAGE:

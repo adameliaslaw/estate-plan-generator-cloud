@@ -2140,7 +2140,7 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'distribution.pourOverToTrust',
         label: 'Pour residual estate into a trust?',
         type: 'yesno',
-        helpText: 'Used with a Revocable Living Trust (Fortress Package).',
+        helpText: 'Used with a Revocable Living Trust (Revocable Trust or Irrevocable Trust Package).',
         width: 'full',
       },
       {

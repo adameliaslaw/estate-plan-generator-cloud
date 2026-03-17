@@ -10,7 +10,7 @@
  *   clientId      — Firestore client ID
  *   clientName    — for GenerateDocumentsButton
  *   packageType   — client's selected package
- *   trustTypes    — optional array of trust types (Fortress)
+ *   trustTypes    — optional array of trust types (Irrevocable Trust package)
  *   questionnaireComplete — whether questionnaire is done (gates generation)
  */
 

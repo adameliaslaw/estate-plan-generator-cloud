@@ -1,7 +1,7 @@
 /**
  * Recommendation Engine for the NJ Estate Plan Generator
  *
- * Scores each of the three packages (Foundation, Guardian, Fortress) based on
+ * Scores each of the three packages (Basic Estate Plan, Revocable Trust, Irrevocable Trust) based on
  * the questionnaire data and returns a ranked recommendation with plain-English
  * reasons and full package option objects.
  */
@@ -22,7 +22,7 @@ export interface PackageRecommendation {
 
 export interface PackageOption {
   type: PackageType;
-  name: string;          // "The Foundation Plan", "The Guardian Plan", "The Fortress Plan"
+  name: string;          // "Basic Estate Plan Package", "Revocable Trust Package", "Irrevocable Trust Package"
   tagline: string;       // "Will-Based", "Revocable Trust Plan", "Irrevocable / Protection Plan"
   description: string;
   includedDocuments: string[];
@@ -72,12 +72,12 @@ export function calculateRecommendation(data: QuestionnaireData): PackageRecomme
 
   // ── Scoring ───────────────────────────────────────────────────────────────
 
-  // Foundation: best for simple, single-person/couple estates with no trust needs
+  // Basic Estate Plan: best for simple, single-person/couple estates with no trust needs
   if (isSimpleEstate)     foundationScore += 3;
   if (isModerateEstate)   foundationScore += 1;
   if (!hasOutOfStateRealEstate) foundationScore += 1;
 
-  // Guardian: trust-centered plan — avoids probate, handles real estate, minor children
+  // Revocable Trust: trust-centered plan — avoids probate, handles real estate, minor children
   if (hasOutOfStateRealEstate) guardianScore += 3;  // avoid ancillary probate
   if (hasRealEstate)           guardianScore += 1;   // probate-avoidance benefit
   if (hasMinorChildren)        guardianScore += 2;   // long-term trust for minors
@@ -85,7 +85,7 @@ export function calculateRecommendation(data: QuestionnaireData): PackageRecomme
   if (hasNonClassABeneficiaries) guardianScore += 2; // NJ inheritance tax waiver timing
   if (isModerateEstate || isLargeEstate) guardianScore += 1;
 
-  // Fortress: irrevocable / advanced planning for Medicaid, asset protection, SNT
+  // Irrevocable Trust: irrevocable / advanced planning for Medicaid, asset protection, SNT
   if (wantsMedicaidPlanning)    fortressScore += 3;
   if (hasSpecialNeedsChild)     fortressScore += 2;
   if (isLargeEstate)            fortressScore += 1;

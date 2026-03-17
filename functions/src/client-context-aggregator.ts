@@ -348,9 +348,9 @@ function computeFields(
     `The ${clientFullName} Revocable Living Trust`;
 
   const packageLabels: Record<string, string> = {
-    foundation: 'Foundation',
-    guardian: 'Guardian',
-    fortress: 'Fortress',
+    foundation: 'Basic Estate Plan',
+    guardian: 'Revocable Trust',
+    fortress: 'Irrevocable Trust',
   };
 
   const now = new Date();
@@ -377,7 +377,7 @@ function computeFields(
     todayFormatted,
     todayISO,
     packageType: packageDetails.packageType ?? 'foundation',
-    packageLabel: packageLabels[packageDetails.packageType] ?? 'Foundation',
+    packageLabel: packageLabels[packageDetails.packageType] ?? 'Basic Estate Plan',
     // Relationship titles
     spouseTitle,
     clientTitle,

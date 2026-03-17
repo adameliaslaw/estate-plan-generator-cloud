@@ -181,7 +181,7 @@ function WhyPanel({ reasons }: WhyPanelProps) {
 }
 
 // ============================================================================
-// Trust type selector (for Guardian / Fortress)
+// Trust type selector (for Revocable Trust / Irrevocable Trust packages)
 // ============================================================================
 
 interface TrustTypeSelectorProps {
@@ -192,7 +192,7 @@ interface TrustTypeSelectorProps {
 
 function TrustTypeSelector({ value, onChange, packageType }: TrustTypeSelectorProps) {
   // Filter trust types by package:
-  // Guardian → revocable trusts are sensible; Fortress → any irrevocable trust
+  // Revocable Trust package → revocable trusts are sensible; Irrevocable Trust package → any irrevocable trust
   const revocableTrusts = ['Revocable Living Trust', 'Testamentary Trust', 'Land Trust'];
   const options =
     packageType === 'guardian'
@@ -297,7 +297,7 @@ export function PackageSelector({ onContinue }: PackageSelectorProps) {
         ))}
       </div>
 
-      {/* Trust type selector — only for Guardian / Fortress */}
+      {/* Trust type selector — only for Revocable Trust / Irrevocable Trust packages */}
       {needsTrustType && (
         <TrustTypeSelector
           value={selectedTrustType}
