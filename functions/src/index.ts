@@ -49,3 +49,4 @@ export { onKnowledgeResourceWritten, backfillEmbeddings, onTemplateWritten, back
 export { getDocumentVersions, getDocumentVersionContent, revertDocumentVersion } from './document-versions';
 export { enhanceTemplate } from './enhance-template';
 export { connectGoogleDrive, onDocumentWrittenSyncToDrive } from './google-drive-sync';
+export { lookupPropertyData } from './property-data';
