@@ -362,7 +362,7 @@ export async function callPerplexityWithCitations(
     throw new Error('Perplexity API key is missing. Configure it in Firm Settings → AI Configuration.');
   }
 
-  const model = options.model ?? 'sonar';
+  const model = options.model ?? 'sonar-pro';
   const temperature = options.temperature ?? 0.2;
 
   const response = await fetchWithRetry('https://api.perplexity.ai/chat/completions', {
