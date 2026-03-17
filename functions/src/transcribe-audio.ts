@@ -151,6 +151,11 @@ export const transcribeAudio = functions
     const firmData = firmSnap.data() || {};
     const customApiKey = firmData.openAiApiKey ?? firmData.settings?.openAiApiKey;
 
+    // Transcription provider toggle — 'openai' (default) or 'assemblyai'
+    const transcriptionProvider: string =
+      firmData.transcriptionProvider ??
+      firmData.settings?.transcriptionProvider ??
+      'openai';
 
     try {
       // ----------------------------------------------------------------
@@ -169,41 +174,81 @@ export const transcribeAudio = functions
 
       console.log(`[transcribeAudio] Audio downloaded — ${audioBuffer.length} bytes`);
 
-      // ----------------------------------------------------------------
-      // 5. Send to OpenAI Whisper
-      //    We instantiate OpenAI directly here (same env var as ai-client.ts)
-      //    because the Whisper API requires the raw client for file uploads.
-      // ----------------------------------------------------------------
-      const apiKey = customApiKey || process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        throw new functions.https.HttpsError(
-          'internal',
-          'OpenAI API Key is missing. Configure it in Firm Settings or environment variables.',
-        );
+      let transcriptionText: string;
+      let enhancedData: Record<string, unknown> = {};
+
+      if (transcriptionProvider === 'assemblyai') {
+        // ----------------------------------------------------------------
+        // 5a. AssemblyAI enhanced transcription
+        // ----------------------------------------------------------------
+        const { transcribeWithAssemblyAI, formatSpeakerTranscript } = await import('./assemblyai-transcribe');
+        const assemblyaiKey =
+          firmData.assemblyaiApiKey ??
+          firmData.settings?.assemblyaiApiKey ??
+          process.env.ASSEMBLYAI_API_KEY;
+
+        if (!assemblyaiKey) {
+          throw new functions.https.HttpsError(
+            'internal',
+            'AssemblyAI API Key is missing. Configure it in Firm Settings or set ASSEMBLYAI_API_KEY.',
+          );
+        }
+
+        console.log(`[transcribeAudio] Using AssemblyAI for transcription`);
+        const result = await transcribeWithAssemblyAI(audioBuffer, assemblyaiKey, {
+          speakerDiarization: true,
+          entityExtraction: true,
+          autoSummary: true,
+        });
+
+        // Use speaker-labeled transcript if available, otherwise plain text
+        transcriptionText = result.utterances.length > 0
+          ? formatSpeakerTranscript(result.utterances)
+          : result.text;
+
+        enhancedData = {
+          transcriptionSummary: result.summary,
+          extractedEntities: result.entities,
+          speakerCount: result.speakerCount,
+          audioDuration: result.audioDuration,
+          transcriptionConfidence: result.confidence,
+          transcriptionProvider: 'assemblyai',
+          assemblyaiTranscriptId: result.transcriptId,
+        };
+
+      } else {
+        // ----------------------------------------------------------------
+        // 5b. OpenAI Whisper (default)
+        // ----------------------------------------------------------------
+        const apiKey = customApiKey || process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          throw new functions.https.HttpsError(
+            'internal',
+            'OpenAI API Key is missing. Configure it in Firm Settings or environment variables.',
+          );
+        }
+        const openai = new OpenAI({ apiKey });
+        const filename = storagePath.split('/').pop() ?? 'audio.mp3';
+        const mimeType = mimeTypeFromPath(storagePath);
+
+        const audioFile = await toFile(audioBuffer, filename, { type: mimeType });
+
+        const promptText = "This is a legal meeting or dictation for an estate planning attorney regarding a client's will, trust, beneficiaries, assets, taxes, probate, and health care directives. Please use proper punctuation, capitalization, and paragraph breaks. Accuracy is extremely important.";
+
+        console.log(`[transcribeAudio] Sending to Whisper — model=whisper-1 mime=${mimeType}`);
+        const transcriptionResponse = await openai.audio.transcriptions.create({
+          model: 'whisper-1',
+          file: audioFile,
+          response_format: 'text',
+          prompt: promptText,
+        });
+
+        transcriptionText = transcriptionResponse as unknown as string;
+        enhancedData = { transcriptionProvider: 'openai' };
       }
-      const openai = new OpenAI({ apiKey });
-      const filename = storagePath.split('/').pop() ?? 'audio.mp3';
-      const mimeType = mimeTypeFromPath(storagePath);
-
-      // The openai SDK's `toFile` helper wraps a Buffer/Blob as a File-like
-      // object so Whisper can detect the format from the filename extension.
-      const audioFile = await toFile(audioBuffer, filename, { type: mimeType });
-
-      const promptText = "This is a legal meeting or dictation for an estate planning attorney regarding a client's will, trust, beneficiaries, assets, taxes, probate, and health care directives. Please use proper punctuation, capitalization, and paragraph breaks. Accuracy is extremely important.";
-
-      console.log(`[transcribeAudio] Sending to Whisper — model=whisper-1 mime=${mimeType}`);
-      const transcriptionResponse = await openai.audio.transcriptions.create({
-        model: 'whisper-1',
-        file: audioFile,
-        response_format: 'text',
-        prompt: promptText,
-      });
-
-      // response_format: 'text' returns a plain string, not an object
-      const transcriptionText = transcriptionResponse as unknown as string;
 
       console.log(
-        `[transcribeAudio] Transcription complete — ${transcriptionText.length} chars`,
+        `[transcribeAudio] Transcription complete (${transcriptionProvider}) — ${transcriptionText.length} chars`,
       );
 
       // ----------------------------------------------------------------
@@ -215,6 +260,7 @@ export const transcribeAudio = functions
         transcriptionCompletedAt: now,
         updatedAt: now,
         updatedBy: context.auth.uid,
+        ...enhancedData,
       });
 
       console.log(`[transcribeAudio] Saved transcription to noteId=${noteId}`);
