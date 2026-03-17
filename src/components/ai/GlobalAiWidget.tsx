@@ -85,6 +85,7 @@ export function GlobalAiWidget() {
   const [mentionedClient, setMentionedClient] = useState<ClientOption | null>(null);
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [highlightedMentionIndex, setHighlightedMentionIndex] = useState(0);
   const [allClients, setAllClients] = useState<ClientOption[]>([]);
   const [clientsLoaded, setClientsLoaded] = useState(false);
 
@@ -160,9 +161,11 @@ export function GlobalAiWidget() {
     if (atMatch) {
       setMentionQuery(atMatch[1]);
       setShowMentionDropdown(true);
+      setHighlightedMentionIndex(0);
     } else {
       setShowMentionDropdown(false);
       setMentionQuery('');
+      setHighlightedMentionIndex(0);
     }
   };
 
@@ -375,6 +378,35 @@ export function GlobalAiWidget() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // When the @mention dropdown is visible, intercept keyboard navigation
+    if (showMentionDropdown && filteredClients.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightedMentionIndex((prev) =>
+          prev < filteredClients.length - 1 ? prev + 1 : 0,
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightedMentionIndex((prev) =>
+          prev > 0 ? prev - 1 : filteredClients.length - 1,
+        );
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        selectMentionedClient(filteredClients[highlightedMentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionDropdown(false);
+        setMentionQuery('');
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -680,13 +712,24 @@ export function GlobalAiWidget() {
                 <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
                   Select a client
                 </div>
-                {filteredClients.map((client) => (
+                {filteredClients.map((client, idx) => (
                   <button
                     key={client.id}
                     onClick={() => selectMentionedClient(client)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                    onMouseEnter={() => setHighlightedMentionIndex(idx)}
+                    className={cn(
+                      'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors',
+                      idx === highlightedMentionIndex
+                        ? 'bg-purple-50 text-purple-700'
+                        : 'text-gray-700 hover:bg-purple-50 hover:text-purple-700',
+                    )}
                   >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-500">
+                    <div className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold',
+                      idx === highlightedMentionIndex
+                        ? 'bg-purple-100 text-purple-600'
+                        : 'bg-gray-100 text-gray-500',
+                    )}>
                       {client.name.charAt(0).toUpperCase()}
                     </div>
                     <span className="font-medium">{client.name}</span>

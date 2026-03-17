@@ -54,6 +54,7 @@ export type FieldType =
   | 'radio'
   | 'checkbox'
   | 'multiselect'
+  | 'combobox'    // searchable typeahead select
   | 'yesno'       // Yes/No toggle buttons
   | 'ssn4'        // last 4 of SSN (masked)
   | 'address'     // composite address fields
