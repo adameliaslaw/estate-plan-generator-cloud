@@ -59,23 +59,23 @@ interface ChargeResult {
 /** Global AffiniPay Hosted Fields SDK type declarations */
 interface HostedFieldState {
   isReady: boolean;
-  isValid: boolean;
-  isFocused: boolean;
-  isEmpty: boolean;
-  cardType?: string;
+  fields: { selector: string; type: string; error: string; length: number }[];
+  target: { selector: string; type: string; error: string; length: number } | null;
 }
 
 interface HostedFieldsInstance {
   getPaymentToken: (formData: Record<string, string>) => Promise<{ id: string }>;
-  getState: () => Record<string, HostedFieldState>;
+  getState: () => HostedFieldState;
 }
 
 interface HostedFieldConfig {
   publicKey: string;
-  input: {
-    el: string;
-    type: string;
-    css?: Record<string, string>;
+  fields: {
+    selector: string;
+    input: {
+      type: 'credit_card_number' | 'cvv' | 'bank_account_number' | 'routing_number' | 'text';
+      css?: Record<string, string | Record<string, string>>;
+    };
   }[];
 }
 
@@ -85,9 +85,9 @@ declare global {
       HostedFields: {
         initializeFields: (
           config: HostedFieldConfig,
-          callback: (state: Record<string, HostedFieldState>) => void,
+          callback: (state: HostedFieldState) => void,
         ) => HostedFieldsInstance;
-        getState: () => Record<string, HostedFieldState>;
+        isInitialized?: boolean;
       };
     };
   }
@@ -212,6 +212,13 @@ export function ChargePaymentDialog({
   const [description, setDescription] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [paymentType, setPaymentType] = useState<'card' | 'echeck'>('card');
+  // Card expiration form inputs (not hosted fields — SDK requires them as plain form data)
+  const [expMonth, setExpMonth] = useState('');
+  const [expYear, setExpYear] = useState('');
+  // eCheck account details
+  const [accountType, setAccountType] = useState<'checking' | 'savings'>('checking');
+  const [accountHolderType, setAccountHolderType] = useState<'individual' | 'business'>('individual');
+  const [accountHolderName, setAccountHolderName] = useState('');
 
   // SDK / processing state
   const [sdkReady, setSdkReady] = useState(false);
@@ -250,37 +257,28 @@ export function ChargePaymentDialog({
 
       const cardConfig: HostedFieldConfig = {
         publicKey: lawPayPublicKey,
-        input: [
+        fields: [
           {
-            el: '#af-card-number',
-            type: 'card_number',
-            css: HOSTED_FIELD_CSS,
+            selector: 'af-card-number',
+            input: { type: 'credit_card_number', css: HOSTED_FIELD_CSS },
           },
           {
-            el: '#af-card-exp',
-            type: 'expiration',
-            css: HOSTED_FIELD_CSS,
-          },
-          {
-            el: '#af-card-cvv',
-            type: 'cvv',
-            css: HOSTED_FIELD_CSS,
+            selector: 'af-card-cvv',
+            input: { type: 'cvv', css: HOSTED_FIELD_CSS },
           },
         ],
       };
 
       const bankConfig: HostedFieldConfig = {
         publicKey: lawPayPublicKey,
-        input: [
+        fields: [
           {
-            el: '#af-routing-number',
-            type: 'routing_number',
-            css: HOSTED_FIELD_CSS,
+            selector: 'af-routing-number',
+            input: { type: 'routing_number', css: HOSTED_FIELD_CSS },
           },
           {
-            el: '#af-account-number',
-            type: 'account_number',
-            css: HOSTED_FIELD_CSS,
+            selector: 'af-account-number',
+            input: { type: 'bank_account_number', css: HOSTED_FIELD_CSS },
           },
         ],
       };
@@ -293,8 +291,11 @@ export function ChargePaymentDialog({
       }
 
       hostedFieldsRef.current =
-        af.HostedFields.initializeFields(config, () => {
-          setSdkReady(true);
+        af.HostedFields.initializeFields(config, (state) => {
+          console.log('[ChargePaymentDialog] Hosted Fields state:', state);
+          if (state.isReady) {
+            setSdkReady(true);
+          }
         });
     } catch (err) {
       console.error('[ChargePaymentDialog] SDK init error:', err);
@@ -344,6 +345,11 @@ export function ChargePaymentDialog({
     setShowSuccess(false);
     setSdkReady(false);
     setSdkError(null);
+    setExpMonth('');
+    setExpYear('');
+    setAccountType('checking');
+    setAccountHolderType('individual');
+    setAccountHolderName('');
     initAttempted.current = false;
     hostedFieldsRef.current = null;
     onClose();
@@ -375,10 +381,35 @@ export function ChargePaymentDialog({
     setProcessing(true);
 
     try {
-      // Step 1: Get the one-time payment token from Hosted Fields
-      const tokenResult = await hostedFieldsRef.current.getPaymentToken({
+      // Step 1: Build form data required by the SDK
+      const formData: Record<string, string> = {
         name: effectiveClientName || 'Client',
-      });
+      };
+
+      if (paymentType === 'card') {
+        if (!expMonth || !expYear) {
+          toast.error('Please enter the card expiration date.');
+          setProcessing(false);
+          return;
+        }
+        formData.exp_month = expMonth;
+        formData.exp_year = expYear;
+      } else {
+        // eCheck requires account_type and account_holder_type
+        formData.account_type = accountType;
+        formData.account_holder_type = accountHolderType;
+        if (accountHolderType === 'business') {
+          formData.name = accountHolderName || effectiveClientName || 'Client';
+        } else {
+          // Individual requires given_name and surname
+          const nameParts = (effectiveClientName || 'Client').split(' ');
+          formData.given_name = nameParts[0] || '';
+          formData.surname = nameParts.slice(1).join(' ') || nameParts[0] || '';
+        }
+      }
+
+      // Step 2: Get the one-time payment token from Hosted Fields
+      const tokenResult = await hostedFieldsRef.current.getPaymentToken(formData);
 
       if (!tokenResult?.id) {
         throw new Error(
@@ -429,6 +460,11 @@ export function ChargePaymentDialog({
     amountStr,
     firmId,
     paymentType,
+    expMonth,
+    expYear,
+    accountType,
+    accountHolderType,
+    accountHolderName,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -613,12 +649,29 @@ export function ChargePaymentDialog({
                     className="h-10 rounded-md border border-gray-300 bg-white"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-gray-500">Expiration</Label>
-                    <div
-                      id="af-card-exp"
-                      className="h-10 rounded-md border border-gray-300 bg-white"
+                    <Label className="text-xs text-gray-500">Month (MM)</Label>
+                    <Input
+                      id="af-exp-month"
+                      type="text"
+                      maxLength={2}
+                      placeholder="MM"
+                      value={expMonth}
+                      onChange={(e) => setExpMonth(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                      className="h-10 text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Year (YYYY)</Label>
+                    <Input
+                      id="af-exp-year"
+                      type="text"
+                      maxLength={4}
+                      placeholder="YYYY"
+                      value={expYear}
+                      onChange={(e) => setExpYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      className="h-10 text-center"
                     />
                   </div>
                   <div className="space-y-1">
@@ -650,6 +703,43 @@ export function ChargePaymentDialog({
                     className="h-10 rounded-md border border-gray-300 bg-white"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Account Type</Label>
+                    <Select value={accountType} onValueChange={(v) => setAccountType(v as 'checking' | 'savings')}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="checking">Checking</SelectItem>
+                        <SelectItem value="savings">Savings</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Account Holder</Label>
+                    <Select value={accountHolderType} onValueChange={(v) => setAccountHolderType(v as 'individual' | 'business')}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual">Individual</SelectItem>
+                        <SelectItem value="business">Business</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {accountHolderType === 'business' && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Business Name</Label>
+                    <Input
+                      value={accountHolderName}
+                      onChange={(e) => setAccountHolderName(e.target.value)}
+                      placeholder="Business name"
+                      className="h-10"
+                    />
+                  </div>
+                )}
               </>
             )}
 
