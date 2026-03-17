@@ -121,7 +121,9 @@ async function _callOpenAI(
       { role: 'user', content: userPrompt },
     ],
     temperature,
-    max_tokens: maxTokens,
+    // Newer OpenAI models (gpt-5.4, o1, o3, etc.) require max_completion_tokens
+    // instead of the deprecated max_tokens parameter
+    max_completion_tokens: maxTokens,
   };
 
   if (options.jsonMode) {
