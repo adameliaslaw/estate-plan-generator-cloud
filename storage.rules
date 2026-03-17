@@ -34,6 +34,19 @@ service firebase.storage {
       ) && request.resource.size < 100 * 1024 * 1024;
     }
 
+    // Scanned questionnaire images (handwritten intake photos)
+    match /firms/{firmId}/clients/{clientId}/scans/{scanFile} {
+      allow read: if request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId) ||
+        (request.auth.token.role == 'client' && request.auth.token.clientId == clientId)
+      );
+      allow write: if request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
+      ) && request.resource.size < 50 * 1024 * 1024;
+    }
+
     // Draft document uploads from vault (docx/pdf files uploaded by staff for AI processing)
     match /firms/{firmId}/clients/{clientId}/uploads/{uploadFile} {
       allow read: if request.auth != null && (
@@ -67,7 +80,7 @@ service firebase.storage {
       );
       allow write: if request.auth != null && (
         request.auth.token.role == 'admin' ||
-        (request.auth.token.role == 'attorney' && request.auth.token.firmId == firmId)
+        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
       ) && request.resource.size < 200 * 1024 * 1024;
     }
 
@@ -79,7 +92,7 @@ service firebase.storage {
       );
       allow write: if request.auth != null && (
         request.auth.token.role == 'admin' ||
-        (request.auth.token.role == 'attorney' && request.auth.token.firmId == firmId)
+        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
       ) && request.resource.size < 200 * 1024 * 1024;
     }
   }
