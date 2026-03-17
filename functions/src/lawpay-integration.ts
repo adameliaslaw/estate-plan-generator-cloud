@@ -76,7 +76,6 @@ interface LawPayWebhookEvent {
  * Read LawPay credentials from environment variables.
  * Throws a `failed-precondition` HttpsError if either value is absent.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getLawPayCredentials(): {
   apiKey: string;
   echeckAccountId: string;
@@ -642,3 +641,272 @@ export const lawpayWebhook = onRequest(
     res.status(200).send('OK');
   },
 );
+
+// ---------------------------------------------------------------------------
+// Function 3 — processDirectCharge (onCall)
+// ---------------------------------------------------------------------------
+
+/**
+ * processDirectCharge
+ *
+ * Processes a direct payment charge using a one-time payment token obtained
+ * from AffiniPay Hosted Fields on the frontend. The token is passed to
+ * POST /v1/charges on the AffiniPay Payment Gateway API.
+ *
+ * Input:  { firmId, clientId, amount, description, paymentToken,
+ *           paymentType, clientEmail, clientName }
+ * Output: { success, chargeId?, status?, errorMessage? }
+ */
+
+interface ProcessDirectChargeData {
+  firmId: string;
+  clientId: string;
+  /** Amount in **cents** (e.g. 150000 = $1,500.00) */
+  amount: number;
+  description: string;
+  /** One-time token ID from AffiniPay Hosted Fields */
+  paymentToken: string;
+  /** 'card' or 'echeck' — determines which LawPay account ID to use */
+  paymentType: 'card' | 'echeck';
+  clientEmail?: string;
+  clientName?: string;
+}
+
+export const processDirectCharge = functions
+  .region('us-east1')
+  .runWith({
+    timeoutSeconds: 60,
+    memory: '256MB',
+    secrets: ['LAWPAY_API_KEY', 'LAWPAY_ECHECK_ACCOUNT_ID', 'LAWPAY_CARD_ACCOUNT_ID'],
+  })
+  .https.onCall(async (data: ProcessDirectChargeData, context) => {
+    // ------------------------------------------------------------------
+    // 1. Auth check
+    // ------------------------------------------------------------------
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'You must be logged in to process payments.',
+      );
+    }
+
+    const {
+      firmId,
+      clientId,
+      amount,
+      description,
+      paymentToken,
+      paymentType,
+      clientEmail,
+      clientName,
+    } = data;
+
+    // ------------------------------------------------------------------
+    // 2. Validate input and permissions
+    // ------------------------------------------------------------------
+    if (!firmId || !clientId) {
+      throw new functions.https.HttpsError('invalid-argument', 'firmId and clientId are required.');
+    }
+
+    // Check firm access
+    if (context.auth.token.firmId !== firmId && context.auth.token.role !== 'admin') {
+      throw new functions.https.HttpsError('permission-denied', 'You do not have access to this firm.');
+    }
+
+    // Check billing capability
+    const role = context.auth.token.role as string | undefined;
+    const capabilities = (context.auth.token.capabilities || []) as string[];
+    const canManageBilling =
+      role === 'admin' || role === 'attorney' || capabilities.includes('manage_billing');
+
+    if (!canManageBilling) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'You do not have permission to manage billing.',
+      );
+    }
+
+    if (!amount || amount <= 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'amount must be a positive integer (in cents).');
+    }
+    if (!description?.trim()) {
+      throw new functions.https.HttpsError('invalid-argument', 'description is required.');
+    }
+    if (!paymentToken?.trim()) {
+      throw new functions.https.HttpsError('invalid-argument', 'paymentToken is required.');
+    }
+    if (!paymentType || !['card', 'echeck'].includes(paymentType)) {
+      throw new functions.https.HttpsError('invalid-argument', 'paymentType must be "card" or "echeck".');
+    }
+
+    console.log(
+      `[processDirectCharge] firmId=${firmId} clientId=${clientId} ` +
+      `amount=${amount} paymentType=${paymentType}`,
+    );
+
+    // ------------------------------------------------------------------
+    // 3. Get LawPay credentials
+    // ------------------------------------------------------------------
+    const { apiKey, echeckAccountId, cardAccountId } = getLawPayCredentials();
+    const accountId = paymentType === 'echeck' ? echeckAccountId : cardAccountId;
+
+    if (!accountId) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        `LawPay ${paymentType} account ID is not configured. ` +
+        `Set LAWPAY_${paymentType === 'echeck' ? 'ECHECK' : 'CARD'}_ACCOUNT_ID as a Cloud Function secret.`,
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Create the charge via AffiniPay Payment Gateway API
+    // ------------------------------------------------------------------
+    const db = admin.firestore();
+    const paymentDocRef = db
+      .collection('firms')
+      .doc(firmId)
+      .collection('clients')
+      .doc(clientId)
+      .collection('payments')
+      .doc(); // auto-generated ID
+
+    const reference = `${firmId}::${clientId}::${paymentDocRef.id}`;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    try {
+      const chargeBody = {
+        amount,
+        method: paymentToken.trim(),
+        account_id: accountId,
+        reference,
+        description: description.trim(),
+        auto_capture: true,
+      };
+
+      console.log(`[processDirectCharge] Calling POST /v1/charges — account_id=${accountId}`);
+
+      const authHeader = 'Basic ' + Buffer.from(`${apiKey}:`).toString('base64');
+
+      const response = await fetch('https://api.8am.com/v1/charges', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+        body: JSON.stringify(chargeBody),
+      });
+
+      const responseData = await response.json() as Record<string, unknown>;
+
+      if (!response.ok) {
+        // Charge was rejected by the gateway
+        const errorMsg =
+          (responseData.messages as Array<{ message: string }> | undefined)?.[0]?.message ??
+          (responseData.message as string | undefined) ??
+          `Charge failed with status ${response.status}`;
+
+        console.error(
+          `[processDirectCharge] Charge REJECTED — status=${response.status} error="${errorMsg}"`,
+        );
+
+        // Save as failed payment record so the user can see the attempt
+        await paymentDocRef.set({
+          id: paymentDocRef.id,
+          firmId,
+          clientId,
+          amount,
+          amountPaid: 0,
+          balanceDue: amount,
+          description: description.trim(),
+          paymentMethod: paymentType === 'card' ? 'Credit Card' : 'ACH / Bank Transfer',
+          accountDesignation: 'operating',
+          status: 'failed',
+          lastFailureReason: errorMsg,
+          clientEmail: clientEmail || '',
+          clientName: clientName || '',
+          createdAt: now,
+          createdBy: context.auth.uid,
+          updatedAt: now,
+          updatedBy: context.auth.uid,
+        });
+
+        return {
+          success: false,
+          errorMessage: errorMsg,
+          paymentDocId: paymentDocRef.id,
+        };
+      }
+
+      // Charge succeeded (status is typically AUTHORIZED, auto-captured daily)
+      const chargeId = responseData.id as string;
+      const chargeStatus = responseData.status as string;
+      const authorizationCode = responseData.authorization_code as string | undefined;
+
+      console.log(
+        `[processDirectCharge] Charge SUCCESS — chargeId=${chargeId} status=${chargeStatus}`,
+      );
+
+      // Save the payment record — mark as paid since the charge was authorized
+      await paymentDocRef.set({
+        id: paymentDocRef.id,
+        firmId,
+        clientId,
+        amount,
+        amountPaid: amount,
+        balanceDue: 0,
+        description: description.trim(),
+        paymentMethod: paymentType === 'card' ? 'Credit Card' : 'ACH / Bank Transfer',
+        accountDesignation: 'operating',
+        status: 'paid',
+        paidAt: now,
+        lawPayChargeId: chargeId,
+        lawPayTransactionId: chargeId,
+        authorizationCode: authorizationCode || '',
+        clientEmail: clientEmail || '',
+        clientName: clientName || '',
+        createdAt: now,
+        createdBy: context.auth.uid,
+        updatedAt: now,
+        updatedBy: context.auth.uid,
+      });
+
+      return {
+        success: true,
+        chargeId,
+        status: chargeStatus,
+        paymentDocId: paymentDocRef.id,
+      };
+    } catch (error: unknown) {
+      console.error('[processDirectCharge] Unexpected error:', error);
+
+      // Save a failed record so the attempt is visible
+      try {
+        await paymentDocRef.set({
+          id: paymentDocRef.id,
+          firmId,
+          clientId,
+          amount,
+          amountPaid: 0,
+          balanceDue: amount,
+          description: description.trim(),
+          paymentMethod: paymentType === 'card' ? 'Credit Card' : 'ACH / Bank Transfer',
+          accountDesignation: 'operating',
+          status: 'failed',
+          lastFailureReason: error instanceof Error ? error.message : 'Unexpected error processing charge',
+          clientEmail: clientEmail || '',
+          clientName: clientName || '',
+          createdAt: now,
+          createdBy: context.auth.uid,
+          updatedAt: now,
+          updatedBy: context.auth.uid,
+        });
+      } catch (saveError) {
+        console.error('[processDirectCharge] Failed to save error record:', saveError);
+      }
+
+      throw new functions.https.HttpsError(
+        'internal',
+        error instanceof Error ? error.message : 'Failed to process payment.',
+      );
+    }
+  });

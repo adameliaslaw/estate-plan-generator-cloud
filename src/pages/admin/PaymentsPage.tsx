@@ -16,11 +16,12 @@ import {
     Send,
     Plus,
     Trash2,
+    CreditCard,
 } from 'lucide-react';
 import { where, orderBy, limit } from 'firebase/firestore';
 import { toast } from 'sonner';
 
-import { useCollectionGroup, useCollection, deleteDoc } from '@/hooks/useFirestore';
+import { useCollectionGroup, useCollection, useDocument, deleteDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { COLLECTIONS } from '@/config/constants';
@@ -38,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { SendPaymentDialog } from '@/components/payments/SendPaymentDialog';
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog';
+import { ChargePaymentDialog } from '@/components/payments/ChargePaymentDialog';
 
 
 
@@ -93,6 +95,7 @@ export default function PaymentsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showSendDialog, setShowSendDialog] = useState(false);
     const [showRecordDialog, setShowRecordDialog] = useState(false);
+    const [showChargeDialog, setShowChargeDialog] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [confirmDeletePayment, setConfirmDeletePayment] = useState<(Payment & { id: string }) | null>(null);
 
@@ -100,6 +103,11 @@ export default function PaymentsPage() {
     const { data: allClients } = useCollection<Client>(
         firmId ? COLLECTIONS.CLIENTS(firmId) : null,
         useMemo(() => [orderBy('createdAt', 'desc'), limit(200)], []),
+    );
+
+    // Fetch firm settings for lawPayPublicKey
+    const { data: firmDoc } = useDocument<{ lawPayPublicKey?: string }>(
+        firmId ? `firms/${firmId}` : null,
     );
 
     // Collection-group query: all payments for this firm
@@ -220,6 +228,13 @@ export default function PaymentsPage() {
                             >
                                 <Send className="mr-2 h-4 w-4" />
                                 Send Payment Request
+                            </Button>
+                            <Button
+                                onClick={() => setShowChargeDialog(true)}
+                                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                                <CreditCard className="mr-2 h-4 w-4" />
+                                Charge Payment
                             </Button>
                         </>
                     )}
@@ -402,6 +417,15 @@ export default function PaymentsPage() {
                 open={showRecordDialog}
                 onClose={() => setShowRecordDialog(false)}
                 firmId={firmId}
+                clients={allClients as (Client & { id: string })[]}
+            />
+
+            {/* Charge Payment Dialog */}
+            <ChargePaymentDialog
+                open={showChargeDialog}
+                onClose={() => setShowChargeDialog(false)}
+                firmId={firmId}
+                lawPayPublicKey={firmDoc?.lawPayPublicKey ?? ''}
                 clients={allClients as (Client & { id: string })[]}
             />
 

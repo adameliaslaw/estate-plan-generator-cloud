@@ -215,6 +215,7 @@ export interface FirmSettings {
   googleMapsApiKey?: string;
   // Other integrations
   lawPayApiKey?: string;
+  lawPayPublicKey?: string;
   sendGridApiKey?: string;
   lawPayMerchantId?: string;
 }

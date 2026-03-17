@@ -153,6 +153,7 @@ interface FirmSettings {
   transcriptionProvider?: 'openai' | 'assemblyai';
   assemblyaiApiKey?: string;
   lawPayApiKey?: string;
+  lawPayPublicKey?: string;
   lawPayMerchantId?: string;
   sendGridApiKey?: string;
   levitateApiKey?: string;
@@ -282,6 +283,7 @@ export default function SettingsPage() {
   const [documentDraftingModel, setDocumentDraftingModel] = useState('');
 
   const [lawPayKey, setLawPayKey] = useState('');
+  const [lawPayPublicKey, setLawPayPublicKey] = useState('');
   const [lawPayMerchantId, setLawPayMerchantId] = useState('');
   const [sendGridKey, setSendGridKey] = useState('');
   const [levitateKey, setLevitateKey] = useState('');
@@ -559,9 +561,11 @@ export default function SettingsPage() {
     try {
       const updates: Partial<FirmSettings> = { updatedBy: userProfile?.uid ?? '' };
       if (lawPayKey.trim()) updates.lawPayApiKey = lawPayKey.trim();
+      if (lawPayPublicKey.trim()) updates.lawPayPublicKey = lawPayPublicKey.trim();
       if (lawPayMerchantId.trim()) updates.lawPayMerchantId = lawPayMerchantId.trim();
       await updateDoc(firmDocPath, updates);
       setLawPayKey('');
+      setLawPayPublicKey('');
       setLawPayMerchantId('');
       toast.success('LawPay credentials saved.');
     } catch (err) {
@@ -570,7 +574,7 @@ export default function SettingsPage() {
     } finally {
       setSavingLawPay(false);
     }
-  }, [firmDocPath, lawPayKey, lawPayMerchantId, userProfile]);
+  }, [firmDocPath, lawPayKey, lawPayPublicKey, lawPayMerchantId, userProfile]);
 
   const handleSaveTranscriptionProvider = useCallback(
     async (provider: 'openai' | 'assemblyai') => {
@@ -1595,6 +1599,20 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
+                      <Label className="text-sm font-medium text-[#1a365d]">Public Key</Label>
+                      <p className="text-xs text-gray-500">Used for client-side payment tokenization (Hosted Fields). Safe to expose.</p>
+                      <Input
+                        value={lawPayPublicKey}
+                        onChange={(e) => setLawPayPublicKey(e.target.value)}
+                        placeholder={
+                          firmDoc?.lawPayPublicKey
+                            ? maskApiKey(firmDoc.lawPayPublicKey)
+                            : 'Enter LawPay public key…'
+                        }
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-[#1a365d]">
                         Merchant ID
                       </Label>
@@ -1623,7 +1641,7 @@ export default function SettingsPage() {
                       <Button
                         size="sm"
                         onClick={handleSaveLawPay}
-                        disabled={savingLawPay || (!lawPayKey.trim() && !lawPayMerchantId.trim())}
+                        disabled={savingLawPay || (!lawPayKey.trim() && !lawPayPublicKey.trim() && !lawPayMerchantId.trim())}
                         className="bg-[#2b6cb0] hover:bg-[#1a365d]"
                       >
                         {savingLawPay ? (

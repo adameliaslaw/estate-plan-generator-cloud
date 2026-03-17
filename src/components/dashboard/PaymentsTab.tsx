@@ -31,6 +31,7 @@ import {
   RefreshCcw,
   Circle,
   ExternalLink,
+  CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,7 +65,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-import { useCollection, createDoc, deleteDoc } from '@/hooks/useFirestore';
+import { useCollection, useDocument, createDoc, deleteDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { COLLECTIONS } from '@/config/constants';
@@ -73,6 +74,7 @@ import type { Payment, PaymentMethod, PaymentStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { logSystemActivity } from '@/utils/activity-logger';
 import { functions } from '@/config/firebase';
+import { ChargePaymentDialog } from '@/components/payments/ChargePaymentDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -698,7 +700,13 @@ export default function PaymentsTab({
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [showRecordDialog, setShowRecordDialog] = useState(false);
   const [showRequestDialog, setShowRequestDialog] = useState(false);
+  const [showChargeDialog, setShowChargeDialog] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Fetch firm settings for lawPayPublicKey
+  const { data: firmDoc } = useDocument<{ lawPayPublicKey?: string }>(
+    firmId ? `firms/${firmId}` : null,
+  );
 
   const { data: payments, loading, error } = useCollection<Payment>(
     firmId && clientId ? COLLECTIONS.PAYMENTS(firmId, clientId) : null,
@@ -809,6 +817,16 @@ export default function PaymentsTab({
             >
               <Plus className="h-4 w-4" />
               Record Payment
+            </Button>
+          )}
+          {canManageBilling && (
+            <Button
+              size="sm"
+              className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={() => setShowChargeDialog(true)}
+            >
+              <CreditCard className="h-4 w-4" />
+              Charge Payment
             </Button>
           )}
         </div>
@@ -1091,6 +1109,15 @@ export default function PaymentsTab({
         clientEmail={clientEmail}
         clientName={clientName}
         createdBy={uid}
+      />
+      <ChargePaymentDialog
+        open={showChargeDialog}
+        onClose={() => setShowChargeDialog(false)}
+        firmId={firmId}
+        lawPayPublicKey={firmDoc?.lawPayPublicKey ?? ''}
+        clientId={clientId}
+        clientEmail={clientEmail}
+        clientName={clientName}
       />
     </div>
   );
