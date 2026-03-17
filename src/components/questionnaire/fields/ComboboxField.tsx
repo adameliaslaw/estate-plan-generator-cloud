@@ -65,11 +65,17 @@ export function ComboboxField({ field, value, onChange, options: overrideOptions
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
-        const opt = resolvedOptions.find((o) => o.label.toLowerCase() === inputText.toLowerCase());
+        const trimmed = inputText.trim();
+        const opt = resolvedOptions.find((o) => o.label.toLowerCase() === trimmed.toLowerCase());
         if (opt) {
+          // Exact match — store the canonical value
           onChange(opt.value);
           setInputText(opt.label);
-        } else if (!inputText.trim()) {
+        } else if (trimmed) {
+          // Freeform text — store it as-is so document templates get the value
+          onChange(trimmed);
+        } else {
+          // Empty input — clear
           onChange('');
         }
       }
@@ -121,6 +127,11 @@ export function ComboboxField({ field, value, onChange, options: overrideOptions
           selectOption(filtered[highlightIndex]);
         } else if (filtered.length === 1) {
           selectOption(filtered[0]);
+        } else if (inputText.trim()) {
+          // Freeform text — store as-is and close
+          onChange(inputText.trim());
+          setIsOpen(false);
+          setHighlightIndex(-1);
         }
         break;
       case 'Escape':
@@ -131,6 +142,9 @@ export function ComboboxField({ field, value, onChange, options: overrideOptions
       case 'Tab':
         if (highlightIndex >= 0 && highlightIndex < filtered.length) {
           selectOption(filtered[highlightIndex]);
+        } else if (inputText.trim()) {
+          // Freeform text on tab-out
+          onChange(inputText.trim());
         }
         setIsOpen(false);
         break;
