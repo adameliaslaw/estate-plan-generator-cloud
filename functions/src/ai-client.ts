@@ -28,6 +28,13 @@ export interface CallAIOptions {
    * For non-OpenAI providers, the schema is included in the system prompt.
    */
   jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean };
+  /**
+   * Gemini Google Search Grounding.
+   * When true, Gemini will use Google Search to ground its responses
+   * against real-time web data (statutory citations, current law, etc.).
+   * Only applicable when provider is Gemini.
+   */
+  groundingEnabled?: boolean;
 }
 
 /** Subset of Firm data used by the AI client for provider selection and API keys. */
@@ -307,6 +314,13 @@ async function _callGemini(
     (requestBody.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema.schema;
   } else if (options.jsonMode) {
     (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
+  }
+
+  // Google Search Grounding — enables real-time web grounding
+  if (options.groundingEnabled) {
+    (requestBody as Record<string, unknown>).tools = [
+      { google_search: {} }
+    ];
   }
 
   const response = await fetchWithRetry(endpoint, {
