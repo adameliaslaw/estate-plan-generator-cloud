@@ -734,6 +734,37 @@ export async function generateFromTemplate(
     );
   }
 
+  // ── Smart routing ──────────────────────────────────────────────────────────
+  // Uploaded DOCX templates (softwareSource set, no Handlebars variables)
+  // should skip Handlebars entirely — the template is a complete document for
+  // a sample client with no {{variables}} to substitute. Route directly to
+  // template-referenced AI which uses the template as a formatting guide.
+  const isRawUploadedTemplate =
+    !!template.softwareSource &&
+    (!template.variables || template.variables.length === 0);
+
+  if (isRawUploadedTemplate) {
+    const title = `${template.name} — ${ctx.computed.clientFullName}`;
+
+    if (mode === 'hybrid') {
+      console.info(
+        `[template-engine] Smart route: raw uploaded template for ${docType} ` +
+        `(source=${template.softwareSource}) → template-referenced AI`,
+      );
+      const content = await generateFromTemplateReference(template.content, ctx, docType);
+      return { docType, title, content, status: 'draft' };
+    }
+
+    // Template mode with a raw DOCX — no variable substitution possible,
+    // return the raw extracted HTML as-is.
+    console.info(
+      `[template-engine] Smart route: raw uploaded template for ${docType} ` +
+      `(source=${template.softwareSource}) → serving raw HTML (template mode)`,
+    );
+    return { docType, title, content: template.content, status: 'draft' };
+  }
+
+  // ── Handlebars rendering (for templates WITH variables) ─────────────────
   // Render template — guard against invalid Handlebars syntax in uploaded templates
   let renderedHtml: string;
   try {
