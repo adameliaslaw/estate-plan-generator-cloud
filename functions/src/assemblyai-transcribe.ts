@@ -219,12 +219,9 @@ export async function transcribeWithAssemblyAI(
     transcriptRequest.redact_pii_sub = options.piiRedactionPolicy ?? 'hash';
   }
 
-  // Auto summary
-  if (options.autoSummary !== false) {
-    transcriptRequest.summarization = true;
-    transcriptRequest.summary_type = options.summaryType ?? 'informative';
-    transcriptRequest.summary_model = 'conversational';
-  }
+  // NOTE: AssemblyAI deprecated summarization, summary_model, summary_type.
+  // Summaries should be generated post-transcription via callAI() or
+  // the existing summarizeTranscription Cloud Function.
 
   console.log('[AssemblyAI] Creating transcription request...');
   const createResult = await assemblyAIRequest(
@@ -239,7 +236,7 @@ export async function transcribeWithAssemblyAI(
 
   // 3. Poll for completion
   let result: AssemblyAITranscriptResult;
-  const maxWaitMs = 5 * 60 * 1000; // 5 minutes
+  const maxWaitMs = 4 * 60 * 1000; // 4 min — leave buffer before Cloud Function's 5 min timeout
   const pollIntervalMs = 3000;
   const startTime = Date.now();
 

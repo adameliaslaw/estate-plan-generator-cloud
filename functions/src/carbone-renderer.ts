@@ -147,7 +147,7 @@ async function renderWithCarbone(
   data: Record<string, unknown>,
 ): Promise<Buffer> {
   // Use require() for optional dependency — carbone may not be installed
-  type RenderFn = (template: Buffer, data: Record<string, unknown>, options: Record<string, unknown>, cb: (err: unknown, result: unknown) => void) => void;
+  type RenderFn = (templatePath: string, data: Record<string, unknown>, options: Record<string, unknown>, cb: (err: unknown, result: unknown) => void) => void;
   let render: RenderFn;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -159,24 +159,42 @@ async function renderWithCarbone(
     );
   }
 
-  return new Promise((resolve, reject) => {
-    render(
-      templateBuffer,
-      data,
-      {
-        convertTo: null, // Keep as DOCX (don't convert to PDF)
-        complement: {},  // Additional data accessible via {c.field}
-      },
-      (err: unknown, result: unknown) => {
-        if (err) {
-          console.error('[Carbone] Render error:', err);
-          reject(new Error(`Carbone render failed: ${err}`));
-          return;
-        }
-        resolve(result as Buffer);
-      },
-    );
-  });
+  // Carbone's render() expects a FILE PATH, not a Buffer.
+  // Write the template to a temp file, render, then clean up.
+  const os = await import('os');
+  const fs = await import('fs');
+  const path = await import('path');
+  const tmpPath = path.join(os.tmpdir(), `carbone-template-${Date.now()}.docx`);
+
+  try {
+    fs.writeFileSync(tmpPath, templateBuffer);
+
+    return await new Promise((resolve, reject) => {
+      render(
+        tmpPath,
+        data,
+        {
+          convertTo: null, // Keep as DOCX (don't convert to PDF)
+          complement: {},  // Additional data accessible via {c.field}
+        },
+        (err: unknown, result: unknown) => {
+          if (err) {
+            console.error('[Carbone] Render error:', err);
+            reject(new Error(`Carbone render failed: ${err}`));
+            return;
+          }
+          resolve(result as Buffer);
+        },
+      );
+    });
+  } finally {
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
