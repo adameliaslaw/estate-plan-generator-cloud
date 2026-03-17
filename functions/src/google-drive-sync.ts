@@ -13,7 +13,7 @@
  * 2. onDocumentWrittenSyncToDrive (Firestore onWrite trigger)
  *    Fires whenever a document in the vault is created or updated.
  *    Generates a PDF via Puppeteer and uploads/updates it in the firm's
- *    Google Drive under an "Estate Plans / [Client Name]" folder.
+ *    Google Drive under "Everybody (S) / Wills and Trusts / [Client Name]".
  *
  * Firestore paths:
  *   Firm Drive tokens:  firms/{firmId}.googleDrive
@@ -199,9 +199,9 @@ async function findOrCreateFolder(
 
 /**
  * Ensure the full folder hierarchy exists:
- *   root → "Estate Plans" → "[Client Name]"
+ *   root → "Everybody (S)" → "Wills and Trusts" → "[Client Name]"
  *
- * Caches the root folder ID on the firm doc for reuse.
+ * Caches the "Wills and Trusts" folder ID on the firm doc for reuse.
  */
 async function ensureDriveFolders(
   db: admin.firestore.Firestore,
@@ -210,17 +210,19 @@ async function ensureDriveFolders(
   accessToken: string,
   cachedRootFolderId?: string,
 ): Promise<{ rootFolderId: string; clientFolderId: string }> {
-  // Root folder: "Estate Plans"
+  // "Wills and Trusts" folder (cached as rootFolderId)
   let rootFolderId = cachedRootFolderId;
   if (!rootFolderId) {
-    rootFolderId = await findOrCreateFolder(accessToken, 'Estate Plans');
-    // Cache on firm doc
+    // Navigate: root → "Everybody (S)" → "Wills and Trusts"
+    const everybodyFolderId = await findOrCreateFolder(accessToken, 'Everybody (S)');
+    rootFolderId = await findOrCreateFolder(accessToken, 'Wills and Trusts', everybodyFolderId);
+    // Cache the "Wills and Trusts" folder ID on firm doc
     await db.doc(`firms/${firmId}`).update({
       'googleDrive.rootFolderId': rootFolderId,
     });
   }
 
-  // Client folder: "[Client Name]"
+  // Client folder: "[Client Name]" inside "Wills and Trusts"
   const clientFolderId = await findOrCreateFolder(accessToken, clientName, rootFolderId);
 
   return { rootFolderId, clientFolderId };

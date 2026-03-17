@@ -14,7 +14,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen, Search, ExternalLink } from 'lucide-react';
+import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen, Search, ExternalLink, BookOpen } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ import { functions, db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { DOC_TYPES } from '@/config/constants';
+import { knowledgeBaseService } from '@/services/knowledge-base-service';
 
 interface ClientOption {
   id: string;
@@ -342,6 +343,46 @@ export function GlobalAiWidget() {
     } catch (err) {
       console.error('[GlobalAiWidget] Save to vault error:', err);
       toast.error('Failed to save to vault.');
+    }
+  };
+
+  // Save a research response to the Knowledge Base
+  const handleSaveToKB = async (msg: Message) => {
+    if (!firmId) {
+      toast.error('Firm ID is missing.');
+      return;
+    }
+    try {
+      // Extract title from first line or heading
+      const titleMatch = msg.content.match(/^#+\s+(.+)$/m)
+        || msg.content.match(/^\*\*(.+?)\*\*/m);
+      const title = titleMatch?.[1]?.trim()
+        || msg.content.split('\n')[0].slice(0, 80).trim()
+        || `Research — ${new Date().toLocaleDateString()}`;
+
+      // Append citations to the content
+      let fullContent = msg.content;
+      if (msg.citations && msg.citations.length > 0) {
+        fullContent += '\n\n---\nSOURCES:\n' + msg.citations.map((url, i) => `[${i + 1}] ${url}`).join('\n');
+      }
+
+      const { resourceId } = await knowledgeBaseService.addResource({
+        firmId,
+        category: 'practice_note',
+        title,
+        content: fullContent,
+        tags: ['ai-research', 'perplexity'],
+        jurisdiction: 'NJ',
+        source: 'AI Research (Perplexity)',
+        sourceUrl: msg.citations?.[0],
+      });
+
+      toast.success(`Saved to Knowledge Base: "${title}"`, {
+        description: `Resource ID: ${resourceId}`,
+      });
+    } catch (err) {
+      console.error('[GlobalAiWidget] Save to KB error:', err);
+      toast.error('Failed to save to Knowledge Base.');
     }
   };
 
@@ -726,6 +767,17 @@ export function GlobalAiWidget() {
                           >
                             <FolderOpen className="h-3 w-3" />
                             Save to Vault
+                          </button>
+                        )}
+                        {/* Save to KB — for research mode assistant messages */}
+                        {!isUser && msg.citations && msg.citations.length > 0 && (
+                          <button
+                            onClick={() => handleSaveToKB(msg)}
+                            className="flex items-center gap-1 text-[10px] font-medium text-gray-400 hover:text-emerald-600 transition-colors"
+                            title="Save to Knowledge Base"
+                          >
+                            <BookOpen className="h-3 w-3" />
+                            Save to KB
                           </button>
                         )}
                       </div>

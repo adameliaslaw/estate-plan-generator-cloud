@@ -1793,7 +1793,7 @@ export default function SettingsPage() {
                         <div>
                           <p className="text-sm font-medium text-green-800">Connected</p>
                           <p className="text-xs text-green-600">
-                            Documents sync to Estate Plans folder automatically.
+                            Documents sync to Wills and Trusts folder automatically.
                           </p>
                         </div>
                         <Button
@@ -1810,7 +1810,7 @@ export default function SettingsPage() {
                       <div className="space-y-3">
                         <p className="text-sm text-gray-600">
                           Connect your Google account to auto-sync vault documents. PDFs are
-                          organized into Estate Plans → Client Name folders.
+                          organized into Everybody (S) → Wills and Trusts → Client Name folders.
                         </p>
                         {GOOGLE_CLIENT_ID ? (
                           <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
@@ -1829,7 +1829,7 @@ export default function SettingsPage() {
                           </Alert>
                         )}
                         <p className="text-xs text-gray-400">
-                          Only files created by this app are accessible (drive.file scope).
+                          Documents are synced to Everybody (S) / Wills and Trusts.
                         </p>
                       </div>
                     )}
