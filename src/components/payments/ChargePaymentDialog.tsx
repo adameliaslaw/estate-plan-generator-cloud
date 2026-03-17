@@ -308,32 +308,26 @@ export function ChargePaymentDialog({
   useEffect(() => {
     if (!open) {
       initAttempted.current = false;
+      hostedFieldsRef.current = null;
       return;
     }
 
     // Small delay to let the dialog DOM render before initializing iframes
     const timer = setTimeout(() => {
-      if (!initAttempted.current) {
-        initAttempted.current = true;
-        initializeHostedFields();
+      // Clean up any existing iframes from a previous init (e.g. payment type change)
+      for (const containerId of ['af-card-number', 'af-card-cvv', 'af-routing-number', 'af-account-number']) {
+        const el = document.getElementById(containerId);
+        if (el) {
+          el.innerHTML = '';
+        }
       }
+
+      hostedFieldsRef.current = null;
+      initializeHostedFields();
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [open, initializeHostedFields]);
-
-  // Re-initialize when payment type changes
-  useEffect(() => {
-    if (open && initAttempted.current) {
-      initAttempted.current = false;
-      // Short delay so the new DOM containers render
-      const timer = setTimeout(() => {
-        initAttempted.current = true;
-        initializeHostedFields();
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [paymentType, open, initializeHostedFields]);
+  }, [open, paymentType, initializeHostedFields]);
 
   // ── Reset on close ────────────────────────────────────────────────────
 
