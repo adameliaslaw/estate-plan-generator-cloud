@@ -244,7 +244,7 @@ export async function searchKnowledgeBase(
       .findNearest({
         vectorField: 'embedding',
         queryVector,
-        limit: 5,
+        limit: 10,
         distanceMeasure: 'COSINE',
         distanceResultField: '__distance',
       })
@@ -283,7 +283,7 @@ export async function searchKnowledgeBase(
       .findNearest({
         vectorField: 'embedding',
         queryVector,
-        limit: 5,
+        limit: 10,
         distanceMeasure: 'COSINE',
         distanceResultField: '__distance',
       })
