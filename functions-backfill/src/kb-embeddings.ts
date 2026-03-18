@@ -327,7 +327,7 @@ async function embedTemplate(
 export const backfillEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '1GiB',
+    memory: '2GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
@@ -412,7 +412,7 @@ export const backfillEmbeddings = onCall(
 export const backfillTemplateEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '1GiB',
+    memory: '2GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
