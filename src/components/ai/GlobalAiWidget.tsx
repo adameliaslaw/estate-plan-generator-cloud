@@ -13,7 +13,7 @@
  *  - @mention client tagging from any page
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen, Search, ExternalLink, BookOpen } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -122,7 +122,7 @@ export function GlobalAiWidget() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Conversation persistence
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -205,7 +205,7 @@ export function GlobalAiWidget() {
   };
 
   // Handle input change with @mention detection
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputValue(val);
 
@@ -472,7 +472,20 @@ export function GlobalAiWidget() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Auto-grow textarea height
+  const autoResizeTextarea = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    // Cap at ~6 lines (approx 144px)
+    el.style.height = Math.min(el.scrollHeight, 144) + 'px';
+  }, []);
+
+  useLayoutEffect(() => {
+    autoResizeTextarea();
+  }, [inputValue, autoResizeTextarea]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // When the @mention dropdown is visible, intercept keyboard navigation
     if (showMentionDropdown && filteredClients.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -502,6 +515,7 @@ export function GlobalAiWidget() {
       }
     }
 
+    // Enter sends the message; Shift+Enter inserts a newline
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -820,7 +834,7 @@ export function GlobalAiWidget() {
             <span className="text-[10px] text-gray-400">Context connected</span>
           </div>
         )}
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2" style={{ alignItems: 'flex-end' }}>
           <div className="relative flex-1">
             {/* @mention autocomplete dropdown */}
             {showMentionDropdown && filteredClients.length > 0 && (
@@ -853,9 +867,9 @@ export function GlobalAiWidget() {
                 ))}
               </div>
             )}
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               placeholder={
                 mode === 'draft'
                   ? 'Describe the document you need... (use @ for clients)'
@@ -866,7 +880,8 @@ export function GlobalAiWidget() {
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 pr-10 text-sm focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors"
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 pr-10 text-sm focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors resize-none overflow-y-auto"
+              style={{ maxHeight: '144px' }}
             />
           </div>
           <Button
