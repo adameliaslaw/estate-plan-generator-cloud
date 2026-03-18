@@ -544,17 +544,17 @@ export function GlobalAiWidget() {
       )}
     >
       {/* Header */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-purple-100 bg-gradient-to-r from-purple-600 to-indigo-600 px-4 text-white">
-        <div className="flex items-center gap-2">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-purple-100 bg-gradient-to-r from-purple-600 to-indigo-600 px-3 text-white gap-2">
+        <div className="flex items-center gap-2 min-w-0 shrink">
           <Bot className="h-5 w-5 text-purple-100" />
-          <h2 className="font-semibold">AI Assistant</h2>
+          <h2 className="font-semibold truncate">AI Assistant</h2>
           {conversationId && (
             <span className="rounded bg-white/20 px-1.5 py-0.5 text-[9px] font-medium text-purple-100">
               💾 Saved
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {/* History toggle */}
           <button
             onClick={() => { setShowHistory(!showHistory); if (!showHistory) loadHistory(); }}
