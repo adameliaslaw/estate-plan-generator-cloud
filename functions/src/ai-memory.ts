@@ -225,15 +225,17 @@ export async function recordDraftHistory(
   entry: DraftHistoryEntry,
 ): Promise<void> {
   const ref = db().doc(`firms/${firmId}/aiMemory/${clientId}`);
+
+  // Strip undefined fields up-front — Firestore rejects undefined values
+  const sanitizedEntry = Object.fromEntries(
+    Object.entries(entry).filter(([, v]) => v !== undefined),
+  ) as DraftHistoryEntry;
+
   const snap = await ref.get();
 
   if (snap.exists) {
     // Append to draftHistory (keep last 50)
     const data = snap.data() as ClientMemory;
-    // Strip undefined fields — Firestore rejects undefined values in nested objects
-    const sanitizedEntry = Object.fromEntries(
-      Object.entries(entry).filter(([, v]) => v !== undefined),
-    ) as DraftHistoryEntry;
     const history = [...(data.draftHistory ?? []), sanitizedEntry].slice(-50);
     await ref.update({
       draftHistory: history,
@@ -246,7 +248,7 @@ export async function recordDraftHistory(
       firmId,
       keyFacts: [],
       preferences: {},
-      draftHistory: [entry],
+      draftHistory: [sanitizedEntry],
       lastTopics: [],
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

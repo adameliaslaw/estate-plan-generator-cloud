@@ -742,8 +742,8 @@ export async function generateFromTemplate(
   // Fetch template (with optional software source filtering + auto-fallback)
   const template = await getTemplate(firmId, docType, templateId, variant, softwareSource);
   if (!template) {
-    if (mode === 'hybrid' && aiGeneratorFn) {
-      console.warn(`[template-engine] No template found for ${docType}, falling back to AI.`);
+    if (aiGeneratorFn) {
+      console.warn(`[template-engine] No template found for ${docType} (mode=${mode}), falling back to AI generation.`);
       return aiGeneratorFn();
     }
     throw new Error(
