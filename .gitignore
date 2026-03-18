@@ -5,6 +5,7 @@ functions/node_modules/
 # Build output
 dist/
 functions/lib/
+functions-backfill/lib/
 
 # Environment variables
 .env
