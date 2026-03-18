@@ -103,7 +103,7 @@ export async function searchKnowledgeBase(
   const {
     docType,
     limit = 15,
-    minScore = 0.3,
+    minScore = 0.5,
     excludeOcr = false,
   } = options;
 
