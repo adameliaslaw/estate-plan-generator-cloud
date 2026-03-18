@@ -2,7 +2,8 @@
  * functions/src/kb-embeddings.ts
  *
  * Generates and stores vector embeddings for Knowledge Base resources.
- * Uses OpenAI text-embedding-3-small (1536 dimensions) for cost efficiency.
+ * Uses Gemini gemini-embedding-001 (768 dimensions) for superior quality
+ * and zero-cost via the firm's Gemini API key.
  *
  * Features:
  *  - onWrite trigger: auto-embeds new/updated KB resources
@@ -14,14 +15,13 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import OpenAI from 'openai';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_DIMENSIONS = 1536;
+const EMBEDDING_MODEL = 'gemini-embedding-001';
+const EMBEDDING_DIMENSIONS = 768;
 
 /** Content shorter than this gets a single embedding on the document itself. */
 const CHUNK_THRESHOLD = 2000;
@@ -40,47 +40,73 @@ const BACKFILL_BATCH_SIZE = 25;
 // ---------------------------------------------------------------------------
 
 /**
- * Get or create an OpenAI client using the firm's API key.
+ * Retrieve the firm's Gemini API key.
  */
-async function getOpenAIClient(firmId: string): Promise<OpenAI> {
+async function getGeminiApiKey(firmId: string): Promise<string> {
   const firmSnap = await admin.firestore().doc(`firms/${firmId}`).get();
   const firmData = firmSnap.data() ?? {};
   const apiKey =
-    firmData.openAiApiKey ??
-    firmData.settings?.openAiApiKey ??
-    process.env.OPENAI_API_KEY;
+    firmData.geminiApiKey ??
+    firmData.settings?.geminiApiKey;
 
   if (!apiKey) {
-    throw new Error('OpenAI API key is missing. Configure it in Firm Settings.');
+    throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  return new OpenAI({ apiKey });
+  return apiKey;
 }
 
+/** Task type for Gemini embeddings — improves quality by specializing the vector. */
+export type EmbeddingTaskType = 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
+
 /**
- * Generate an embedding vector for a text string.
+ * Generate an embedding vector for a text string using Gemini.
  */
 export async function generateEmbedding(
   text: string,
-  openaiClient: OpenAI,
+  geminiApiKey: string,
+  taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[]> {
-  // Clean and truncate text — OpenAI has an 8191 token limit for this model
+  // Clean and truncate text — Gemini has a 2048 token limit per input
   const cleanText = text
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 30000); // ~8K tokens rough estimate
+    .slice(0, 10000); // ~2K tokens rough estimate
 
   if (!cleanText) {
     throw new Error('Cannot generate embedding for empty text.');
   }
 
-  const response = await openaiClient.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: cleanText,
-    dimensions: EMBEDDING_DIMENSIONS,
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': geminiApiKey,
+    },
+    body: JSON.stringify({
+      model: `models/${EMBEDDING_MODEL}`,
+      content: {
+        parts: [{ text: cleanText }],
+      },
+      taskType,
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+    }),
   });
 
-  return response.data[0].embedding;
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini Embedding API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json() as { embedding?: { values?: number[] } };
+  const values = data.embedding?.values;
+  if (!values || values.length === 0) {
+    throw new Error('Gemini Embedding API returned empty embedding.');
+  }
+
+  return values;
 }
 
 /**
@@ -131,7 +157,7 @@ async function embedResource(
   firmId: string,
   resourceId: string,
   content: string,
-  openaiClient: OpenAI,
+  geminiApiKey: string,
 ): Promise<{ embedded: boolean; chunks: number }> {
   const db = admin.firestore();
   const resourceRef = db.doc(`firms/${firmId}/knowledgeBase/${resourceId}`);
@@ -139,7 +165,7 @@ async function embedResource(
 
   if (content.length <= CHUNK_THRESHOLD) {
     // Short content: single embedding on the document
-    const embedding = await generateEmbedding(content, openaiClient);
+    const embedding = await generateEmbedding(content, geminiApiKey);
 
     await resourceRef.update({
       embedding: admin.firestore.FieldValue.vector(embedding),
@@ -173,7 +199,7 @@ async function embedResource(
 
   // Embed and write each chunk one at a time
   for (let i = 0; i < textChunks.length; i++) {
-    const embedding = await generateEmbedding(textChunks[i], openaiClient);
+    const embedding = await generateEmbedding(textChunks[i], geminiApiKey);
     const chunkRef = chunksCol.doc(`chunk_${String(i).padStart(3, '0')}`);
     await chunkRef.set({
       parentResourceId: resourceId,
@@ -246,8 +272,8 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
     }
 
     try {
-      const openai = await getOpenAIClient(firmId);
-      const result = await embedResource(firmId, resourceId, content, openai);
+      const apiKey = await getGeminiApiKey(firmId);
+      const result = await embedResource(firmId, resourceId, content, apiKey);
       console.log(
         `[kb-embeddings] Embedded resource ${resourceId}: ${result.chunks > 0 ? `${result.chunks} chunks` : 'single vector'}`,
       );
@@ -278,12 +304,12 @@ export const backfillEmbeddings = onCall(
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
-    // Get OpenAI client — fail early with a clear message
-    let openai: OpenAI;
+    // Get Gemini API key — fail early with a clear message
+    let apiKey: string;
     try {
-      openai = await getOpenAIClient(firmId);
+      apiKey = await getGeminiApiKey(firmId);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to initialize OpenAI client';
+      const msg = err instanceof Error ? err.message : 'Failed to get Gemini API key';
       throw new HttpsError('failed-precondition', msg);
     }
 
@@ -318,10 +344,10 @@ export const backfillEmbeddings = onCall(
           continue; // Skip documents without meaningful content
         }
 
-        await embedResource(firmId, docSnap.id, data.content, openai);
+        await embedResource(firmId, docSnap.id, data.content, apiKey);
         processed++;
 
-        // Rate limiting: ~3 requests per second to stay within OpenAI limits
+        // Rate limiting: ~3 requests per second to stay within Gemini limits
         await new Promise((r) => setTimeout(r, 350));
       } catch (err) {
         console.error(`[backfillEmbeddings] Failed for ${docSnap.id}:`, err);
@@ -415,8 +441,8 @@ export const onTemplateWritten = onDocumentWritten(
     }
 
     try {
-      const openai = await getOpenAIClient(firmId);
-      const result = await embedTemplate(firmId, templateId, cleanContent, openai);
+      const apiKey = await getGeminiApiKey(firmId);
+      const result = await embedTemplate(firmId, templateId, cleanContent, apiKey);
       console.log(
         `[kb-embeddings] Embedded template ${templateId}: ${result.chunks > 0 ? `${result.chunks} chunks` : 'single vector'}`,
       );
@@ -438,14 +464,14 @@ async function embedTemplate(
   firmId: string,
   templateId: string,
   cleanContent: string,
-  openaiClient: OpenAI,
+  geminiApiKey: string,
 ): Promise<{ embedded: boolean; chunks: number }> {
   const db = admin.firestore();
   const templateRef = db.doc(`firms/${firmId}/documentTemplates/${templateId}`);
   const chunksCol = templateRef.collection('chunks');
 
   if (cleanContent.length <= CHUNK_THRESHOLD) {
-    const embedding = await generateEmbedding(cleanContent, openaiClient);
+    const embedding = await generateEmbedding(cleanContent, geminiApiKey);
 
     await templateRef.update({
       embedding: admin.firestore.FieldValue.vector(embedding),
@@ -477,7 +503,7 @@ async function embedTemplate(
   }
 
   for (let i = 0; i < textChunks.length; i++) {
-    const embedding = await generateEmbedding(textChunks[i], openaiClient);
+    const embedding = await generateEmbedding(textChunks[i], geminiApiKey);
     await chunksCol.doc(`chunk_${String(i).padStart(3, '0')}`).set({
       parentTemplateId: templateId,
       firmId,
@@ -522,11 +548,11 @@ export const backfillTemplateEmbeddings = onCall(
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
-    let openai: OpenAI;
+    let apiKey: string;
     try {
-      openai = await getOpenAIClient(firmId);
+      apiKey = await getGeminiApiKey(firmId);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to initialize OpenAI client';
+      const msg = err instanceof Error ? err.message : 'Failed to get Gemini API key';
       throw new HttpsError('failed-precondition', msg);
     }
 
@@ -561,7 +587,7 @@ export const backfillTemplateEmbeddings = onCall(
         const cleanContent = stripHandlebars(data.content);
         if (cleanContent.length < 50) continue;
 
-        await embedTemplate(firmId, docSnap.id, cleanContent, openai);
+        await embedTemplate(firmId, docSnap.id, cleanContent, apiKey);
         processed++;
 
         await new Promise((r) => setTimeout(r, 350));

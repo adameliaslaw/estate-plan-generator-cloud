@@ -215,7 +215,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": 1536,
+            "dimension": 768,
             "flat": {}
           }
         }
@@ -236,7 +236,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": 1536,
+            "dimension": 768,
             "flat": {}
           }
         }
@@ -257,7 +257,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": 1536,
+            "dimension": 768,
             "flat": {}
           }
         }
@@ -274,7 +274,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": 1536,
+            "dimension": 768,
             "flat": {}
           }
         }
@@ -299,7 +299,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": 1536,
+            "dimension": 768,
             "flat": {}
           }
         }

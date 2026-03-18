@@ -3,7 +3,7 @@
  *
  * Core semantic search module for the Knowledge Base.
  * Uses Firestore's native vector search (`findNearest`) with
- * OpenAI text-embedding-3-small (1536 dimensions).
+ * Gemini gemini-embedding-001 (768 dimensions).
  *
  * Features:
  *  - Generates query embedding, then runs findNearest on both
@@ -15,7 +15,6 @@
 
 import * as admin from 'firebase-admin';
 import { generateEmbedding } from './kb-embeddings';
-import OpenAI from 'openai';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,21 +53,20 @@ export interface VectorSearchResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Get or create an OpenAI client using the firm's API key.
+ * Retrieve the firm's Gemini API key.
  */
-async function getOpenAIClient(firmId: string): Promise<OpenAI> {
+async function getGeminiApiKey(firmId: string): Promise<string> {
   const firmSnap = await admin.firestore().doc(`firms/${firmId}`).get();
   const firmData = firmSnap.data() ?? {};
   const apiKey =
-    firmData.openAiApiKey ??
-    firmData.settings?.openAiApiKey ??
-    process.env.OPENAI_API_KEY;
+    firmData.geminiApiKey ??
+    firmData.settings?.geminiApiKey;
 
   if (!apiKey) {
-    throw new Error('OpenAI API key is missing. Configure it in Firm Settings.');
+    throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  return new OpenAI({ apiKey });
+  return apiKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,10 +106,10 @@ export async function searchKnowledgeBase(
   } = options;
 
   const db = admin.firestore();
-  const openai = await getOpenAIClient(firmId);
+  const geminiApiKey = await getGeminiApiKey(firmId);
 
-  // 1. Generate query embedding
-  const queryEmbedding = await generateEmbedding(queryText, openai);
+  // 1. Generate query embedding (use RETRIEVAL_QUERY for search queries)
+  const queryEmbedding = await generateEmbedding(queryText, geminiApiKey, 'RETRIEVAL_QUERY');
   const queryVector = admin.firestore.FieldValue.vector(queryEmbedding);
 
   // 2. Search parent documents (short content with embedding on the doc)
