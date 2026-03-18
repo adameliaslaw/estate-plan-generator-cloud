@@ -33,7 +33,7 @@ const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 200;
 
 /** Max resources to process per backfill invocation. */
-const BACKFILL_BATCH_SIZE = 25;
+const BACKFILL_BATCH_SIZE = 5;
 
 // ---------------------------------------------------------------------------
 // Helpers
