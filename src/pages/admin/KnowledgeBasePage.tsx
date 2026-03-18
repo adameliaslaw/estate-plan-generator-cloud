@@ -305,7 +305,7 @@ export default function KnowledgeBasePage() {
       while (true) {
         batchNum++;
         toast.info(`Processing batch ${batchNum}...`, { id: 'embed-progress' });
-        const result = await knowledgeBaseService.backfillEmbeddings(firmId);
+        const result = await knowledgeBaseService.backfillEmbeddings(firmId, true);
         totalProcessed += result.processed;
         totalSkipped += result.skipped;
         totalErrors += result.errors;
@@ -337,7 +337,7 @@ export default function KnowledgeBasePage() {
       while (true) {
         batchNum++;
         toast.info(`Processing template batch ${batchNum}...`, { id: 'template-embed-progress' });
-        const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId);
+        const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId, true);
         totalProcessed += result.processed;
         totalSkipped += result.skipped;
         totalErrors += result.errors;

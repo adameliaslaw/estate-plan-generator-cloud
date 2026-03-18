@@ -291,7 +291,7 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
 export const backfillEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '4GiB',
+    memory: '8GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
@@ -299,7 +299,7 @@ export const backfillEmbeddings = onCall(
       throw new HttpsError('unauthenticated', 'Sign in required.');
     }
 
-    const { firmId } = request.data as { firmId: string };
+    const { firmId, forceAll } = request.data as { firmId: string; forceAll?: boolean };
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
@@ -323,9 +323,9 @@ export const backfillEmbeddings = onCall(
       .limit(200)
       .get();
 
-    // Filter to those missing embeddings, then take up to BACKFILL_BATCH_SIZE
+    // Filter to those needing embedding, then take up to BACKFILL_BATCH_SIZE
     const needsEmbedding = snap.docs
-      .filter((doc) => !doc.data().embeddedAt)
+      .filter((doc) => forceAll || !doc.data().embeddedAt)
       .slice(0, BACKFILL_BATCH_SIZE);
 
     let processed = 0;
@@ -535,7 +535,7 @@ async function embedTemplate(
 export const backfillTemplateEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '4GiB',
+    memory: '8GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
@@ -543,7 +543,7 @@ export const backfillTemplateEmbeddings = onCall(
       throw new HttpsError('unauthenticated', 'Sign in required.');
     }
 
-    const { firmId } = request.data as { firmId: string };
+    const { firmId, forceAll } = request.data as { firmId: string; forceAll?: boolean };
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
@@ -567,7 +567,7 @@ export const backfillTemplateEmbeddings = onCall(
       .get();
 
     const needsEmbedding = snap.docs
-      .filter((doc) => !doc.data().embeddedAt)
+      .filter((doc) => forceAll || !doc.data().embeddedAt)
       .slice(0, BACKFILL_BATCH_SIZE);
 
     let processed = 0;

@@ -230,13 +230,13 @@ export const knowledgeBaseService = {
    * Trigger batch embedding generation for existing KB resources.
    * Processes up to 50 resources per call; call repeatedly until processed = 0.
    */
-  async backfillEmbeddings(firmId: string): Promise<{
+  async backfillEmbeddings(firmId: string, forceAll = false): Promise<{
     processed: number;
     skipped: number;
     errors: number;
   }> {
     const fn = httpsCallable(functions, 'backfillEmbeddings', { timeout: 300000 });
-    const res = await fn({ firmId });
+    const res = await fn({ firmId, forceAll });
     return res.data as { processed: number; skipped: number; errors: number };
   },
 
@@ -244,13 +244,13 @@ export const knowledgeBaseService = {
    * Trigger batch embedding generation for existing document templates.
    * Processes up to 25 templates per call; call repeatedly until processed = 0.
    */
-  async backfillTemplateEmbeddings(firmId: string): Promise<{
+  async backfillTemplateEmbeddings(firmId: string, forceAll = false): Promise<{
     processed: number;
     skipped: number;
     errors: number;
   }> {
     const fn = httpsCallable(functions, 'backfillTemplateEmbeddings', { timeout: 300000 });
-    const res = await fn({ firmId });
+    const res = await fn({ firmId, forceAll });
     return res.data as { processed: number; skipped: number; errors: number };
   },
 };
