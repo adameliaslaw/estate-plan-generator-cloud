@@ -608,12 +608,14 @@ export function GlobalAiWidget() {
           >
             {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
+          {/* Divider before close */}
+          <div className="mx-0.5 h-5 w-px bg-white/25" />
           <button
             onClick={() => setIsOpen(false)}
-            className="rounded p-1.5 text-purple-100 hover:bg-white/20 transition-colors"
+            className="rounded-lg p-1.5 text-white hover:bg-white/30 transition-colors"
             aria-label="Close"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
       </div>
