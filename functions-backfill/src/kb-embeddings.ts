@@ -29,7 +29,7 @@ const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 200;
 
 /** Max resources to process per backfill invocation. */
-const BACKFILL_BATCH_SIZE = 5;
+const BACKFILL_BATCH_SIZE = 3;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -327,7 +327,7 @@ async function embedTemplate(
 export const backfillEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '2GiB',
+    memory: '4GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
@@ -356,7 +356,7 @@ export const backfillEmbeddings = onCall(
       .collection(`firms/${firmId}/knowledgeBase`)
       .where('isActive', '==', true)
       .select('embeddedAt', 'title')
-      .limit(200)
+      .limit(50)
       .get();
 
     // Filter to those needing embedding, then take up to BACKFILL_BATCH_SIZE
@@ -412,7 +412,7 @@ export const backfillEmbeddings = onCall(
 export const backfillTemplateEmbeddings = onCall(
   {
     region: 'us-east1',
-    memory: '2GiB',
+    memory: '4GiB',
     timeoutSeconds: 540,
   },
   async (request) => {
@@ -440,7 +440,7 @@ export const backfillTemplateEmbeddings = onCall(
       .collection(`firms/${firmId}/documentTemplates`)
       .where('isActive', '==', true)
       .select('embeddedAt', 'name')
-      .limit(200)
+      .limit(50)
       .get();
 
     const needsEmbedding = snap.docs
