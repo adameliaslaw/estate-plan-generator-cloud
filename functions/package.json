@@ -14,13 +14,12 @@
   "dependencies": {
     "@sparticuz/chromium": "^143.0.4",
     "archiver": "^7.0.1",
-
+    "carbone": "^3.5.6",
     "cors": "^2.8.5",
     "docx": "^9.6.0",
     "express": "^4.21.0",
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^5.0.0",
-
     "handlebars": "^4.7.8",
     "mammoth": "^1.11.0",
     "openai": "^4.70.0",
