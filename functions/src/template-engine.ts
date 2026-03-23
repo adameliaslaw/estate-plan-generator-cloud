@@ -17,6 +17,7 @@ import * as admin from 'firebase-admin';
 import { getFormattingPreset } from './config/formatting-presets';
 import { ClientContext } from './client-context-aggregator';
 import { callAI, sanitizeObject } from './ai-client';
+import { searchTemplatesByDocType } from './kb-vector-search';
 import { GeneratedDoc } from './generate-documents';
 import { buildStandardTitle } from './unified-generator';
 import { VARIABLE_TO_QUESTIONNAIRE_MAP } from './template-variables';
@@ -439,6 +440,24 @@ export async function getTemplate(
         .limit(1)
         .get();
       if (!snap.empty) rawData = snap.docs[0].data();
+    }
+  }
+
+  // ── Vector search fallback ────────────────────────────────────────────────
+  // If exact-match queries found nothing, try semantic vector search against
+  // the documentTemplates collection. This catches cases where templates exist
+  // but don't have the right softwareSource or aren't marked as default.
+  if (!rawData && !templateId) {
+    const vectorMatch = await searchTemplatesByDocType(firmId, docType);
+    if (vectorMatch) {
+      console.info(
+        `[getTemplate] Vector search fallback found template: "${vectorMatch.name}" ` +
+        `(id=${vectorMatch.id}, similarity=${vectorMatch.similarity.toFixed(3)}) for docType="${docType}"`,
+      );
+      const vectorSnap = await col.doc(vectorMatch.id).get();
+      if (vectorSnap.exists) {
+        rawData = vectorSnap.data();
+      }
     }
   }
 

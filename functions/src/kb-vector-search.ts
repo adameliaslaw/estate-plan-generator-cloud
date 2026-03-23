@@ -55,7 +55,7 @@ export interface VectorSearchResult {
 /**
  * Retrieve the firm's Gemini API key.
  */
-async function getGeminiApiKey(firmId: string): Promise<string> {
+export async function getGeminiApiKey(firmId: string): Promise<string> {
   const firmSnap = await admin.firestore().doc(`firms/${firmId}`).get();
   const firmData = firmSnap.data() ?? {};
   const apiKey =
@@ -68,6 +68,24 @@ async function getGeminiApiKey(firmId: string): Promise<string> {
 
   return apiKey;
 }
+
+// ---------------------------------------------------------------------------
+// Shared doc-type label map
+// ---------------------------------------------------------------------------
+
+/** Human-readable labels for doc type keys, used for semantic search queries. */
+export const DOC_TYPE_LABELS: Record<string, string> = {
+  will: 'last will and testament',
+  pourOverWill: 'pour-over will revocable trust',
+  poa: 'durable power of attorney',
+  livingWill: 'advance directive healthcare proxy',
+  trust: 'revocable living trust',
+  deed: 'deed real property transfer',
+  affidavitOfConsideration: 'affidavit of consideration',
+  gitRep3: 'GIT/REP-3 exemption certificate',
+  estatePlanSummary: 'estate plan summary letter',
+  actionSteps: 'post-signing action steps',
+};
 
 // ---------------------------------------------------------------------------
 // Main search function
@@ -354,19 +372,7 @@ export function buildContextQuery(
 
   // Always include doc type context
   if (targetDocType) {
-    const docTypeLabels: Record<string, string> = {
-      will: 'last will and testament',
-      pourOverWill: 'pour-over will revocable trust',
-      poa: 'durable power of attorney',
-      livingWill: 'advance directive healthcare proxy',
-      trust: 'revocable living trust',
-      deed: 'deed real property transfer',
-      affidavitOfConsideration: 'affidavit of consideration',
-      gitRep3: 'GIT/REP-3 exemption certificate',
-      estatePlanSummary: 'estate plan summary letter',
-      actionSteps: 'post-signing action steps',
-    };
-    parts.push(docTypeLabels[targetDocType] ?? targetDocType);
+    parts.push(DOC_TYPE_LABELS[targetDocType] ?? targetDocType);
   }
 
   // Client characteristic signals
@@ -395,4 +401,101 @@ export function buildContextQuery(
   }
 
   return parts.join(' ');
+}
+
+// ---------------------------------------------------------------------------
+// Template-specific vector search
+// ---------------------------------------------------------------------------
+
+export interface TemplateSearchResult {
+  /** Firestore document ID of the matched template */
+  id: string;
+  /** Human-readable template name */
+  name: string;
+  /** Cosine similarity score (0–1) */
+  similarity: number;
+}
+
+/**
+ * Focused vector search for document templates.
+ *
+ * Unlike `searchKnowledgeBase()` which searches both KB resources and templates,
+ * this function ONLY searches the `documentTemplates` collection and returns
+ * the single best match above a strict similarity threshold.
+ *
+ * Used as a fallback by `getTemplate()` when exact-match Firestore queries
+ * (docType + softwareSource / isDefault) return no results.
+ */
+export async function searchTemplatesByDocType(
+  firmId: string,
+  docType: string,
+): Promise<TemplateSearchResult | null> {
+  const MIN_SIMILARITY = 0.65;
+
+  const db = admin.firestore();
+  let geminiApiKey: string;
+  try {
+    geminiApiKey = await getGeminiApiKey(firmId);
+  } catch {
+    console.warn('[kb-vector-search] No Gemini API key — cannot run template vector search fallback.');
+    return null;
+  }
+
+  // Build a semantic query from the doc type label
+  const label = DOC_TYPE_LABELS[docType] ?? docType;
+  const queryText = `${label} legal document template`;
+
+  const queryEmbedding = await generateEmbedding(queryText, geminiApiKey, 'RETRIEVAL_QUERY');
+  const queryVector = admin.firestore.FieldValue.vector(queryEmbedding);
+
+  const templateRef = db.collection(`firms/${firmId}/documentTemplates`);
+  const templateQuery = templateRef
+    .where('isActive', '==', true)
+    .where('docType', '==', docType);
+
+  try {
+    const snap = await withTimeout(
+      templateQuery
+        .findNearest({
+          vectorField: 'embedding',
+          queryVector,
+          limit: 3,
+          distanceMeasure: 'COSINE',
+          distanceResultField: '__distance',
+        })
+        .get(),
+      VECTOR_SEARCH_TIMEOUT_MS,
+      'Template vector search fallback',
+    );
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const distance = (data as Record<string, unknown>).__distance as number;
+      const similarity = 1 - (distance / 2);
+
+      if (similarity >= MIN_SIMILARITY) {
+        console.info(
+          `[kb-vector-search] Template vector search fallback matched: ` +
+          `"${data.name ?? doc.id}" (similarity=${similarity.toFixed(3)}) for docType="${docType}"`,
+        );
+        return {
+          id: doc.id,
+          name: (data.name as string) ?? doc.id,
+          similarity,
+        };
+      }
+    }
+
+    console.info(
+      `[kb-vector-search] Template vector search fallback: no match above ${MIN_SIMILARITY} ` +
+      `for docType="${docType}"`,
+    );
+    return null;
+  } catch (err) {
+    console.warn(
+      '[kb-vector-search] Template vector search fallback failed (index may not exist):',
+      err,
+    );
+    return null;
+  }
 }
