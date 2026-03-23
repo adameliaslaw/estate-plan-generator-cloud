@@ -34,7 +34,6 @@ import {
   Header,
   Footer,
   PageNumber,
-  NumberFormat,
   Table,
   TableRow,
   TableCell,
@@ -48,6 +47,107 @@ import {
   UnderlineType,
 } from 'docx';
 import { sanitizeFileName } from './export-pdf';
+
+// ── TR_ Style Map (InteractiveLegal / template-referenced formatting) ────────
+//
+// The AI prompt instructs template-referenced generation to tag every <p> with
+// a `tr-*` CSS class.  This map translates those classes into concrete docx
+// Paragraph properties so the exported .docx matches the firm's sample docs.
+
+interface TrStyleConfig {
+  alignment?: (typeof AlignmentType)[keyof typeof AlignmentType];
+  indent?: { left?: number; firstLine?: number; hanging?: number };
+  spacing?: { before?: number; after?: number; line?: number };
+  bold?: boolean;
+  underline?: boolean;
+  allCaps?: boolean;
+  fontSize?: number;  // half-points (24 = 12pt)
+  tabStops?: boolean; // special: affidavit tab layout
+}
+
+const TR_STYLE_MAP: Record<string, TrStyleConfig> = {
+  // Title & headers
+  'tr-title':        { alignment: AlignmentType.CENTER, underline: true, allCaps: true, spacing: { before: 0, after: 240 } },
+  'tr-cover-title':  { alignment: AlignmentType.CENTER, spacing: { before: 480, after: 240 } },
+  'tr-cover':        { alignment: AlignmentType.CENTER, spacing: { after: 80 } },
+  'tr-mem-header1':  { alignment: AlignmentType.CENTER, underline: true, spacing: { before: 360, after: 240 } },
+
+  // Body content
+  'tr-body1':        { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160 } },
+  'tr-body3':        { alignment: AlignmentType.JUSTIFIED, spacing: { before: 160, after: 160 } },
+
+  // Article hierarchy
+  'tr-art1':         { alignment: AlignmentType.CENTER, bold: true, spacing: { before: 360, after: 240 } },
+  'tr-art2':         { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160 } },
+  'tr-art3b':        { alignment: AlignmentType.JUSTIFIED, indent: { firstLine: convertInchesToTwip(1.0) }, spacing: { after: 120 } },
+  'tr-art4b':        { alignment: AlignmentType.JUSTIFIED, indent: { firstLine: convertInchesToTwip(1.5) }, spacing: { after: 120 } },
+
+  // Signature & affidavit
+  'tr-sig-line':     { alignment: AlignmentType.LEFT, indent: { left: convertInchesToTwip(3.5) }, spacing: { after: 40 } },
+  'tr-sig-name':     { alignment: AlignmentType.LEFT, indent: { left: convertInchesToTwip(3.5) }, bold: true, spacing: { after: 160 } },
+  'tr-affid':        { alignment: AlignmentType.LEFT, tabStops: true, spacing: { after: 80 }, fontSize: 22 },
+  'tr-base':         { spacing: { after: 80 } },
+};
+
+/**
+ * Extract the first `tr-*` CSS class from an HtmlNode's class attribute.
+ * Returns the class name (e.g. 'tr-title') or undefined if none found.
+ */
+function getTrClass(node: HtmlNode): string | undefined {
+  const cls = node.attrs?.class ?? '';
+  const match = cls.match(/\btr-[a-z0-9-]+/);
+  return match ? match[0] : undefined;
+}
+
+/**
+ * Build a docx Paragraph from an HtmlNode using a TrStyleConfig.
+ */
+function buildTrStyledParagraph(node: HtmlNode, config: TrStyleConfig): Paragraph {
+  const children = node.children ?? [];
+  const inlineStyle: InlineStyle = {};
+  if (config.bold) inlineStyle.bold = true;
+  if (config.underline) inlineStyle.underline = true;
+
+  let runs = buildTextRuns(children, inlineStyle);
+
+  // For allCaps, override the text runs with allCaps formatting
+  if (config.allCaps && runs.length > 0) {
+    const text = extractText(node);
+    runs = [
+      new TextRun({
+        text: text.toUpperCase(),
+        bold: inlineStyle.bold,
+        underline: config.underline ? { type: UnderlineType.SINGLE } : undefined,
+        font: 'Times New Roman',
+        size: config.fontSize ?? 24,
+      }),
+    ];
+  }
+
+  // For affidavit tab layout, add tab stops
+  const tabStopDefs = config.tabStops
+    ? [
+        { type: TabStopType.LEFT, position: TabStopPosition.MAX - convertInchesToTwip(4.5) },
+        { type: TabStopType.LEFT, position: TabStopPosition.MAX - convertInchesToTwip(4.0) },
+      ]
+    : undefined;
+
+  return new Paragraph({
+    children: runs.length ? runs : [new TextRun({ text: '', font: 'Times New Roman', size: config.fontSize ?? 24 })],
+    alignment: config.alignment,
+    indent: config.indent ? {
+      left: config.indent.left,
+      firstLine: config.indent.firstLine,
+      hanging: config.indent.hanging,
+    } : undefined,
+    spacing: config.spacing ? {
+      before: config.spacing.before,
+      after: config.spacing.after,
+      line: config.spacing.line,
+    } : undefined,
+    tabStops: tabStopDefs,
+  });
+}
 
 // ── Minimal HTML tokeniser / parser ──────────────────────────────────────────
 //
@@ -258,6 +358,12 @@ function convertNode(
 ): DocxChild[] {
   const tag = node.tag ?? '';
   const children = node.children ?? [];
+
+  // ── TR_ style-mapped elements (template-referenced generation) ────────
+  const trClass = getTrClass(node);
+  if (trClass && TR_STYLE_MAP[trClass]) {
+    return [buildTrStyledParagraph(node, TR_STYLE_MAP[trClass])];
+  }
 
   // ── Headings ──────────────────────────────────────────────────────────────
   if (tag === 'h1') {
@@ -673,6 +779,70 @@ export function buildDocxDocument(
           paragraph: {
             spacing: { before: 240, after: 120 },
           },
+        },
+        // ── TR_ styles (template-referenced document formatting) ────────
+        {
+          id: 'TR_Title',
+          name: 'TR_Title',
+          basedOn: 'Normal',
+          run: { bold: true, size: 28, font: 'Times New Roman', allCaps: true },
+          paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 0, after: 240 } },
+        },
+        {
+          id: 'TR_Body1',
+          name: 'TR_Body1',
+          basedOn: 'Normal',
+          run: { size: 24, font: 'Times New Roman' },
+          paragraph: { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160 } },
+        },
+        {
+          id: 'TR_Art1',
+          name: 'TR_Art1',
+          basedOn: 'Normal',
+          run: { bold: true, size: 24, font: 'Times New Roman' },
+          paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 360, after: 240 } },
+        },
+        {
+          id: 'TR_Art2',
+          name: 'TR_Art2',
+          basedOn: 'Normal',
+          run: { size: 24, font: 'Times New Roman' },
+          paragraph: { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160 } },
+        },
+        {
+          id: 'TR_Art3B',
+          name: 'TR_Art3B',
+          basedOn: 'Normal',
+          run: { size: 24, font: 'Times New Roman' },
+          paragraph: { alignment: AlignmentType.JUSTIFIED, indent: { firstLine: convertInchesToTwip(1.0) }, spacing: { after: 120 } },
+        },
+        {
+          id: 'TR_SigLine',
+          name: 'TR_SigLine',
+          basedOn: 'Normal',
+          run: { size: 24, font: 'Times New Roman' },
+          paragraph: { indent: { left: convertInchesToTwip(3.5) }, spacing: { after: 40 } },
+        },
+        {
+          id: 'TR_SigName',
+          name: 'TR_SigName',
+          basedOn: 'Normal',
+          run: { bold: true, size: 24, font: 'Times New Roman' },
+          paragraph: { indent: { left: convertInchesToTwip(3.5) }, spacing: { after: 160 } },
+        },
+        {
+          id: 'TR_Affid',
+          name: 'TR_Affid',
+          basedOn: 'Normal',
+          run: { size: 22, font: 'Times New Roman' },
+          paragraph: { spacing: { after: 80 } },
+        },
+        {
+          id: 'TR_MemHeader1',
+          name: 'TR_MemHeader1',
+          basedOn: 'Normal',
+          run: { size: 24, font: 'Times New Roman' },
+          paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 360, after: 240 } },
         },
       ],
     },

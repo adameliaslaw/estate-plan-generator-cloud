@@ -1,0 +1,1861 @@
+=== Rizzo Living Trust.docx ===
+
+[Section 0] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 1] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 2] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 3] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 4] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 5] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 6] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=0.5 B=0.5in
+[Section 7] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+
+--- PARAGRAPHS ---
+
+[P0] Style=TR_Title | Align=INHERIT/DEFAULT | SpAfter=6.0pt
+  Text: RIZZO FAMILY LIVING TRUST 
+    Run[default]: "RIZZO FAMILY LIVING TRUST "
+
+[P1] Style=TR_Title | Align=INHERIT/DEFAULT | SpAfter=6.0pt
+  Text: 
+
+[P2] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: THIS IS AN AGREEMENT dated January 9, 2026, between us, Vito Rizzo and Vita Maria Rizzo, a married couple ( sometimes re
+    Run[default]: "THIS IS AN AGREEMENT dated January 9, 2026, between us, Vito Rizzo"
+    Run[default]: " "
+    Run[default]: "and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo"
+    Run[default]: ", "
+    Run[default]: "a married couple "
+    Run[default]: "("
+    Run[default]: " sometimes"
+    Run[default]: " referred to herein as the "Grantors"), residing at Monroe Township, New Jersey,"
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo as Trustees (collectively"
+    Run[default]: " referred to herein as "
+    Run[default]: "the "Trustee"). "
+    Run[default]: "[OBJ JRT 1000]"
+    Run[default]: " "
+
+[P3] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: WHEREAS, we desire to create a Trust; and [OBJ JRT 1001] 
+    Run[default]: "WHEREAS,"
+    Run[default]: " we desire to create a Trust; and "
+    Run[default]: "[OBJ JRT 1001]"
+    Run[default]: " "
+
+[P4] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: WHEREAS, the Trustee is willing to accept the trust hereby created and covenants to discharge faithfully the duties of a
+    Run[default]: "WHEREAS,"
+    Run[default]: " the Trustee is willing to accept the trust hereby created and covenants to disc"
+    Run[default]: "[OBJ JRT 1002]"
+    Run[default]: " "
+
+[P5] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: NOW, THEREFORE, we hereby transfer property as further described in Schedule(s) annexed hereto to the Trustee, IN TRUST,
+    Run[default]: "NOW, THEREFORE, we hereby transfer property as further described in Schedule(s) "
+    Run[default]: "[OBJ JRT 1003]"
+    Run[default]: " "
+
+[P6] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Trust Name
+    Run[default]: "
+"
+    Run[default]: "Trust Name"
+
+[P7] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: This Agreement may be referred to as the Rizzo Family Living Trust.[OBJ JRT 1009] 
+    Run[default]: "This Agreement may be referred to as the Rizzo Family Living Trust."
+    Run[default]: "[OBJ JRT 1009]"
+    Run[default]: " "
+
+[P8] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Family Information
+    Run[default]: "
+"
+    Run[default]: "Family Information"
+
+[P9] Style=TR_Art2 | Align=INHERIT/DEFAULT | SpBefore=12.0pt
+  Text: Marital Status.  We (the Grantors) are married.[OBJ JRT 1010] Our children born before the date of this Agreement are Sa
+    Run[default]: "Marital Status."
+    Run[default]: "  We (the Grantors) are married."
+    Run[default]: "[OBJ JRT 1010]"
+    Run[default]: " "
+    Run[default]: "Our "
+    Run[default]: "children born before the date of this Agreement are "
+    Run[default]: "Sarina Marie"
+    Run[default]: " Casisa and Lisa Ann Rizzo"
+    Run[default]: ". Our "
+    Run[default]: "grandchildren born before the date of this Agreement are Joseph Casisa and Lia C"
+    Run[default]: "[OBJ JRT 1013.004]"
+    Run[default]: " "
+
+[P10] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Trust Property
+    Run[default]: "
+"
+    Run[default]: "Trust Property"
+
+[P11] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Property transferred to the Trustee by either or both of us shall be held under this Agreement in a common trust fund du
+    Run[default]: "Property transferred to the Trustee by either or both of us shall be held under "
+    Run[default]: "our"
+    Run[default]: " lives.  All property transferred to the trust shall be treated hereunder as pro"
+    Run[default]: "[OBJ JRT 1014]"
+    Run[default]: " "
+
+[P12] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+During Our Lives
+    Run[default]: "
+"
+    Run[default]: "During Our Lives"
+
+[P13] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Property held during the lifetime of the survivor of us, sometimes referred to herein as the "Surviving Spouse," shall b
+    Run[default]: "Property held during the lifetime of "
+    Run[default]: "the"
+    Run[default]: " "
+    Run[default]: "survivor of us"
+    Run[default]: ", sometimes referred to herein as the "Surviving Spouse," shall be disposed of a"
+    Run[default]: " [OBJ JRT 1026]"
+    Run[default]: " "
+
+[P14] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Our Property.  The Trustee shall distribute to us (1) as much of the net income and principal of the trust as either of 
+    Run[default]: "Our "
+    Run[default]: "Property"
+    Run[default]: ".  "
+    Run[default]: "The Trustee shall distribute to us (1) as much of the net income and principal o"
+    Run[default]: " (referred to herein as each Grantor's "power of withdrawal"), and (2) such addi"
+    Run[default]: "into two equal shares if both of us are then living, and one share shall be dist"
+    Run[default]: "Predecease Spouse"
+    Run[default]: ""), distributed in its entirety to the surviving Grantor."
+    Run[default]: " "
+    Run[default]: "[OBJ JRT 1026.001]"
+    Run[default]: " "
+
+[P15] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Intention.  The Trust is established to ensure that the best available care and support are provided to each of us to me
+    Run[default]: "Intention."
+    Run[default]: "  The Trust is established to ensure that the best available care and support ar"
+    Run[default]: "the"
+    Run[default]: " lifetime "
+    Run[default]: "of the"
+    Run[default]: " "
+    Run[default]: "survivor of us"
+    Run[default]: ".  All assets of the Trust are to be considered available for that purpose, and "
+    Run[default]: "shall at all times"
+    Run[default]: " be guided by that purpose and intent, consistent with any specific terms relati"
+    Run[default]: "property.  The Trustee shall liberally distribute income and principal of the Tr"
+    Run[default]: "[OBJ JRT 1029001]"
+    Run[default]: " "
+
+[P16] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: General Directions to Trustee.  The Trustee shall make every effort to involve us in decision-making regarding our perso
+    Run[default]: "General Directions to Trustee."
+    Run[default]: "  The Trustee shall make every effort to involve us in decision-making regarding"
+    Run[default]: "our property.  The "
+    Run[default]: "Trustee shall make every effort to determine our respective wishes and make deci"
+    Run[default]: "[OBJ JRT 1029002]"
+    Run[default]: " "
+
+[P17] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Undistributed Income.  Any net income not so distributed shall be accumulated and annually added to principal. [OBJ JRT 
+    Run[default]: "Undistributed Income."
+    Run[default]: "  Any net income not so distributed shall be accumulated and annually added to p"
+    Run[default]: "[OBJ JRT 1033]"
+    Run[default]: " "
+
+[P18] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Death of Predeceased Spouse.  Upon the Predecease Spouse’s death, the Trustee shall distribute the trust property as fol
+    Run[default]: "Death of Predeceased "
+    Run[default]: "Spouse"
+    Run[default]: "."
+    Run[default]: "  Upon the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " death, the Trustee shall distribute the trust property as follows:"
+
+[P19] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: If the Predecease Spouse’s probate estate (excluding income) is insufficient to pay the Predecease Spouse’s funeral expe
+    Run[default]: "If the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " probate estate (excluding income) is insufficient to pay the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " funeral expenses, all claims against the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " probate estate and the expenses of administering the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " probate estate, the Trustee shall make available to the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " Executor out of the trust fund (including by direct payment thereof as directed"
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " Executor), such sums as the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " Executor shall certify to be required to make good such insufficiency; provided"
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " funeral (and related expenses) "
+    Run[default]: "in excess of"
+    Run[default]: " any limit thereon imposed by applicable state or Federal law.  "
+
+[P20] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The Trustee shall pay any death taxes that result from the Predecease Spouse’s death out of the trust fund in the manner
+    Run[default]: "The Trustee shall pay any death taxes that result from the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " death out of the trust fund in the manner provided below in the provisions gove"
+
+[P21] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: All assets remaining in the trust fund after the payments provided for above shall continue to be held in this trust and
+    Run[default]: "All assets remaining in the trust fund after the payments provided for above sha"
+
+[P22] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+At the Death of the Surviving Spouse
+    Run[default]: "
+"
+    Run[default]: "At the Death of the Surviving Spouse"
+
+[P23] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Upon the death of the survivor of us, property held in the trust fund shall be disposed of under this Article as follows
+    Run[default]: "Upon the death of the survivor of us, property held in the trust fund shall be d"
+    Run[default]: "[OBJ JRT 1229]"
+    Run[default]: " "
+
+[P24] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Payments after Death.  Upon the death of the Surviving Spouse, the Trustee shall pay all property then belonging to or t
+    Run[default]: "Payments after Death."
+    Run[default]: "  Upon the death of the Surviving Spouse, the Trustee shall pay all property the"
+    Run[default]: "as a result of"
+    Run[default]: " the Surviving Spouse's death as follows: "
+    Run[default]: "[OBJ JRT 1231]"
+    Run[default]: " "
+
+[P25] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: If the Surviving Spouse's probate estate (excluding income) is insufficient to pay the Surviving Spouse's funeral expens
+    Run[default]: "If the Surviving Spouse's probate estate (excluding income) is insufficient to p"
+    Run[default]: "make available to the Surviving Spouse's Executor out of the trust fund (includi"
+    Run[default]: "in excess of"
+    Run[default]: " any limit thereon imposed by applicable state or Federal law.  "
+
+[P26] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The Trustee shall pay any death taxes that result from the Surviving Spouse's death out of the trust fund in the manner 
+    Run[default]: "The Trustee shall pay any death taxes that result from the Surviving Spouse's de"
+    Run[default]: "[OBJ JRT 1233]"
+    Run[default]: " "
+
+[P27] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The Trustee shall dispose of the balance of the trust fund remaining after these payments in the manner provided below i
+    Run[default]: "The Trustee shall dispose of the balance of the trust fund remaining after these"
+    Run[default]: "[OBJ JRT 1234]"
+    Run[default]: " "
+
+[P28] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Gift of the Remaining Trust Fund to Descendants.  The Trustee may distribute the residue of the trust fund, real and per
+    Run[default]: "Gift of the Remaining Trust Fund to Descendants."
+    Run[default]: "  The Trustee "
+    Run[default]: "may"
+    Run[default]: " distribute the residue of the trust fund, real and personal, wherever located ("
+    Run[default]: "to our children, per stirpes, or may leave the residue in trust as set forth in "
+    Run[default]: " "
+    Run[default]: "[OBJ JRT 1265]"
+    Run[default]: " "
+
+[P29] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Takers of Last Resort 
+    Run[default]: "
+"
+    Run[default]: "Takers of Last Resort"
+    Run[default]: " "
+
+[P30] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: If the provisions of this Agreement fail to effectively dispose of any property, that property shall be distributed (a) 
+    Run[default]: "If the provisions of this Agreement fail to effectively dispose of any property,"
+    Run[default]: "[OBJ:STD TLR 1000.001]"
+    Run[default]: " "
+
+[P31] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Maximum Duration for Trusts
+    Run[default]: "
+"
+    Run[default]: "Maximum Duration for Trusts"
+
+[P32] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Maximum Duration for Trusts Defined.  The Maximum Duration for Trusts shall end on the date twenty-one (21) years after 
+    Run[default]: "Maximum Duration for Trusts Defined."
+    Run[default]: "  The Maximum Duration for Trusts shall end on the date twenty-one (21) years af"
+    Run[default]: "[OBJ:STD MDT 1002]"
+    Run[default]: " "
+
+[P33] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Measuring Lives.  The measuring lives under the paragraph entitled "Maximum Duration for Trusts Defined" shall consist o
+    Run[default]: "Measuring Lives."
+    Run[default]: "  The measuring lives under the paragraph entitled "Maximum Duration for Trusts "
+    Run[default]: "[OBJ:STD MDT 1003]"
+    Run[default]: " "
+
+[P34] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Spendthrift Provision
+    Run[default]: "
+"
+    Run[default]: "Spendthrift Provision"
+
+[P35] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: No Assignment.  Each trust shall be a spendthrift trust to the maximum extent permitted by law and no interest in any tr
+    Run[default]: "No Assignment."
+    Run[default]: "  Each trust shall be a spendthrift trust to the maximum extent permitted by law"
+    Run[default]: "a power"
+    Run[default]: " of appointment in a non-fiduciary capacity. "
+    Run[default]: "[OBJ:STD SPE 1002]"
+    Run[default]: " "
+
+[P36] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Protection from Creditors.  If the Trustee shall determine that a beneficiary would not benefit as greatly from any outr
+    Run[default]: "Protection from Creditors."
+    Run[default]: "  If the Trustee shall determine that a beneficiary would not benefit as greatly"
+    Run[default]: "principal"
+    Run[default]: " because of the availability of the distribution to the beneficiary's creditors,"
+    Run[default]: "[OBJ:STD SPE 1004]"
+    Run[default]: " "
+
+[P37] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Protection from Marital Claims.  This paragraph shall apply to any trust created hereunder that is irrevocable, and with
+    Run[default]: "Protection from Marital Claims."
+    Run[default]: "  This paragraph shall apply to any trust created hereunder that is irrevocable,"
+    Run[default]: "beneficiary's spouse might have a claim or interest arising out of the marital r"
+    Run[default]: "[OBJ:STD SPE 1005]"
+    Run[default]: " "
+
+[P38] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Limitation of Court’s Authority.  No court shall have the authority or discretion to direct that there be a distribution
+    Run[default]: "Limitation of Court’s Authority."
+    Run[default]: "  No court shall have the authority or discretion to direct that there be a dist"
+    Run[default]: "[OBJ:STD SPE 1006]"
+    Run[default]: " "
+
+[P39] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Exercise of Powers Created Hereunder
+    Run[default]: "
+"
+    Run[default]: "Exercise of Powers Created Hereunder"
+
+[P40] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Form of Appointment.  A power of appointment conferred hereunder upon a person in his or her individual capacity (a "Non
+    Run[default]: "Form of Appointment."
+    Run[default]: "  A power of appointment conferred hereunder upon a person in his or her individ"
+    Run[default]: "persons"
+    Run[default]: " to or for whom the power may be exercised, in any proportions, in any lawful es"
+    Run[default]: "Such a"
+    Run[default]: " Non-Fiduciary Power may be exercised to create further Non-Fiduciary Powers whi"
+    Run[default]: "exercisable"
+    Run[default]: " in the same or a different manner.  A limited power of appointment may be exerc"
+    Run[default]: "[OBJ:STD PWR 1000]"
+    Run[default]: " "
+
+[P41] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Trustees Under Appointment.  The Trustee under an appointment in further trust may be any person not prohibited from ser
+    Run[default]: "Trustees Under Appointment."
+    Run[default]: "  The Trustee under an appointment in further trust may be any person not prohib"
+    Run[default]: "exercisable"
+    Run[default]: ", however, only in favor of permissible objects of the exercised power. "
+    Run[default]: "[OBJ:STD PWR 1001]"
+    Run[default]: " "
+
+[P42] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Testamentary Power.  A Non-Fiduciary Power, if any, that is exercisable only by the powerholder’s last will and testamen
+    Run[default]: "Testamentary Power."
+    Run[default]: "  A Non-Fiduciary Power, if any, that is "
+    Run[default]: "exercisable"
+    Run[default]: " only by the powerholder’s last will and testament may also be exercised by a se"
+    Run[default]: "contains"
+    Run[default]: " a direction that the exercise in the other instrument be honored. "
+    Run[default]: " [OBJ:STD PWR 1002]"
+    Run[default]: " "
+
+[P43] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Life Insurance and Qualified Retirement Benefits
+    Run[default]: "
+"
+    Run[default]: "Life Insurance and Qualified Retirement Benefits"
+
+[P44] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: The following provisions concern proceeds of life insurance and Retirement Benefits that become payable or distributable
+    Run[default]: "The following provisions concern proceeds of life insurance and Retirement Benef"
+    Run[default]: "[OBJ JRT 1313]"
+    Run[default]: " "
+
+[P45] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Disposition of Insured's and Participant's Interests.  Life insurance proceeds and Retirement Benefits payable by reason
+    Run[default]: "Disposition of Insured's and Participant's Interests."
+    Run[default]: "  Life insurance proceeds and Retirement Benefits payable by reason of the death"
+    Run[default]: " residue (the trust fund remaining after the payment of expenses, debts and deat"
+    Run[default]: "Predecease Spouse"
+    Run[default]: " and authorized to be paid in this Agreement  with respect to the "
+    Run[default]: "Predecease Spouse"
+    Run[default]: " and the Remaining Trust Fund with respect to the Surviving Spouse)"
+    Run[default]: ".  These provisions are subject to the following exemptions from creditors. "
+    Run[default]: "[OBJ JRT 1321]"
+    Run[default]: " "
+
+[P46] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Exclusion of Proceeds and Benefits from Creditors.  Anything to the contrary in this Agreement notwithstanding, any proc
+    Run[default]: "Exclusion of Proceeds and Benefits from Creditors."
+    Run[default]: "  Anything to the contrary in this Agreement notwithstanding, any proceeds of li"
+    Run[default]: "[OBJ JRT 1322]"
+    Run[default]: " "
+
+[P47] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text:  Definition of Retirement Benefits.  As used in this Agreement, the term "Retirement Benefits" (of whatever type), inclu
+    Run[default]: " "
+    Run[default]: "Definition of Retirement Benefits."
+    Run[default]: "  As used in this Agreement, the term "Retirement Benefits" (of whatever type), "
+
+[P48] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Selection of "Payout Schedule."  The Trustee may, in the Trustee's sole and absolute discretion, exercise any right to d
+    Run[default]: "Selection of "Payout Schedule.""
+    Run[default]: "  The Trustee may, in the Trustee's sole and absolute discretion, exercise any r"
+    Run[default]: "any excise tax under Code Sec. 4974(a) or any other tax or penalty as shall appl"
+    Run[default]: ". "
+    Run[default]: "[OBJ JRT 1325]"
+    Run[default]: " "
+
+[P49] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Outright Transfers if Trust Already Terminated in Whole or Part
+    Run[default]: "
+"
+    Run[default]: "Outright Transfers if Trust Already Terminated in Whole or Part"
+
+[P50] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Where property is directed under this Agreement to be held in trust and the time for termination of such trust has been 
+    Run[default]: "Where property is directed under this Agreement to be held in trust and the time"
+    Run[default]: "[OBJ:TFR 1001]"
+    Run[default]: " "
+
+[P51] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Trustees
+    Run[default]: "
+"
+    Run[default]: "Trustees"
+
+[P52] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of Initial Trustee.  We appoint Vito Rizzo and Vita Maria Rizzo to serve as Co-Trustees hereunder (collectiv
+    Run[default]: "Appointment of Initial Trustee."
+    Run[default]: "  We appoint Vito Rizzo and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo to serve as "
+    Run[default]: "Co-"
+    Run[default]: "Trustees hereunder (collectively referred to in this instrument as the Trustee)."
+
+[P53] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Successor to Initial Trustees. 
+    Run[default]: "Successor to Initial Trustees. "
+
+[P54] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: We appoint our daughter, Lisa Ann Rizzo, to serve as a Trustee if and when Vito Rizzo fails to qualify or ceases to serv
+    Run[default]: "We appoint "
+    Run[default]: "our daughter, Lisa Ann Rizzo,"
+    Run[default]: " to serve as a Trustee "
+    Run[default]: "if and when"
+    Run[default]: " Vito Rizzo fails to qualify or ceases to serve as a Trustee."
+
+[P55] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: We appoint our daughter, Lisa Ann Rizzo, to serve as a Trustee if and when Vita Maria Rizzo fails to qualify or ceases t
+    Run[default]: "We appoint "
+    Run[default]: "our daughter, Lisa Ann Rizzo,"
+    Run[default]: " to serve as a Trustee "
+    Run[default]: "if and when"
+    Run[default]: " "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo fails to qualify or ceases to serve as a Trustee."
+
+[P56] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: We appoint Sarina Marie Casisa to serve as Trustee hereunder when all other Trustees previously appointed have failed to
+    Run[default]: "We appoint "
+    Run[default]: "Sarina Marie"
+    Run[default]: " Casisa to serve as Trustee hereunder when all other Trustees previously appoint"
+
+[P57] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Filling Trustee Vacancies.  If there is neither an effectual appointment of a successor Trustee nor any effectual provis
+    Run[default]: "Filling Trustee Vacancies."
+    Run[default]: "  If there is neither an effectual appointment of a successor Trustee nor any ef"
+    Run[Color=#000000]: " "
+    Run[default]: "shall have the right to appoint an individual, corporation or other entity with "
+    Run[default]: "[OBJ:JRT 1342.001]"
+    Run[default]: " "
+
+[P58] Style=TR_Art2 | Align=INHERIT/DEFAULT | LeftInd=0.5in
+  Text: 
+
+[P59] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Compensation of Trustees.  Individual Trustees shall receive reasonable compensation in accordance with the law of the S
+    Run[default]: "Compensation of Trustees."
+    Run[default]: "  Individual Trustees shall receive reasonable compensation in accordance with t"
+    Run[default]: "[OBJ:JRT 1347]"
+    Run[default]: " "
+
+[P60] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Trust Protector
+    Run[default]: "
+"
+    Run[default]: "Trust Protector"
+
+[P61] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of Trust Protector.  We appoint our attorney, Adam J. Elias, Esq. of 168 Prospect Plains Road, Monroe Townsh
+    Run[default]: "Appointment of Trust Protector."
+    Run[default]: "  We appoint our attorney, Adam J. Elias, Esq. of 168 Prospect Plains Road, Monr"
+    Run[default]: "[OBJ:JRT 1349]"
+    Run[default]: " "
+
+[P62] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Trust Protector Provisions.
+    Run[default]: "Trust Protector Provisions."
+
+[P63] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Anyone serving as Trust Protector may resign by acknowledged instrument delivered to the Trustee then acting hereunder. 
+    Run[default]: "Anyone serving as Trust Protector may resign by acknowledged instrument delivere"
+    Run[default]: "[OBJ:JRT 1353]"
+    Run[default]: " "
+
+[P64] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Each Trust Protector acting hereunder shall be treated as acting under a fiduciary duty and must, in all events, act in 
+    Run[default]: "Each Trust Protector acting hereunder shall be treated as acting under a fiducia"
+    Run[default]: "[OBJ:JRT 1356]"
+    Run[default]: " "
+
+[P65] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Trust Protector Powers.  The Trust Protector shall have the following powers: [OBJ:JRT 1360] 
+    Run[default]: "Trust Protector Powers."
+    Run[default]: "  The Trust Protector shall have the following powers: "
+    Run[default]: "[OBJ:JRT 1360]"
+    Run[default]: " "
+
+[P66] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The power to appoint one or more individuals, corporations or other entities to be successor Trust Protector to take off
+    Run[default]: "The power to appoint one or more individuals, corporations or other entities to "
+    Run[default]: "[OBJ:JRT 1361]"
+    Run[default]: " "
+
+[P67] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The power to fill vacancies in the office of Trustee granted and described in the Article entitled "Trustees" in the par
+    Run[default]: "The power to fill vacancies in the office of Trustee granted and described in th"
+    Run[default]: "[OBJ:JRT 1366]"
+    Run[default]: " "
+
+[P68] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The authority to request, from the Trustee, information reasonably related to the administration of any trust under this
+    Run[default]: "The authority to request, from the Trustee, information reasonably related to th"
+    Run[default]: "[OBJ:JRT 13671]"
+
+[P69] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Fiduciary Provisions 
+    Run[default]: "
+"
+    Run[default]: "Fiduciary Provisions"
+    Run[default]: " "
+
+[P70] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: General Provisions Regarding Changes in Fiduciaries.  
+    Run[default]: "General Provisions Regarding Changes in Fiduciaries."
+    Run[default]: "  "
+
+[P71] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: To the extent not prohibited by applicable law, any Trustee may resign at any time without court approval, whether or no
+    Run[default]: "To the extent not prohibited by applicable law, any "
+    Run[default]: "Trustee"
+    Run[default]: " may resign at any time without court approval, "
+    Run[default]: "whether or not"
+    Run[default]: " a successor has been appointed, provided the resigning Trustee complies with an"
+
+[P72] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: If any Trustee is removed, resigns or otherwise ceases to act as Trustee of any trust hereunder, such Trustee shall imme
+    Run[default]: "If any "
+    Run[default]: "Trustee"
+    Run[default]: " is removed, resigns or otherwise ceases to act as Trustee of any trust hereunde"
+    Run[default]: "[OBJ:STD FIDUC PROV 1006]"
+    Run[default]: " "
+
+[P73] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Accountings and Other Proceedings.  
+    Run[default]: "Accountings and Other Proceedings."
+    Run[default]: "  "
+
+[P74] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: We direct that a trust hereunder be subject to independent administration with as little court supervision as the applic
+    Run[default]: "We direct that "
+    Run[default]: "a trust"
+    Run[default]: " hereunder be subject to independent administration with as little court supervi"
+    Run[default]: "[OBJ:STD FIDUC PROV 1013]"
+    Run[default]: " "
+
+[P75] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: We direct that in any proceeding relating to a trust hereunder, service upon any person under a legal disability need no
+    Run[default]: "We direct that in any proceeding relating to a trust hereunder, service upon any"
+    Run[default]: "made"
+    Run[default]: " when another person not under a disability is a party to the proceeding and has"
+    Run[default]: "[OBJ:STD FIDUC PROV 1014]"
+    Run[default]: " "
+
+[P76] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Trustee's Duty to Notify, Inform and Report.  
+    Run[default]: "Trustee's Duty to Notify, Inform and Report."
+    Run[default]: "  "
+
+[P77] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Our privacy and the privacy of our beneficiaries are important to us.  This section establishes the Trustee's duties to 
+    Run[default]: "Our privacy and the privacy of our beneficiaries are important to us.  This sect"
+    Run[default]: "r."
+
+[P78] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Except to the extent required by law, the Trustee is not required to file annual accounts or reports in any jurisdiction
+    Run[default]: "Except to the extent required by law, the Trustee is not required to file annual"
+    Run[default]: "[OBJ:STD FIDUC PROV 1017]"
+    Run[default]: " "
+
+[P79] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: During such time as both of us are living, the Trustee shall respond to a request by either of us for information reason
+    Run[default]: "During such time as both of us are living, the Trustee shall respond to a reques"
+    Run[default]: "trust but"
+    Run[default]: " shall not otherwise be required to provide any beneficiary, including any Quali"
+    Run[default]: "T"
+    Run[default]: "he Trustee shall also provide the Trust Protector with information reasonably re"
+    Run[default]: "[OBJ:STD FIDUC PROV 1018]"
+    Run[default]: " "
+
+[P80] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Following the death of the Predecease Spouse, the Trustee shall respond to a request by the Surviving Spouse for informa
+    Run[default]: "Following the death of the "
+    Run[default]: "Predecease Spouse"
+    Run[default]: ", the Trustee shall respond to a request by the Surviving Spouse for information"
+    Run[default]: "trust fund"
+    Run[default]: ", but shall not otherwise be required to provide any beneficiary of the"
+    Run[default]: " "
+    Run[default]: "trust fund, including any Qualified Beneficiary, with information related to the"
+    Run[default]: "."
+    Run[default]: " If the Surviving Spouse is not acting as a Trustee or Trust Protector under thi"
+    Run[default]: "[OBJ:STD FIDUC PROV 1019]"
+    Run[default]: " "
+
+[P81] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Following the death of the Predecease Spouse, except as otherwise provided above with respect to the trust fund, the Tru
+    Run[default]: "Following the death of the "
+    Run[default]: "Predecease Spouse"
+    Run[default]: ", except as otherwise provided above with respect to the trust fund, the Trustee"
+    Run[default]: "[OBJ:STD FIDUC PROV 1020]"
+    Run[default]: " "
+
+[P82] Style=TR_Art4B | Align=INHERIT/DEFAULT
+  Text: providing any Qualified Beneficiary who has attained the age of thirty-five (35) years with a copy of this Agreement, or
+    Run[default]: "providing any Qualified Beneficiary who has attained the age of thirty-five (35)"
+    Run[default]: "[OBJ:STD FIDUC PROV 1021]"
+    Run[default]: " "
+
+[P83] Style=TR_Art4B | Align=INHERIT/DEFAULT
+  Text: providing notice to all Qualified Beneficiaries of a proposed transfer of the principal place of administration of any t
+    Run[default]: "providing notice to all Qualified Beneficiaries of a proposed transfer of the pr"
+    Run[default]: "[OBJ:STD FIDUC PROV 1022]"
+    Run[default]: " "
+
+[P84] Style=TR_Art4B | Align=INHERIT/DEFAULT
+  Text: providing notice to all Qualified Beneficiaries prior to the termination of this Agreement in accordance with the provis
+    Run[default]: "providing notice to all Qualified Beneficiaries prior to the termination of this"
+    Run[default]: "[OBJ:STD FIDUC PROV 1023]"
+
+[P85] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Otherwise, to the extent allowed by law, all waivable duties of the Trustee under the New Jersey Uniform Trust Code (N.J
+    Run[default]: "Otherwise, to the extent allowed by law, all waivable duties of the Trustee unde"
+    Run[default]: "[OBJ:STD FIDUC PROV 1024]"
+    Run[default]: " "
+
+[P86] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Nothing in this paragraph is intended to prohibit the Trustee from providing any beneficiary of a trust under this Agree
+    Run[default]: "Nothing in this paragraph is intended to prohibit the Trustee from providing any"
+    Run[default]: "a trust"
+    Run[default]: " under this Agreement, or any representative of a beneficiary, with notices, rep"
+    Run[default]: "in excess of"
+    Run[default]: ", that which is required under this paragraph.  In addition to the requirements "
+
+[P87] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Continuation of Trustee's Powers.  Powers granted to the Trustee hereunder or by applicable law shall continue with resp
+    Run[default]: "Continuation of Trustee's"
+    Run[default]: " "
+    Run[default]: "Powers."
+    Run[default]: "  Powers granted to the Trustee hereunder or by applicable law shall continue wi"
+    Run[default]: "Trustee"
+    Run[default]: " until property is "
+    Run[default]: "actually distributed"
+    Run[default]: " to a beneficiary.  By way of illustration and not by way of limitation, the Tru"
+    Run[default]: "actually distributed"
+    Run[default]: ". "
+    Run[default]: "[OBJ:STD FIDUC PROV 1070]"
+    Run[default]: " "
+
+[P88] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Additional General Provisions Regarding Fiduciaries.  
+    Run[default]: "Additional General Provisions Regarding Fiduciaries."
+    Run[default]: "  "
+
+[P89] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The Trustee shall be entitled to reimbursement for any out-of-pocket expenditures made or incurred in the proper adminis
+    Run[default]: "The Trustee shall be entitled to reimbursement for any out-of-pocket expenditure"
+    Run[default]: "[OBJ:STD FIDUC PROV 1079]"
+    Run[default]: " "
+
+[P90] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: No Trustee shall be liable to anyone for anything done or not done by any other Trustee or any beneficiary. [OBJ:STD FID
+    Run[default]: "No "
+    Run[default]: "Trustee"
+    Run[default]: " shall be liable to anyone for anything done or not done by any other Trustee or"
+    Run[default]: "[OBJ:STD FIDUC PROV 1080]"
+    Run[default]: " "
+
+[P91] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The Trustee may employ, and may rely upon advice given by, investment counsel, delegate discretionary investment authori
+    Run[default]: "The Trustee may employ, and may rely upon advice given by, investment counsel, d"
+    Run[default]: "[OBJ:STD FIDUC PROV 1082]"
+    Run[default]: " "
+
+[P92] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The fact that a Trustee (or a firm of which a Trustee is a member or with which a Trustee is otherwise affiliated) rende
+    Run[default]: "The fact that "
+    Run[default]: "a Trustee"
+    Run[default]: " (or a firm of which a Trustee is a member or with which a Trustee is otherwise "
+    Run[default]: "as"
+    Run[default]: " a Trustee and the professional services rendered, except as specifically limite"
+    Run[default]: "[OBJ:STD FIDUC PROV 1087]"
+    Run[default]: " "
+
+[P93] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: A Trustee may irrevocably release one or more powers held by the Trustee while retaining other powers. [OBJ:STD FIDUC PR
+    Run[default]: "A Trustee may irrevocably release one or more powers held by the Trustee while r"
+    Run[default]: "[OBJ:STD FIDUC PROV 1091]"
+    Run[default]: "  "
+    Run[default]: "[OBJ:STD FIDUC PROV 1093]"
+    Run[default]: " "
+
+[P94] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Waiver of Bond.  To the extent permitted by applicable state law, we direct that no Trustee shall be required to give bo
+    Run[default]: "Waiver of Bond."
+    Run[default]: "  To the extent permitted by applicable state law, we direct that no Trustee sha"
+    Run[default]: "exoneration"
+    Run[default]: ", a bond is nevertheless required, no sureties shall be required.   "
+    Run[default]: "[OBJ:STD FIDUC PROV 1094]"
+    Run[default]: " "
+
+[P95] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Governing Law and Trustee Powers 
+    Run[default]: "
+"
+    Run[default]: "Governing Law and Trustee Powers"
+    Run[default]: " "
+
+[P96] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: The interpretation and operation of the trust shall be governed by the laws of the State of New Jersey.  The Trustee may
+    Run[default]: "The interpretation and operation of the trust shall be governed by the laws of t"
+    Run[default]: "Trustee"
+    Run[default]: " shall include the following: "
+    Run[default]: "[OBJ:STD GOV 1000]"
+    Run[default]: " "
+
+[P97] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Waiver of New Jersey Uniform Trust Code Provisions.  To the extent consistent with the terms of this Agreement, the New 
+    Run[default]: "Waiver of New Jersey Uniform Trust Code Provisions."
+    Run[default]: "  To the extent consistent with the terms of this Agreement, the New Jersey Unif"
+    Run[default]: "[OBJ:STD GOV 1006.003]"
+    Run[default]: "  "
+
+[P98] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Deceased Spousal Unused Exclusion Amount Election.  We direct that the Predecease Spouse’s Executor do all things necess
+    Run[default]: "Deceased Spousal Unused Exclusion Amount Election."
+    Run[default]: "  We direct that the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " Executor do all things necessary to make a valid election to allow the Survivin"
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " deceased spousal unused exclusion amount, to the greatest extent permitted unde"
+    Run[default]: "Predecease Spouse"
+    Run[default]: " or to any other beneficiaries of the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " estate in order for the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " Executor to make this election or because this election was made, nor shall any"
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " estate because this election was made.  If there is no Executor appointed for t"
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " estate, the direction in this paragraph shall apply to the Trustee. "
+    Run[default]: "[OBJ:STD GOV 1006.005]"
+    Run[default]: "  "
+
+[P99] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Special Trustee Liability Provision.  Some persons may be hesitant to serve as Trustee hereunder because of a concern ab
+    Run[default]: "Special Trustee Liability Provision."
+    Run[default]: "  "
+    Run[default]: "Some "
+    Run[default]: "persons"
+    Run[default]: " may be hesitant to serve as "
+    Run[default]: "Trustee"
+    Run[default]: " hereunder because of a concern about potential liability. Therefore, with respe"
+    Run[default]: "i"
+    Run[default]: ")"
+    Run[Font=MS Mincho]: " "
+    Run[default]: "no "
+    Run[default]: "Trustee"
+    Run[default]: " shall incur any liability by reason of any error of "
+    Run[default]: "judgment, mistake of law, or action of any kind taken or omitted to be taken in "
+    Run[default]: "Trustee"
+    Run[default]: " to be in accordance with the provisions and intent hereof, except for matters i"
+    Run[default]: ", (ii) no Trustee shall have any fiduciary responsibility to observe, monitor or"
+    Run[default]: "."
+    Run[Color=#008000]: "  "
+    Run[default]: "[OBJ:STD GOV 1063]"
+    Run[default]: " "
+
+[P100] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Allocate Gain to Accounting Income.  The Trustee may allocate any capital gain recognized by any trust hereunder to acco
+    Run[default]: "Allocate Gain to Accounting Income."
+    Run[default]: "  The Trustee may allocate any capital gain recognized by any trust hereunder to"
+    Run[default]: "[OBJ:STD GOV 1065]"
+    Run[default]: " "
+
+[P101] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Authority to Terminate an Uneconomic Trust.  The Trustee (may, in the exercise of the Trustee's sole and absolute discre
+    Run[default]: "Authority to Terminate "
+    Run[default]: "an Uneconomic"
+    Run[default]: " Trust."
+    Run[default]: "  The Trustee (may, in the exercise of the Trustee's sole and absolute discretio"
+
+[P102] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: Upon the termination of any uneconomic trust pursuant to this provision, the Trustee shall distribute the then remaining
+    Run[default]: "Upon the termination of any uneconomic trust pursuant to this provision, the Tru"
+    Run[default]: ", in the case of the termination of a Descendants' Single Trust, "
+    Run[default]: "the persons who are then permissible "
+    Run[default]: "distributees"
+    Run[default]: " of income and/or principal of the trust, as the Trustee, in the exercise of dis"
+    Run[default]: ".  In making any such determination, it is our wish, but not our direction, that"
+    Run[default]: "[OBJ:STD GOV 10680.001]"
+    Run[default]: "  "
+
+[P103] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: The Trustee shall not be required to notify any beneficiary of the trust about the Trustee's intent to terminate the une
+    Run[default]: "The Trustee shall not be required to notify any beneficiary of the trust about t"
+
+[P104] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Security Interests.  The Trustee may grant security interests and execute all instruments creating such interests upon s
+    Run[default]: "Security Interests."
+    Run[default]: "  The Trustee may grant security interests and execute all instruments creating "
+    Run[default]: "[OBJ:STD GOV 1078]"
+    Run[default]: " "
+
+[P105] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Tax Elections and Allocations.  The Trustee may make all tax elections and allocations the Trustee may consider appropri
+    Run[default]: "Tax Elections and Allocations."
+    Run[default]: "  The Trustee may make all tax elections and allocations the Trustee may conside"
+    Run[default]: "[OBJ:STD GOV 1081]"
+    Run[default]: " "
+
+[P106] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Determinations About Property.  The Trustee may determine what property is covered by general descriptions contained in 
+    Run[default]: "Determinations About Property."
+    Run[default]: "  The Trustee may determine what property is covered by general descriptions con"
+    Run[default]: "[OBJ:STD GOV 1084]"
+    Run[default]: " "
+
+[P107] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Sale or Exchange of Property.  The Trustee may sell real or personal property at public or private sale, for cash or upo
+    Run[default]: "Sale or Exchange of Property."
+    Run[default]: "  The Trustee may sell real or personal property at public or private sale, for "
+    Run[default]: "period of time"
+    Run[default]: " and give options of any duration for sales, exchanges or leases.  The Trustee m"
+    Run[default]: " "
+    Run[default]: "[OBJ:STD GOV 1089]"
+    Run[default]: " "
+
+[P108] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Distributions in Cash or Kind.  The Trustee may, without the consent of any beneficiary, distribute in cash or in kind, 
+    Run[default]: "Distributions in Cash or Kind."
+    Run[default]: "  The Trustee may, without the consent of any beneficiary, distribute in cash or"
+
+[P109] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Digital Assets and Accounts.  The Trustee may take any action with respect to any Digital Assets, Digital Accounts, and 
+    Run[default]: "Digital Assets and Accounts."
+    Run[default]: "  The Trustee may take any action with respect to any Digital Assets, Digital Ac"
+    Run[Font=Calibri]: " "
+    Run[default]: "Trustee the authority described in this paragraph, it is our intent to reference"
+    Run[default]: " [OBJ:STD GOV 11072]"
+    Run[default]: " "
+
+[P110] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Reliance Upon Advice.  The Trustee may employ, and rely upon advice given by, accountants, attorneys, investment bankers
+    Run[default]: "Reliance Upon Advice."
+    Run[default]: "  The Trustee may employ, and rely upon advice given by, accountants, attorneys,"
+    Run[default]: "[OBJ:STD GOV 1121]"
+    Run[default]: " "
+
+[P111] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Definitions and Miscellaneous Provisions
+    Run[default]: "
+"
+    Run[default]: "Definitions and Miscellaneous Provisions"
+
+[P112] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: The following definitions and miscellaneous provisions shall apply under this Agreement: [OBJ:STD DEF 1000] 
+    Run[default]: "The following definitions and miscellaneous provisions shall apply under this Ag"
+    Run[default]: "[OBJ:STD DEF 1000]"
+    Run[default]: " "
+
+[P113] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Spouse.  An individual's "spouse" (other than with respect to either of us) is the person (if any) to whom that individu
+    Run[default]: "Spouse"
+    Run[Size=11.0pt]: "."
+    Run[default]: "  An individual's "spouse" (other than with respect to either of us) is the pers"
+    Run[default]: "[OBJ:STD DEF 10010]"
+    Run[default]: " "
+
+[P114] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Surviving Spouse.  The "surviving spouse" of an individual, other than with respect to either of us, is the person (if a
+    Run[default]: "Surviving Spouse."
+    Run[default]: "  The "surviving spouse" of an individual, other than with respect to either of "
+    Run[default]: "[OBJ:STD DEF 1002]"
+    Run[default]: " "
+
+[P115] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Descendants.  References in this Agreement to a person's "children," "grandchildren," and other "descendants" shall refe
+    Run[default]: "Descendants."
+    Run[default]: "  References in this Agreement to a person's "children," "grandchildren," and ot"
+    Run[default]: "[OBJ:STD DEF 1006]"
+    Run[default]: " "
+
+[P116] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Minor and Adult.  Whether an individual is a minor or an adult shall be determined under the laws of the individual's do
+    Run[default]: "Minor and Adult."
+    Run[default]: "  Whether an individual is a minor or an adult shall be determined under the law"
+    Run[default]: "[OBJ:STD DEF 1020]"
+    Run[default]: " "
+
+[P117] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Code and Regulations.  References to the "Internal Revenue Code" or "Code" or to provisions thereof are to the Internal 
+    Run[default]: "Code and Regulations."
+    Run[default]: "  References to the "Internal Revenue Code" or "Code" or to provisions thereof a"
+    Run[default]: "[OBJ:STD DEF 1021]"
+    Run[default]: " "
+
+[P118] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Digital Assets, Accounts and Devices.  The following definitions and descriptions shall apply to the authority of the Tr
+    Run[default]: "Digital Assets, Accounts and Devices."
+    Run[default]: "  The following definitions and descriptions shall apply to the authority of the"
+    Run[default]: "[OBJ:STD DEF 102200]"
+    Run[default]: " "
+
+[P119] Style=TR_Art2 | Align=INHERIT/DEFAULT | LeftInd=0.5in
+  Text: 
+
+[P120] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: "Catalogue of electronic communications" shall mean a record of identifying information regarding electronic communicati
+    Run[default]: ""Catalogue of electronic communications" shall mean a record of identifying info"
+    Run[default]: "[OBJ:STD DEF 102201]"
+    Run[default]: " "
+
+[P121] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: "Content of electronic communications" shall mean information concerning the substance or meaning of electronic communic
+    Run[default]: ""Content of electronic communications" shall mean information concerning the sub"
+    Run[default]: "[OBJ:STD DEF 102202]"
+    Run[default]: " "
+
+[P122] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: "Digital Assets" shall include any electronic record in which either of us has a right or interest, including any asset 
+    Run[default]: ""Digital Assets" shall include any electronic record in which either of us has a"
+    Run[default]: "[OBJ:STD DEF 102203]"
+    Run[default]: " "
+
+[P123] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: A "Digital Device" is an electronic device that can create, generate, send, share, communicate, receive, store, display,
+    Run[default]: "A "Digital Device" is an electronic device that can create, generate, send, shar"
+    Run[default]: "[OBJ:STD DEF 102204]"
+    Run[default]: " "
+
+[P124] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: "Digital Accounts" shall include all arrangements under which a custodian carries, maintains, processes, receives or sto
+    Run[default]: ""Digital Accounts" shall include all arrangements under which a custodian carrie"
+    Run[default]: "[OBJ:STD DEF 102205]"
+    Run[default]: " "
+
+[P125] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Per Stirpes.  Property that is to be divided among an individual's surviving or then-living descendants "per stirpes" or
+    Run[default]: "Per Stirpes."
+    Run[default]: "  Property that is to be divided among an individual's surviving or then-living "
+    Run[default]: "stirpital"
+    Run[default]: " shares" shall be divided into as many equal shares as there are children of the"
+    Run[default]: "."
+    Run[default]: " "
+
+[P126] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Executor.  Whenever herein a reference is made to an Executor of either of us, or to another person's Executor, such ref
+    Run[default]: "Executor"
+    Run[default]: "."
+    Run[default]: "  "
+    Run[default]: "Whenever herein"
+    Run[default]: " a reference is made to an Executor of either of us, or to another person's Exec"
+    Run[default]: "[OBJ:STD DEF 1024]"
+    Run[default]: " "
+
+[P127] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Qualified Beneficiary.  The term "Qualified Beneficiary" shall have the meaning applied to the same term under the New J
+    Run[default]: "Qualified Beneficiary."
+    Run[default]: "  The term "Qualified Beneficiary" shall have the meaning applied to the same te"
+    Run[default]: "[OBJ:STD DEF 1026]"
+    Run[default]: "  "
+
+[P128] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Is a distributee or permissible distributee of trust income or principal; [OBJ:STD DEF 1026001] 
+    Run[default]: "Is a "
+    Run[default]: "distributee"
+    Run[default]: " or permissible "
+    Run[default]: "distributee"
+    Run[default]: " of trust income or principal; "
+    Run[default]: "[OBJ:STD DEF 1026001]"
+    Run[default]: " "
+
+[P129] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Would be a distributee or permissible distributee of trust income or principal if the interests of the distributees desc
+    Run[default]: "Would"
+    Run[default]: " be a "
+    Run[default]: "distributee"
+    Run[default]: " or permissible "
+    Run[default]: "distributee"
+    Run[default]: " of trust income or "
+    Run[default]: "principal"
+    Run[default]: " if the interests of the "
+    Run[default]: "distributees"
+    Run[default]: " described in paragraph (1) of this subsection terminated on that date without c"
+    Run[default]: "[OBJ:STD DEF 10271]"
+    Run[default]: " "
+
+[P130] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Would be a distributee or permissible distributee of trust income or principal if the trust terminated on that date. [OB
+    Run[default]: "Would"
+    Run[default]: " be a "
+    Run[default]: "distributee"
+    Run[default]: " or permissible "
+    Run[default]: "distributee"
+    Run[default]: " of trust income or principal if the trust terminated on that date. "
+    Run[default]: "[OBJ:STD DEF 10281]"
+    Run[default]: " "
+
+[P131] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Disabled Grantor, Trust Protector, or Trustee.  No individual (including either of us) shall serve as Trustee or Trust P
+    Run[default]: "Disabled Grantor, Trust Protector, or Trustee."
+    Run[default]: "  "
+    Run[default]: "No individual (including either "
+    Run[default]: "of us) shall serve as Trustee or Trust Protector during any period in which such"
+
+[P132] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text:   Change of Situs.  The situs of the property of any trust created hereunder may be maintained in any jurisdiction, in t
+    Run[default]: " "
+    Run[default]: " "
+    Run[default]: "Change of Situs."
+    Run[default]: "  The situs of the property of any trust created hereunder may be maintained in "
+    Run[default]: ", "
+    Run[default]: "and thereafter transferred at any time or times to any jurisdiction selected by "
+    Run[default]: ". "
+    Run[default]: "Upon any such transfer of situs, the trust estate of that trust may thereafter, "
+    Run[default]: "[OBJ:STD DEF 1100]"
+    Run[default]: " "
+
+[P133] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Revocability of Trust and Rights Reserved
+    Run[default]: "
+"
+    Run[default]: "Revocability of Trust and Rights Reserved"
+
+[P134] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: We reserve the rights listed in this article, each of which may be exercised whenever and as often as either or both of 
+    Run[default]: "We reserve the rights listed in this article, each of which may be exercised whe"
+    Run[default]: "[OBJ:STD REV 1000]"
+    Run[default]: "  "
+
+[P135] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: 
+
+[P136] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Amend or Revoke.  The right, to be exercised solely by an acknowledged instrument in writing delivered to each of us and
+    Run[default]: "Amend or "
+    Run[default]: "Revoke"
+    Run[default]: "."
+    Run[default]: "  The right, to be exercised solely by an acknowledged instrument in writing del"
+    Run[default]: "[OBJ:STD REV 1001]"
+    Run[default]: " "
+
+[P137] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Remove and Appoint Trustees.  The right to remove any Trustee and appoint substitute, additional or successor Trustees s
+    Run[default]: "Remove and Appoint Trustees."
+    Run[default]: "  The right to remove any Trustee and appoint substitute, additional or successo"
+    Run[default]: "exercisable"
+    Run[default]: " by us jointly while we are both alive.  After the death of one of us, the right"
+    Run[default]: "."
+    Run[default]: " "
+
+[P138] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Approve Investment Decisions.  The right to approve the Trustee's investment decisions.  Our approval in accordance with
+    Run[default]: "Approve Investment Decisions."
+    Run[default]: "  The right to approve the Trustee's investment decisions.  Our approval in acco"
+
+[P139] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+No Contest
+    Run[default]: "
+"
+    Run[default]: "No Contest"
+
+[P140] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Effect of Attempted Contest.  In the event that any person (1) directly or indirectly contests or attacks, with respect 
+    Run[default]: "Effect of Attempted Contest."
+    Run[default]: "  In the event that any person (1) directly or indirectly contests or attacks, w"
+    Run[default]: "Predecease Spouse"
+    Run[default]: ", if the action relates to the property or estate of the "
+    Run[default]: "Predecease Spouse"
+    Run[default]: ", or the Surviving Spouse, if the action relates to the property or estate of th"
+    Run[default]: "[OBJ:STD NCT 1002]"
+    Run[default]: " "
+
+[P141] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Savings Clause
+    Run[default]: "
+"
+    Run[default]: "Savings Clause"
+
+[P142] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Should any of the provisions or directions of this Agreement fail or be held ineffectual or invalid for any reason, it i
+    Run[default]: "Should any of the provisions or directions of this Agreement fail or be held ine"
+    Run[default]: " [OBJ:STD SAV 1002]"
+    Run[default]: " "
+
+[P143] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: 
+
+[P144] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: We are familiar with and understand the contents of this Agreement, including the paragraph entitled Special Trustee Lia
+    Run[default]: "We are familiar with and understand the contents of this Agreement, including th"
+    Run[default]: "[OBJ:RT 15440]"
+    Run[default]: " "
+
+[P145] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P146] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: IN WITNESS WHEREOF, the Trustees and the Grantors have signed this Agreement, effective the day and year first above wri
+    Run[default]: "IN WITNESS WHEREOF, the Trustees and the Grantors have signed this Agreement, ef"
+    Run[default]: " [OBJ JRT 1389]"
+    Run[default]: " "
+
+[P147] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: 
+
+[P148] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: Dated: January 9, 2026			______________________________________
+    Run[default]: "Dated: January 9, 2026"
+    Run[default]: "	"
+    Run[default]: "	"
+    Run[default]: "	"
+    Run[default]: "______________________________________"
+
+[P149] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Vito Rizzo, as Grantor and Initial Trustee
+    Run[default]: "Vito Rizzo, as Grantor"
+    Run[default]: " and Initial Trustee"
+
+[P150] Style=TR_SigLine | Align=INHERIT/DEFAULT
+  Text: 
+
+[P151] Style=TR_SigLine | Align=INHERIT/DEFAULT
+  Text: Dated: January 9, 2026			______________________________________
+    Run[default]: "Dated: January 9, 2026"
+    Run[default]: "	"
+    Run[default]: "	"
+    Run[default]: "	"
+    Run[default]: "______________________________________"
+
+[P152] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Vita Maria Rizzo, as Grantor and Initial Trustee
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo, as Grantor"
+    Run[default]: " and Initial Trustee"
+
+[P153] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 
+
+[P154] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: STATE OF NEW JERSEY		)
+    Run[default]: "STATE OF NEW JERSEY"
+    Run[default]: "	"
+    Run[default]: "	)"
+
+[P155] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 		)
+    Run[default]: "	"
+    Run[default]: "	)"
+
+[P156] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: MIDDLESEX COUNTY		)
+    Run[default]: "MIDDLESEX COUNTY"
+    Run[default]: "	"
+    Run[default]: "	)"
+
+[P157] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P158] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: I HEREBY CERTIFY that on January 9, 2026, before me, the subscriber, personally appeared Vito Rizzo and Vita Maria Rizzo
+    Run[default]: "I HEREBY CERTIFY that on January 9, 2026, before me, the subscriber, personally "
+    Run[default]: " and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo"
+    Run[default]: ", as Grantor"
+    Run[default]: "s and Initial Trustees"
+    Run[default]: ", personally known to me (or proved to me on the basis of satisfactory evidence)"
+    Run[default]: "s"
+    Run[default]: " whose name "
+    Run[default]: "are"
+    Run[default]: " subscribed to the foregoing instrument, and acknowledged to me that "
+    Run[default]: "they"
+    Run[default]: " executed the same."
+    Run[default]: "[OBJ:STDIND 1001]"
+    Run[default]: " "
+
+[P159] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: Dated: January 9, 2026
+    Run[default]: "Dated: January 9, 2026"
+
+[P160] Style=TR_SigLine | Align=INHERIT/DEFAULT
+  Text: ______________________________________
+    Run[default]: "______________________________________"
+
+[P161] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Adam J. Elias, Esq. (#050452014)
+    Run[default]: "Adam J. Elias, Esq"
+    Run[default]: ". (#"
+    Run[default]: "050452014)"
+
+[P162] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Attorney at Law of the State of New Jersey
+    Run[default]: "Attorney at Law of the State of New Jersey"
+
+[P163] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P164] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: SCHEDULE A
+    Run[default]: "SCHEDULE A"
+
+[P165] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 603 Waterside Boulevard, Monroe Township, New Jersey
+    Run[default]: "603 "
+    Run[default]: "Waterside"
+    Run[default]: " Boulevard, Monroe Township, New Jersey"
+
+[P166] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 125 Texas Avenue, Lower Township, New Jersey
+    Run[default]: "125 Texas Avenue, Lower Township, New Jersey"
+
+[P167] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P168] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P169] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P170] Style=TR_Title | Align=INHERIT/DEFAULT | SpAfter=6.0pt
+  Text: EXECUTIVE SUMMARY FOR THE
+RIZZO FAMILY LIVING TRUST 
+    Run[default]: "EXECUTIVE SUMMARY FOR THE"
+    Run[default]: "
+RIZZO FAMILY LIVING TRUST "
+
+[P171] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Your estate plan includes a Revocable "living" Trust. This executive summary contains a brief summary of your Joint Revo
+    Run[default]: "Your estate plan includes a Revocable "living" Trust. This executive summary con"
+    Run[default]: "a brief summary"
+    Run[default]: " of your Joint Revocable Trust.  Many provisions contained in your Joint Revocab"
+    Run[default]: " "
+    Run[default]: "[OBJ JRT 1390]"
+    Run[default]: " "
+
+[P172] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Assets Held by Trustee.  By holding title to more of your assets in your living trust, you reduce the need to go to cour
+    Run[default]: "Assets Held by Trustee."
+    Run[default]: "  By holding title to more of your assets in your living trust, you reduce the n"
+    Run[default]: "estate, and"
+    Run[default]: " thereby may reduce the cost of administration.  Putting assets in your trust do"
+    Run[default]: "a court"
+    Run[default]: " supervised, or dependent, administration.  In addition, if you own assets locat"
+    Run[default]: " "
+    Run[default]: "[OBJ JRT 1392]"
+    Run[default]: " "
+
+[P173] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Trust Provisions During Your Lives.  This Article contains the trust dispositive provisions that apply while either of y
+    Run[default]: "Trust Provisions During Your Lives."
+    Run[default]: "  This Article contains the trust dispositive provisions that apply while either"
+    Run[default]: "Upon the death of the "
+    Run[default]: "Predecease Spouse"
+    Run[default]: ", this Article provides for payment of the "
+    Run[default]: "Predecease Spouse’s"
+    Run[default]: " debts, expenses and death taxes.  The trust then "
+    Run[default]: "continues on"
+    Run[default]: " the same terms until the death of the survivor of you."
+    Run[default]: "  "
+    Run[default]: " [OBJ JRT 1395]"
+    Run[default]: " "
+
+[P174] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: At the Death of the Surviving Spouse.  This Article makes provision for the payment of the Surviving Spouse's expenses a
+    Run[default]: "At the Death of the Surviving Spouse."
+    Run[default]: "  This Article makes provision for the payment of the Surviving Spouse's expense"
+    Run[default]: " "
+
+[P175] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Gift of the Remaining Trust Fund to Descendants.  Under this paragraph, the rest of the Surviving Spouse's property pass
+    Run[default]: "Gift of the Remaining Trust Fund to Descendants."
+    Run[default]: "  Under this paragraph, the rest of the Surviving Spouse's property passing unde"
+    Run[default]: "may be"
+    Run[default]: " distributed to "
+    Run[default]: "your children outright or may remain in Trust"
+    Run[default]: ", "
+    Run[default]: "whichever your children may deem more appropriate at that time."
+
+[P176] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Payment of the Surviving Spouse's Death Taxes.  This Article contains the very complex provisions for payment of taxes u
+    Run[default]: "Payment of the Surviving Spouse's Death Taxes."
+    Run[default]: "  This Article contains the very complex provisions for payment of taxes upon th"
+    Run[default]: "The technicalities"
+    Run[default]: " are required "
+    Run[default]: "in order to"
+    Run[default]: " ensure that these taxes are borne by the appropriate beneficiaries consistent w"
+    Run[default]: " [OBJ JRT 1460]"
+    Run[default]: " "
+
+[P177] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Takers of Last Resort.  This Article determines who will receive the trust funds if all the persons to whom you have lef
+    Run[default]: "Takers of Last Resort."
+    Run[default]: "  This Article determines who will receive the trust funds if all the persons to"
+    Run[default]: "a good"
+    Run[default]: " practice to name some alternate "
+    Run[default]: "taker"
+    Run[default]: " in this event."
+    Run[default]: " [OBJ JRT 1461]"
+    Run[default]: " "
+
+[P178] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Maximum Duration of Trusts.  This Article provides special protection against unanticipated problems that can arise unde
+    Run[default]: "Maximum Duration of Trusts."
+    Run[default]: "  This Article provides special protection against unanticipated problems that c"
+    Run[default]: "[OBJ JRT 1462]"
+    Run[default]: " "
+
+[P179] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Spendthrift Provision.  This Article protects the trust funds from the creditors of the beneficiaries by preventing a be
+    Run[default]: "Spendthrift Provision."
+    Run[default]: "  This Article protects the trust funds from the creditors of the beneficiaries "
+    Run[default]: " [OBJ JRT 1464]"
+    Run[default]: " "
+
+[P180] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Exercise of Powers Created Under this Agreement.  This Article provides detailed guidelines on how powers of appointment
+    Run[default]: "Exercise of Powers Created Under this Agreement."
+    Run[default]: "  This Article provides detailed guidelines on how powers of appointment created"
+    Run[default]: "[OBJ JRT 1465]"
+    Run[default]: " "
+
+[P181] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Outright Transfers if Trust Already Terminated in Whole or Part.  This Article allows the Trustee to make distributions 
+    Run[default]: "Outright Transfers if Trust Already Terminated in Whole or Part."
+    Run[default]: "  This Article allows the Trustee to make distributions directly to beneficiarie"
+    Run[default]: "occurred"
+    Run[default]: " making the trust subject to partial distribution under the terms of the trust. "
+    Run[default]: " [OBJ JRT 1467]"
+    Run[default]: " "
+
+[P182] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Trustee Appointments.  This Article names your Trustee and any successors.  The Trustee will be responsible for administ
+    Run[default]: "Trustee Appointments."
+    Run[default]: "  This Article names your Trustee and any successors.  The Trustee will be respo"
+    Run[default]: " [OBJ JRT 1468]"
+    Run[default]: " "
+
+[P183] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Vito Rizzo and Vita Maria Rizzo [OBJ JRT 14690] are listed in the Agreement as the initial Trustees. [OBJ JRT 1469] Lisa
+    Run[default]: "Vito Rizzo and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo "
+    Run[default]: "[OBJ JRT 14690]"
+    Run[default]: " are listed in the Agreement as the initial Trustees."
+    Run[default]: " "
+    Run[default]: "[OBJ JRT 1469]"
+    Run[default]: " Lisa Ann Rizzo is named as the First Level Successor Trustee and "
+    Run[default]: "Sarina Marie"
+    Run[default]: " Casisa is named as the Second Level Successor Trustee.  "
+    Run[default]: "[OBJ:JRT 14700]"
+
+[P184] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Other Provisions Regarding Trustees.  This Article also provides the Trustee with broad authority to manage your Trust F
+    Run[default]: "Other Provisions Regarding Trustees."
+    Run[default]: "  This Article also provides the Trustee with broad authority to manage your Tru"
+    Run[default]: "actually need"
+    Run[default]: " to be exercised, but we need to provide them so that your Trustee can handle wh"
+    Run[default]: "[OBJ JRT 1477]"
+    Run[default]: " "
+
+[P185] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Trust Protectors.  We have also created the position of "Protector" for your Trust Fund.  The Protector can remove a fid
+    Run[default]: "Trust Protectors."
+    Run[default]: "  We have also created the position of "Protector" for your Trust Fund.  The Pro"
+    Run[default]: "[OBJ JRT 1478]"
+    Run[default]: " Adam J. Elias, Esq."
+    Run[default]: " is"
+    Run[default]: " named as the Trust Protector. "
+    Run[default]: "[OBJ:JRT 1478004]"
+    Run[default]: " "
+
+[P186] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Revocability of Trust and Rights Reserved.  You may each revoke or amend this trust at any time.  For income tax purpose
+    Run[default]: "Revocability of Trust and Rights Reserved."
+    Run[default]: "  You may "
+    Run[default]: "each revoke"
+    Run[default]: " or amend this trust at any time.  "
+    Run[default]: "For income tax purposes, you each own the trust's assets personally, and the tru"
+    Run[default]: " [OBJ JRT 1486]"
+    Run[default]: " "
+
+[P187] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Changing Title to Assets.  Funding your trust will free the assets in the trust from probate before the state courts and
+    Run[default]: "Changing Title to Assets."
+    Run[default]: "  Funding your trust will free the assets in the trust from probate before the s"
+    Run[default]: " [OBJ JRT 1487]"
+    Run[default]: " Please remember, however, that funding your trust will not change the estate ta"
+    Run[default]: " [OBJ JRT 1488]"
+    Run[default]: " "
+
+[P188] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P189] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: CERTIFICATE OF TRUST
+    Run[default]: "CERTIFICATE OF TRUST"
+
+[P190] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Trust Name.  The Rizzo Family Living Trust which was created by Agreement dated January 9, 2026 (referred to herein as t
+    Run[default]: "Trust Name."
+    Run[default]: "  The Rizzo Family Living Trust which was created "
+    Run[default]: "by Agreement dated January 9, 2026"
+    Run[default]: " (referred to herein as the "Trust") is the subject of this Certificate."
+    Run[default]: "  The Trust was established under the laws of the State of New Jersey."
+    Run[default]: " "
+    Run[default]: "[OBJ:STD JRT COT 1000]"
+    Run[default]: " "
+
+[P191] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Grantors.  The Grantors of this Trust are Vito Rizzo and Vita Maria Rizzo. [OBJ:STD JRT COT 1002] 
+    Run[default]: "Grantors."
+    Run[default]: "  The Grantors of this Trust are Vito Rizzo and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo. "
+    Run[default]: "[OBJ:STD JRT COT 1002]"
+    Run[default]: " "
+
+[P192] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Currently Acting Trustees.  The names of the current Trustees are as follows:  Vito Rizzo and Vita Maria Rizzo. [OBJ:STD
+    Run[default]: "Currently Acting Trustees."
+    Run[default]: "  The names"
+    Run[default]: " of the "
+    Run[default]: "current Trustees are as follows"
+    Run[default]: ":  Vito"
+    Run[default]: " Rizzo and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo. "
+    Run[default]: "[OBJ:STD JRT COT 1003]"
+    Run[default]: " "
+
+[P193] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Power to Revoke.  The Grantors have the power to revoke the Trust and to modify or amend the Agreement.  If the Trust is
+    Run[default]: "Power to Revoke."
+    Run[default]: "  The Grantors have the power to revoke the Trust and to modify or amend the Agr"
+    Run[default]: "[OBJ:STD JRT COT 1004]"
+    Run[default]: " "
+
+[P194] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Taxpayer Identification Number.  The taxpayer identification number for the trust is _______________.  [OBJ:STD JRT COT 
+    Run[default]: "Taxpayer Identification Number."
+    Run[default]: "  The taxpayer identification number for the trust is "
+    Run[default]: "_______________"
+    Run[default]: ".  "
+    Run[default]: "[OBJ:STD JRT COT 1005]"
+    Run[default]: " "
+
+[P195] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Trust In Effect.  The Trust is currently in full force and effect.  The Trust has not been revoked, and the Agreement ha
+    Run[default]: "Trust In Effect."
+    Run[default]: "  The Trust is currently in full force and effect.  The Trust has not been revok"
+    Run[default]: "[OBJ:STD JRT COT 1006]"
+    Run[default]: " "
+
+[P196] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Authority of Co-Trustees.  If two Trustees are eligible to act on any given matter, they shall act unanimously, and if m
+    Run[default]: "Authority of Co-Trustees."
+    Run[default]: "  "
+    Run[default]: "If two Trustees are eligible to act on any given matter, they shall act unanimou"
+    Run[default]: "  Co-Trustees may delegate their powers to other Co-Trustees eligible to act on "
+    Run[default]: "[OBJ:STD JRT COT 1007.001]"
+    Run[default]: " "
+
+[P197] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Title to Assets.  Title to Trust assets shall be taken in the name of Vito Rizzo and Vita Maria Rizzo as Trustees of the
+    Run[default]: "Title to Assets."
+    Run[default]: "  Title to Trust assets shall be taken in the name of Vito Rizzo and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo as Trustees of the Rizzo Family Living Trust dated January 9, 2026. "
+    Run[default]: "[OBJ:STD JRT COT 1009]"
+    Run[default]: " "
+
+[P198] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Hold Harmless.  No person or entity paying money to or delivering property to any Trustee shall be required to see to it
+    Run[default]: "Hold Harmless."
+    Run[default]: "  No person or entity paying money to or delivering property to any Trustee shal"
+    Run[default]: "persons"
+    Run[default]: " relying on this Certificate of Trust regarding the Trustee and the Trustee's po"
+    Run[default]: "[OBJ:STD JRT COT 1010]"
+    Run[default]: " "
+
+[P199] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Third Party Reliance.  Any third party to whom this Certificate is presented may rely upon an affidavit by the then serv
+    Run[default]: "Third Party Reliance."
+    Run[default]: "  Any third party to whom this Certificate is presented may rely upon an affidav"
+    Run[default]: "such affidavit shall be liable for any losses, damages, or claims caused by comp"
+    Run[default]: "[OBJ:STD JRT COT 1011]"
+    Run[default]: " "
+
+[P200] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Validity of Copies of This Certificate.  A copy of this Certificate of Trust shall be just as valid as the original. [OB
+    Run[default]: "Validity of Copies of This Certificate."
+    Run[default]: "  A copy of this Certificate of Trust shall be just as valid as the original. "
+    Run[default]: "[OBJ:STD JRT COT 1012]"
+    Run[default]: " "
+
+[P201] Style=TR_Art3B | Align=INHERIT/DEFAULT | LeftInd=1.0in
+  Text: 
+
+[P202] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: IN WITNESS WHEREOF, the undersigned, as Grantors and Trustees, have signed this Certificate of Trust, effective the day 
+    Run[default]: "IN WITNESS WHEREOF, the undersigned, as Grantors and Trustees, have signed this "
+    Run[default]: ". "
+    Run[default]: "[OBJ:STD JRT COT 1013]"
+    Run[default]: " "
+
+[P203] Style=Normal | Align=INHERIT/DEFAULT
+  Text: 
+
+[P204] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: Dated: January 9, 2026
+    Run[default]: "Dated: January 9, 2026"
+
+[P205] Style=TR_SigLine | Align=INHERIT/DEFAULT
+  Text: ______________________________________
+    Run[default]: "______________________________________"
+
+[P206] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Vito Rizzo, as Grantor and Initial Trustee
+    Run[default]: "Vito Rizzo, as Grantor"
+    Run[default]: " and Initial Trustee"
+
+[P207] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: Dated: January 9, 2026
+    Run[default]: "Dated: January 9, 2026"
+
+[P208] Style=TR_SigLine | Align=INHERIT/DEFAULT
+  Text: ______________________________________
+    Run[default]: "______________________________________"
+
+[P209] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Vita Maria Rizzo, as Grantor and Initial Trustee
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo, as Grantor"
+    Run[default]: " and Initial Trustee"
+
+[P210] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P211] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P212] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P213] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: STATE OF NEW JERSEY		)
+    Run[default]: "STATE OF NEW JERSEY"
+    Run[default]: "	"
+    Run[default]: "	)"
+
+[P214] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 		)
+    Run[default]: "	"
+    Run[default]: "	)"
+
+[P215] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: MIDDLESEX COUNTY		)
+    Run[default]: "MIDDLESEX COUNTY"
+    Run[default]: "	"
+    Run[default]: "	)"
+
+[P216] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P217] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: I HEREBY CERTIFY that on January 9, 2026, before me, the subscriber, personally appeared Vito Rizzo and Vita Maria Rizzo
+    Run[default]: "I HEREBY CERTIFY that on January 9, 2026, before me, the subscriber, personally "
+    Run[default]: " and "
+    Run[default]: "Vita Maria"
+    Run[default]: " Rizzo"
+    Run[default]: ", as Grantor"
+    Run[default]: "s and Initial Trustee"
+    Run[default]: ", personally known to me (or proved to me on the basis of satisfactory evidence)"
+    Run[default]: "s"
+    Run[default]: " "
+    Run[default]: "are"
+    Run[default]: " subscribed to the foregoing instrument, and acknowledged to me that "
+    Run[default]: "they"
+    Run[default]: " executed the same."
+    Run[default]: "[OBJ:STDIND 1001]"
+    Run[default]: " "
+
+[P218] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: Dated: January 9, 2026
+    Run[default]: "Dated: January 9, 2026"
+
+[P219] Style=TR_SigLine | Align=INHERIT/DEFAULT
+  Text: ______________________________________
+    Run[default]: "______________________________________"
+
+[P220] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Adam J. Elias, Esq. (#050452014)
+    Run[default]: "Adam J. Elias, Esq"
+    Run[default]: ". (#"
+    Run[default]: "050452014)"
+
+[P221] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: Attorney at Law of the State of New Jersey
+    Run[default]: "Attorney at Law of the State of New Jersey"
+
+[P222] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: 
+
+[P223] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P224] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: 
+
+[P225] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P226] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P227] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P228] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P229] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P230] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P231] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P232] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: 
+
+[P233] Style=TR_CoverTitle | Align=INHERIT/DEFAULT
+  Text: RIZZO FAMILY LIVING TRUST
+    Run[default]: "RIZZO FAMILY LIVING TRUST"
+
+[P234] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: Elias Counsel, LLC
+    Run[default]: "Elias Counsel, LLC"
+
+[P235] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: 168 Prospect Plains Road
+    Run[default]: "168 Prospect Plains Road"
+
+[P236] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: Monroe Township, New Jersey 08831
+    Run[default]: "Monroe Township, New Jersey 08831"
+
+[P237] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: (609) 655-3200 Telephone Number 
+    Run[default]: "(609) 655-3200 Telephone Number "
+
+[P238] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: 
+
+[P239] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P240] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P241] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: RIZZO FAMILY LIVING TRUST
+TABLE OF CONTENTS
+    Run[default]: "RIZZO FAMILY LIVING TRUST"
+    Run[default]: "
+TABLE OF CONTENTS"
+
+[P242] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE I Trust Name	1
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: "ARTICLE I Trust Name"
+    Run[default]: "	"
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: "1"
+    Run[default]: ""
+
+[P243] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE II Family Information	1
+    Run[default]: "ARTICLE II Family Information"
+    Run[default]: "	"
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: "1"
+    Run[default]: ""
+
+[P244] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE III Trust Property	1
+    Run[default]: "ARTICLE III Trust Property"
+    Run[default]: "	1"
+
+[P245] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE IV During Our Lives	2
+    Run[default]: "ARTICLE IV During Our Lives"
+    Run[default]: "	"
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: "2"
+    Run[default]: ""
+
+[P246] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE V At the Death of the Surviving Spouse	3
+    Run[default]: "ARTICLE V At the Death of the Surviving Spouse"
+    Run[default]: "	3"
+
+[P247] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE VI Takers of Last Resort	4
+    Run[default]: "ARTICLE VI Takers of Last Resort"
+    Run[default]: "	4"
+
+[P248] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE VII Maximum Duration for Trusts	5
+    Run[default]: "ARTICLE VII Maximum Duration for Trusts"
+    Run[default]: "	5"
+
+[P249] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE VIII Spendthrift Provision	5
+    Run[default]: "ARTICLE VIII Spendthrift Provision"
+    Run[default]: "	5"
+
+[P250] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE IX Exercise of Powers Created Hereunder	6
+    Run[default]: "ARTICLE IX Exercise of Powers Created Hereunder"
+    Run[default]: "	6"
+
+[P251] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE X Life Insurance and Qualified Retirement Benefits	7
+    Run[default]: "ARTICLE X Life Insurance and Qualified Retirement Benefits"
+    Run[default]: "	7"
+
+[P252] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XI Outright Transfers if Trust Already Terminated in Whole or Part	8
+    Run[default]: "ARTICLE XI Outright Transfers if Trust Already Terminated in Whole or Part"
+    Run[default]: "	"
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: ""
+    Run[default]: "8"
+    Run[default]: ""
+
+[P253] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XII Trustees	8
+    Run[default]: "ARTICLE XII Trustees"
+    Run[default]: "	8"
+
+[P254] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XIII Trust Protector	9
+    Run[default]: "ARTICLE XIII Trust Protector"
+    Run[default]: "	9"
+
+[P255] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XIV Fiduciary Provisions	10
+    Run[default]: "ARTICLE XIV Fiduciary Provisions"
+    Run[default]: "	10"
+
+[P256] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XV Governing Law and Trustee Powers	14
+    Run[default]: "ARTICLE XV Governing Law and Trustee Powers"
+    Run[default]: "	14"
+
+[P257] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XVI Definitions and Miscellaneous Provisions	18
+    Run[default]: "ARTICLE XVI Definitions and Miscellaneous Provisions"
+    Run[default]: "	18"
+
+[P258] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XVII Revocability of Trust and Rights Reserved	20
+    Run[default]: "ARTICLE XVII Revocability of Trust and Rights Reserved"
+    Run[default]: "	20"
+
+[P259] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XVIII No Contest	21
+    Run[default]: "ARTICLE XVIII No Contest"
+    Run[default]: "	21"
+
+[P260] Style=toc 1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XIX Savings Clause	22
+    Run[default]: "ARTICLE XIX Savings Clause"
+    Run[default]: "	22"
+
+[P261] Style=Normal | Align=INHERIT/DEFAULT
+  Text: 
+    Run[BOLD]: ""
+
+[P262] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P263] Style=TR_SigName | Align=INHERIT/DEFAULT
+  Text: 
+
+[P264] Style=Normal | Align=INHERIT/DEFAULT
+  Text: 
+

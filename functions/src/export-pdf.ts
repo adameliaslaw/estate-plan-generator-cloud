@@ -229,6 +229,22 @@ export function buildLegalDocumentHtml(
     .notary-block p {
       margin-bottom: 6pt;
     }
+
+    /* ── TR_ styles (template-referenced document formatting) ───────────── */
+    .tr-title       { text-align: center; text-decoration: underline; text-transform: uppercase; font-size: 14pt; font-weight: bold; margin: 0 0 18pt; page-break-after: avoid; }
+    .tr-cover-title { text-align: center; font-size: 14pt; margin: 36pt 0 18pt; }
+    .tr-cover       { text-align: center; margin: 0 0 6pt; }
+    .tr-mem-header1 { text-align: center; text-decoration: underline; margin: 24pt 0 14pt; page-break-after: avoid; }
+    .tr-body1       { text-align: justify; margin: 0 0 10pt; }
+    .tr-body3       { text-align: justify; margin: 10pt 0; }
+    .tr-art1        { text-align: center; font-weight: bold; margin: 24pt 0 14pt; page-break-after: avoid; }
+    .tr-art2        { text-align: justify; margin: 0 0 10pt; }
+    .tr-art3b       { text-align: justify; text-indent: 1in; margin: 0 0 8pt; }
+    .tr-art4b       { text-align: justify; text-indent: 1.5in; margin: 0 0 8pt; }
+    .tr-sig-line    { margin-left: 3.5in; margin-bottom: 4pt; }
+    .tr-sig-name    { margin-left: 3.5in; font-weight: bold; margin-bottom: 10pt; }
+    .tr-affid       { margin: 0 0 6pt; font-size: 11pt; }
+    .tr-base        { margin: 0 0 6pt; min-height: 1em; }
   </style>
 </head>
 <body>

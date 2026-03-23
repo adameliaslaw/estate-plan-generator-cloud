@@ -1,0 +1,265 @@
+=== Sean Byrnes- HC 11.3.25.docx ===
+
+[Section 0] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+
+--- PARAGRAPHS ---
+
+[P0] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: ADVANCE HEALTH CARE DIRECTIVE 
+    Run[UNDERLINE]: "ADVANCE HEALTH CARE DIRECTIVE "
+
+[P1] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I understand that as a competent adult I have the right to make decisions about my health care.  There may come a time w
+    Run[default]: "I understand that as a competent adult I have the right to make decisions about "
+    Run[default]: "In order to"
+    Run[default]: " provide the guidance and authority needed to make decisions on my behalf: "
+    Run[default]: "[OBJ:POAM-NJ 1000]"
+    Run[default]: "  "
+
+[P2] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I, SEAN BYRNES, residing at 16 Saddle Court, Monroe Township, New Jersey, voluntarily make this statement as a directive
+    Run[default]: "I, "
+    Run[BOLD]: "SEAN BYRNES"
+    Run[default]: ", residing at "
+    Run[default]: "16 Saddle Court"
+    Run[default]: ", Monroe Township, New Jersey"
+    Run[default]: ", voluntarily make this statement as a directive to be followed if I become unab"
+    Run[default]: "[OBJ:POAM-NJ 1001]"
+    Run[default]: "  "
+
+[P3] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of Health Care Representative.  I realize that it is not possible for me to anticipate the very wide variety
+    Run[default]: "Appointment of Health Care Representative."
+    Run[default]: "  I realize that it is not possible for me to anticipate the very wide variety o"
+    Run[default]: " my "
+    Run[default]: "wife"
+    Run[default]: ","
+    Run[default]: " "
+    Run[BOLD]: "JESSICA BYRNES"
+    Run[default]: ", "
+    Run[default]: "of "
+    Run[default]: "16 Saddle Court"
+    Run[default]: ", Monroe Township, New Jersey"
+    Run[default]: ","
+    Run[Color=#0000FF]: " "
+    Run[default]: "as my Health Care Representative, to make all health care decisions on my behalf"
+    Run[default]: "[OBJ:POAM-NJ 1002]"
+    Run[default]: "  "
+
+[P4] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: First Level Successor Health Care Representative. If my Health Care Representative is unavailable, unable or unwilling t
+    Run[default]: "First Level Successor Health Care Representative."
+    Run[default]: " If my Health Care Representative is unavailable, unable or unwilling to serve f"
+    Run[default]: "mother-in-law"
+    Run[default]: ", "
+    Run[BOLD]: "CATHLEEN ESERNIO, "
+    Run[default]: "of 315 East 72"
+    Run[default]: "nd"
+    Run[default]: " Street, Apt. PH, New York, New York"
+    Run[default]: ","
+    Run[default]: " "
+    Run[default]: "as HealthCare Representative, to exercise the powers conferred separately in the"
+    Run[default]: "[OBJ:POAM-NJ 1003]"
+    Run[default]: " "
+
+[P5] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Effective Date. This durable power of attorney for health care shall take effect in the event I become unable to make my
+    Run[default]: "Effective Date"
+    Run[default]: "."
+    Run[default]: " "
+    Run[default]: "This durable power of attorney for health care shall take effect in the event I "
+
+[P6] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: who has primary responsibility for my care, and any necessary confirming determinations. [OBJ:POAM-NJ 1004]  
+    Run[default]: "who has primary responsibility for my care, and any necessary confirming determi"
+    Run[default]: "[OBJ:POAM-NJ 1004]"
+    Run[default]: "  "
+
+[P7] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Statement of Wishes.  To inform those responsible for my care of my specific wishes, I make the following statement of m
+    Run[default]: "Statement of Wishes."
+    Run[default]: "  To inform those responsible for my care of my specific wishes, I make the foll"
+    Run[default]: "[OBJ:POAM-NJ 1005]"
+    Run[default]: "  "
+
+[P8] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Terminal Incurable and Irreversible Illness.  I understand that there may come a time when I am diagnosed with an incura
+    Run[default]: "Terminal Incurable and Irrever"
+    Run[default]: "s"
+    Run[default]: "ible Illness."
+    Run[default]: "  I understand that there may come a time when I am diagnosed with an incurable "
+    Run[default]: "in the near future"
+    Run[default]: ". If my attending physician and at least one additional physician who has person"
+    Run[default]: "terminal"
+    Run[default]: " "
+    Run[default]: "I direct that life-sustaining measures which would serve only to artificially pr"
+    Run[default]: "withheld"
+    Run[default]: " or discontinued."
+    Run[default]: " "
+    Run[default]: "Under these circumstances, I direct that artificially provided fluids and nutrit"
+    Run[default]: "[OBJ:POAM-NJ 1007]"
+    Run[default]: "  "
+
+[P9] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Permanently Unconscious.  If there should come a time when I am permanently unconscious, and it is determined by my atte
+    Run[default]: "Permanently Unconscious."
+    Run[default]: "  If there should come a time when I am permanently unconscious, and it is deter"
+    Run[default]: "[OBJ:POAM-NJ 1007]"
+    Run[default]: "  "
+
+[P10] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Incurable and Irreversible Illness Not Terminal.  I recognize that I may develop an incurable and irreversible illness, 
+    Run[default]: "Incurable and Irreversible Illness Not Terminal."
+    Run[default]: "  I recognize that I may develop an incurable and irreversible illness, disease,"
+    Run[default]: " Under these circumstances, I direct that artificially provided fluids and nutri"
+    Run[default]: "[OBJ:POAM-NJ 1007]"
+    Run[default]: "  "
+
+[P11] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Definition of Brain Dead.  The State of New Jersey recognizes the irreversible cessation of all functions of the entire 
+    Run[default]: "Definition of Brain Dead."
+    Run[default]: "  The State of New Jersey recognizes the irreversible cessation of all functions"
+
+[P12] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: Initial the following statement only if it applies to you.  
+    Run[ITALIC]: "Initial"
+    Run[ITALIC]: " the following statement "
+    Run[BOLD, ITALIC, UNDERLINE]: "only"
+    Run[ITALIC]: " if it applies to you.  "
+
+[P13] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: [      ]	To declare my death on the basis of the whole brain death standard would violate my personal religious beliefs.
+    Run[default]: "[      ]"
+    Run[default]: "	To declare my death "
+    Run[default]: "on the basis of"
+    Run[default]: " the whole brain death standard would violate my personal religious beliefs.  I "
+    Run[default]: "on the basis of"
+    Run[default]: " the traditional criteria of irreversible cessation of cardiopulmonary (heartbea"
+    Run[default]: "[OBJ:POAM-NJ 1011]"
+    Run[default]: "  "
+
+[P14] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Anatomical Gifts.   I do not wish to make an anatomical gift upon my death. [OBJ:POAM-NJ 1013] 
+    Run[default]: "Anatomical Gifts."
+    Run[default]: " "
+    Run[default]: "  "
+    Run[default]: "I do not wish to make an anatomical gift upon my death. "
+    Run[default]: "[OBJ:POAM-NJ 1013]"
+    Run[default]: " "
+
+[P15] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: This request is made after careful consideration, while I am in good health and of sound mind. I recognize that it appea
+    Run[default]: "This request is made after careful consideration, while I am in good health and "
+    Run[default]: "[OBJ:POAM-NJ 1014]"
+    Run[default]: "  "
+
+[P16] Style=TR_Art2 | Align=INHERIT/DEFAULT | LeftInd=0.5in
+  Text: Executed on December _____, 2025.
+    Run[default]: "Executed on "
+    Run[default]: "December"
+    Run[default]: " _____, 2025."
+
+[P17] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ____________________________________ 
+    Run[default]: "____________________________________ "
+
+[P18] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: SEAN BYRNES 
+    Run[BOLD]: "SEAN BYRNES"
+    Run[BOLD]: " "
+
+[P19] Style=TR_MemHeader1 | Align=INHERIT/DEFAULT
+  Text: STATEMENT OF WITNESSES 
+    Run[UNDERLINE]: "STATEMENT OF WITNESSES "
+
+[P20] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I declare that the person who signed this document or asked another to sign this document on her behalf, did so in my pr
+    Run[default]: "I declare that the person who signed this "
+    Run[default]: "document or"
+    Run[default]: " asked another to sign this document on her behalf, did so in my presence, that "
+    Run[default]: "older and"
+    Run[default]: " am not designated by this or any other document as the person’s health care rep"
+    Run[default]: "[OBJ:POAM-NJ 1015]"
+    Run[default]: " "
+
+[P21] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ____________________________________
+    Run[default]: "____________________________________"
+
+[P22] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: LORI PENSABENE, Witness
+168 Prospect Plains Road
+Monroe Township, New Jersey 08831
+    Run[default]: "LORI PENSABENE, Witness"
+    Run[default]: "
+168 Prospect Plains Road"
+    Run[default]: "
+Monroe Township, New Jersey 08831"
+
+[P23] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ____________________________________
+    Run[default]: "____________________________________"
+
+[P24] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: KAREN M. CLAYTON, Witness
+168 Prospect Plains Road
+Monroe Township, New Jersey 08831
+    Run[default]: "KAREN M. CLAYTON, Witness"
+    Run[default]: "
+168 Prospect Plains Road"
+    Run[default]: "
+Monroe Township, New Jersey 08831"
+
+[P25] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: STATE OF NEW JERSEY	)
+    Run[default]: "STATE OF NEW JERSEY"
+    Run[default]: "	)"
+
+[P26] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 	)  ss
+    Run[default]: "	)  "
+    Run[default]: "ss"
+
+[P27] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: MIDDLESEX COUNTY	) 
+    Run[default]: "MIDDLESEX COUNTY"
+    Run[default]: "	) "
+
+[P28] Style=Normal | Align=INHERIT/DEFAULT
+  Text: 
+
+[P29] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: On December _____, 2025, before me, the subscriber, an Attorney at Law of the State of New Jersey, in and for Middlesex 
+    Run[default]: "On "
+    Run[default]: "December"
+    Run[default]: " "
+    Run[default]: "_____,"
+    Run[default]: " 2025, before me, the subscriber, a"
+    Run[default]: "n Attorney at Law "
+    Run[default]: "of the State of New Jersey, in and for Middlesex County, personally appeared "
+    Run[BOLD]: "SEAN BYRNES"
+    Run[default]: ", whom I know to be such person, and he did then and there execute this declarat"
+    Run[default]: "[OBJ:POAM-NJ 1016]"
+    Run[default]: "  "
+
+[P30] Style=TR_SigName | Align=JUSTIFY | LeftInd=3.5in
+  Text: 
+
+[P31] Style=TR_SigName | Align=JUSTIFY | LeftInd=3.5in
+  Text: 
+
+[P32] Style=TR_SigName | Align=JUSTIFY | LeftInd=3.5in
+  Text: ___________________________________
+Adam J. Elias, Esq. (#050452014)
+    Run[BOLD]: "___________________________________"
+    Run[BOLD]: "
+"
+    Run[default]: "Adam J. Elias, Esq. (#050452014)"
+
+[P33] Style=TR_SigName | Align=JUSTIFY | LeftInd=3.5in
+  Text: Attorney at Law of the State of New Jersey
+    Run[default]: "Attorney at Law of the State of New Jersey"
+
+[P34] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+

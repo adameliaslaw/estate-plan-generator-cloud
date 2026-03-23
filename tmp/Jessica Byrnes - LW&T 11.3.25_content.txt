@@ -1,0 +1,811 @@
+=== Jessica Byrnes - LW&T 11.3.25.docx ===
+
+[Section 0] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 1] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=1.0 B=1.0in
+[Section 2] Page: 8.5x11.0in, Margins: L=1.0 R=1.0 T=0.5 B=0.5in
+
+--- PARAGRAPHS ---
+
+[P0] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: LAST WILL AND TESTAMENT
+OF
+JESSICA BYRNES
+    Run[UNDERLINE]: "LAST WILL AND TESTAMENT"
+    Run[UNDERLINE]: "
+"
+    Run[UNDERLINE]: "OF"
+    Run[UNDERLINE]: "
+"
+    Run[UNDERLINE]: "JESSICA BYRNES"
+
+[P1] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: 
+
+[P2] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I, JESSICA BYRNES, of 16 Saddle Court, Monroe Township, New Jersey, revoke any prior Wills and Codicils and declare this
+    Run[default]: "I, "
+    Run[BOLD]: "JESSICA BYRNES"
+    Run[BOLD]: ", "
+    Run[default]: "of "
+    Run[default]: "16 Saddle Court"
+    Run[default]: ", Monroe Township, New Jersey"
+    Run[default]: ", revoke any prior Wills and Codicils and declare this to be my Last Will and Te"
+    Run[default]: "[OBJ:WILL 1000]"
+    Run[default]: " "
+
+[P3] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Family Information
+    Run[default]: "
+"
+    Run[default]: "Family Information"
+
+[P4] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I am married to Sean Byrnes and any reference to my Husband shall be to him. My children born before the date of this Wi
+    Run[default]: "I am married to "
+    Run[default]: "Sean Byrnes"
+    Run[default]: " and any reference to my Husband shall be to him. My children born before the da"
+    Run[default]: "Jack Byrnes, Lyla Byrnes, and Madely"
+    Run[default]: "n"
+    Run[default]: " Byrnes"
+    Run[default]: ". "
+    Run[default]: " [OBJ WILL 1001]"
+    Run[default]: " "
+    Run[default]: "[OBJ WILL 1001]"
+    Run[default]: " "
+
+[P5] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Funeral Representative and Arrangements
+    Run[default]: "
+"
+    Run[default]: "Funeral Representative and Arrangements"
+
+[P6] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: I appoint my husband, SEAN BYRNES, to act as my representative pursuant to N.J.S.A. 45:27-22 to control the arrangements
+    Run[default]: "I appoint "
+    Run[default]: "my "
+    Run[default]: "h"
+    Run[default]: "usband, "
+    Run[BOLD]: "SEAN BYRNES"
+    Run[default]: ", "
+    Run[default]: "to act as my representative pursuant to N.J.S.A. 45:27-22 to control the arrange"
+    Run[default]: "Sean Byrnes"
+    Run[default]: " "
+    Run[default]: "is not living at my death or is not reasonably available or willing to act as my"
+    Run[default]: "my "
+    Run[default]: "father"
+    Run[default]: ", "
+    Run[BOLD]: "ANTHONY ESERNIO"
+    Run[default]: ", "
+    Run[default]: "to act as my successor Funeral Representative. I direct "
+    Run[default]: "my"
+    Run[default]: " Executor to notify my Funeral Representative, or the successor Funeral "
+    Run[default]: "Representative,"
+    Run[default]: " if necessary, of his or her appointment as soon as possible after my death and "
+    Run[default]: "[OBJ WILL 1001001]"
+    Run[default]: " "
+
+[P7] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: In making arrangements for my funeral and the disposition of my remains, I direct my Funeral Representative to use his o
+    Run[default]: "In "
+    Run[default]: "making arrangements"
+    Run[default]: " for my funeral and the disposition of my remains, I direct my Funeral Represent"
+
+[P8] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Residue
+    Run[default]: "
+"
+    Run[default]: "Residue"
+
+[P9] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I dispose of my Estate (referred to hereinafter as my "Residuary Estate") as follows: [OBJ:WILL 1069] 
+    Run[default]: "I dispose of my Estate (referred to hereinafter as my "Residuary Estate") as fol"
+    Run[default]: "[OBJ:WILL 1069]"
+    Run[default]: " "
+
+[P10] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: If my Husband Survives.  If my Husband survives me, I give my Residuary Estate to my Husband. [OBJ:WILL 1070]  
+    Run[default]: "If my Husband Survives."
+    Run[default]: "  If my Husband survives me, I give my Residuary Estate to my Husband. "
+    Run[default]: "[OBJ:WILL 1070]  "
+
+[P11] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: If my Husband Does Not Survive.  If my Husband does not survive me, I give my Residuary Estate, to my children who survi
+    Run[default]: "If my Husband Does Not Survive."
+    Run[default]: "  If my Husband does not survive me, "
+    Run[default]: "I give my Residuary Estate,"
+    Run[default]: " "
+    Run[default]: "to "
+    Run[default]: "my children who survive me, in equal shares, per stirpes."
+
+[P12] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Takers of Last Resort 
+    Run[default]: "
+"
+    Run[default]: "Takers of Last Resort"
+    Run[default]: " "
+
+[P13] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: My Executor or the Trustee shall distribute any property that is not otherwise disposed of under this Will to the person
+    Run[default]: "My Executor or the Trustee shall distribute any property that is not otherwise d"
+    Run[default]: "[OBJ:STD TLR 1001]"
+    Run[default]: " "
+
+[P14] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Payments to Minors
+    Run[default]: "
+"
+    Run[default]: "Payments to Minors"
+
+[P15] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: In the event that any property would, if not for the provisions of this article, be distributed outright to a person und
+    Run[default]: "In the event that"
+    Run[default]: " any property would, if not for the provisions of this article, be distributed o"
+    Run[default]: "twenty-five (25)"
+    Run[default]: " years of age (described herein as the "Minor" regardless of the actual legal ag"
+
+[P16] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: An outright gift to the Minor, including a gift under the Article entitled "Takers of Last Resort"; or
+    Run[default]: "An outright gift to the Minor, including a gift under the Article entitled "Take"
+
+[P17] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Termination of a trust under this Will;
+    Run[default]: "Termination of "
+    Run[default]: "a trust"
+    Run[default]: " under this "
+    Run[default]: "Will;"
+
+[P18] Style=TR_Body | Align=INHERIT/DEFAULT
+  Text: my Executor or the Trustee may make the distribution in any way in which my Executor or the Trustee shall deem appropria
+    Run[default]: "my Executor or the Trustee may make the distribution in any way in which my Exec"
+    Run[default]: ": "
+    Run[default]: "[OBJ:STD PTM 1000]"
+    Run[default]: " "
+
+[P19] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Distribution to Trust.  My Executor or the Trustee may hold the property in a separate trust for the Minor until the Min
+    Run[default]: "Distribution to Trust."
+    Run[default]: "  "
+    Run[default]: "My"
+    Run[default]: " Executor or the Trustee may hold the property in a separate trust for the Minor"
+    Run[default]: "twenty-five (25)"
+    Run[default]: " years of age.  My Executor or the Trustee "
+    Run[default]: "may"
+    Run[default]: " distribute to the Minor as much of the net income and/or principal of the trust"
+    Run[default]: "twenty-five (25)"
+    Run[default]: " years of age, my Executor or the Trustee shall distribute the property to the M"
+    Run[default]: "Minor dies before reaching "
+    Run[default]: "twenty-five (25)"
+    Run[default]: " years of age, then upon the Minor's death, my Executor or the Trustee shall dis"
+    Run[default]: "[OBJ:STD PTM 1001]"
+    Run[default]: " "
+
+[P20] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: To the Minor's descendants surviving the Minor, per stirpes; or if there are no such descendants then living, then [OBJ:
+    Run[default]: "T"
+    Run[default]: "o the Minor's descendants surviving the Minor, per stirpes; or if there are no s"
+    Run[default]: "[OBJ:STD PTM 1002]"
+    Run[default]: " "
+
+[P21] Style=TR_Art3B | Align=INHERIT/DEFAULT
+  Text: If the Minor was a grandchild or more remote descendant of mine, to the descendants then living, per stirpes, of the Min
+    Run[default]: "I"
+    Run[default]: "f the Minor was a grandchild or more remote descendant of "
+    Run[default]: "mine, to the descendants then living, per stirpes, of the Minor's nearest ancest"
+    Run[default]: "[OBJ:STD PTM 1005]"
+    Run[default]: " "
+    Run[default]: "to my descendants then living, per stirpes. "
+    Run[default]: "[OBJ:STD PTM 1007]"
+    Run[default]: " "
+
+[P22] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Payments to Disabled Persons
+    Run[default]: "
+"
+    Run[default]: "Payments to Disabled Persons"
+
+[P23] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: Whenever property becomes distributable to a person whom my Executor or the Trustee reasonably and in good faith shall d
+    Run[default]: "Whenever property becomes distributable to a person whom my Executor or the Trus"
+    Run[default]: "my Executor or the Trustee"
+    Run[default]: " may make the distribution in any way in which my Executor or the Trustee shall "
+    Run[default]: "."
+    Run[default]: " "
+    Run[default]: "[OBJ:STD PTI 1000]"
+    Run[default]: " "
+
+[P24] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Distribution to Trust.  My Executor or the Trustee may hold the property in a separate trust for the Disabled Person unt
+    Run[default]: "Distribution to Trust."
+    Run[default]: "  My Executor or the Trustee may hold the property in a separate trust for the D"
+    Run[default]: "[OBJ:STD PTI 1001]"
+    Run[default]: " "
+
+[P25] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Executor Appointments
+    Run[default]: "
+"
+    Run[default]: "Executor Appointments"
+
+[P26] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of Initial Executor.  I appoint my Husband, SEAN BYRNES, of 16 Saddle Court, Monroe Township, New Jersey, to
+    Run[default]: "Appointment of Initial Executor."
+    Run[default]: "  I appoint my Husband, "
+    Run[BOLD]: "SEAN BYRNES"
+    Run[default]: ", "
+    Run[default]: "of "
+    Run[default]: "16 Saddle Court"
+    Run[default]: ", Monroe Township, New Jersey"
+    Run[default]: ","
+    Run[default]: " "
+    Run[default]: "to serve as Executor hereunder."
+
+[P27] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of First Level Successor Executor.  I appoint my father, 
+ANTHONY ESERNIO, of 315 East 72nd Street, Apt. PH,
+    Run[default]: "Appointment of First Level Successor Executor."
+    Run[default]: "  I appoint my "
+    Run[default]: "father"
+    Run[default]: ", "
+    Run[default]: "
+"
+    Run[BOLD]: "ANTHONY ESERNIO"
+    Run[BOLD]: ", "
+    Run[default]: "of "
+    Run[default]: "315 East 72"
+    Run[default]: "nd"
+    Run[default]: " Str"
+    Run[default]: "eet, Apt. PH, New York, New York"
+    Run[default]: ", to serve as Executor hereunder when all other Executors previously appointed h"
+
+[P28] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of Second Level Successor Executor.  I appoint my mother, 
+CATHLEEN ESERNIO, of 315 East 72nd Street, Apt. P
+    Run[default]: "Appointment of Second Level Successor Executor."
+    Run[default]: "  "
+    Run[default]: "I appoint my mother, "
+    Run[default]: "
+"
+    Run[BOLD]: "CATHLEEN ESERNIO, "
+    Run[default]: "of 315 East 72"
+    Run[default]: "nd"
+    Run[default]: " Street, Apt. PH, New York, New York, to serve as Executor hereunder when all ot"
+
+[P29] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Appointment of Third Level Successor Executor.  I appoint my sister, 
+JEANA ESERNIO, to serve as Executor hereunder when
+    Run[default]: "Appointment of Third Level Successor Executor."
+    Run[default]: "  I appoint my sister, "
+    Run[default]: "
+"
+    Run[BOLD]: "JEANA"
+    Run[BOLD]: " ESERNIO"
+    Run[default]: ", to serve as Executor hereunder when all other Executors previously appointed h"
+
+[P30] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Trustees
+    Run[default]: "
+"
+    Run[default]: "Trustees"
+
+[P31] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: I appoint my brother, JAMES ESERNIO, to serve as Trustee for my children, JACK BYRNES, LYLA BYRNES and MADELYN BYRNES. [
+    Run[default]: "I appoint my "
+    Run[default]: "brother"
+    Run[default]: ", "
+    Run[BOLD]: "JAMES ESERNIO"
+    Run[default]: ", to serve as Trustee for my children, "
+    Run[BOLD]: "JACK BYRNES, LYLA BYRNES "
+    Run[default]: "and"
+    Run[BOLD]: " MADELYN BYRNES"
+    Run[default]: ". "
+    Run[default]: "[OBJ:WILL 5000]"
+    Run[default]: " "
+
+[P32] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: 
+Fiduciary Provisions
+    Run[default]: "
+"
+    Run[default]: "Fiduciary Provisions"
+
+[P33] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: General Provisions Regarding Changes in Fiduciaries.  
+    Run[default]: "General Provisions Regarding Changes in Fiduciaries."
+    Run[default]: "  "
+
+[P34] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 1. In the event that the sole Trustee of a trust is a beneficiary of the trust, the Trustee may appoint, but shall not b
+    Run[default]: "1. "
+    Run[default]: "In the event that"
+    Run[default]: " the sole Trustee of a trust is a beneficiary of the trust, the Trustee may appo"
+    Run[default]: "this would"
+    Run[default]: " still happen under applicable law, then a Co-Trustee shall be appointed in pref"
+    Run[default]: "[OBJ:STD FIDUC PROV 1001]"
+    Run[default]: " "
+
+[P35] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 
+
+[P36] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Accountings and Other Proceedings.  
+    Run[default]: "Accountings and Other Proceedings."
+    Run[default]: "  "
+
+[P37] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 1. I direct that my estate or a trust hereunder be subject to independent administration with as little court supervisio
+    Run[default]: "1. I direct that my estate or a trust hereunder be subject to independent admini"
+    Run[default]: ". My Executor and the Trustee shall not be requ"
+    Run[default]: "ired to render to any court annual or other periodic accounts, or any inventory,"
+    Run[default]: "[OBJ:STD FIDUC PROV 1013]"
+    Run[default]: " "
+
+[P38] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 2. I direct that in any proceeding relating to my estate or a trust hereunder, service upon any person under a legal dis
+    Run[default]: "2. I direct that in any proceeding relating to my estate or a trust hereunder, s"
+    Run[default]: "[OBJ:STD FIDUC PROV 1014]"
+    Run[default]: " "
+
+[P39] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: C. 	Additional General Provisions Regarding Fiduciaries.  
+    Run[default]: "C."
+    Run[default]: " "
+    Run[default]: "	Additional General Provisions Regarding Fiduciaries."
+    Run[default]: "  "
+
+[P40] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 1. My Executor may make distributions directly from my estate to beneficiaries of a trust hereunder, but only at the dir
+    Run[default]: "1. My Executor may make distributions directly from my estate to beneficiaries o"
+    Run[default]: "[OBJ:STD FIDUC PROV 1071]"
+    Run[default]: " "
+
+[P41] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 2. Under this Will, if two or more separate trusts with the same beneficiaries and same terms are created, either by dir
+    Run[default]: "2. Under this Will, if two or more separate trusts with the same beneficiaries a"
+    Run[default]: "[OBJ:STD FIDUC PROV 1072]"
+
+[P42] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 3. Except to the extent, if any, specifically provided otherwise in this Will, references to my Executor or the Trustee 
+    Run[default]: "3. Except to the extent, if any, specifically provided otherwise in this Will, r"
+    Run[default]: "of discretion over distributions, if this Will provides that certain "
+    Run[default]: "Trustees"
+    Run[default]: " may participate in distributions limited by an ascertainable standard while a d"
+    Run[default]: "[OBJ:STD FIDUC PROV 1075]"
+    Run[default]: " "
+
+[P43] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 4. My Executor and Trustee shall be entitled to reimbursement for any out-of-pocket expenditures made or incurred in the
+    Run[default]: "4. My Executor and Trustee shall be entitled to reimbursement for any out-of-poc"
+    Run[default]: "[OBJ:STD FIDUC PROV 1079]"
+    Run[default]: " "
+
+[P44] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 5. No Executor or Trustee shall be liable to anyone for anything done or not done by any other Executor or Trustee or an
+    Run[default]: "5. No "
+    Run[default]: "Executor or Trustee"
+    Run[default]: " shall be liable to anyone for anything done or not done by any other Executor o"
+    Run[default]: "[OBJ:STD FIDUC PROV 1080]"
+    Run[default]: " "
+
+[P45] Style=TR_Art3B | Align=INHERIT/DEFAULT | FirstLine=1.0in
+  Text: 6. My Executor and the Trustee may employ, and may rely upon advice given by, investment counsel, delegate discretionary
+    Run[default]: "6. My Executor and the Trustee may employ, and may rely upon advice given by, in"
+    Run[default]: "pay investment counsel"
+    Run[default]: " reasonable compensation in addition to fees otherwise payable to my Executor an"
+    Run[default]: "[OBJ:STD FIDUC PROV 1082]"
+    Run[default]: " "
+
+[P46] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: D. 	Waiver of Bond. To the extent permitted by applicable state law, I direct that no Executor or Trustee shall be requi
+    Run[default]: "D."
+    Run[default]: " "
+    Run[default]: "	Waiver of Bond."
+    Run[default]: " To the extent permitted by applicable state law, I direct that no Executor or T"
+    Run[default]: "exoneration"
+    Run[default]: ", a bond is nevertheless required, no sureties shall be required. This waiver of"
+    Run[default]: "[OBJ:STD FIDUC PROV 1094]"
+    Run[default]: " "
+
+[P47] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: 
+
+[P48] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: 			              ARTICLE X
+    Run[default]: "	"
+    Run[default]: "	"
+    Run[default]: "	             "
+    Run[default]: " "
+    Run[BOLD]: "ARTICLE X"
+
+[P49] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: 				Fiduciary Powers
+    Run[BOLD]: "	"
+    Run[BOLD]: "	"
+    Run[BOLD]: "	"
+    Run[BOLD]: "	"
+    Run[BOLD]: "Fiduciary Powers"
+
+[P50] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: My Executor and the Trustee may, without prior authority from any court, exercise all powers conferred by this Will or b
+    Run[default]: "My Executor and the Trustee may, without prior authority from any court, exercis"
+    Run[default]: " State of New Jersey "
+    Run[default]: "or any other jurisdiction whose law applies to this Will or to any trust hereby"
+    Run[default]: " created. "
+    Run[default]: "My Executor and the Trustee shall have sole and absolute discretion in exercisin"
+    Run[default]: " "
+    Run[default]: "powers.  Except as specifically limited by this Will, these powers shall extend "
+    Run[default]: "held by my Executor and the Trustee until the actual distribution of the propert"
+    Run[default]: "[OBJ:STD GOV 1001]"
+    Run[default]: " "
+
+[P51] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: A. 	Power to Sell.  I grant to my Executor the power to sell, convey, or lease any real estate and to transfer or assign
+    Run[default]: "A."
+    Run[default]: " "
+    Run[default]: "	Power to Sell."
+    Run[default]: "  I grant to my Executor the power to sell, convey, or lease any real estate and"
+    Run[default]: "[OBJ:STD GOV 1073]"
+    Run[default]: " "
+
+[P52] Style=TR_Art2 | Align=INHERIT/DEFAULT | FirstLine=0.5in
+  Text: B. 	Application of Property.  My Executor may apply to the use or for the benefit of any individual, any property whethe
+    Run[default]: "B."
+    Run[default]: " "
+    Run[default]: "	Application of Property."
+    Run[default]: "  My Executor may apply to the use or for the benefit of any individual, any pro"
+    Run[default]: "[OBJ:STD GOV 1095]"
+    Run[default]: " "
+
+[P53] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Reliance Upon Advice. My Executor may employ, and rely upon advice given by, accountants, attorneys, investment bankers,
+    Run[default]: "Reliance Upon Advice."
+    Run[default]: " My Executor may employ, and rely upon advice given by, accountants, attorneys, "
+
+[P54] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: [OBJ:STD GOV 1121]Executor as Agent. Executors serving in any jurisdiction in which a corporate Executor is unable to se
+    Run[default]: "[OBJ:STD GOV 1121]"
+    Run[default]: "Executor"
+    Run[default]: " as Agent."
+    Run[default]: " Executors serving in any jurisdiction in which a corporate Executor is unable t"
+
+[P55] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XI  
+Appointment of Guardian 
+    Run[default]: "ARTICLE XI"
+    Run[default]: " "
+    Run[default]: " "
+    Run[default]: "
+"
+    Run[default]: "Appointment of Guardian"
+    Run[default]: " "
+
+[P56] Style=TR_Body1 | Align=INHERIT/DEFAULT
+  Text: I appoint as guardian of the person and the property of any minor child of mine, the child's other parent, if living, or
+    Run[default]: "I appoint as guardian of the person and the property of any minor child of mine,"
+    Run[default]: "parents"
+    Run[default]: ", "
+    Run[BOLD]: "ANTHONY ESERNIO"
+    Run[default]: " and "
+    Run[BOLD]: "CATHLEEN ESERNIO"
+    Run[default]: ", as guardians of the person and the property of any such minor child of mine. I"
+    Run[BOLD]: "JAMES ESERNIO "
+    Run[default]: "and my sister-in-law"
+    Run[BOLD]: ", OLIVIA ESERNIO"
+    Run[default]: ", to be the successor guardian"
+    Run[default]: "s"
+    Run[default]: " of the person and the property of any minor child of mine, "
+    Run[default]: "if and when"
+    Run[default]: " all persons I have previously named shall fail to qualify or cease to act.  No "
+    Run[default]: "or by other lawful means) responsible for the property of an individual and incl"
+    Run[default]: "[OBJ:STD GUA 1000]"
+    Run[default]: " "
+
+[P57] Style=TR_Art1 | Align=INHERIT/DEFAULT
+  Text: ARTICLE XII
+No Contest
+    Run[default]: "ARTICLE XII"
+    Run[default]: "
+"
+    Run[default]: "No Contest"
+
+[P58] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: Effect of Attempted Contest.  In the event that any person, other than my Husband, (1) directly or indirectly contests o
+    Run[default]: "Effect of Attempted Contest."
+    Run[default]: "  In the event that any person, other than my Husband, (1) directly or indirectl"
+
+[P59] Style=TR_Art2 | Align=INHERIT/DEFAULT
+  Text: or in trust, under this Will, shall be forfeited and such property shall be disposed of as if such person had predecease
+    Run[default]: "or in trust, under this Will, shall be forfeited and such property shall be "
+    Run[default]: "disposed of"
+    Run[default]: " as if such person had predeceased me. "
+    Run[default]: "[OBJ:STD NCT 1000]"
+    Run[default]: " "
+
+[P60] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P61] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: IN WITNESS WHEREOF, I have hereunto subscribed my name on December _____, 2025. [OBJ:WILL 1372.0001] 
+    Run[default]: "IN WITNESS WHEREOF, I have hereunto subscribed my name on "
+    Run[default]: "December"
+    Run[default]: " _____"
+    Run[default]: ", 2025."
+    Run[default]: " "
+    Run[default]: "[OBJ:WILL 1372.0001]"
+    Run[default]: " "
+
+[P62] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ____________________________________ 
+    Run[default]: "____________________________________"
+    Run[default]: " "
+
+[P63] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: JESSICA BYRNES
+    Run[BOLD]: "JESSICA BYRNES"
+
+[P64] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: 
+
+[P65] Style=TR_Body3 | Align=INHERIT/DEFAULT | LineSpacing=1.5
+  Text: Signed, sealed, published and declared by JESSICA BYRNES, the Testatrix above named, as and for her Last Will and Testam
+    Run[default]: "Signed, sealed, published and declared by "
+    Run[BOLD]: "JESSICA BYRNES"
+    Run[default]: ", the Testatrix above named, as and for her Last Will and Testament, in our pres"
+    Run[default]: "December"
+    Run[default]: " "
+    Run[default]: "_____"
+    Run[default]: ","
+    Run[default]: " 2025. "
+
+[P66] Style=TR_Body3 | Align=INHERIT/DEFAULT | LineSpacing=1.5
+  Text: [OBJ:WILL 1372.0003] 
+    Run[default]: "[OBJ:WILL 1372.0003]"
+    Run[default]: " "
+
+[P67] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ____________________________________
+    Run[default]: "____________________________________"
+
+[P68] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: LORI PENSABENE, Witness
+168 Prospect Plains Road
+Monroe Township, New Jersey 08831
+    Run[default]: "LORI PENSABENE"
+    Run[default]: ", Witness"
+    Run[default]: "
+168 Prospect Plains Road"
+    Run[default]: "
+"
+    Run[default]: "Monroe Township, New Jersey 08831"
+
+[P69] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+
+[P70] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+
+[P71] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ____________________________________
+    Run[default]: "____________________________________"
+
+[P72] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: KAREN M. CLAYTON, Witness
+168 Prospect Plains Road
+Monroe Township, New Jersey 08831
+    Run[default]: "KAREN M. CLAYTON"
+    Run[default]: ", Witness"
+    Run[default]: "
+168 Prospect Plains Road"
+    Run[default]: "
+Monroe Township, New Jersey 08831"
+
+[P73] Style=Normal | Align=INHERIT/DEFAULT
+  Text: 
+
+[P74] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
+[P75] Style=TR_Title | Align=INHERIT/DEFAULT
+  Text: SELF-PROVING AFFIDAVIT
+    Run[UNDERLINE, Size=11.0pt]: "SELF-PROVING AFFIDAVIT"
+
+[P76] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: STATE OF NEW JERSEY			)
+    Run[Size=11.0pt]: "STATE OF NEW JERSEY"
+    Run[Size=11.0pt]: "	"
+    Run[Size=11.0pt]: "	"
+    Run[Size=11.0pt]: "	"
+    Run[Size=11.0pt]: ")"
+
+[P77] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 	)  ss:
+    Run[Size=11.0pt]: "	)  "
+    Run[Size=11.0pt]: "ss"
+    Run[Size=11.0pt]: ":"
+
+[P78] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: MIDDLESEX COUNTY	)
+    Run[Size=11.0pt]: "MIDDLESEX COUNTY"
+    Run[Size=11.0pt]: "	)"
+
+[P79] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 
+
+[P80] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: I, JESSICA BYRNES, the Testatrix, sign my name to this instrument on December _____, 2025, and, being duly sworn, do her
+    Run[Size=11.0pt]: "I, "
+    Run[BOLD, Size=11.0pt]: "JESSICA BYRNES"
+    Run[Size=11.0pt]: ", the Testatrix, sign my name to this instrument on "
+    Run[Size=11.0pt]: "December"
+    Run[Size=11.0pt]: " "
+    Run[Size=11.0pt]: "_____"
+    Run[Size=11.0pt]: ", 2025, and, being duly sworn, do hereby declare to the undersigned authority th"
+    Run[Size=11.0pt]: "[OBJ:STDSPA 1063]"
+    Run[Size=11.0pt]: " "
+
+[P81] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ______________________________________
+    Run[Size=11.0pt]: "______________________________________"
+
+[P82] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: JESSICA BYRNES
+    Run[BOLD, Size=11.0pt]: "JESSICA BYRNES"
+
+[P83] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: We, LORI PENSABENE and KAREN M. CLAYTON, the witnesses, sign our names to this instrument and, being duly sworn, do here
+    Run[Size=11.0pt]: "We"
+    Run[Size=11.0pt]: ", "
+    Run[Size=11.0pt]: "LORI PENSABENE"
+    Run[Size=11.0pt]: " "
+    Run[Size=11.0pt]: "and KAREN M. CLAYTON, the witnesses, sign our names to th"
+    Run[Size=11.0pt]: "is instrument and, being duly sworn, do hereby declare to the undersigned author"
+    Run[Size=11.0pt]: "
+"
+    Run[BOLD, Size=11.0pt]: "JESSICA BYRNES"
+    Run[BOLD, Size=11.0pt]: " "
+    Run[Size=11.0pt]: "signs and executes this instrument as her Last Will and Testament, and that she "
+    Run[BOLD, Size=11.0pt]: "JESSICA BYRNES"
+    Run[Size=11.0pt]: ", hereby signs this Last Will and Testament as witness to her signing, and that "
+    Run[BOLD, Size=11.0pt]: "JESSICA BYRNES"
+    Run[BOLD, Size=11.0pt]: " "
+    Run[Size=11.0pt]: "is eighteen (18) or more years of age, of sound mind and under no constraint or "
+    Run[Size=11.0pt]: "[OBJ:STDSPA 1064]"
+    Run[Size=11.0pt]: " "
+
+[P84] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ______________________________________
+    Run[Size=11.0pt]: "______________________________________"
+
+[P85] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: LORI PENSABENE, Witness
+168 Prospect Plains Road
+Monroe Township, New Jersey 08831
+    Run[Size=11.0pt]: "LORI PENSABENE"
+    Run[Size=11.0pt]: ", Witness"
+    Run[Size=11.0pt]: "
+168 Prospect Plains Road"
+    Run[Size=11.0pt]: "
+Monroe Township, New Jersey 08831"
+
+[P86] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+
+[P87] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+
+[P88] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+
+[P89] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ______________________________________
+    Run[Size=11.0pt]: "______________________________________"
+
+[P90] Style=TR_SigName | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: KAREN M. CLAYTON, Witness
+168 Prospect Plains Road
+Monroe Township, New Jersey 08831
+    Run[Size=11.0pt]: "KAREN M. CLAYTON, Witness"
+    Run[Size=11.0pt]: "
+168 Prospect Plains Road"
+    Run[Size=11.0pt]: "
+Monroe Township, New Jersey 08831"
+
+[P91] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: STATE OF NEW JERSEY	)
+    Run[Size=11.0pt]: "STATE OF NEW JERSEY"
+    Run[Size=11.0pt]: "	)"
+
+[P92] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 	)  ss:
+    Run[Size=11.0pt]: "	)  "
+    Run[Size=11.0pt]: "ss"
+    Run[Size=11.0pt]: ":"
+
+[P93] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: MIDDLESEX COUNTY	)
+    Run[Size=11.0pt]: "MIDDLESEX COUNTY"
+    Run[Size=11.0pt]: "	)"
+
+[P94] Style=TR_Affid | Align=INHERIT/DEFAULT
+  Text: 
+
+[P95] Style=TR_Body3 | Align=INHERIT/DEFAULT
+  Text: Subscribed, sworn to and acknowledged before me by JESSICA BYRNES, the Testatrix, and subscribed and sworn to before me 
+    Run[Size=11.0pt]: "Subscribed, sworn to and acknowledged before me by "
+    Run[BOLD, Size=11.0pt]: "JESSICA BYRNES"
+    Run[Size=11.0pt]: ", the Testatrix, and subscribed and sworn to before "
+    Run[Size=11.0pt]: "me by "
+    Run[Size=11.0pt]: "LORI PENSABENE"
+    Run[Size=11.0pt]: " "
+    Run[Size=11.0pt]: "and KAREN M. CLAYTON"
+    Run[Size=11.0pt]: ", witnesses, on "
+    Run[Size=11.0pt]: "December"
+    Run[Size=11.0pt]: " "
+    Run[Size=11.0pt]: "_____"
+    Run[Size=11.0pt]: ", 2025."
+    Run[Size=11.0pt]: "[OBJ:STDSPA 1065]"
+    Run[Size=11.0pt]: " "
+
+[P96] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: 
+
+[P97] Style=TR_SigLine | Align=INHERIT/DEFAULT | LeftInd=3.5in
+  Text: ______________________________________
+    Run[Size=11.0pt]: "______________________________________"
+
+[P98] Style=TR_SigName | Align=JUSTIFY | LeftInd=3.5in
+  Text: Adam J. Elias, Esq. (#050452014)
+    Run[Size=11.0pt]: "Adam J. Elias, Esq"
+    Run[Size=11.0pt]: ". (#"
+    Run[Size=11.0pt]: "050452014)"
+
+[P99] Style=TR_SigName | Align=JUSTIFY | LeftInd=3.5in
+  Text: Attorney at Law of the State of New Jersey
+    Run[Size=11.0pt]: "Attorney at Law of the State of New Jersey"
+
+[P100] Style=Normal | Align=INHERIT/DEFAULT
+  Text: 
+
+[P101] Style=TR_CoverTitle | Align=INHERIT/DEFAULT
+  Text: LAST WILL AND TESTAMENT
+OF
+JESSICA BYRNES
+    Run[default]: "LAST WILL AND TESTAMENT"
+    Run[default]: "
+OF"
+    Run[default]: "
+JESSICA BYRNES"
+
+[P102] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: Adam J. Elias, Esq.
+    Run[default]: "Adam J. Elias, Esq."
+
+[P103] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: Elias Counsel, LLC
+    Run[default]: "Elias Counsel, LLC"
+
+[P104] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: 168 Prospect Plains Road
+    Run[default]: "168 Prospect Plains Road"
+
+[P105] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: Monroe Township, New Jersey 08831
+    Run[default]: "Monroe Township, New Jersey 08831"
+
+[P106] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: (609) 655-3200  
+    Run[default]: "(609) 655-3200  "
+
+[P107] Style=TR_Cover | Align=INHERIT/DEFAULT
+  Text: 
+
+[P108] Style=TR_Base | Align=INHERIT/DEFAULT
+  Text: 
+
