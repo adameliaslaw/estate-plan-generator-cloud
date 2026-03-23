@@ -30,6 +30,36 @@ import { validateDocumentStructure, buildRetryInstruction } from './document-str
 
 
 // ---------------------------------------------------------------------------
+// Doc-type union types — single source of truth for valid doc types.
+// Adding a new doc type here forces updates to ALL_DOC_TYPES, loadGenerator(),
+// DOC_TYPE_DISPLAY_NAMES, etc. via the compiler.
+// ---------------------------------------------------------------------------
+
+/** Standard generators — each has a dedicated generator file */
+export type StandardDocType =
+  | 'will' | 'pourOverWill' | 'poa' | 'livingWill' | 'trust'
+  | 'deed' | 'affidavitOfConsideration' | 'gitRep3'
+  | 'estatePlanSummary' | 'actionSteps';
+
+/** Flex generators — AI with doc-type-specific prompts via flex-prompts.ts */
+export type FlexDocType =
+  | 'engagementLetter' | 'coverLetter' | 'invoice' | 'certificationOfTrust'
+  | 'beneficiaryDesignation' | 'trustAmendment' | 'trustRestatement' | 'petTrust'
+  | 'letterOfInstruction' | 'memorandumOfPersonalProp' | 'codicil' | 'hipaaRelease'
+  | 'custom';
+
+/** All known document types */
+export type DocType = StandardDocType | FlexDocType;
+
+/** Per-property doc types that generate one document per qualifying property */
+type PerPropertyDocType = 'deed' | 'affidavitOfConsideration' | 'gitRep3';
+
+/** Runtime type-guard: checks if a string is a known DocType */
+function isDocType(s: string): s is DocType {
+  return (ALL_DOC_TYPES as Set<string>).has(s);
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -85,7 +115,7 @@ export interface UnifiedGenerateResult {
 // Pre-generation completeness gate — critical fields per doc type
 // ---------------------------------------------------------------------------
 
-const CRITICAL_FIELDS: Record<string, Array<{ path: string; altPath?: string; label: string }>> = {
+const CRITICAL_FIELDS: Partial<Record<StandardDocType, Array<{ path: string; altPath?: string; label: string }>>> = {
   will: [
     { path: 'personalInfo.firstName', label: 'Client first name' },
     { path: 'personalInfo.lastName', label: 'Client last name' },
@@ -155,7 +185,7 @@ function checkCompleteness(
   clientData: Record<string, unknown>,
   docType: string,
 ): string[] {
-  const rules = CRITICAL_FIELDS[docType];
+  const rules = CRITICAL_FIELDS[docType as StandardDocType];
   if (!rules) return [];
 
   const warnings: string[] = [];
@@ -185,7 +215,7 @@ type StandardGeneratorFn = (
 ) => Promise<GeneratedDoc>;
 
 /** All known doc types — used for membership checks */
-const ALL_DOC_TYPES = new Set([
+const ALL_DOC_TYPES = new Set<DocType>([
   // Standard generators
   'will', 'pourOverWill', 'poa', 'livingWill', 'trust',
   'deed', 'affidavitOfConsideration', 'gitRep3',
@@ -198,7 +228,7 @@ const ALL_DOC_TYPES = new Set([
 ]);
 
 /** Flex doc types — skip structural validation retry (no structural expectations) */
-const FLEX_DOC_TYPES = new Set([
+const FLEX_DOC_TYPES = new Set<FlexDocType>([
   'engagementLetter', 'coverLetter', 'invoice', 'certificationOfTrust',
   'beneficiaryDesignation', 'trustAmendment', 'trustRestatement', 'petTrust',
   'letterOfInstruction', 'memorandumOfPersonalProp', 'codicil', 'hipaaRelease',
@@ -212,7 +242,7 @@ const FLEX_DOC_TYPES = new Set([
  * adapter wrapper that delegates to generateFlexAI().
  * Node's module cache means each import() only loads once.
  */
-async function loadGenerator(docType: string): Promise<StandardGeneratorFn | null> {
+async function loadGenerator(docType: DocType): Promise<StandardGeneratorFn | null> {
   switch (docType) {
     // --- Standard generators ---
     case 'will': return (await import('./generators/will-generator')).generateWill;
@@ -245,13 +275,13 @@ async function loadGenerator(docType: string): Promise<StandardGeneratorFn | nul
 }
 
 /** Per-property doc types that generate one document per qualifying property */
-const PER_PROPERTY_DOCS = new Set(['deed', 'affidavitOfConsideration', 'gitRep3']);
+const PER_PROPERTY_DOCS = new Set<PerPropertyDocType>(['deed', 'affidavitOfConsideration', 'gitRep3']);
 
 // ---------------------------------------------------------------------------
 // Display name lookup
 // ---------------------------------------------------------------------------
 
-const DOC_TYPE_DISPLAY_NAMES: Record<string, string> = {
+const DOC_TYPE_DISPLAY_NAMES: Record<DocType, string> = {
   will: 'Last Will and Testament',
   pourOverWill: 'Pour-Over Will',
   poa: 'Durable Power of Attorney',
@@ -278,7 +308,7 @@ const DOC_TYPE_DISPLAY_NAMES: Record<string, string> = {
 };
 
 export function getDocTypeDisplayName(docType: string): string {
-  return DOC_TYPE_DISPLAY_NAMES[docType] ?? docType;
+  return DOC_TYPE_DISPLAY_NAMES[docType as DocType] ?? docType;
 }
 
 /**
@@ -293,7 +323,7 @@ export function getDocTypeDisplayName(docType: string): string {
  * instead of ad-hoc title formatting — ensures consistent vault sorting.
  */
 export function buildStandardTitle(
-  docType: string,
+  docType: DocType | string,
   clientFullName: string,
   propertyAddress?: string,
 ): string {
@@ -305,7 +335,7 @@ export function buildStandardTitle(
   }
 
   // Per-property docs include the address
-  if (PER_PROPERTY_DOCS.has(docType) && propertyAddress) {
+  if ((PER_PROPERTY_DOCS as Set<string>).has(docType) && propertyAddress) {
     return `${displayName} of ${clientFullName} — ${propertyAddress}`;
   }
 
@@ -436,20 +466,20 @@ export async function generateDocument(
   const genStartTime = Date.now();
   let generatedDoc: GeneratedDoc;
 
-  if (ALL_DOC_TYPES.has(docType)) {
+  if (isDocType(docType)) {
     // Unified dispatch — loads standard generator or flex adapter wrapper
     const generatorFn = await loadGenerator(docType);
     if (!generatorFn) throw new Error(`Generator loader returned null for known docType: ${docType}`);
 
     // For flex docs, inject customPrompt/additionalData into clientData so the adapter can extract them
-    if (FLEX_DOC_TYPES.has(docType)) {
+    if ((FLEX_DOC_TYPES as Set<string>).has(docType)) {
       (clientData as Record<string, unknown>)._customPrompt = customPrompt;
       (clientData as Record<string, unknown>)._additionalData = additionalData;
       generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
     } else {
       // Resolve property for per-property docs
       let property: admin.firestore.DocumentData | undefined;
-      if (PER_PROPERTY_DOCS.has(docType)) {
+      if ((PER_PROPERTY_DOCS as Set<string>).has(docType)) {
         const properties: admin.firestore.DocumentData[] =
           (clientData.assets?.realEstate ?? []).filter(
             (p: admin.firestore.DocumentData) => p.transferToTrust === true,
@@ -522,7 +552,7 @@ export async function generateDocument(
 
       // Auto-retry ONCE for standard generators with error-severity failures
       const hasErrors = structureResult.missing.some(m => m.severity === 'error');
-      if (hasErrors && ALL_DOC_TYPES.has(docType) && !FLEX_DOC_TYPES.has(docType)) {
+      if (hasErrors && isDocType(docType) && !(FLEX_DOC_TYPES as Set<string>).has(docType)) {
         console.info(`[unifiedGenerator] Retrying ${docType} with structural feedback...`);
         const retryInstruction = buildRetryInstruction(structureResult, docType);
 
@@ -537,7 +567,7 @@ export async function generateDocument(
           };
 
           // Re-use loadGenerator (Node caches the module after first import)
-          const retryGeneratorFn = await loadGenerator(docType);
+          const retryGeneratorFn = await loadGenerator(docType as DocType);
           const retryDoc = await retryGeneratorFn!(
             retryClientData, firmData, packageType, trustTypes,
           );
@@ -614,7 +644,7 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   // 4. Save to vault via shared helper
   // ------------------------------------------------------------------
-  const isFlexType = FLEX_DOC_TYPES.has(docType);
+  const isFlexType = (FLEX_DOC_TYPES as Set<string>).has(docType);
   const suffix = propertyIndex !== undefined ? `_${propertyIndex}` : '';
 
   // Flex docs use timestamp-based IDs (multiples allowed); standard docs use deterministic IDs
@@ -704,7 +734,7 @@ export async function generateDocumentWithPropertyExpansion(
   params: UnifiedGenerateParams,
   clientData?: admin.firestore.DocumentData,
 ): Promise<UnifiedGenerateResult[]> {
-  if (PER_PROPERTY_DOCS.has(params.docType)) {
+  if ((PER_PROPERTY_DOCS as Set<string>).has(params.docType)) {
     // Fetch client data if not passed in (batch callers may pass it to avoid re-fetching)
     let client = clientData;
     if (!client) {
