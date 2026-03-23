@@ -936,20 +936,51 @@ FIRM: ${safeFirm.firmName ?? ''}
 
 Your job is to generate a NEW document of the same type for a DIFFERENT CLIENT, following the template's formatting exactly:
 - Use the SAME heading hierarchy, section ordering, and clause structure
-- Match the template's CSS styling and HTML formatting
 - Use the SAME legal language patterns and provision wording
 - Replace ALL client-specific details (names, addresses, fiduciaries, distribution plans, etc.) with the new client's actual data
 - Ensure gender-specific language matches the new client (he/she, his/her, etc.)
 - Add or remove clauses only where the new client's situation differs materially (e.g., no children section if no children)
 
 CRITICAL RULES:
-- Follow the template's formatting EXACTLY — same fonts, margins, spacing, indentation
+- Follow the template's structure EXACTLY
 - Do NOT add new sections the template doesn't have
 - Do NOT remove sections unless they're truly inapplicable to this client
 - Cite the specific statute (N.J.S.A.) for every legal provision — do NOT fabricate citations
 - Return ONLY the complete HTML document — no JSON wrapper, no markdown fences
 - Preserve the professional appearance and layout of the original template
 - Do NOT include <style> blocks — they will be preserved separately
+
+PARAGRAPH FORMATTING CLASSES — REQUIRED:
+You MUST use these CSS classes on every <p> element to control formatting in the exported document.
+Map each paragraph to the appropriate class based on its role:
+
+  <p class="tr-title">       → Document title (centered, underlined, uppercase).
+                                Example: "LAST WILL AND TESTAMENT OF JOHN DOE"
+  <p class="tr-cover-title">  → Cover page title (centered, multi-line: title / OF / name).
+  <p class="tr-cover">        → Cover page info lines (attorney name, firm, address, phone). Centered.
+  <p class="tr-mem-header1">  → Section sub-headers like "STATEMENT OF WITNESSES", "ACKNOWLEDGMENT",
+                                "SELF-PROVING AFFIDAVIT". Centered, underlined.
+  <p class="tr-body1">        → Primary body text — introductory paragraphs, general provisions. Justified.
+  <p class="tr-body3">        → Witness/attestation ceremonial text (e.g., "IN WITNESS WHEREOF").
+  <p class="tr-art1">         → Article-level headings — major sections (e.g., "ARTICLE I", "FAMILY INFORMATION").
+                                Centered, bold. Preceded by a blank <p class="tr-base"></p> spacer.
+  <p class="tr-art2">         → Sub-article provisions — substantive clauses with inline bold sub-headings.
+                                Use text-indent for lettered sub-sections (A., B., C.).
+  <p class="tr-art3b">        → Sub-sub-article items — numbered items (1., 2., 3.) under Art2 sections.
+                                Indented further than Art2.
+  <p class="tr-art4b">        → Fourth-level nested items (rare, for deeply nested trust provisions).
+  <p class="tr-sig-line">     → Signature line: "____________________________________" (right-aligned block at 3.5" indent).
+  <p class="tr-sig-name">     → Name printed below signature line (e.g., "JOHN DOE"). Same 3.5" indent, bold.
+  <p class="tr-affid">        → Affidavit jurisdiction block (STATE OF NEW JERSEY / COUNTY format with tab layout).
+  <p class="tr-base">         → Blank spacer/separator paragraphs between sections.
+
+TEXT FORMATTING RULES:
+- Wrap the principal's full name in <strong> on first reference and in signature blocks.
+- Wrap ALL appointed persons' names (executors, trustees, guardians, agents, healthcare reps) in <strong>.
+- Wrap article numbers in <strong> when they appear in tr-art1 headings.
+- Wrap sub-section heading text in <strong> within tr-art2 paragraphs.
+- Use <u> for the document title text inside tr-title and for section headers inside tr-mem-header1.
+- Do NOT use <h1>, <h2>, <h3> tags. Use ONLY <p class="tr-*"> for all content.
 
 KNOWLEDGE BASE (for accurate statutory references):
 ${kbContext || 'No specific resources available.'}`;
@@ -1031,14 +1062,25 @@ You are given a template-rendered document that is structurally correct but may 
 3. Smoother legal prose and professional formatting
 4. Filling any remaining blanks with appropriate language
 
-RULES:
-- Do NOT restructure the document — the template structure is intentional.
-- Do NOT remove any existing clauses or statutory citations.
-- DO add relevant statutory citations from the knowledge base context provided.
-- DO incorporate any relevant notes or special considerations.
-- Cite the specific statute (N.J.S.A.) for every legal claim or provision. Do NOT fabricate citations.
-- Return ONLY the enhanced HTML content (no JSON wrapper, no markdown fences).
-- Preserve all HTML tags and structure.
+ABSOLUTE RULES — VIOLATION OF THESE WILL PRODUCE REJECTED OUTPUT:
+- NEVER restructure, reorder, or remove sections — the template structure is intentional and legally reviewed.
+- NEVER alter client names, addresses, dates, or fiduciary designations from the template.
+- NEVER remove existing clauses, signature blocks, witness attestation blocks, self-proving affidavits, or notary acknowledgments.
+- NEVER insert placeholder text ([INSERT], [TBD], [TODO], blanks). Every field must use actual client data.
+- NEVER fabricate statutory citations. Only cite N.J.S.A. references you find in the KNOWLEDGE BASE below.
+- NEVER add new substantive legal provisions not present in the template.
+
+PERMITTED ENHANCEMENTS:
+- Add relevant N.J.S.A. citations from the knowledge base to strengthen existing clauses.
+- Incorporate relevant client notes or special considerations into existing provision language.
+- Smooth legal prose for clarity and professionalism within existing sections.
+- Fill remaining template blanks with proper client data (names, dates, addresses).
+- Add transitional language between existing sections for readability.
+
+OUTPUT FORMAT:
+- Return ONLY the enhanced HTML content (no JSON wrapper, no markdown fences, no preamble).
+- Preserve ALL HTML tags, CSS classes, inline styles, and document structure exactly.
+- The output must be a COMPLETE document — do not truncate or omit closing tags.
 
 KNOWLEDGE BASE:
 ${kbContext || 'No specific resources available.'}
@@ -1046,7 +1088,7 @@ ${kbContext || 'No specific resources available.'}
 CLIENT NOTES:
 ${notesContext || 'No recent notes.'}`;
 
-  const userPrompt = `Enhance this ${docType} document:
+  const userPrompt = `Enhance this ${docType} document. Follow all ABSOLUTE RULES above — structure, names, and signature blocks must remain exactly as they appear:
 
 TEMPLATE-RENDERED DOCUMENT:
 ${templateHtml.slice(0, 12000)}

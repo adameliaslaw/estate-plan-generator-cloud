@@ -25,6 +25,8 @@ import { aggregateClientContext, ClientContext } from './client-context-aggregat
 import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper';
 import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
+import { serializeClientData } from './client-data-serializer';
+import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
 
 // Individual generators
 import { generateWill } from './generators/will-generator';
@@ -79,12 +81,99 @@ export interface UnifiedGenerateResult {
   docType: string;
   title: string;
   content: string;
-  status: 'draft' | 'error';
+  status: 'draft' | 'incomplete' | 'needs_review' | 'error';
   docId: string;
   isNew: boolean;
   currentVersion: number;
   propertyAddress?: string;
   propertyIndex?: number;
+  /** Pre-generation warnings (missing critical fields) */
+  warnings?: string[];
+  /** Post-generation structural validation findings (missing elements) */
+  validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-generation completeness gate — critical fields per doc type
+// ---------------------------------------------------------------------------
+
+const CRITICAL_FIELDS: Record<string, Array<{ path: string; label: string }>> = {
+  will: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'personalInfo.lastName', label: 'Client last name' },
+    { path: 'fiduciaries.executor.primary', label: 'Primary executor' },
+  ],
+  pourOverWill: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'personalInfo.lastName', label: 'Client last name' },
+    { path: 'fiduciaries.executor.primary', label: 'Primary executor' },
+    { path: 'distribution.trustName', label: 'Trust name for pour-over' },
+  ],
+  trust: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'personalInfo.lastName', label: 'Client last name' },
+    { path: 'fiduciaries.trustee.primary', label: 'Primary trustee' },
+  ],
+  poa: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'personalInfo.lastName', label: 'Client last name' },
+    { path: 'fiduciaries.powerOfAttorney.agent', label: 'POA agent' },
+  ],
+  livingWill: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'personalInfo.lastName', label: 'Client last name' },
+    { path: 'fiduciaries.healthcareProxy.primary', label: 'Healthcare proxy' },
+  ],
+  deed: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'personalInfo.lastName', label: 'Client last name' },
+    { path: 'assets.realEstate', label: 'Real estate properties' },
+  ],
+  affidavitOfConsideration: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'assets.realEstate', label: 'Real estate properties' },
+  ],
+  gitRep3: [
+    { path: 'personalInfo.firstName', label: 'Client first name' },
+    { path: 'assets.realEstate', label: 'Real estate properties' },
+  ],
+};
+
+/**
+ * Check if a nested field exists and has a truthy value in an object.
+ */
+function hasNestedField(obj: Record<string, unknown>, path: string): boolean {
+  const parts = path.split('.');
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return false;
+    current = (current as Record<string, unknown>)[part];
+  }
+  // For arrays, check length > 0; for objects, check it has keys; for strings, check non-empty
+  if (Array.isArray(current)) return current.length > 0;
+  if (typeof current === 'object' && current !== null) return Object.keys(current).length > 0;
+  if (typeof current === 'string') return current.trim().length > 0;
+  return current != null;
+}
+
+/**
+ * Run the pre-generation completeness check.
+ * Returns an array of warning strings for missing critical fields.
+ */
+function checkCompleteness(
+  clientData: Record<string, unknown>,
+  docType: string,
+): string[] {
+  const rules = CRITICAL_FIELDS[docType];
+  if (!rules) return [];
+
+  const warnings: string[] = [];
+  for (const rule of rules) {
+    if (!hasNestedField(clientData, rule.path)) {
+      warnings.push(`Missing: ${rule.label} (${rule.path})`);
+    }
+  }
+  return warnings;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +331,35 @@ export async function generateDocument(
   const packageType = clientData.packageDetails?.packageType ?? 'foundation';
 
   // ------------------------------------------------------------------
+  // 1b. Pre-generation completeness gate (Phase 3)
+  // ------------------------------------------------------------------
+  const completenessWarnings = checkCompleteness(
+    clientData as Record<string, unknown>,
+    docType,
+  );
+  if (completenessWarnings.length > 0) {
+    console.warn(
+      `[unifiedGenerator] ⚠ INCOMPLETE DATA for ${docType}: ${completenessWarnings.join('; ')}`,
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // 1c. Serialize client data canonically (Phase 1)
+  //     Attach to clientData so generators can use it
+  // ------------------------------------------------------------------
+  try {
+    const serialized = serializeClientData(clientData, firmData, docType);
+    clientData = {
+      ...clientData,
+      _serializedClientData: serialized.text,
+      _clientFullName: serialized.clientFullName,
+      _spouseFullName: serialized.spouseFullName,
+    };
+  } catch (serErr) {
+    console.warn('[unifiedGenerator] Client data serialization failed (non-blocking):', serErr);
+  }
+
+  // ------------------------------------------------------------------
   // 2. Aggregate context (always — not just for template/hybrid)
   //    Reuse preloadedContext when available to avoid redundant Firestore reads
   // ------------------------------------------------------------------
@@ -329,7 +447,77 @@ export async function generateDocument(
   }
 
   // ------------------------------------------------------------------
-  // 3b. Observability — structured generation log
+  // 3b. Post-generation structural validation (Phase 2 + Phase 4)
+  // ------------------------------------------------------------------
+  let validationFindings: Array<{ name: string; severity: 'error' | 'warning' }> = [];
+
+  if (generatedDoc.status !== 'error' && generatedDoc.content) {
+    const structureResult = validateDocumentStructure(generatedDoc.content, docType);
+
+    if (!structureResult.valid) {
+      console.warn(
+        `[unifiedGenerator] ⚠ STRUCTURAL VALIDATION FAILED for ${docType}: ` +
+        `missing=[${structureResult.missing.map(m => m.name).join(', ')}], ` +
+        `minLength=${structureResult.meetsMinimumLength}, truncated=${structureResult.appearsTruncated}, ` +
+        `placeholders=${structureResult.placeholderCount}`,
+      );
+
+      // Auto-retry ONCE for standard generators with error-severity failures
+      const hasErrors = structureResult.missing.some(m => m.severity === 'error');
+      if (hasErrors && STANDARD_GENERATORS[docType] && !FLEX_DOC_TYPES.has(docType)) {
+        console.info(`[unifiedGenerator] Retrying ${docType} with structural feedback...`);
+        const retryInstruction = buildRetryInstruction(structureResult, docType);
+
+        try {
+          // Inject retry instruction and re-run the generator
+          const retryClientData = {
+            ...clientData,
+            _customInstructions: [
+              (clientData as Record<string, unknown>)._customInstructions ?? '',
+              retryInstruction,
+            ].filter(Boolean).join('\n\n'),
+          };
+
+          const generatorFn = STANDARD_GENERATORS[docType];
+          const retryDoc = await generatorFn(
+            retryClientData, firmData, packageType, trustTypes,
+          );
+
+          // Validate the retry
+          const retryValidation = validateDocumentStructure(retryDoc.content ?? '', docType);
+          if (retryValidation.valid || retryValidation.missing.filter(m => m.severity === 'error').length < structureResult.missing.filter(m => m.severity === 'error').length) {
+            // Retry improved — use it
+            generatedDoc = retryDoc;
+            validationFindings = retryValidation.missing;
+            console.info(`[unifiedGenerator] ✓ Retry improved ${docType}: ${retryValidation.missing.length} issues (was ${structureResult.missing.length})`);
+          } else {
+            // Retry didn't help — keep original, flag for review
+            validationFindings = structureResult.missing;
+            console.warn(`[unifiedGenerator] Retry did not improve ${docType}, keeping original. Flagging as needs_review.`);
+          }
+        } catch (retryErr) {
+          console.error(`[unifiedGenerator] Retry failed for ${docType}:`, retryErr);
+          validationFindings = structureResult.missing;
+        }
+      } else {
+        validationFindings = structureResult.missing;
+      }
+    }
+  }
+
+  // Determine final status based on completeness + validation
+  let finalStatus: 'draft' | 'incomplete' | 'needs_review' | 'error' = generatedDoc.status as 'draft' | 'error';
+  if (finalStatus !== 'error') {
+    const hasValidationErrors = validationFindings.some(f => f.severity === 'error');
+    if (hasValidationErrors) {
+      finalStatus = 'needs_review';
+    } else if (completenessWarnings.length > 0) {
+      finalStatus = 'incomplete';
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 3c. Observability — structured generation log
   // ------------------------------------------------------------------
   const genElapsedMs = Date.now() - genStartTime;
   const contentLength = generatedDoc.content?.length ?? 0;
@@ -340,23 +528,25 @@ export async function generateDocument(
     event: 'document_generated',
     docType,
     mode: generationMode ?? 'hybrid',
-    status: generatedDoc.status,
+    status: finalStatus,
     contentLength,
     textLength,
     elapsedMs: genElapsedMs,
     templateId: templateId ?? null,
     firmId,
     clientId,
+    completenessWarnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
+    validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
   };
 
-  if (textLength < 200 && generatedDoc.status !== 'error') {
+  if (textLength < 200 && finalStatus !== 'error') {
     genLog.warning = 'suspiciously_short';
     console.warn(`[unifiedGenerator] ⚠ SHORT DOCUMENT: ${docType} has only ${textLength} chars of text (${genElapsedMs}ms)`, genLog);
-  } else if (textLength === 0 && generatedDoc.status !== 'error') {
+  } else if (textLength === 0 && finalStatus !== 'error') {
     genLog.warning = 'empty_content';
     console.error(`[unifiedGenerator] 🚨 EMPTY DOCUMENT: ${docType} generated with no text content (${genElapsedMs}ms)`, genLog);
   } else {
-    console.info(`[unifiedGenerator] ✓ ${docType} generated: ${textLength} chars, ${genElapsedMs}ms, mode=${generationMode ?? 'hybrid'}`);
+    console.info(`[unifiedGenerator] ✓ ${docType} generated: ${textLength} chars, ${genElapsedMs}ms, mode=${generationMode ?? 'hybrid'}, status=${finalStatus}`);
   }
 
   // ------------------------------------------------------------------
@@ -387,7 +577,7 @@ export async function generateDocument(
       docType,
       displayName: generatedDoc.title,
       content: generatedDoc.content,
-      status: generatedDoc.status,
+      status: finalStatus === 'error' ? 'error' : (finalStatus === 'needs_review' ? 'review' : generatedDoc.status),
       createdBy,
       documentId,
       generationMode: triggerSource === 'chat-draft' ? 'chat-draft' : 'batch',
@@ -426,12 +616,14 @@ export async function generateDocument(
     docType: generatedDoc.docType,
     title: generatedDoc.title,
     content: generatedDoc.content,
-    status: generatedDoc.status,
+    status: finalStatus,
     docId: saveResult.docId,
     isNew: saveResult.isNew,
     currentVersion: saveResult.currentVersion,
     propertyAddress: generatedDoc.propertyAddress,
     propertyIndex,
+    warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
+    validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
   };
 }
 
