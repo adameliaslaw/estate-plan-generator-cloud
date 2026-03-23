@@ -209,12 +209,13 @@ Generate the complete ${trustType} now. Include all standard articles, comprehen
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   return {
     docType: 'trust',
     title: parsed.title ?? `The ${clientFullName} Revocable Living Trust`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }

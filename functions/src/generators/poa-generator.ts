@@ -148,7 +148,7 @@ Generate the complete Durable POA now. Include all enumerated powers, the exact 
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   // Guard: content must be non-trivially populated
   if (!parsed.content || parsed.content.trim().length < 200) {
@@ -163,5 +163,6 @@ Generate the complete Durable POA now. Include all enumerated powers, the exact 
     title: parsed.title ?? `Durable Power of Attorney of ${clientFullName}`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }

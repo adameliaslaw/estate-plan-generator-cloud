@@ -156,7 +156,7 @@ Generate the complete affidavit. Include the state/county caption, deponent ID, 
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   const shortAddress = propAddress ? `${propAddress}, ${propCity}` : 'Property';
 
@@ -165,5 +165,6 @@ Generate the complete affidavit. Include the state/county caption, deponent ID, 
     title: parsed.title ?? `Affidavit of Consideration — ${shortAddress}`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }

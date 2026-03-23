@@ -161,12 +161,13 @@ Generate the complete pour-over will now. The POUR-OVER ARTICLE must name the tr
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   return {
     docType: 'pourOverWill',
     title: parsed.title ?? `Pour-Over Will of ${clientFullName}`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }

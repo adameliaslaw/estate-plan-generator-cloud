@@ -509,12 +509,15 @@ export async function generateDocument(
     }
   }
 
-  // Determine final status based on completeness + validation
+  // Determine final status based on completeness + validation + truncation
   let finalStatus: 'draft' | 'incomplete' | 'needs_review' | 'error' = generatedDoc.status as 'draft' | 'error';
   if (finalStatus !== 'error') {
     const hasValidationErrors = validationFindings.some(f => f.severity === 'error');
-    if (hasValidationErrors) {
+    if (hasValidationErrors || generatedDoc._truncated) {
       finalStatus = 'needs_review';
+      if (generatedDoc._truncated) {
+        console.warn(`[unifiedGenerator] ${docType} was truncated by AI — flagging as needs_review`);
+      }
     } else if (completenessWarnings.length > 0) {
       finalStatus = 'incomplete';
     }
@@ -581,7 +584,7 @@ export async function generateDocument(
       docType,
       displayName: generatedDoc.title,
       content: generatedDoc.content,
-      status: finalStatus === 'error' ? 'error' : (finalStatus === 'needs_review' ? 'review' : generatedDoc.status),
+      status: finalStatus === 'error' ? 'error' : finalStatus,
       createdBy,
       documentId,
       generationMode: triggerSource === 'chat-draft' ? 'chat-draft' : 'batch',

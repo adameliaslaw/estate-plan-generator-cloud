@@ -44,6 +44,8 @@ export interface GeneratedDoc {
   status: 'draft' | 'error';
   propertyAddress?: string; // set for per-property docs
   propertyIndex?: number;
+  /** Set to true when parseAIJson had to recover from a truncated AI response */
+  _truncated?: boolean;
 }
 
 // ---------------------------------------------------------------------------

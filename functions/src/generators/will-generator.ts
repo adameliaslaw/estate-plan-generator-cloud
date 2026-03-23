@@ -138,12 +138,13 @@ Generate the complete, execution-ready will now. Include all required articles, 
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   return {
     docType: 'will',
     title: parsed.title ?? `Last Will and Testament of ${clientFullName}`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }

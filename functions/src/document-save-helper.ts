@@ -23,7 +23,7 @@ export interface SaveDocumentParams {
   docType: string;
   displayName: string;
   content: string;
-  status: 'draft' | 'review' | 'error';
+  status: 'draft' | 'review' | 'error' | 'incomplete' | 'needs_review';
   createdBy: string;
   /** AI model used for generation */
   aiModel?: string;

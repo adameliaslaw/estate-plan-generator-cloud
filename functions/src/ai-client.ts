@@ -715,6 +715,7 @@ export function parseAIJson<T>(raw: string): T {
             const result: Record<string, unknown> = {
               title,
               content: contentValue,
+              _truncated: true,
               metadata: {
                 wordCount: 0,
                 estimatedPages: 0,

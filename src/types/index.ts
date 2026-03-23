@@ -38,7 +38,7 @@ export type DocType =
   | 'actionSteps'
   | 'custom';
 
-export type DocStatus = 'draft' | 'review' | 'final';
+export type DocStatus = 'draft' | 'review' | 'final' | 'incomplete' | 'needs_review';
 
 export type QuestionnaireStatus = 'not_started' | 'in_progress' | 'completed';
 

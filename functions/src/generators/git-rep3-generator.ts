@@ -172,7 +172,7 @@ Generate the complete GIT/REP-3 form styled as an official NJ tax form. Clearly 
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   const shortAddress = propAddress ? `${propAddress}, ${propCity}` : 'Property';
 
@@ -181,5 +181,6 @@ Generate the complete GIT/REP-3 form styled as an official NJ tax form. Clearly 
     title: parsed.title ?? `GIT/REP-3 — ${shortAddress}`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }

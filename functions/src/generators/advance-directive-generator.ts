@@ -160,12 +160,13 @@ Generate the complete Advance Directive now. Mark the declarant's ACTUAL choices
     jsonSchema: DOCUMENT_SCHEMA,
   });
 
-  const parsed = parseAIJson<{ title: string; content: string }>(raw);
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
 
   return {
     docType: 'livingWill',
     title: parsed.title ?? `Advance Directive for Health Care of ${clientFullName}`,
     content: parsed.content ?? '',
     status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
   };
 }
