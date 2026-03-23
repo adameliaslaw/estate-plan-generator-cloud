@@ -21,7 +21,7 @@
  * Standard document response: { title, content, metadata? }
  * Used by: will-generator, trust-generator, poa-generator,
  *          advance-directive-generator, deed-generator, affidavit-generator,
- *          git-rep3-generator, summary-generator, action-steps-generator,
+ *          git-rep3-generator, summary-docs-generator,
  *          pour-over-will-generator, flex-prompts
  */
 export const DOCUMENT_SCHEMA = {

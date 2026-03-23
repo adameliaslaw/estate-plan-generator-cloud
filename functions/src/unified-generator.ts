@@ -206,8 +206,8 @@ async function loadGenerator(docType: string): Promise<StandardGeneratorFn | nul
     case 'deed': return (await import('./generators/deed-generator')).generateDeed;
     case 'affidavitOfConsideration': return (await import('./generators/affidavit-generator')).generateAffidavitOfConsideration;
     case 'gitRep3': return (await import('./generators/git-rep3-generator')).generateGitRep3;
-    case 'estatePlanSummary': return (await import('./generators/summary-generator')).generateEstatePlanSummary;
-    case 'actionSteps': return (await import('./generators/action-steps-generator')).generateActionSteps;
+    case 'estatePlanSummary': return (await import('./generators/summary-docs-generator')).generateEstatePlanSummary;
+    case 'actionSteps': return (await import('./generators/summary-docs-generator')).generateActionSteps;
     default: return null;
   }
 }

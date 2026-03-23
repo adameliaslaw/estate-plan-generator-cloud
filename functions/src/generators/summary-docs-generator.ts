@@ -1,10 +1,13 @@
 /**
- * functions/src/generators/action-steps-generator.ts
+ * functions/src/generators/summary-docs-generator.ts
  *
- * Generates a personalized Action Steps Checklist for the client.
- * Lists every post-signing task they and the attorney need to complete,
- * organized by category, with specific county clerk filing information
- * for each real property deed.
+ * Merged generator for non-legal summary documents:
+ *   - Estate Plan Summary — client-friendly overview of their complete plan
+ *   - Action Steps Checklist — post-signing tasks organized by category
+ *
+ * Both share common setup (client data extraction, trust name resolution,
+ * property data) but have distinct system prompts and user prompts since
+ * they produce structurally different documents.
  */
 
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
@@ -185,8 +188,245 @@ function getCountyRecordingInfo(county: string) {
 }
 
 // ---------------------------------------------------------------------------
-// System prompt
+// Shared context builder — extracts common data for both generators
 // ---------------------------------------------------------------------------
+
+interface SummaryDocContext {
+  safe: admin.firestore.DocumentData;
+  safeFirm: admin.firestore.DocumentData;
+  serializedData: string | undefined;
+  clientFullName: string;
+  hasTrust: boolean;
+  trustName: string;
+  realEstate: admin.firestore.DocumentData[];
+  propertiesForTrust: admin.firestore.DocumentData[];
+  fiduciaries: admin.firestore.DocumentData;
+  poa: admin.firestore.DocumentData;
+  assets: admin.firestore.DocumentData;
+  distribution: admin.firestore.DocumentData;
+  healthPrefs: admin.firestore.DocumentData;
+  specialConsiderations: admin.firestore.DocumentData;
+}
+
+function buildSummaryDocContext(
+  clientData: admin.firestore.DocumentData,
+  firmData: admin.firestore.DocumentData,
+  packageType: string,
+): SummaryDocContext {
+  const safe = sanitizeObject(clientData);
+  const safeFirm = sanitizeObject(firmData);
+
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
+  const fiduciaries = safe.fiduciaries ?? {};
+  const trusts: admin.firestore.DocumentData[] = safe.trusts ?? [];
+  const assets = safe.assets ?? {};
+  const distribution = safe.distribution ?? {};
+  const healthPrefs = safe.healthcarePreferences ?? {};
+  const specialConsiderations = safe.specialConsiderations ?? {};
+  const poa = fiduciaries.powerOfAttorney ?? {};
+
+  const hasTrust = ['guardian', 'fortress'].includes(packageType);
+  const primaryTrust = trusts[0];
+  const trustName = sanitizeForPrompt(
+    primaryTrust?.trustName ?? distribution.trustName ?? (hasTrust ? `The ${clientFullName} Revocable Living Trust` : ''),
+  );
+
+  const realEstate: admin.firestore.DocumentData[] = assets.realEstate ?? [];
+  const propertiesForTrust = realEstate.filter((r: admin.firestore.DocumentData) => r.transferToTrust);
+
+  return {
+    safe,
+    safeFirm,
+    serializedData,
+    clientFullName,
+    hasTrust,
+    trustName,
+    realEstate,
+    propertiesForTrust,
+    fiduciaries,
+    poa,
+    assets,
+    distribution,
+    healthPrefs,
+    specialConsiderations,
+  };
+}
+
+// ===========================================================================
+// ESTATE PLAN SUMMARY
+// ===========================================================================
+
+const SUMMARY_SYSTEM_PROMPT = `
+You are an expert New Jersey estate planning attorney creating a clear, comprehensive, plain-English Estate Plan Summary for a client.
+
+PURPOSE: This document is a CLIENT-FRIENDLY overview of their complete estate plan. It is NOT a legal document and does not require signatures. It should help the client understand:
+1. What documents they have signed and what each one does
+2. Who they have named for each role (executor, trustee, agents, etc.)
+3. What happens to their assets at death
+4. What happens if they become incapacitated
+5. What they still need to do (funding, beneficiary designations, etc.)
+
+TONE AND STYLE:
+• Write in warm, clear plain English — imagine explaining this to a smart non-lawyer.
+• Avoid legal jargon; when you must use a legal term, define it immediately.
+• Use numbered lists and bullet points for easy scanning.
+• Use bold headings for each section.
+• Keep sentences short and direct.
+• Be specific — use actual names and actual provisions from the client data.
+
+DOCUMENT STRUCTURE:
+
+SECTION 1 — YOUR ESTATE PLAN AT A GLANCE
+  • Brief 2-paragraph intro: what an estate plan is, why it matters
+  • Summary table listing each document in the package, its purpose, and execution status
+
+SECTION 2 — YOUR DOCUMENTS AND WHAT THEY DO
+  For each document in the client's package, provide:
+  • Document name (bolded)
+  • 2-3 sentence plain-English description of what it does
+  • Who is named in what role
+  • When it takes effect
+
+SECTION 3 — WHO YOU NAMED AND WHY IT MATTERS
+  Table format listing:
+  • Role | Person Named | Alternate | What They Can Do
+  (Include: Executor, Trustee if applicable, Power of Attorney Agent, Healthcare Representative, Guardian if applicable)
+
+SECTION 4 — WHAT HAPPENS TO YOUR ASSETS
+  • At death: who inherits what, in plain terms
+  • If trust: what goes into the trust, what passes through the will/probate
+  • Beneficiary designations note (retirement accounts, life insurance, POD accounts pass outside the estate)
+  • Specific bequests if any
+
+SECTION 5 — IF YOU BECOME INCAPACITATED
+  • Who manages your finances (POA agent)
+  • Who makes healthcare decisions (healthcare representative)
+  • What your specific healthcare preferences are (life support, nutrition, organ donation)
+  • When does the POA take effect (immediate or springing)
+
+SECTION 6 — YOUR NEXT STEPS (FUNDING AND IMPLEMENTATION)
+  • List specific action items:
+    - For each real estate property: deed needs to be recorded (county clerk, filing fee)
+    - For trust: open trust bank account, re-title accounts to trust
+    - Update beneficiary designations on retirement accounts and life insurance to coordinate with trust plan
+    - Store documents safely; give copies to agents
+    - Schedule annual review
+
+SECTION 7 — YOUR IMPORTANT CONTACTS
+  Table: Attorney name/firm/phone, Key fiduciaries and their contact info
+
+FORMATTING:
+• Full HTML (no <html>/<body>/<head>).
+• <h1> for title, <h2> for sections, <h3> for subsections, <p> for paragraphs.
+• Use <table> for tables, <ul>/<li> for lists.
+• Style to look like a professional client summary — not a legal document.
+
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
+OUTPUT FORMAT — JSON only:
+{
+  "title": "Your Estate Plan Summary — [Client Name]",
+  "content": "<complete HTML>",
+  "metadata": {
+    "wordCount": <number>,
+    "estimatedPages": <number>,
+    "executionRequirements": [],
+    "witnessRequired": false,
+    "notarizationRequired": false
+  }
+}
+`.trim();
+
+export async function generateEstatePlanSummary(
+  clientData: admin.firestore.DocumentData,
+  firmData: admin.firestore.DocumentData,
+  packageType: string,
+  _trustTypes?: string[],
+): Promise<GeneratedDoc> {
+  const ctx = buildSummaryDocContext(clientData, firmData, packageType);
+
+  const packageDisplayNames: Record<string, string> = {
+    foundation: 'Basic Estate Plan',
+    guardian: 'Revocable Trust',
+    fortress: 'Irrevocable Trust',
+  };
+
+  const packageDocs = ctx.hasTrust
+    ? ['Revocable Living Trust', 'Pour-Over Will', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Deeds (one per property)', 'Affidavit of Consideration (one per property)', 'GIT/REP-3 (one per property)', 'Estate Plan Summary', 'Action Steps Checklist']
+    : ['Last Will and Testament', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Estate Plan Summary', 'Action Steps Checklist'];
+
+  const userPrompt = `
+Generate a complete plain-English Estate Plan Summary for this client:
+
+CLIENT DATA BLOCK:
+${ctx.serializedData ?? '(Client data not available — use the details below)'}
+
+SUMMARY-SPECIFIC DETAILS:
+  Client: ${ctx.clientFullName}
+  Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+  Package: ${packageDisplayNames[packageType] ?? packageType} Package
+  ${ctx.hasTrust ? `Trust: ${ctx.trustName}` : ''}
+
+  Documents in this package:
+  ${packageDocs.map(d => `• ${d}`).join('\n  ')}
+
+  Healthcare preferences (key):
+    Life support: ${ctx.healthPrefs.lifeSupport === 'withhold' ? 'Withhold if terminal/PVS' : ctx.healthPrefs.lifeSupport === 'provide' ? 'Provide all treatment' : 'Defer to representative'}
+    Organ donation: ${ctx.healthPrefs.organDonation ? 'Yes' : 'No'}
+
+  Real estate:
+  ${ctx.realEstate.length === 0 ? 'None.' : ctx.realEstate.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred'}`
+  ).join('\n  ')}
+
+  Properties to deed into trust (${ctx.propertiesForTrust.length}):
+  ${ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, ${sanitizeForPrompt(r.county)} County`
+  ).join('\n  ') || 'None.'}
+
+  Special notes:
+    Gift-making power: ${ctx.poa.giftingPower ? 'Yes' : 'No'}
+    Spendthrift: ${ctx.distribution.spendthriftProvision ? 'Yes' : 'No'}
+    Special needs child: ${ctx.specialConsiderations.hasSpecialNeedsChild ? 'Yes' : 'No'}
+    No-contest clause: ${ctx.distribution.noContestClause ? 'Yes' : 'No'}
+    Digital assets: ${ctx.specialConsiderations.hasDigitalAssets ? 'Yes' : 'No'}
+
+  Firm: ${sanitizeForPrompt(ctx.safeFirm.firmName ?? '')}
+    Phone: ${ctx.safeFirm.firmPhone ?? ''}
+    Email: ${ctx.safeFirm.firmEmail ?? ''}
+
+Generate the complete estate plan summary. Use the client's actual names throughout. For next steps, include specific county recording information for ${ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) => sanitizeForPrompt(r.county)).filter(Boolean).join(', ') || 'relevant NJ counties'}.
+`.trim();
+
+  const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, ctx.safeFirm, {
+    model: ctx.safeFirm?.documentDraftingModel || 'gpt-5.4',
+    temperature: 0.3,
+    maxTokens: 8192,
+    jsonMode: true,
+    jsonSchema: DOCUMENT_SCHEMA,
+  });
+
+  const parsed = parseAIJson<{ title: string; content: string; _truncated?: boolean }>(raw);
+
+  return {
+    docType: 'estatePlanSummary',
+    title: buildStandardTitle('estatePlanSummary', ctx.clientFullName),
+    content: parsed.content ?? '',
+    status: 'draft',
+    ...(parsed._truncated && { _truncated: true }),
+  };
+}
+
+// ===========================================================================
+// ACTION STEPS CHECKLIST
+// ===========================================================================
 
 const ACTION_STEPS_SYSTEM_PROMPT = `
 You are an expert New Jersey estate planning attorney generating a personalized Action Steps Checklist for a client who has just completed their estate plan.
@@ -259,43 +499,17 @@ OUTPUT FORMAT — JSON only:
 }
 `.trim();
 
-// ---------------------------------------------------------------------------
-// Generator
-// ---------------------------------------------------------------------------
-
 export async function generateActionSteps(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
   packageType: string,
   _trustTypes?: string[],
 ): Promise<GeneratedDoc> {
-  const safe = sanitizeObject(clientData);
-  const safeFirm = sanitizeObject(firmData);
-
-  // Use canonical serialized data from unified-generator (Phase 1)
-  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
-  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
-    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
-      .filter(Boolean)
-      .join(' ');
-
-  const pi = safe.personalInfo ?? {};
-  const fiduciaries = safe.fiduciaries ?? {};
-  const trusts: admin.firestore.DocumentData[] = safe.trusts ?? [];
-  const assets = safe.assets ?? {};
-  const distribution = safe.distribution ?? {};
-
-  const hasTrust = ['guardian', 'fortress'].includes(packageType);
-  const primaryTrust = trusts[0];
-  const trustName = sanitizeForPrompt(
-    primaryTrust?.trustName ?? distribution.trustName ?? (hasTrust ? `The ${clientFullName} Revocable Living Trust` : ''),
-  );
-
-  const realEstate: admin.firestore.DocumentData[] = assets.realEstate ?? [];
-  const propertiesForTrust = realEstate.filter((r: admin.firestore.DocumentData) => r.transferToTrust);
+  const ctx = buildSummaryDocContext(clientData, firmData, packageType);
+  const pi = ctx.safe.personalInfo ?? {};
 
   // Build county recording info for each property
-  const countyRecordingDetails = propertiesForTrust.map((r: admin.firestore.DocumentData) => {
+  const countyRecordingDetails = ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) => {
     const county = sanitizeForPrompt(r.county ?? pi.county ?? '');
     const info = getCountyRecordingInfo(county);
     return {
@@ -311,33 +525,32 @@ export async function generateActionSteps(
     };
   });
 
-  const bankAccounts: admin.firestore.DocumentData[] = (assets.bankAccounts ?? []).filter(
+  const bankAccounts: admin.firestore.DocumentData[] = (ctx.assets.bankAccounts ?? []).filter(
     (b: admin.firestore.DocumentData) => b.transferToTrust,
   );
-  const investmentAccounts: admin.firestore.DocumentData[] = (assets.investmentAccounts ?? []).filter(
+  const investmentAccounts: admin.firestore.DocumentData[] = (ctx.assets.investmentAccounts ?? []).filter(
     (i: admin.firestore.DocumentData) => i.transferToTrust,
   );
-  const retirementAccounts: admin.firestore.DocumentData[] = assets.retirementAccounts ?? [];
-  const lifeInsurance: admin.firestore.DocumentData[] = assets.lifeInsurance ?? [];
+  const retirementAccounts: admin.firestore.DocumentData[] = ctx.assets.retirementAccounts ?? [];
+  const lifeInsurance: admin.firestore.DocumentData[] = ctx.assets.lifeInsurance ?? [];
 
-  const executor = fiduciaries.executor ?? {};
-  const poa = fiduciaries.powerOfAttorney ?? {};
-  const proxy = fiduciaries.healthcareProxy ?? {};
+  const executor = ctx.fiduciaries.executor ?? {};
+  const proxy = ctx.fiduciaries.healthcareProxy ?? {};
 
   const userPrompt = `
 Generate a complete personalized Action Steps Checklist using this client data:
 
 CLIENT DATA BLOCK:
-${serializedData ?? '(Client data not available — use the details below)'}
+${ctx.serializedData ?? '(Client data not available — use the details below)'}
 
 ACTION STEPS-SPECIFIC DETAILS:
-  Client: ${clientFullName}
-  Package: ${packageType} (${hasTrust ? 'includes trust' : 'no trust'})
+  Client: ${ctx.clientFullName}
+  Package: ${packageType} (${ctx.hasTrust ? 'includes trust' : 'no trust'})
   Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-  ${hasTrust ? `Trust: ${trustName}` : ''}
+  ${ctx.hasTrust ? `Trust: ${ctx.trustName}` : ''}
 
-  Properties to deed into trust (${propertiesForTrust.length}):
-  ${propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) => `
+  Properties to deed into trust (${ctx.propertiesForTrust.length}):
+  ${ctx.propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) => `
     Property ${i + 1}: ${r.address}, ${r.city}, NJ
     County: ${r.county}
     Recording Office: ${r.recordingOffice}
@@ -367,18 +580,18 @@ ACTION STEPS-SPECIFIC DETAILS:
   Key contacts to give copies of documents:
     Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} — ${sanitizeForPrompt(executor.primary?.phone ?? '')} — ${sanitizeForPrompt(executor.primary?.email ?? '')}
     Alternate Executor: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
-    POA Agent: ${sanitizeForPrompt(poa.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(poa.agent?.phone ?? '')}
+    POA Agent: ${sanitizeForPrompt(ctx.poa.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(ctx.poa.agent?.phone ?? '')}
     Healthcare Rep: ${sanitizeForPrompt(proxy.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(proxy.agent?.phone ?? '')}
 
-  Firm: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
-    Phone: ${safeFirm.firmPhone ?? ''}
-    Email: ${safeFirm.firmEmail ?? ''}
+  Firm: ${sanitizeForPrompt(ctx.safeFirm.firmName ?? '')}
+    Phone: ${ctx.safeFirm.firmPhone ?? ''}
+    Email: ${ctx.safeFirm.firmEmail ?? ''}
 
 Generate the complete action steps checklist. For each real property, include the specific county clerk's name, address, phone, website, and approximate recording fee. Include all sections: immediate steps, trust funding (real estate with specific county info), financial account re-titling, beneficiary designation updates, and annual review reminder.
 `.trim();
 
-  const raw = await callAI(ACTION_STEPS_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+  const raw = await callAI(ACTION_STEPS_SYSTEM_PROMPT, userPrompt, ctx.safeFirm, {
+    model: ctx.safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.25,
     maxTokens: 8192,
     jsonMode: true,
@@ -389,7 +602,7 @@ Generate the complete action steps checklist. For each real property, include th
 
   return {
     docType: 'actionSteps',
-    title: buildStandardTitle('actionSteps', clientFullName),
+    title: buildStandardTitle('actionSteps', ctx.clientFullName),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),
