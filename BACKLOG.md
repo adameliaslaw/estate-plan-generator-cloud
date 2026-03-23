@@ -1,53 +1,101 @@
-# Estate Plan Generator — Feature Backlog
+# Estate Plan Generator — Backlog
 
-## RAG & AI Enhancements
+> Prioritized by **impact on product quality, reliability, and user value** — irrespective of effort.
+>
+> Items from the [systems analysis](file:///C:/Users/adame/.gemini/antigravity/brain/eab403ba-32a1-464d-979b-18fabb1de466/system_analysis.md) that have already been completed are not listed here.
+>
+> **Completed:** Anthropic prompt caching · skip enhanceWithAI when zero missing vars · extract VARIABLE_TO_QUESTIONNAIRE_MAP · lazy-load generators · merge summary + action-steps generators · type-safe generator registry · standardize document titles · structural validator retry · cap raw template HTML
 
-### Cross-Client Semantic Search of Chat Insights
-**Priority:** Medium | **Effort:** 2-3 hours
+---
 
-Embed extracted key facts from chat conversations into the vector store so they're semantically searchable across clients. Currently, key facts are saved per client but only retrievable via direct Firestore query (by client ID), not via similarity search.
+## 1 · State-Aware Generation
+**Impact:** Multi-state expansion — the single biggest product-value unlock  
+**Source:** Systems Analysis — Priority 4
 
-**Use cases:**
-- "Which clients wanted spray trusts?" → finds all clients where that was discussed
-- "Any clients with special needs planning?" → surfaces SNT conversations
-- Document generation pulls relevant chat insights as additional context
+Detect client state (NJ, NY, FL, etc.) from questionnaire data and swap statutory references, witness/notary requirements, and legal boilerplate per jurisdiction. Currently all generators use NJ-centric language.
+
+---
+
+## 2 · Add Default HBS Templates for Trust, Pour-Over Will
+**Impact:** Template/Hybrid mode works consistently for all core doc types  
+**Source:** Systems Analysis — Priority 2
+
+Trust, Pour-Over Will, Deed, Affidavit, and GIT-REP3 currently have no default HBS templates — selecting "Template" or "Hybrid" mode silently falls back to full AI generation. Adding templates makes the tri-mode pipeline truly consistent.
+
+---
+
+## 3 · Side-by-Side Template Comparison
+**Impact:** Higher attorney confidence in AI output  
+**Source:** Systems Analysis — Priority 4
+
+Show template draft vs AI draft side-by-side for attorney review. Lets the attorney see exactly what the AI changed, added, or omitted compared to the template baseline.
+
+---
+
+## 4 · Vector Search for Template Matching
+**Impact:** Auto-selects best template without manual dropdown  
+**Source:** Systems Analysis — Priority 2 / Existing backlog
+
+Currently `getTemplate()` uses exact Firestore field query (`docType + softwareSource`). Enhance with vector search so the system auto-selects the best-matching template based on semantic similarity — leveraging embeddings already created during template upload.
+
+---
+
+## 5 · Cross-Client Semantic Search of Chat Insights
+**Impact:** Firm-wide intelligence across all client conversations  
+**Source:** Existing backlog
+
+Embed extracted key facts from chat conversations into the vector store so they're semantically searchable across clients ("Which clients wanted spray trusts?", "Any clients with special needs planning?").
 
 **Implementation:**
 1. After `extractAndSaveKeyFacts`, generate embedding for each fact
 2. Store in `firms/{firmId}/chatInsights` collection with `clientId` tag + embedding vector
-3. Add `chatInsights` to the `searchKnowledgeBase` query alongside `knowledgeBase`
+3. Add `chatInsights` to `searchKnowledgeBase` query alongside `knowledgeBase`
 4. Scope results by `clientId` for single-client context, firm-wide for admin queries
 
 ---
 
-### Embed Attorney Corrections into KB
-**Priority:** Low | **Effort:** 1-2 hours
+## 6 · Prompt Version Tracking
+**Impact:** Debugging + quality regression detection  
+**Source:** Systems Analysis — Priority 4
 
-When an attorney corrects a legal point in chat (e.g., "NJ changed this statute in 2024"), detect the correction and offer to save it as a KB resource with embedding — so future queries reflect the updated information.
+Log which prompt version (hash or version tag) generated each document. When a generator's system prompt changes, this enables before/after quality comparison and regression tracking.
 
 ---
 
-## UI / UX
+## 7 · Pre-Generation Cost Estimate
+**Impact:** Cost transparency for firm admins  
+**Source:** Systems Analysis — Priority 4
 
-### Fix Backfill Toast "Skipped" Count
-**Priority:** Low | **Effort:** 30 min
+Show estimated token cost before generating. Use the token economics data (AI mode ~$0.03/doc, hybrid ~$0.04/doc, template = free) to display an estimate in the Generate dialog so firm admins can make informed mode choices.
+
+---
+
+## 8 · Batch-Aware Prompt Sharing
+**Impact:** ~40% fewer API calls for non-legal summary docs  
+**Source:** Systems Analysis — Priority 1
+
+Combine 2-3 small non-legal docs (Summary, Action Steps) into a single AI call when generating in batch. Reduces API call count and amortizes system prompt tokens.
+
+---
+
+## 9 · Consolidate flex-prompts into Generator Registry
+**Impact:** Single routing table instead of two parallel prompt systems  
+**Source:** Systems Analysis — Priority 3
+
+`flex-prompts.ts` has its own prompt registry for supplementary doc types (Cover Letter, Engagement Letter, Trust Amendment, etc.), separate from the generator registry in `unified-generator.ts`. Merge into one routing table.
+
+---
+
+## 10 · Embed Attorney Corrections into KB
+**Impact:** Self-improving knowledge base  
+**Source:** Existing backlog
+
+When an attorney corrects a legal point in chat (e.g., "NJ changed this statute in 2024"), detect the correction and offer to save it as a KB resource with embedding.
+
+---
+
+## 11 · Fix Backfill Toast "Skipped" Count
+**Impact:** UI accuracy  
+**Source:** Existing backlog
 
 The "already had embeddings" count in the backfill toast is misleading with `forceAll=true` — it accumulates the "not in this batch" count across all batches. Show unique totals instead.
-
----
-
-### Vector Search for Template Matching
-**Priority:** Medium | **Effort:** 3-4 hours
-
-Currently `getTemplate()` uses a simple Firestore field query (`docType + softwareSource`) to find templates. The user must manually select the "Template Source" from a dropdown. Enhance this with vector search so the system auto-selects the best-matching template based on semantic similarity — leveraging the embeddings already created during template upload.
-
-**Benefits:**
-- No need for manual Template Source selection
-- Better template matching when doc types have multiple variants
-- Seamlessly incorporates new template sources without UI changes
-
-**Implementation:**
-1. When templates are uploaded via `BulkTemplateUploadDialog`, embeddings are already generated
-2. In `getTemplate()`, add a vector search fallback: if no template matches the exact `softwareSource`, search for semantically similar templates
-3. Use the existing `searchKnowledgeBase()` infrastructure to query template embeddings
-4. Rank results by similarity score and use the top match
