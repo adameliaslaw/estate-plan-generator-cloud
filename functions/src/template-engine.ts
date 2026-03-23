@@ -971,7 +971,7 @@ ${kbContext || 'No specific resources available.'}`;
 ${clientSummary}
 
 REFERENCE TEMPLATE (follow this formatting exactly):
-${rawTemplateHtml.slice(0, 15000)}
+${rawTemplateHtml}
 
 Generate the complete HTML document now. Return ONLY the HTML.`;
 
@@ -979,7 +979,7 @@ Generate the complete HTML document now. Return ONLY the HTML.`;
     let result = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
-      maxTokens: 12000,
+      maxTokens: 16384,
     });
 
     if (result && result.trim().length > 100) {
@@ -1072,7 +1072,7 @@ ${notesContext || 'No recent notes.'}`;
   const userPrompt = `Enhance this ${docType} document. Follow all ABSOLUTE RULES above — structure, names, and signature blocks must remain exactly as they appear:
 
 TEMPLATE-RENDERED DOCUMENT:
-${templateHtml.slice(0, 12000)}
+${templateHtml}
 
 Return the enhanced HTML document.`;
 
@@ -1080,7 +1080,7 @@ Return the enhanced HTML document.`;
     const enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
-      maxTokens: 12000,
+      maxTokens: 16384,
     });
 
     // If AI returned something reasonable, use it; otherwise fall back to template
