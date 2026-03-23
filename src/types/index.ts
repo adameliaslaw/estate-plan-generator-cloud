@@ -873,6 +873,8 @@ export interface Document {
   generationMode?: 'batch' | 'chat-draft';
   /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
   templateBaseline?: string;
+  /** Short hash identifying the prompt version used for generation */
+  promptVersion?: string;
 }
 
 // ============================================================================
