@@ -237,7 +237,7 @@ export const knowledgeBaseService = {
   }> {
     const fn = httpsCallable(functions, 'backfillEmbeddings', { timeout: 300000 });
     const res = await fn({ firmId, forceAll });
-    return res.data as { processed: number; skipped: number; errors: number };
+    return res.data as { processed: number; skipped: number; errors: number; total?: number };
   },
 
   /**
@@ -251,7 +251,7 @@ export const knowledgeBaseService = {
   }> {
     const fn = httpsCallable(functions, 'backfillTemplateEmbeddings', { timeout: 300000 });
     const res = await fn({ firmId, forceAll });
-    return res.data as { processed: number; skipped: number; errors: number };
+    return res.data as { processed: number; skipped: number; errors: number; total?: number };
   },
 };
 

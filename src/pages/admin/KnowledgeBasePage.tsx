@@ -302,7 +302,7 @@ export default function KnowledgeBasePage() {
 
     try {
       // Process in batches until all resources are embedded
-      while (true) {
+      while (batchNum < 500) { // Safety cap
         batchNum++;
         toast.info(`Processing batch ${batchNum}...`, { id: 'embed-progress' });
         const result = await knowledgeBaseService.backfillEmbeddings(firmId, true);
@@ -310,7 +310,8 @@ export default function KnowledgeBasePage() {
         totalSkipped += result.skipped;
         totalErrors += result.errors;
 
-        if (result.processed === 0) break; // All done
+        // Stop when nothing was processed OR we've handled all items
+        if (result.processed === 0 || totalProcessed + totalErrors >= (result.total ?? Infinity)) break;
       }
 
       setEmbeddingState('done');
@@ -334,14 +335,16 @@ export default function KnowledgeBasePage() {
     let batchNum = 0;
 
     try {
-      while (true) {
+      while (batchNum < 500) { // Safety cap
         batchNum++;
         toast.info(`Processing template batch ${batchNum}...`, { id: 'template-embed-progress' });
         const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId, true);
         totalProcessed += result.processed;
         totalSkipped += result.skipped;
         totalErrors += result.errors;
-        if (result.processed === 0) break;
+
+        // Stop when nothing was processed OR we've handled all items
+        if (result.processed === 0 || totalProcessed + totalErrors >= (result.total ?? Infinity)) break;
       }
 
       setTemplateEmbeddingState('done');

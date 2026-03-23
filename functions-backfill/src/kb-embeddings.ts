@@ -407,6 +407,7 @@ export const backfillEmbeddings = onCall(
       processed,
       skipped,
       errors,
+      total: snap.docs.length,
     };
   },
 );
@@ -490,6 +491,7 @@ export const backfillTemplateEmbeddings = onCall(
       processed,
       skipped,
       errors,
+      total: snap.docs.length,
     };
   },
 );
