@@ -11,6 +11,8 @@
 
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt } from './ai-client';
+import { generateEmbedding } from './kb-embeddings';
+import { getGeminiApiKey } from './kb-vector-search';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -375,6 +377,46 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
       console.log(`[ai-memory] Created note ${noteRef.id} for client ${clientId}`);
     } catch (noteErr) {
       console.warn('[ai-memory] Failed to create note from key facts:', noteErr);
+    }
+
+    // ── Embed key facts into chatInsights for cross-client semantic search ──
+    try {
+      const geminiApiKey = await getGeminiApiKey(firmId);
+      const insightsCol = db().collection(`firms/${firmId}/chatInsights`);
+      const batch = db().batch();
+      let embeddedCount = 0;
+
+      for (const fact of deduped) {
+        try {
+          const embeddingText = `[${fact.category}] ${fact.fact}`;
+          const embedding = await generateEmbedding(embeddingText, geminiApiKey);
+          const insightRef = insightsCol.doc();
+          batch.set(insightRef, {
+            fact: fact.fact,
+            category: fact.category,
+            confidence: fact.confidence,
+            clientId,
+            conversationId,
+            firmId,
+            embedding: admin.firestore.FieldValue.vector(embedding),
+            isActive: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          embeddedCount++;
+          // Rate limit: small delay between embedding calls
+          await new Promise((r) => setTimeout(r, 200));
+        } catch (embedErr) {
+          console.warn(`[ai-memory] Failed to embed fact "${fact.fact.slice(0, 50)}...":`, embedErr);
+        }
+      }
+
+      if (embeddedCount > 0) {
+        await batch.commit();
+        console.log(`[ai-memory] Embedded ${embeddedCount} chat insights for cross-client search`);
+      }
+    } catch (insightErr) {
+      // Non-fatal — facts are still saved to aiMemory and notes
+      console.warn('[ai-memory] Chat insight embedding failed:', insightErr);
     }
   } catch (err) {
     console.warn('[ai-memory] Key fact extraction failed:', err);

@@ -29,6 +29,8 @@ export interface VectorSearchOptions {
   minScore?: number;
   /** Exclude OCR-sourced content (default: false) */
   excludeOcr?: boolean;
+  /** Scope chat insight results to a specific client (optional) */
+  clientId?: string;
 }
 
 export interface VectorSearchResult {
@@ -44,8 +46,10 @@ export interface VectorSearchResult {
   isChunk: boolean;
   /** For chunk results, the index of the chunk within the parent */
   chunkIndex?: number;
-  /** Source of the result: 'kb' for knowledge base, 'template' for document templates */
-  sourceType: 'kb' | 'template';
+  /** Source of the result */
+  sourceType: 'kb' | 'template' | 'chatInsight';
+  /** Client ID (for chatInsight results) */
+  clientId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +354,51 @@ export async function searchKnowledgeBase(
     console.warn('[kb-vector-search] Template chunk vector search failed (index may not exist):', err);
   }
 
-  // 8. Sort by similarity (highest first) and limit
+  // 8. Search chat insights (embedded key facts from conversations)
+  try {
+    const insightsRef = db.collection(`firms/${firmId}/chatInsights`);
+    let insightsQuery: admin.firestore.Query = insightsRef.where('isActive', '==', true);
+    if (options.clientId) {
+      insightsQuery = insightsQuery.where('clientId', '==', options.clientId);
+    }
+
+    const insightResults = await withTimeout(
+      insightsQuery
+        .findNearest({
+          vectorField: 'embedding',
+          queryVector,
+          limit: 10,
+          distanceMeasure: 'COSINE',
+          distanceResultField: '__distance',
+        })
+        .get(),
+      VECTOR_SEARCH_TIMEOUT_MS,
+      'Chat insights vector search',
+    );
+
+    for (const doc of insightResults.docs) {
+      const data = doc.data();
+      const distance = (data as Record<string, unknown>).__distance as number;
+      const similarity = 1 - (distance / 2);
+      if (similarity < minScore) continue;
+
+      results.push({
+        id: doc.id,
+        title: `Chat Insight — ${(data.category as string) ?? 'general'}`,
+        content: (data.fact as string) ?? '',
+        category: 'chat_insight',
+        tags: [(data.category as string) ?? 'general'],
+        similarity,
+        isChunk: false,
+        sourceType: 'chatInsight',
+        clientId: data.clientId as string,
+      });
+    }
+  } catch (err) {
+    console.warn('[kb-vector-search] Chat insights vector search failed (index may not exist):', err);
+  }
+
+  // 9. Sort by similarity (highest first) and limit
   results.sort((a, b) => b.similarity - a.similarity);
   return results.slice(0, limit);
 }
