@@ -20,6 +20,7 @@ import { callAI, sanitizeObject } from './ai-client';
 import { searchTemplatesByDocType } from './kb-vector-search';
 import { GeneratedDoc } from './generate-documents';
 import { buildStandardTitle } from './unified-generator';
+import { computePromptHash } from './unified-generator';
 import { VARIABLE_TO_QUESTIONNAIRE_MAP } from './template-variables';
 
 // Re-export so downstream consumers (tests, etc.) don't break
@@ -626,6 +627,9 @@ export async function generateFromTemplate(
     );
   }
 
+  // Compute prompt version hash from the template content
+  const promptVersion = computePromptHash(template.content);
+
   // ── Smart routing ──────────────────────────────────────────────────────────
   // Uploaded DOCX templates (softwareSource set, no Handlebars variables)
   // should skip Handlebars entirely — the template is a complete document for
@@ -644,7 +648,7 @@ export async function generateFromTemplate(
         `(source=${template.softwareSource}) → template-referenced AI`,
       );
       const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
-      return { docType, title, content, status: 'draft' };
+      return { docType, title, content, status: 'draft', promptVersion };
     }
 
     // Template mode with a raw DOCX — no variable substitution possible,
@@ -653,7 +657,7 @@ export async function generateFromTemplate(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
       `(source=${template.softwareSource}) → serving raw HTML (template mode)`,
     );
-    return { docType, title, content: template.content, status: 'draft' };
+    return { docType, title, content: template.content, status: 'draft', promptVersion };
   }
 
   // ── Handlebars rendering (for templates WITH variables) ─────────────────
@@ -682,6 +686,7 @@ export async function generateFromTemplate(
         title: buildStandardTitle(docType, ctx.computed.clientFullName),
         content: templateGuided,
         status: 'draft',
+        promptVersion,
       };
     }
     // In template mode, serve the raw unrendered HTML so the user gets something
@@ -715,6 +720,7 @@ export async function generateFromTemplate(
       title,
       content: renderedHtml,
       status: 'draft',
+      promptVersion,
     };
   }
 
@@ -733,6 +739,7 @@ export async function generateFromTemplate(
         title,
         content: renderedHtml,
         status: 'draft',
+        promptVersion,
       };
     }
     const enhanced = await enhanceWithAI(renderedHtml, ctx, docType);
@@ -741,11 +748,11 @@ export async function generateFromTemplate(
       title,
       content: enhanced,
       status: 'draft',
+      promptVersion,
     };
   }
 
-  // Should not reach here
-  return { docType, title, content: renderedHtml, status: 'draft' };
+  return { docType, title, content: renderedHtml, status: 'draft', promptVersion };
 }
 
 // ---------------------------------------------------------------------------

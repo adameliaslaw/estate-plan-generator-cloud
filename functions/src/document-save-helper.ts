@@ -44,6 +44,8 @@ export interface SaveDocumentParams {
   warnings?: string[];
   /** Structural validation findings from post-generation checks */
   validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
+  /** Short hash identifying the prompt version used for generation */
+  promptVersion?: string;
 }
 
 export interface SaveDocumentResult {
@@ -185,6 +187,9 @@ export async function saveDocumentToVault(
   }
   if (params.validationFindings && params.validationFindings.length > 0) {
     docData.validationFindings = params.validationFindings;
+  }
+  if (params.promptVersion) {
+    docData.promptVersion = params.promptVersion;
   }
 
   // Version summary on the main document (lightweight — no content)

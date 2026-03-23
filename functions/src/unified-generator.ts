@@ -19,6 +19,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import * as crypto from 'crypto';
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext, ClientContext } from './client-context-aggregator';
@@ -309,6 +310,15 @@ const DOC_TYPE_DISPLAY_NAMES: Record<DocType, string> = {
 
 export function getDocTypeDisplayName(docType: string): string {
   return DOC_TYPE_DISPLAY_NAMES[docType as DocType] ?? docType;
+}
+
+/**
+ * Compute a short, deterministic hash of a prompt string.
+ * Used to track which prompt version produced a given document.
+ * Returns a 12-char hex string (48 bits — sufficient for version tracking).
+ */
+export function computePromptHash(promptText: string): string {
+  return crypto.createHash('sha256').update(promptText).digest('hex').slice(0, 12);
 }
 
 /**
@@ -678,6 +688,7 @@ export async function generateDocument(
       tags,
       warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
       validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
+      promptVersion: generatedDoc.promptVersion,
     });
   } catch (saveError) {
     console.error(`[unifiedGenerator] Failed to save ${docType}:`, saveError);

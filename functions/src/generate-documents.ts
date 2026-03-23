@@ -47,6 +47,8 @@ export interface GeneratedDoc {
   propertyIndex?: number;
   /** Set to true when parseAIJson had to recover from a truncated AI response */
   _truncated?: boolean;
+  /** Short hash identifying the prompt version used for generation */
+  promptVersion?: string;
 }
 
 // ---------------------------------------------------------------------------
