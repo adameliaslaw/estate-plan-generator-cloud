@@ -70,11 +70,13 @@ Show estimated token cost before generating. Use the token economics data (AI mo
 
 ---
 
-## 8 · Batch-Aware Prompt Sharing
+## 8 · ~~Batch-Aware Prompt Sharing~~ ✅ DONE
 **Impact:** ~40% fewer API calls for non-legal summary docs  
 **Source:** Systems Analysis — Priority 1
 
 Combine 2-3 small non-legal docs (Summary, Action Steps) into a single AI call when generating in batch. Reduces API call count and amortizes system prompt tokens.
+
+**Completed:** Added `BATCH_SUMMARY_SCHEMA`, `generateBatchSummaryDocs()` combined generator, and batch partitioning in `generate-documents.ts`. Falls back to individual generation on failure.
 
 ---
 
