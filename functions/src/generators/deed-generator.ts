@@ -73,6 +73,10 @@ FORMATTING:
 • Use <p class="deed-clause"> for the legal clauses.
 • Include blank signature/date lines.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "Bargain and Sale Deed — [Property Address] to [Trust Name]",
@@ -102,6 +106,13 @@ export async function generateDeed(
   const safeFirm = sanitizeObject(firmData);
   const safeProperty = sanitizeObject(property ?? {});
 
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const pi = safe.personalInfo ?? {};
   const spouse = safe.spouseInfo;
   const fiduciaries = safe.fiduciaries ?? {};
@@ -109,25 +120,16 @@ export async function generateDeed(
   const distribution = safe.distribution ?? {};
   const trusts: admin.firestore.DocumentData[] = safe.trusts ?? [];
 
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
   const isMarried = pi.maritalStatus === 'Married' || pi.maritalStatus === 'Domestic Partnership';
 
-  // Trust info
+  // Trust info for grantee line
   const primaryTrust = trusts[0];
   const trustName = sanitizeForPrompt(
-    primaryTrust?.trustName ??
-    distribution.trustName ??
-    `The ${clientFullName} Revocable Living Trust`,
+    primaryTrust?.trustName ?? distribution.trustName ?? `The ${clientFullName} Revocable Living Trust`,
   );
   const trustDate = primaryTrust?.trustDate ?? '[Trust Date — to be filled in upon trust execution]';
-
   const primaryTrustee = trustee.primary ?? primaryTrust?.trustees?.primary;
-  const trusteeName = primaryTrustee
-    ? sanitizeForPrompt(primaryTrustee.name ?? clientFullName)
-    : clientFullName;
+  const trusteeName = primaryTrustee ? sanitizeForPrompt(primaryTrustee.name ?? clientFullName) : clientFullName;
 
   // Property details
   const propAddress = sanitizeForPrompt(safeProperty.address ?? '');
@@ -145,7 +147,10 @@ export async function generateDeed(
   const userPrompt = `
 Generate a complete Bargain and Sale Deed with Covenants Against Grantor's Acts for this property:
 
-PROPERTY:
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
+
+PROPERTY DETAILS:
   Address: ${propAddress}, ${propCity}, ${propState} ${propZip}
   County: ${propCounty}
   Block/Lot: ${blockLot || 'To be confirmed with tax map'}
@@ -155,19 +160,13 @@ PROPERTY:
   Primary residence: ${safeProperty.isPrimaryResidence ? 'Yes' : 'No'}
   Current titling: ${sanitizeForPrompt(safeProperty.titling ?? 'Sole ownership')}
 
-GRANTOR (current owner):
-  Full name: ${clientFullName}
-  Marital status: ${pi.maritalStatus}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-
-${isMarried && spouse ? `SPOUSE (joining for dower/curtesy release):
-  Full name: ${[spouse.firstName, spouse.middleName, spouse.lastName].filter(Boolean).join(' ')}
-  Address: ${spouse.address}, ${spouse.city}, ${spouse.state} ${spouse.zip}
-  NOTE: Include spousal joinder / release of marital interest per N.J.S.A. 3B:28-1
-` : ''}
-
 GRANTEE (trustee of trust):
   Grantee: ${trusteeName}, as Trustee of ${trustName} dated ${trustDate}, and any successor trustee thereof
+
+${isMarried && spouse ? `SPOUSAL JOINDER:
+  Spouse: ${[spouse.firstName, spouse.middleName, spouse.lastName].filter(Boolean).join(' ')}
+  Note: Include spousal joinder / release of marital interest per N.J.S.A. 3B:28-1
+` : ''}
 
 RTF EXEMPTION: N.J.S.A. 46:15-10(a)(7) — transfer from individual to revocable trust where grantor is settlor-beneficiary
 

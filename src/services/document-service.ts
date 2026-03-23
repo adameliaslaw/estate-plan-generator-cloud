@@ -17,6 +17,8 @@ export interface GenerateDocumentsRequest {
   trustTypes?: string[];
   generationMode?: 'template' | 'ai' | 'hybrid';
   softwareSource?: string;
+  /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
+  formattingPreset?: string;
 }
 
 export interface GenerateDocumentsResponse {

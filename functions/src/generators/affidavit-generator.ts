@@ -59,6 +59,10 @@ FORMATTING:
 • Use <table> for the "sworn before" notary block.
 • The document should be concise — typically one page.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "Affidavit of Consideration — [Property Address]",
@@ -88,28 +92,26 @@ export async function generateAffidavitOfConsideration(
   const safeFirm = sanitizeObject(firmData);
   const safeProperty = sanitizeObject(property ?? {});
 
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const pi = safe.personalInfo ?? {};
   const fiduciaries = safe.fiduciaries ?? {};
   const trustee = fiduciaries.trustee ?? {};
   const distribution = safe.distribution ?? {};
   const trusts: admin.firestore.DocumentData[] = safe.trusts ?? [];
 
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
   const primaryTrust = trusts[0];
   const trustName = sanitizeForPrompt(
-    primaryTrust?.trustName ??
-    distribution.trustName ??
-    `The ${clientFullName} Revocable Living Trust`,
+    primaryTrust?.trustName ?? distribution.trustName ?? `The ${clientFullName} Revocable Living Trust`,
   );
   const trustDate = primaryTrust?.trustDate ?? '[Trust Date]';
-
   const primaryTrustee = trustee.primary ?? primaryTrust?.trustees?.primary;
-  const trusteeName = primaryTrustee
-    ? sanitizeForPrompt(primaryTrustee.name ?? clientFullName)
-    : clientFullName;
+  const trusteeName = primaryTrustee ? sanitizeForPrompt(primaryTrustee.name ?? clientFullName) : clientFullName;
 
   const propAddress = sanitizeForPrompt(safeProperty.address ?? '');
   const propCity = sanitizeForPrompt(safeProperty.city ?? '');
@@ -122,12 +124,10 @@ export async function generateAffidavitOfConsideration(
   const userPrompt = `
 Generate a complete Affidavit of Consideration (RTF Exemption Affidavit) for this property transfer:
 
-GRANTOR (DEPONENT):
-  Full name: ${clientFullName}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-  County of signing: ${pi.county ?? propCounty}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-PROPERTY:
+PROPERTY DETAILS:
   Address: ${propAddress}, ${propCity}, ${propState} ${propZip}
   County: ${propCounty}
   Block/Lot: ${blockLot || 'To be confirmed'}

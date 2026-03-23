@@ -77,6 +77,10 @@ FORMATTING:
 • Schedule A as a formatted table.
 • Do NOT leave any "[NAME]" tokens — use actual data.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "The [Settlor Name] Revocable Living Trust",
@@ -104,9 +108,13 @@ export async function generateTrust(
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
 
-  const pi = safe.personalInfo ?? {};
-  const spouse = safe.spouseInfo;
-  const children: admin.firestore.DocumentData[] = safe.children ?? [];
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const fiduciaries = safe.fiduciaries ?? {};
   const trustee = fiduciaries.trustee ?? {};
   const distribution = safe.distribution ?? {};
@@ -114,14 +122,7 @@ export async function generateTrust(
   const assets = safe.assets ?? {};
   const specialConsiderations = safe.specialConsiderations ?? {};
 
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const hasSpouse = pi.maritalStatus === 'Married' || pi.maritalStatus === 'Domestic Partnership';
-  const hasMinors = children.some((c: admin.firestore.DocumentData) => c.isMinor === true);
-
-  // Find primary trust definition from client's trusts array
+  // Trust-specific data
   const primaryTrustDef = trusts[0];
   const trustName = sanitizeForPrompt(
     primaryTrustDef?.trustName ??
@@ -134,105 +135,68 @@ export async function generateTrust(
     'Revocable Living Trust',
   );
 
-  // Primary trustee
-  const primaryTrustee = trustee.primary ?? primaryTrustDef?.trustees?.primary ?? {};
-  const alternateTrustee = trustee.alternate ?? primaryTrustDef?.trustees?.alternate;
-  const successorTrustee = trustee.successor ?? primaryTrustDef?.trustees?.successor;
   const coTrustee = trustee.coTrustee;
-
-  // Beneficiaries
   const beneficiaries = primaryTrustDef?.beneficiaries ?? [];
 
   // Funded assets
   const fundingAssets: admin.firestore.DocumentData[] = (assets.realEstate ?? [])
     .filter((r: admin.firestore.DocumentData) => r.transferToTrust);
-
   const fundingBankAccounts: admin.firestore.DocumentData[] = (assets.bankAccounts ?? [])
     .filter((b: admin.firestore.DocumentData) => b.transferToTrust);
-
   const fundingInvestments: admin.firestore.DocumentData[] = (assets.investmentAccounts ?? [])
     .filter((i: admin.firestore.DocumentData) => i.transferToTrust);
-
-  const residualText = (distribution.residualDistributions ?? [])
-    .map((r: admin.firestore.DocumentData) =>
-      `${sanitizeForPrompt(r.recipient)} (${sanitizeForPrompt(r.recipientRelationship ?? '')}) — ${r.percentage}%${r.perStirpes ? ', per stirpes' : ', per capita'}${r.alternateRecipient ? `; alternate: ${sanitizeForPrompt(r.alternateRecipient)}` : ''}`
-    )
-    .join('\n');
 
   const distributionStandard = sanitizeForPrompt(
     primaryTrustDef?.distributionStandard ?? 'HEMS (health, education, maintenance, and support)',
   );
 
+  const residualText = (distribution.residualDistributions ?? [])
+    .map((r: admin.firestore.DocumentData) =>
+      `${sanitizeForPrompt(r.recipient)} (${sanitizeForPrompt(r.recipientRelationship ?? '')}) — ${r.percentage}%${r.perStirpes ? ', per stirpes' : ', per capita'}`
+    )
+    .join('\n');
+
   const userPrompt = `
 Generate a complete ${trustType} using this client data:
 
-SETTLOR:
-  Full name: ${clientFullName}
-  Date of birth: ${pi.dob ?? 'Unknown'}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-  County: ${pi.county}
-  Marital status: ${pi.maritalStatus}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-${hasSpouse && spouse ? `SPOUSE / CO-SETTLOR (if joint trust):
-  Full name: ${[spouse.firstName, spouse.middleName, spouse.lastName].filter(Boolean).join(' ')}
-  Address: ${spouse.address}, ${spouse.city}, ${spouse.state} ${spouse.zip}
-  Note: ${packageType === 'fortress' ? 'Generate as JOINT Revocable Living Trust with co-settlor provisions.' : 'Separate trusts — settlor only.'}
-` : ''}
+TRUST-SPECIFIC DETAILS:
+  Trust name: ${trustName}
+  Trust type: ${trustType}
+  ${packageType === 'fortress' ? 'Note: Generate as JOINT Revocable Living Trust with co-settlor provisions.' : ''}
+  ${coTrustee ? `Co-trustee: ${sanitizeForPrompt(coTrustee.name ?? '')} (${sanitizeForPrompt(coTrustee.relationship ?? '')})` : ''}
 
-TRUST NAME: ${trustName}
-TRUST TYPE: ${trustType}
-
-PRIMARY TRUSTEE:
-  Name: ${sanitizeForPrompt(primaryTrustee.name ?? clientFullName)} (settlor acting as own initial trustee)
-  Relationship: ${sanitizeForPrompt(primaryTrustee.relationship ?? 'Settlor')}
-
-${coTrustee ? `CO-TRUSTEE:
-  Name: ${sanitizeForPrompt(coTrustee.name ?? '')}
-  Relationship: ${sanitizeForPrompt(coTrustee.relationship ?? '')}
-` : ''}
-
-ALTERNATE/SUCCESSOR TRUSTEE:
-  Alternate: ${sanitizeForPrompt(alternateTrustee?.name ?? 'TBD')} — ${sanitizeForPrompt(alternateTrustee?.relationship ?? '')}
-  Successor: ${sanitizeForPrompt(successorTrustee?.name ?? 'None')}
-  Bond required: ${trustee.bondRequired ? 'Yes' : 'No'}
-  Compensation: ${trustee.compensation ?? 'statutory'}
-
-CHILDREN (${children.length}):
-${children.length === 0 ? '  None.' : children.map((c: admin.firestore.DocumentData) =>
-    `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'MINOR' : 'adult'}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardianshipNotes ? `: ${sanitizeForPrompt(c.guardianshipNotes)}` : ''}`
-  ).join('\n')}
-
-TRUST BENEFICIARIES:
-${beneficiaries.length > 0
-      ? beneficiaries.map((b: admin.firestore.DocumentData) =>
+  Trust beneficiaries:
+  ${beneficiaries.length > 0
+    ? beneficiaries.map((b: admin.firestore.DocumentData) =>
         `  - ${sanitizeForPrompt(b.name)} (${sanitizeForPrompt(b.relationship)}) — ${b.percentage ?? ''}%${b.notes ? `: ${sanitizeForPrompt(b.notes)}` : ''}`
       ).join('\n')
-      : residualText || '  Settlor during lifetime; then equal shares to children, per stirpes.'}
+    : residualText || '  Settlor during lifetime; then equal shares to children, per stirpes.'}
 
-DISTRIBUTION STANDARD: ${distributionStandard}
-TERMINATION AGE FOR MINOR TRUSTS: ${primaryTrustDef?.terminationAge ?? 25}
+  Distribution standard: ${distributionStandard}
+  Termination age for minor trusts: ${primaryTrustDef?.terminationAge ?? 25}
 
-FUNDED ASSETS:
-  Real estate: ${fundingAssets.map((r: admin.firestore.DocumentData) =>
-        `${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ ${r.zip} (Block ${r.blockLot ?? 'TBD'})`
-      ).join('; ') || 'None specified — add to Schedule A at funding'}
-  Bank accounts: ${fundingBankAccounts.map((b: admin.firestore.DocumentData) =>
-        `${sanitizeForPrompt(b.institution)} ${b.accountType}`
-      ).join('; ') || 'None specified'}
-  Investment accounts: ${fundingInvestments.map((i: admin.firestore.DocumentData) =>
-        `${sanitizeForPrompt(i.institution)} ${i.accountType}`
-      ).join('; ') || 'None specified'}
+  Funded assets:
+    Real estate: ${fundingAssets.map((r: admin.firestore.DocumentData) =>
+      `${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ ${r.zip} (Block ${r.blockLot ?? 'TBD'})`
+    ).join('; ') || 'None specified — add to Schedule A at funding'}
+    Bank accounts: ${fundingBankAccounts.map((b: admin.firestore.DocumentData) =>
+      `${sanitizeForPrompt(b.institution)} ${b.accountType}`
+    ).join('; ') || 'None specified'}
+    Investment accounts: ${fundingInvestments.map((i: admin.firestore.DocumentData) =>
+      `${sanitizeForPrompt(i.institution)} ${i.accountType}`
+    ).join('; ') || 'None specified'}
 
-SPECIAL PROVISIONS:
-  Spendthrift: ${distribution.spendthriftProvision ? 'YES — include spendthrift clause' : 'No'}
-  Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? `YES — ${sanitizeForPrompt(specialConsiderations.specialNeedsDetails ?? '')} — include SNT sub-trust preserving government benefits` : 'No'}
-  Medicaid planning: ${specialConsiderations.hasMedicaidPlanning ? `YES — ${sanitizeForPrompt(specialConsiderations.medicaidPlanningDetails ?? '')}` : 'No'}
-  Pet provision: ${specialConsiderations.hasPetProvision ? `YES — ${sanitizeForPrompt(specialConsiderations.petDetails ?? '')}` : 'No'}
-  Charitable goals: ${specialConsiderations.hasCharitableGoals ? `YES — ${sanitizeForPrompt(specialConsiderations.charitableGoalsDetails ?? '')}` : 'No'}
-  No-contest clause: ${distribution.noContestClause ? 'Yes' : 'No'}
-  Additional notes: ${sanitizeForPrompt(primaryTrustDef?.notes ?? '')}
-
-FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
+  Special provisions:
+    Spendthrift: ${distribution.spendthriftProvision ? 'YES' : 'No'}
+    Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? `YES — ${sanitizeForPrompt(specialConsiderations.specialNeedsDetails ?? '')} — include SNT sub-trust` : 'No'}
+    Medicaid planning: ${specialConsiderations.hasMedicaidPlanning ? `YES — ${sanitizeForPrompt(specialConsiderations.medicaidPlanningDetails ?? '')}` : 'No'}
+    Pet provision: ${specialConsiderations.hasPetProvision ? `YES — ${sanitizeForPrompt(specialConsiderations.petDetails ?? '')}` : 'No'}
+    Charitable goals: ${specialConsiderations.hasCharitableGoals ? `YES — ${sanitizeForPrompt(specialConsiderations.charitableGoalsDetails ?? '')}` : 'No'}
+    No-contest clause: ${distribution.noContestClause ? 'Yes' : 'No'}
+    Additional notes: ${sanitizeForPrompt(primaryTrustDef?.notes ?? '')}
 
 Generate the complete ${trustType} now. Include all standard articles, comprehensive trustee powers per N.J.S.A. 3B:14-23, successor trustee provisions, distribution plan, Schedule A, execution block, and notary acknowledgment.
 `.trim();

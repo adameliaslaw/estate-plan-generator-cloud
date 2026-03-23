@@ -240,6 +240,10 @@ FORMATTING:
 • Include a table of key contacts at the end.
 • Include county clerk tables for each property.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "Action Steps Checklist — [Client Name]",
@@ -262,10 +266,17 @@ export async function generateActionSteps(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
   packageType: string,
-  trustTypes?: string[],
+  _trustTypes?: string[],
 ): Promise<GeneratedDoc> {
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
+
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
 
   const pi = safe.personalInfo ?? {};
   const fiduciaries = safe.fiduciaries ?? {};
@@ -273,41 +284,31 @@ export async function generateActionSteps(
   const assets = safe.assets ?? {};
   const distribution = safe.distribution ?? {};
 
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
   const hasTrust = ['guardian', 'fortress'].includes(packageType);
   const primaryTrust = trusts[0];
   const trustName = sanitizeForPrompt(
-    primaryTrust?.trustName ??
-    distribution.trustName ??
-    (hasTrust ? `The ${clientFullName} Revocable Living Trust` : ''),
+    primaryTrust?.trustName ?? distribution.trustName ?? (hasTrust ? `The ${clientFullName} Revocable Living Trust` : ''),
   );
 
   const realEstate: admin.firestore.DocumentData[] = assets.realEstate ?? [];
-  const propertiesForTrust = realEstate.filter(
-    (r: admin.firestore.DocumentData) => r.transferToTrust,
-  );
+  const propertiesForTrust = realEstate.filter((r: admin.firestore.DocumentData) => r.transferToTrust);
 
   // Build county recording info for each property
-  const countyRecordingDetails = propertiesForTrust.map(
-    (r: admin.firestore.DocumentData) => {
-      const county = sanitizeForPrompt(r.county ?? pi.county ?? '');
-      const info = getCountyRecordingInfo(county);
-      return {
-        address: sanitizeForPrompt(r.address ?? ''),
-        city: sanitizeForPrompt(r.city ?? ''),
-        county,
-        recordingOffice: info.office,
-        recordingAddress: info.address,
-        phone: info.phone,
-        website: info.website,
-        fee: info.approxFee,
-        mortgage: r.mortgageBalance ? `${sanitizeForPrompt(r.mortgageLender ?? 'lender')} ($${r.mortgageBalance.toLocaleString()})` : 'None',
-      };
-    },
-  );
+  const countyRecordingDetails = propertiesForTrust.map((r: admin.firestore.DocumentData) => {
+    const county = sanitizeForPrompt(r.county ?? pi.county ?? '');
+    const info = getCountyRecordingInfo(county);
+    return {
+      address: sanitizeForPrompt(r.address ?? ''),
+      city: sanitizeForPrompt(r.city ?? ''),
+      county,
+      recordingOffice: info.office,
+      recordingAddress: info.address,
+      phone: info.phone,
+      website: info.website,
+      fee: info.approxFee,
+      mortgage: r.mortgageBalance ? `${sanitizeForPrompt(r.mortgageLender ?? 'lender')} ($${r.mortgageBalance.toLocaleString()})` : 'None',
+    };
+  });
 
   const bankAccounts: admin.firestore.DocumentData[] = (assets.bankAccounts ?? []).filter(
     (b: admin.firestore.DocumentData) => b.transferToTrust,
@@ -325,49 +326,52 @@ export async function generateActionSteps(
   const userPrompt = `
 Generate a complete personalized Action Steps Checklist using this client data:
 
-CLIENT: ${clientFullName}
-Package: ${packageType} (${hasTrust ? 'includes trust' : 'no trust'})
-Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-${hasTrust ? `TRUST: ${trustName}` : ''}
+ACTION STEPS-SPECIFIC DETAILS:
+  Client: ${clientFullName}
+  Package: ${packageType} (${hasTrust ? 'includes trust' : 'no trust'})
+  Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+  ${hasTrust ? `Trust: ${trustName}` : ''}
 
-PROPERTIES TO DEED INTO TRUST (${propertiesForTrust.length}):
-${propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) => `
-  Property ${i + 1}: ${r.address}, ${r.city}, NJ
-  County: ${r.county}
-  Recording Office: ${r.recordingOffice}
-  Address: ${r.recordingAddress}
-  Phone: ${r.phone}
-  Website: ${r.website}
-  Approximate Recording Fee: ${r.fee}
-  Mortgage: ${r.mortgage}
-  Documents to file: Deed + Affidavit of Consideration + GIT/REP-3 + filing fee
-`).join('\n')}
+  Properties to deed into trust (${propertiesForTrust.length}):
+  ${propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) => `
+    Property ${i + 1}: ${r.address}, ${r.city}, NJ
+    County: ${r.county}
+    Recording Office: ${r.recordingOffice}
+    Address: ${r.recordingAddress}
+    Phone: ${r.phone}
+    Website: ${r.website}
+    Approximate Recording Fee: ${r.fee}
+    Mortgage: ${r.mortgage}
+    Documents to file: Deed + Affidavit of Consideration + GIT/REP-3 + filing fee
+  `).join('\n')}
 
-BANK/INVESTMENT ACCOUNTS TO RE-TITLE TO TRUST (${bankAccounts.length + investmentAccounts.length}):
-${[...bankAccounts, ...investmentAccounts].map((a: admin.firestore.DocumentData) =>
+  Bank/investment accounts to re-title (${bankAccounts.length + investmentAccounts.length}):
+  ${[...bankAccounts, ...investmentAccounts].map((a: admin.firestore.DocumentData) =>
     `• ${sanitizeForPrompt(a.institution ?? '')} — ${a.accountType}`
-  ).join('\n') || 'None specified.'}
+  ).join('\n  ') || 'None specified.'}
 
-RETIREMENT ACCOUNTS (update beneficiary designations only — do NOT transfer to trust):
-${retirementAccounts.map((r: admin.firestore.DocumentData) =>
+  Retirement accounts (update beneficiary designations only — do NOT transfer to trust):
+  ${retirementAccounts.map((r: admin.firestore.DocumentData) =>
     `• ${sanitizeForPrompt(r.institution ?? '')} ${r.accountType} — current beneficiary: ${sanitizeForPrompt(r.primaryBeneficiary ?? 'unknown')}`
-  ).join('\n') || 'None.'}
+  ).join('\n  ') || 'None.'}
 
-LIFE INSURANCE (update beneficiary designations):
-${lifeInsurance.map((l: admin.firestore.DocumentData) =>
+  Life insurance (update beneficiary designations):
+  ${lifeInsurance.map((l: admin.firestore.DocumentData) =>
     `• ${sanitizeForPrompt(l.company ?? '')} — current beneficiary: ${sanitizeForPrompt(l.primaryBeneficiary ?? 'unknown')} — transfer to trust: ${l.transferToTrust ? 'Yes (ILIT consideration)' : 'No'}`
-  ).join('\n') || 'None.'}
+  ).join('\n  ') || 'None.'}
 
-KEY CONTACTS TO GIVE COPIES OF DOCUMENTS:
-  Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} — ${sanitizeForPrompt(executor.primary?.phone ?? '')} — ${sanitizeForPrompt(executor.primary?.email ?? '')}
-  Alternate Executor: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
-  POA Agent: ${sanitizeForPrompt(poa.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(poa.agent?.phone ?? '')}
-  Healthcare Rep: ${sanitizeForPrompt(proxy.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(proxy.agent?.phone ?? '')}
+  Key contacts to give copies of documents:
+    Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} — ${sanitizeForPrompt(executor.primary?.phone ?? '')} — ${sanitizeForPrompt(executor.primary?.email ?? '')}
+    Alternate Executor: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
+    POA Agent: ${sanitizeForPrompt(poa.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(poa.agent?.phone ?? '')}
+    Healthcare Rep: ${sanitizeForPrompt(proxy.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(proxy.agent?.phone ?? '')}
 
-FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
-  Phone: ${safeFirm.firmPhone ?? ''}
-  Email: ${safeFirm.firmEmail ?? ''}
+  Firm: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
+    Phone: ${safeFirm.firmPhone ?? ''}
+    Email: ${safeFirm.firmEmail ?? ''}
 
 Generate the complete action steps checklist. For each real property, include the specific county clerk's name, address, phone, website, and approximate recording fee. Include all sections: immediate steps, trust funding (real estate with specific county info), financial account re-titling, beneficiary designation updates, and annual review reminder.
 `.trim();

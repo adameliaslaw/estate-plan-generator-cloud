@@ -82,6 +82,10 @@ FORMATTING:
 • Use <table> for tables, <ul>/<li> for lists.
 • Style to look like a professional client summary — not a legal document.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "Your Estate Plan Summary — [Client Name]",
@@ -104,54 +108,35 @@ export async function generateEstatePlanSummary(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
   packageType: string,
-  trustTypes?: string[],
+  _trustTypes?: string[],
 ): Promise<GeneratedDoc> {
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
 
-  const pi = safe.personalInfo ?? {};
-  const spouse = safe.spouseInfo;
-  const children: admin.firestore.DocumentData[] = safe.children ?? [];
-  const fiduciaries = safe.fiduciaries ?? {};
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
+  const _pi = safe.personalInfo ?? {};
   const distribution = safe.distribution ?? {};
   const trusts: admin.firestore.DocumentData[] = safe.trusts ?? [];
   const assets = safe.assets ?? {};
   const healthPrefs = safe.healthcarePreferences ?? {};
   const specialConsiderations = safe.specialConsiderations ?? {};
-
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const hasSpouse = pi.maritalStatus === 'Married' || pi.maritalStatus === 'Domestic Partnership';
-  const hasMinors = children.some((c: admin.firestore.DocumentData) => c.isMinor === true);
-  const hasTrust = ['guardian', 'fortress'].includes(packageType);
-
-  const packageDocs = hasTrust
-    ? ['Revocable Living Trust', 'Pour-Over Will', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Deeds (one per property)', 'Affidavit of Consideration (one per property)', 'GIT/REP-3 (one per property)', 'Estate Plan Summary', 'Action Steps Checklist']
-    : ['Last Will and Testament', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Estate Plan Summary', 'Action Steps Checklist'];
-
-  const executor = fiduciaries.executor ?? {};
-  const trustee = fiduciaries.trustee ?? {};
+  const fiduciaries = safe.fiduciaries ?? {};
   const poa = fiduciaries.powerOfAttorney ?? {};
-  const proxy = fiduciaries.healthcareProxy ?? {};
-  const guardian = fiduciaries.guardian;
 
+  const hasTrust = ['guardian', 'fortress'].includes(packageType);
   const primaryTrust = trusts[0];
   const trustName = sanitizeForPrompt(
-    primaryTrust?.trustName ??
-    distribution.trustName ??
-    (hasTrust ? `The ${clientFullName} Revocable Living Trust` : ''),
+    primaryTrust?.trustName ?? distribution.trustName ?? (hasTrust ? `The ${clientFullName} Revocable Living Trust` : ''),
   );
 
   const realEstate: admin.firestore.DocumentData[] = assets.realEstate ?? [];
   const propertiesForTrust = realEstate.filter((r: admin.firestore.DocumentData) => r.transferToTrust);
-
-  const residualText = (distribution.residualDistributions ?? [])
-    .map((r: admin.firestore.DocumentData) =>
-      `${sanitizeForPrompt(r.recipient)} (${sanitizeForPrompt(r.recipientRelationship ?? '')}) — ${r.percentage}% ${r.perStirpes ? 'per stirpes' : 'per capita'}`
-    )
-    .join('; ');
 
   const packageDisplayNames: Record<string, string> = {
     foundation: 'Basic Estate Plan',
@@ -159,64 +144,49 @@ export async function generateEstatePlanSummary(
     fortress: 'Irrevocable Trust',
   };
 
+  const packageDocs = hasTrust
+    ? ['Revocable Living Trust', 'Pour-Over Will', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Deeds (one per property)', 'Affidavit of Consideration (one per property)', 'GIT/REP-3 (one per property)', 'Estate Plan Summary', 'Action Steps Checklist']
+    : ['Last Will and Testament', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Estate Plan Summary', 'Action Steps Checklist'];
+
   const userPrompt = `
 Generate a complete plain-English Estate Plan Summary for this client:
 
-CLIENT: ${clientFullName}
-Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-Package: ${packageDisplayNames[packageType] ?? packageType} Package
-${hasSpouse && spouse ? `Spouse: ${[spouse.firstName, spouse.lastName].filter(Boolean).join(' ')}` : ''}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-DOCUMENTS IN THIS PACKAGE:
-${packageDocs.map(d => `• ${d}`).join('\n')}
+SUMMARY-SPECIFIC DETAILS:
+  Client: ${clientFullName}
+  Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+  Package: ${packageDisplayNames[packageType] ?? packageType} Package
+  ${hasTrust ? `Trust: ${trustName}` : ''}
 
-CHILDREN (${children.length}):
-${children.length === 0 ? 'None.' : children.map((c: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(c.name)}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [Special Needs]' : ''}`
-  ).join('\n')}
+  Documents in this package:
+  ${packageDocs.map(d => `• ${d}`).join('\n  ')}
 
-${hasTrust ? `TRUST: ${trustName} (${(trustTypes ?? ['Revocable Living Trust']).join(', ')})` : ''}
+  Healthcare preferences (key):
+    Life support: ${healthPrefs.lifeSupport === 'withhold' ? 'Withhold if terminal/PVS' : healthPrefs.lifeSupport === 'provide' ? 'Provide all treatment' : 'Defer to representative'}
+    Organ donation: ${healthPrefs.organDonation ? 'Yes' : 'No'}
 
-FIDUCIARIES:
-  Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} (${sanitizeForPrompt(executor.primary?.relationship ?? '')})
-  Alternate Executor: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
-  ${hasTrust ? `Primary Trustee: ${sanitizeForPrompt(trustee.primary?.name ?? clientFullName + ' (self)')} — Alternate: ${sanitizeForPrompt(trustee.alternate?.name ?? 'TBD')}` : ''}
-  POA Agent: ${sanitizeForPrompt(poa.agent?.name ?? 'TBD')} (${sanitizeForPrompt(poa.agent?.relationship ?? '')}) — ${poa.effectiveDate === 'springing' ? 'Springing (effective on incapacity)' : 'Immediate'}
-  Alternate POA: ${sanitizeForPrompt(poa.alternateAgent?.name ?? 'None')}
-  Healthcare Representative: ${sanitizeForPrompt(proxy.agent?.name ?? 'TBD')} (${sanitizeForPrompt(proxy.agent?.relationship ?? '')})
-  Alternate Healthcare Rep: ${sanitizeForPrompt(proxy.alternateAgent?.name ?? 'None')}
-  ${hasMinors ? `Guardian: ${sanitizeForPrompt(guardian?.primary?.name ?? 'TBD')} — Alternate: ${sanitizeForPrompt(guardian?.alternate?.name ?? 'None')}` : ''}
+  Real estate:
+  ${realEstate.length === 0 ? 'None.' : realEstate.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred'}`
+  ).join('\n  ')}
 
-DISTRIBUTION AT DEATH:
-${residualText || (hasSpouse ? `All to ${[spouse?.firstName, spouse?.lastName].filter(Boolean).join(' ')}, if surviving; otherwise equally to children per stirpes.` : 'Equally to children per stirpes.')}
-${distribution.pourOverToTrust ? `Assets pour over to ${trustName} at death.` : ''}
-Specific bequests: ${(distribution.specificBequests ?? []).length} item(s)
-Charitable bequests: ${(distribution.charitableBequests ?? []).length} item(s)
+  Properties to deed into trust (${propertiesForTrust.length}):
+  ${propertiesForTrust.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, ${sanitizeForPrompt(r.county)} County`
+  ).join('\n  ') || 'None.'}
 
-HEALTHCARE PREFERENCES (key):
-  Life support: ${healthPrefs.lifeSupport === 'withhold' ? 'Withhold if terminal/PVS' : healthPrefs.lifeSupport === 'provide' ? 'Provide all treatment' : 'Defer to representative'}
-  Organ donation: ${healthPrefs.organDonation ? 'Yes' : 'No'}
+  Special notes:
+    Gift-making power: ${poa.giftingPower ? 'Yes' : 'No'}
+    Spendthrift: ${distribution.spendthriftProvision ? 'Yes' : 'No'}
+    Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? 'Yes' : 'No'}
+    No-contest clause: ${distribution.noContestClause ? 'Yes' : 'No'}
+    Digital assets: ${specialConsiderations.hasDigitalAssets ? 'Yes' : 'No'}
 
-REAL ESTATE:
-${realEstate.length === 0 ? 'None.' : realEstate.map((r: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred to trust'}`
-  ).join('\n')}
-
-PROPERTIES TO DEED INTO TRUST (${propertiesForTrust.length}):
-${propertiesForTrust.map((r: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, ${sanitizeForPrompt(r.county)} County — deed, affidavit, and GIT/REP-3 prepared`
-  ).join('\n') || 'None.'}
-
-SPECIAL NOTES:
-  Gift-making power: ${poa.giftingPower ? 'Yes — agent can make gifts on your behalf' : 'No'}
-  Spendthrift: ${distribution.spendthriftProvision ? 'Yes' : 'No'}
-  Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? 'Yes — special needs provisions included' : 'No'}
-  No-contest clause: ${distribution.noContestClause ? 'Yes' : 'No'}
-  Digital assets: ${specialConsiderations.hasDigitalAssets ? 'Yes — provisions included' : 'No'}
-
-FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
-  Phone: ${safeFirm.firmPhone ?? ''}
-  Email: ${safeFirm.firmEmail ?? ''}
+  Firm: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
+    Phone: ${safeFirm.firmPhone ?? ''}
+    Email: ${safeFirm.firmEmail ?? ''}
 
 Generate the complete estate plan summary. Use the client's actual names throughout. For next steps, include specific county recording information for ${propertiesForTrust.map((r: admin.firestore.DocumentData) => sanitizeForPrompt(r.county)).filter(Boolean).join(', ') || 'relevant NJ counties'}.
 `.trim();

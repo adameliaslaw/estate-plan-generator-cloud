@@ -87,6 +87,10 @@ FORMATTING:
 • Mark the declarant's ACTUAL choices clearly (checked/selected) based on client data.
 • Fill ALL client data — no "[NAME]" tokens.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "Advance Directive for Health Care of [Full Name]",
@@ -114,75 +118,36 @@ export async function generateAdvanceDirective(
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
 
-  const pi = safe.personalInfo ?? {};
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const fiduciaries = safe.fiduciaries ?? {};
   const proxy = fiduciaries.healthcareProxy ?? {};
   const hp = safe.healthcarePreferences ?? {};
 
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const primaryRep = proxy.agent ?? {};
-  const alternateRep = proxy.alternateAgent;
-
   const userPrompt = `
 Generate a complete NJ Advance Directive for Health Care using this client data:
 
-DECLARANT:
-  Full name: ${clientFullName}
-  Date of birth: ${pi.dob ?? 'Unknown'}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-  County: ${pi.county}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-PRIMARY HEALTHCARE REPRESENTATIVE:
-  Name: ${sanitizeForPrompt(primaryRep.name ?? 'TBD')}
-  Relationship: ${sanitizeForPrompt(primaryRep.relationship ?? '')}
-  Address: ${sanitizeForPrompt([primaryRep.address, primaryRep.city, primaryRep.state, primaryRep.zip].filter(Boolean).join(', '))}
-  Phone: ${sanitizeForPrompt(primaryRep.phone ?? '')}
-
-ALTERNATE HEALTHCARE REPRESENTATIVE:
-  Name: ${alternateRep ? sanitizeForPrompt(alternateRep.name ?? 'None') : 'None'}
-  Relationship: ${alternateRep ? sanitizeForPrompt(alternateRep.relationship ?? '') : ''}
-  Address: ${alternateRep ? sanitizeForPrompt([alternateRep.address, alternateRep.city, alternateRep.state, alternateRep.zip].filter(Boolean).join(', ')) : ''}
-
-HIPAA AUTHORIZATION: ${proxy.hipaaAuthorization !== false ? 'YES — include HIPAA authorization per 45 C.F.R. §164.508' : 'NO'}
-
-LIFE-SUSTAINING TREATMENT CHOICE:
-  ${hp.lifeSupport === 'withhold' ? '✓ WITHHOLD life-sustaining treatment (comfort care only)' :
-      hp.lifeSupport === 'provide' ? '✓ PROVIDE all life-sustaining treatment' :
-        '✓ DEFER to healthcare representative'}
-
-ARTIFICIAL NUTRITION:
-  ${hp.artificialNutrition === 'withhold' ? '✓ WITHHOLD artificial nutrition' :
-      hp.artificialNutrition === 'provide' ? '✓ PROVIDE artificial nutrition' :
-        '✓ DEFER to healthcare representative'}
-
-ARTIFICIAL HYDRATION:
-  ${hp.artificialHydration === 'withhold' ? '✓ WITHHOLD artificial hydration' :
-      hp.artificialHydration === 'provide' ? '✓ PROVIDE artificial hydration' :
-        '✓ DEFER to healthcare representative'}
-
-PAIN MANAGEMENT:
-  ${hp.painManagement === 'comfort_care' ? '✓ COMFORT CARE / palliative care only — no aggressive treatment' :
-      hp.painManagement === 'all_measures' ? '✓ ALL pain management measures' :
-        '✓ DEFER to healthcare representative'}
-
-CPR DIRECTIVE:
-  ${hp.cprDirective === 'dnr' ? '✓ DO NOT RESUSCITATE (DNR)' :
-      hp.cprDirective === 'full_code' ? '✓ FULL CODE — attempt CPR' :
-        '✓ DEFER to healthcare representative'}
-
-NJ ALZHEIMER/DEMENTIA DIRECTIVE: ${hp.njADRD ? 'YES — include NJ ADRD provision: if I have Alzheimer\'s disease or related dementia and lack decision-making capacity, my representative\'s instructions shall govern.' : 'NO'}
-
-ORGAN DONATION: ${hp.organDonation ? `YES — donate ${sanitizeForPrompt(hp.organDonationDetails ?? 'any and all organs and tissues')}` : 'NO — do not donate organs'}
-ANATOMICAL GIFT: ${hp.anatomicalGift ? `YES — donate entire body to ${sanitizeForPrompt(hp.anatomicalGiftOrganization ?? 'medical science')}` : 'NO'}
-
-PERSONAL STATEMENT: ${sanitizeForPrompt(hp.personalStatement ?? 'None provided.')}
-RELIGIOUS BELIEFS: ${sanitizeForPrompt(hp.religiousBeliefs ?? 'None specified.')}
-NOTES: ${sanitizeForPrompt(hp.notes ?? '')}
-
-FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
+HEALTHCARE DIRECTIVE CHOICES:
+  HIPAA authorization: ${proxy.hipaaAuthorization !== false ? 'YES — include HIPAA authorization per 45 C.F.R. §164.508' : 'NO'}
+  Life-sustaining treatment: ${hp.lifeSupport === 'withhold' ? '✓ WITHHOLD (comfort care only)' : hp.lifeSupport === 'provide' ? '✓ PROVIDE all treatment' : '✓ DEFER to representative'}
+  Artificial nutrition: ${hp.artificialNutrition === 'withhold' ? '✓ WITHHOLD' : hp.artificialNutrition === 'provide' ? '✓ PROVIDE' : '✓ DEFER to representative'}
+  Artificial hydration: ${hp.artificialHydration === 'withhold' ? '✓ WITHHOLD' : hp.artificialHydration === 'provide' ? '✓ PROVIDE' : '✓ DEFER to representative'}
+  Pain management: ${hp.painManagement === 'comfort_care' ? '✓ COMFORT CARE only' : hp.painManagement === 'all_measures' ? '✓ ALL measures' : '✓ DEFER to representative'}
+  CPR directive: ${hp.cprDirective === 'dnr' ? '✓ DO NOT RESUSCITATE (DNR)' : hp.cprDirective === 'full_code' ? '✓ FULL CODE — attempt CPR' : '✓ DEFER to representative'}
+  NJ Alzheimer/dementia directive: ${hp.njADRD ? 'YES — include NJ ADRD provision' : 'NO'}
+  Organ donation: ${hp.organDonation ? `YES — donate ${sanitizeForPrompt(hp.organDonationDetails ?? 'any and all organs and tissues')}` : 'NO'}
+  Anatomical gift: ${hp.anatomicalGift ? `YES — donate body to ${sanitizeForPrompt(hp.anatomicalGiftOrganization ?? 'medical science')}` : 'NO'}
+  Personal statement: ${sanitizeForPrompt(hp.personalStatement ?? 'None provided.')}
+  Religious beliefs: ${sanitizeForPrompt(hp.religiousBeliefs ?? 'None specified.')}
+  Notes: ${sanitizeForPrompt(hp.notes ?? '')}
 
 Generate the complete Advance Directive now. Mark the declarant's ACTUAL choices clearly. Include Part One (proxy), Part Two (instruction directive with all subsections), Part Three (general provisions), full execution block, and witness attestation with the NJ statutory disqualification language.
 `.trim();

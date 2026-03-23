@@ -59,6 +59,10 @@ FORMATTING RULES:
 • Fill ALL placeholders with actual client data — do not leave "[NAME]" tokens.
 • If a field is unknown, use a blank line "_______________" as a fill-in.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT:
 Respond with a valid JSON object only (no markdown fences):
 {
@@ -81,44 +85,27 @@ Respond with a valid JSON object only (no markdown fences):
 export async function generateWill(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
-  packageType: string,
-  trustTypes?: string[],
+  _packageType: string,
+  _trustTypes?: string[],
 ): Promise<GeneratedDoc> {
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
 
-  const pi = safe.personalInfo ?? {};
-  const spouse = safe.spouseInfo;
-  const children: admin.firestore.DocumentData[] = safe.children ?? [];
-  const fiduciaries = safe.fiduciaries ?? {};
-  const executor = fiduciaries.executor ?? {};
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const distribution = safe.distribution ?? {};
   const specialConsiderations = safe.specialConsiderations ?? {};
   const assets = safe.assets ?? {};
 
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const hasMinors = children.some((c: admin.firestore.DocumentData) => c.isMinor === true);
-  const hasSpouse = pi.maritalStatus === 'Married' || pi.maritalStatus === 'Domestic Partnership';
-
-  // Build specific bequests text
+  // Build will-specific supplemental details not fully covered by the canonical serializer
   const specificBequestsText = (distribution.specificBequests ?? [])
     .map((b: admin.firestore.DocumentData, i: number) =>
       `${i + 1}. "${sanitizeForPrompt(b.description)}" to ${sanitizeForPrompt(b.recipient)}${b.condition ? `, provided that ${sanitizeForPrompt(b.condition)}` : ''}${b.alternateRecipient ? `; if predeceased, to ${sanitizeForPrompt(b.alternateRecipient)}` : ''}.`
-    )
-    .join('\n');
-
-  const residualText = (distribution.residualDistributions ?? [])
-    .map((r: admin.firestore.DocumentData) =>
-      `${sanitizeForPrompt(r.recipient)} (${sanitizeForPrompt(r.recipientRelationship ?? '')}) — ${r.percentage}%${r.perStirpes ? ', per stirpes' : ', per capita'}${r.alternateRecipient ? `; alternate: ${sanitizeForPrompt(r.alternateRecipient)}` : ''}`
-    )
-    .join('\n');
-
-  const charitableText = (distribution.charitableBequests ?? [])
-    .map((c: admin.firestore.DocumentData) =>
-      `${sanitizeForPrompt(c.organizationName)}${c.ein ? ` (EIN: ${c.ein})` : ''}: ${c.amount ? `$${c.amount}` : ''}${c.percentage ? `${c.percentage}%` : ''}${c.purpose ? ` for ${sanitizeForPrompt(c.purpose)}` : ''}`
     )
     .join('\n');
 
@@ -127,58 +114,18 @@ export async function generateWill(
   const userPrompt = `
 Generate a complete Last Will and Testament using this client data:
 
-TESTATOR:
-  Full name: ${clientFullName}
-  Date of birth: ${pi.dob ?? 'Unknown'}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-  County: ${pi.county}
-  Marital status: ${pi.maritalStatus}
-  Citizenship: ${pi.citizenship}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-${hasSpouse && spouse ? `SPOUSE:
-  Full name: ${[spouse.firstName, spouse.middleName, spouse.lastName].filter(Boolean).join(' ')}
-  Address: ${spouse.address}, ${spouse.city}, ${spouse.state} ${spouse.zip}
-` : 'SPOUSE: None (single / not applicable)'}
-
-CHILDREN (${children.length}):
-${children.length === 0 ? '  None.' : children.map((c: admin.firestore.DocumentData) =>
-    `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'minor' : 'adult'}, ${c.relationship}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardian ? `, guardian: ${sanitizeForPrompt(c.guardian)}` : ''}${c.alternateGuardian ? `, alternate guardian: ${sanitizeForPrompt(c.alternateGuardian)}` : ''}`
-  ).join('\n')}
-
-EXECUTOR:
-  Primary: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')}, ${sanitizeForPrompt(executor.primary?.relationship ?? '')}, ${sanitizeForPrompt(executor.primary?.address ?? '')}
-  Alternate: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}, ${sanitizeForPrompt(executor.alternate?.relationship ?? '')}
-  Successor: ${sanitizeForPrompt(executor.successor?.name ?? 'None')}
-  Bond required: ${executor.bondRequired ? 'Yes' : 'No'}
-  Compensation: ${executor.compensation ?? 'statutory'}
-
-${hasMinors ? `GUARDIAN FOR MINOR CHILDREN:
-  Primary guardian: ${sanitizeForPrompt(fiduciaries.guardian?.primary?.name ?? 'TBD')}
-  Alternate guardian: ${sanitizeForPrompt(fiduciaries.guardian?.alternate?.name ?? 'None')}
-` : ''}
-
-SPECIFIC BEQUESTS:
-${specificBequestsText || '  None.'}
-
-CHARITABLE BEQUESTS:
-${charitableText || '  None.'}
-
-RESIDUAL DISTRIBUTION:
-${residualText || '  100% to spouse, if living, otherwise equally to children, per stirpes.'}
-  Survivorship period: ${distribution.survivorshipPeriod ?? 30} days
-
-SPECIAL PROVISIONS:
+WILL-SPECIFIC DETAILS:
+  Specific bequests: ${specificBequestsText || 'None.'}
+  Pour-over to trust: ${distribution.pourOverToTrust ? `Yes — pour-over residue to ${sanitizeForPrompt(distribution.trustName ?? 'the Revocable Living Trust')}` : 'No'}
   No-contest clause: ${distribution.noContestClause ? 'Yes — include in terrorem clause' : 'No'}
   Spendthrift provision: ${distribution.spendthriftProvision ? 'Yes — include spendthrift trust language' : 'No'}
   Digital assets: ${digitalAssetsFlag ? 'Yes — include digital assets provision, reference password manager / credential documentation' : 'No'}
-  Pour-over to trust: ${distribution.pourOverToTrust ? `Yes — pour-over residue to ${sanitizeForPrompt(distribution.trustName ?? 'the Revocable Living Trust')}` : 'No'}
   Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? `Yes — ${sanitizeForPrompt(specialConsiderations.specialNeedsDetails ?? '')}` : 'No'}
   Pet provision: ${specialConsiderations.hasPetProvision ? `Yes — ${sanitizeForPrompt(specialConsiderations.petDetails ?? '')}; caretaker: ${sanitizeForPrompt(specialConsiderations.petCaretaker ?? 'TBD')}` : 'No'}
   Notes: ${sanitizeForPrompt(distribution.notes ?? '')}
-
-FIRM:
-  ${sanitizeForPrompt(safeFirm.firmName ?? '')}, ${sanitizeForPrompt(safeFirm.firmAddress ?? '')}, ${safeFirm.firmPhone ?? ''}
-  Attorney bar number: ${safeFirm.barNumber ?? ''}
 
 Generate the complete, execution-ready will now. Include all required articles, the full NJ witness attestation, and the complete N.J.S.A. 3B:3-4 self-proving affidavit with notary block.
 `.trim();

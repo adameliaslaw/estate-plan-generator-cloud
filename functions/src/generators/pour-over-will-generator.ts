@@ -63,6 +63,10 @@ FORMATTING:
 • <h1> for title, <h2> for articles, <p> for paragraphs, <table> for signature blocks.
 • Fill ALL client data — no "[NAME]" placeholder tokens.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only (no markdown):
 {
   "title": "Pour-Over Will of [Full Name]",
@@ -84,27 +88,23 @@ OUTPUT FORMAT — JSON only (no markdown):
 export async function generatePourOverWill(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
-  packageType: string,
-  trustTypes?: string[],
+  _packageType: string,
+  _trustTypes?: string[],
 ): Promise<GeneratedDoc> {
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
 
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const pi = safe.personalInfo ?? {};
-  const spouse = safe.spouseInfo;
-  const children: admin.firestore.DocumentData[] = safe.children ?? [];
-  const fiduciaries = safe.fiduciaries ?? {};
-  const executor = fiduciaries.executor ?? {};
   const distribution = safe.distribution ?? {};
   const trusts: admin.firestore.DocumentData[] = safe.trusts ?? [];
   const specialConsiderations = safe.specialConsiderations ?? {};
-
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const hasMinors = children.some((c: admin.firestore.DocumentData) => c.isMinor === true);
-  const hasSpouse = pi.maritalStatus === 'Married' || pi.maritalStatus === 'Domestic Partnership';
 
   // Identify the primary revocable living trust
   const primaryTrust = trusts.find(
@@ -133,50 +133,22 @@ export async function generatePourOverWill(
   const userPrompt = `
 Generate a complete Pour-Over Will using this client data:
 
-TESTATOR:
-  Full name: ${clientFullName}
-  Date of birth: ${pi.dob ?? 'Unknown'}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-  County: ${pi.county}
-  Marital status: ${pi.maritalStatus}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-${hasSpouse && spouse ? `SPOUSE:
-  Full name: ${[spouse.firstName, spouse.middleName, spouse.lastName].filter(Boolean).join(' ')}
-  Address: ${spouse.address}, ${spouse.city}, ${spouse.state} ${spouse.zip}
-` : 'SPOUSE: None / not applicable'}
+POUR-OVER SPECIFIC DETAILS:
+  Trust receiving pour-over:
+    Trust name: ${trustName}
+    Trust date: ${trustDate}
+    Trustee: ${trusteeName}
 
-CHILDREN (${children.length}):
-${children.length === 0 ? '  None.' : children.map((c: admin.firestore.DocumentData) =>
-    `  - ${sanitizeForPrompt(c.name)}, DOB ${c.dob}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [SPECIAL NEEDS]' : ''}${c.guardian ? `, guardian: ${sanitizeForPrompt(c.guardian)}` : ''}`
-  ).join('\n')}
+  Specific bequests (before pour-over):
+  ${specificBequestsText || 'None — all assets pour over to trust.'}
 
-TRUST RECEIVING POUR-OVER:
-  Trust name: ${trustName}
-  Trust date: ${trustDate}
-  Trustee: ${trusteeName}
-  Trust types: ${(trustTypes ?? [trustName]).join(', ')}
-
-EXECUTOR:
-  Primary: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')}, ${sanitizeForPrompt(executor.primary?.relationship ?? '')}
-  Alternate: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
-  Successor: ${sanitizeForPrompt(executor.successor?.name ?? 'None')}
-  Bond required: ${executor.bondRequired ? 'Yes' : 'No'}
-  Compensation: ${executor.compensation ?? 'statutory'}
-
-${hasMinors ? `GUARDIAN FOR MINOR CHILDREN:
-  Primary: ${sanitizeForPrompt(fiduciaries.guardian?.primary?.name ?? 'TBD')}
-  Alternate: ${sanitizeForPrompt(fiduciaries.guardian?.alternate?.name ?? 'None')}
-` : ''}
-
-SPECIFIC BEQUESTS (before pour-over):
-${specificBequestsText || '  None — all assets pour over to trust.'}
-
-SPECIAL PROVISIONS:
-  No-contest clause: ${distribution.noContestClause ? 'Yes' : 'No'}
-  Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? `Yes — ${sanitizeForPrompt(specialConsiderations.specialNeedsDetails ?? '')}` : 'No'}
-  Survivorship period: ${distribution.survivorshipPeriod ?? 30} days
-
-FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
+  Special provisions:
+    No-contest clause: ${distribution.noContestClause ? 'Yes' : 'No'}
+    Special needs child: ${specialConsiderations.hasSpecialNeedsChild ? `Yes — ${sanitizeForPrompt(specialConsiderations.specialNeedsDetails ?? '')}` : 'No'}
+    Survivorship period: ${distribution.survivorshipPeriod ?? 30} days
 
 Generate the complete pour-over will now. The POUR-OVER ARTICLE must name the trust by its exact full name and date, include "as amended" language, and specify the trustee. Include full execution block, NJ witness attestation, and complete N.J.S.A. 3B:3-4 self-proving affidavit.
 `.trim();

@@ -42,6 +42,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { logSystemActivity } from '@/utils/activity-logger';
 import type { GenerationMode } from '@/services/knowledge-base-service';
 import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sources';
+import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -126,6 +127,7 @@ export default function GenerateDocumentsButton({
   const [errorMessage, setErrorMessage] = useState('');
   const [generationMode, setGenerationMode] = useState<GenerationMode>('template');
   const [softwareSource, setSoftwareSource] = useState('');
+  const [formattingPreset, setFormattingPreset] = useState('');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const packageDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -160,6 +162,7 @@ export default function GenerateDocumentsButton({
         trustTypes,
         generationMode,
         ...(softwareSource ? { softwareSource } : {}),
+        ...(formattingPreset ? { formattingPreset } : {}),
       });
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
@@ -349,6 +352,28 @@ export default function GenerateDocumentsButton({
                     Templates from {getSoftwareSourceLabel(softwareSource)} will be used. Falls back to any available template if none match.
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Formatting Preset Selector */}
+            {generationMode !== 'ai' && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Document Formatting
+                </p>
+                <select
+                  title="Formatting Preset"
+                  value={formattingPreset}
+                  onChange={(e) => setFormattingPreset(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
+                >
+                  {FORMATTING_PRESET_OPTIONS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] text-gray-400">
+                  Controls paragraph styling and layout in exported DOCX/PDF documents.
+                </p>
               </div>
             )}
 

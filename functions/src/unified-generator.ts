@@ -57,6 +57,8 @@ export interface UnifiedGenerateParams {
   customInstructions?: string;
   /** Preferred software source for template selection */
   softwareSource?: string;
+  /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
+  formattingPreset?: string;
   /** For per-property docs (deed, affidavit, gitRep3) — which property (0-based) */
   propertyIndex?: number;
   /** Specific template ID to use */
@@ -277,6 +279,7 @@ export async function generateDocument(
     generationMode = 'hybrid',
     customInstructions,
     softwareSource,
+    formattingPreset,
     propertyIndex,
     templateId,
     trustTypes,
@@ -430,6 +433,7 @@ export async function generateDocument(
           undefined, // variant
           aiGenFn,
           softwareSource,
+          formattingPreset,
         );
       } else {
         // AI-only mode or context aggregation failed — direct AI generation

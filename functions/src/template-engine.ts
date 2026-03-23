@@ -14,6 +14,7 @@
 
 import Handlebars from 'handlebars';
 import * as admin from 'firebase-admin';
+import { getFormattingPreset } from './config/formatting-presets';
 import { ClientContext } from './client-context-aggregator';
 import { callAI, sanitizeObject } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
@@ -728,6 +729,7 @@ export async function generateFromTemplate(
   variant?: string,
   aiGeneratorFn?: () => Promise<GeneratedDoc>,
   softwareSource?: string,
+  formattingPreset?: string,
 ): Promise<GeneratedDoc> {
   const firmId = ctx.firm.id ?? ctx.client.firmId;
 
@@ -769,7 +771,7 @@ export async function generateFromTemplate(
         `[template-engine] Smart route: raw uploaded template for ${docType} ` +
         `(source=${template.softwareSource}) → template-referenced AI`,
       );
-      const content = await generateFromTemplateReference(template.content, ctx, docType);
+      const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
       return { docType, title, content, status: 'draft' };
     }
 
@@ -801,6 +803,7 @@ export async function generateFromTemplate(
         template.content,
         ctx,
         docType,
+        formattingPreset,
       );
       return {
         docType,
@@ -876,6 +879,7 @@ async function generateFromTemplateReference(
   rawTemplateHtml: string,
   ctx: ClientContext,
   docType: string,
+  formattingPreset?: string,
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
   const templateData = buildTemplateData(ctx);
@@ -950,37 +954,14 @@ CRITICAL RULES:
 - Preserve the professional appearance and layout of the original template
 - Do NOT include <style> blocks — they will be preserved separately
 
-PARAGRAPH FORMATTING CLASSES — REQUIRED:
-You MUST use these CSS classes on every <p> element to control formatting in the exported document.
-Map each paragraph to the appropriate class based on its role:
-
-  <p class="tr-title">       → Document title (centered, underlined, uppercase).
-                                Example: "LAST WILL AND TESTAMENT OF JOHN DOE"
-  <p class="tr-cover-title">  → Cover page title (centered, multi-line: title / OF / name).
-  <p class="tr-cover">        → Cover page info lines (attorney name, firm, address, phone). Centered.
-  <p class="tr-mem-header1">  → Section sub-headers like "STATEMENT OF WITNESSES", "ACKNOWLEDGMENT",
-                                "SELF-PROVING AFFIDAVIT". Centered, underlined.
-  <p class="tr-body1">        → Primary body text — introductory paragraphs, general provisions. Justified.
-  <p class="tr-body3">        → Witness/attestation ceremonial text (e.g., "IN WITNESS WHEREOF").
-  <p class="tr-art1">         → Article-level headings — major sections (e.g., "ARTICLE I", "FAMILY INFORMATION").
-                                Centered, bold. Preceded by a blank <p class="tr-base"></p> spacer.
-  <p class="tr-art2">         → Sub-article provisions — substantive clauses with inline bold sub-headings.
-                                Use text-indent for lettered sub-sections (A., B., C.).
-  <p class="tr-art3b">        → Sub-sub-article items — numbered items (1., 2., 3.) under Art2 sections.
-                                Indented further than Art2.
-  <p class="tr-art4b">        → Fourth-level nested items (rare, for deeply nested trust provisions).
-  <p class="tr-sig-line">     → Signature line: "____________________________________" (right-aligned block at 3.5" indent).
-  <p class="tr-sig-name">     → Name printed below signature line (e.g., "JOHN DOE"). Same 3.5" indent, bold.
-  <p class="tr-affid">        → Affidavit jurisdiction block (STATE OF NEW JERSEY / COUNTY format with tab layout).
-  <p class="tr-base">         → Blank spacer/separator paragraphs between sections.
-
-TEXT FORMATTING RULES:
-- Wrap the principal's full name in <strong> on first reference and in signature blocks.
-- Wrap ALL appointed persons' names (executors, trustees, guardians, agents, healthcare reps) in <strong>.
-- Wrap article numbers in <strong> when they appear in tr-art1 headings.
-- Wrap sub-section heading text in <strong> within tr-art2 paragraphs.
-- Use <u> for the document title text inside tr-title and for section headers inside tr-mem-header1.
-- Do NOT use <h1>, <h2>, <h3> tags. Use ONLY <p class="tr-*"> for all content.
+${(() => {
+  // Load formatting preset prompt block (if specified)
+  const preset = formattingPreset ? getFormattingPreset(formattingPreset) : undefined;
+  if (preset?.promptBlock) {
+    return preset.promptBlock;
+  }
+  return 'Output clean semantic HTML with standard tags (h1, h2, h3, p, ul, ol, table). Do NOT use custom CSS classes.';
+})()}
 
 KNOWLEDGE BASE (for accurate statutory references):
 ${kbContext || 'No specific resources available.'}`;

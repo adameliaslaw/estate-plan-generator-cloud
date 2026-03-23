@@ -66,6 +66,10 @@ FORMATTING:
 • Include all agent name/address lines as fill-in fields.
 • Do NOT leave any "[NAME]" tokens — use actual client data.
 
+CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
+Use EXACTLY the names, addresses, and relationships as provided —
+do not rephrase, abbreviate, or reformat any proper nouns.
+
 OUTPUT FORMAT — JSON only:
 {
   "title": "Durable Power of Attorney of [Full Name]",
@@ -93,17 +97,15 @@ export async function generatePOA(
   const safe = sanitizeObject(clientData);
   const safeFirm = sanitizeObject(firmData);
 
-  const pi = safe.personalInfo ?? {};
+  // Use canonical serialized data from unified-generator (Phase 1)
+  const serializedData = (safe as Record<string, unknown>)._serializedClientData as string | undefined;
+  const clientFullName = ((safe as Record<string, unknown>)._clientFullName as string) ??
+    [safe.personalInfo?.firstName, safe.personalInfo?.middleName, safe.personalInfo?.lastName, safe.personalInfo?.suffix]
+      .filter(Boolean)
+      .join(' ');
+
   const fiduciaries = safe.fiduciaries ?? {};
   const poa = fiduciaries.powerOfAttorney ?? {};
-
-  const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const primaryAgent = poa.agent ?? {};
-  const alternateAgent = poa.alternateAgent;
-  const successorAgent = poa.successorAgent;
 
   const financialPowers: string[] = poa.financialPowers ?? [
     'Real property transactions',
@@ -122,39 +124,18 @@ export async function generatePOA(
   const userPrompt = `
 Generate a complete Durable Power of Attorney using this client data:
 
-PRINCIPAL:
-  Full name: ${clientFullName}
-  Date of birth: ${pi.dob ?? 'Unknown'}
-  Address: ${pi.address}, ${pi.city}, ${pi.state} ${pi.zip}
-  County: ${pi.county}
+CLIENT DATA BLOCK:
+${serializedData ?? '(Client data not available — use the details below)'}
 
-PRIMARY AGENT:
-  Name: ${sanitizeForPrompt(primaryAgent.name ?? 'TBD')}
-  Relationship: ${sanitizeForPrompt(primaryAgent.relationship ?? '')}
-  Address: ${sanitizeForPrompt([primaryAgent.address, primaryAgent.city, primaryAgent.state, primaryAgent.zip].filter(Boolean).join(', '))}
-  Phone: ${sanitizeForPrompt(primaryAgent.phone ?? '')}
-
-ALTERNATE AGENT:
-  Name: ${alternateAgent ? sanitizeForPrompt(alternateAgent.name ?? 'None') : 'None'}
-  Relationship: ${alternateAgent ? sanitizeForPrompt(alternateAgent.relationship ?? '') : ''}
-  Address: ${alternateAgent ? sanitizeForPrompt([alternateAgent.address, alternateAgent.city, alternateAgent.state, alternateAgent.zip].filter(Boolean).join(', ')) : ''}
-
-SUCCESSOR AGENT:
-  Name: ${successorAgent ? sanitizeForPrompt(successorAgent.name ?? 'None') : 'None'}
-
-EFFECTIVE DATE: ${poa.effectiveDate === 'springing' ? 'SPRINGING — effective upon incapacity (two-physician certification required)' : 'IMMEDIATE — effective upon signing'}
-DURABILITY: ${poa.durability !== false ? 'Yes — durable (survives incapacity)' : 'No — non-durable (terminates on incapacity)'}
-
-FINANCIAL POWERS GRANTED:
-${financialPowers.map((p: string) => `  • ${sanitizeForPrompt(p)}`).join('\n')}
-
-GIFT-MAKING POWER: ${poa.giftingPower ? 'YES — include N.J.S.A. 46:2B-8.13a gift-making authority (annual exclusion gifts to beneficiaries)' : 'NO — do not include gift-making authority'}
-SELF-DEALING: ${poa.selfDealingPower ? 'YES — agent may engage in self-dealing as expressly authorized' : 'NO — standard restriction applies'}
-
-LIMITATIONS: ${sanitizeForPrompt(poa.limitations ?? 'None specified.')}
-NOTES: ${sanitizeForPrompt(poa.notes ?? '')}
-
-FIRM: ${sanitizeForPrompt(safeFirm.firmName ?? '')}
+POA-SPECIFIC DETAILS:
+  Effective date: ${poa.effectiveDate === 'springing' ? 'SPRINGING — effective upon incapacity (two-physician certification required)' : 'IMMEDIATE — effective upon signing'}
+  Durability: ${poa.durability !== false ? 'Yes — durable (survives incapacity)' : 'No — non-durable (terminates on incapacity)'}
+  Financial powers granted:
+${financialPowers.map((p: string) => `    • ${sanitizeForPrompt(p)}`).join('\n')}
+  Gift-making power: ${poa.giftingPower ? 'YES — include N.J.S.A. 46:2B-8.13a gift-making authority (annual exclusion gifts to beneficiaries)' : 'NO — do not include gift-making authority'}
+  Self-dealing: ${poa.selfDealingPower ? 'YES — agent may engage in self-dealing as expressly authorized' : 'NO — standard restriction applies'}
+  Limitations: ${sanitizeForPrompt(poa.limitations ?? 'None specified.')}
+  Notes: ${sanitizeForPrompt(poa.notes ?? '')}
 
 Generate the complete Durable POA now. Include all enumerated powers, the exact N.J.S.A. 46:2B-8.2 durability clause, ${poa.giftingPower ? 'gift-making authority,' : ''} third-party reliance clause, and full NJ notary acknowledgment block.
 `.trim();

@@ -33,6 +33,8 @@ interface GenerateRequest {
   modelOverride?: string;
   /** Optional software source filter for template selection */
   softwareSource?: string;
+  /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
+  formattingPreset?: string;
 }
 
 export interface GeneratedDoc {
@@ -105,7 +107,7 @@ export const generateDocuments = functions
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource } = data as GenerateRequest;
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource, formattingPreset } = data as GenerateRequest;
 
     if (!firmId || !clientId || !packageType) {
       throw new HttpsError(
@@ -149,6 +151,7 @@ export const generateDocuments = functions
           docType,
           generationMode,
           softwareSource,
+          formattingPreset,
           trustTypes,
           createdBy: auth.uid,
           triggerSource: 'batch',
