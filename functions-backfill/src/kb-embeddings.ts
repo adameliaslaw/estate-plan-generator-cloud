@@ -20,13 +20,13 @@ const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 768;
 
 /** Content shorter than this gets a single embedding on the document itself. */
-const CHUNK_THRESHOLD = 2000;
+const CHUNK_THRESHOLD = 3000;
 
-/** Target size for each chunk. */
-const CHUNK_SIZE = 1500;
+/** Target size for each chunk (~625 tokens — preserves full legal clauses). */
+const CHUNK_SIZE = 2500;
 
 /** Overlap between consecutive chunks to preserve context at boundaries. */
-const CHUNK_OVERLAP = 200;
+const CHUNK_OVERLAP = 400;
 
 /** Max resources to process per backfill invocation. */
 const BACKFILL_BATCH_SIZE = 2;

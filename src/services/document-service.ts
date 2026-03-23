@@ -146,6 +146,7 @@ export const documentService = {
     const fn = httpsCallable<RegenerateDocumentRequest, RegenerateDocumentResponse>(
       functions,
       'generateSingleDocument',
+      { timeout: 540000 }, // 9 min — matches server-side timeout
     );
     const result = await fn(params);
     return result.data;
@@ -174,6 +175,7 @@ export const documentService = {
     const fn = httpsCallable<GenerateFlexDocumentRequest, GenerateFlexDocumentResponse>(
       functions,
       'generateFlexDocument',
+      { timeout: 540000 }, // 9 min — matches server-side timeout
     );
     const result = await fn(params);
     return result.data;
