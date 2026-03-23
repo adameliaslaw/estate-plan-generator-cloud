@@ -648,7 +648,7 @@ export async function generateFromTemplate(
         `(source=${template.softwareSource}) → template-referenced AI`,
       );
       const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
-      return { docType, title, content, status: 'draft', promptVersion };
+      return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
     }
 
     // Template mode with a raw DOCX — no variable substitution possible,
@@ -687,6 +687,7 @@ export async function generateFromTemplate(
         content: templateGuided,
         status: 'draft',
         promptVersion,
+        templateBaseline: template.content,
       };
     }
     // In template mode, serve the raw unrendered HTML so the user gets something
@@ -749,6 +750,7 @@ export async function generateFromTemplate(
       content: enhanced,
       status: 'draft',
       promptVersion,
+      templateBaseline: renderedHtml,
     };
   }
 

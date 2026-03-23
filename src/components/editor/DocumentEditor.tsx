@@ -89,6 +89,7 @@ import EditorStatusBar, { type SaveStatus } from './EditorStatusBar';
 import CommentsPanel from './CommentsPanel';
 import VersionHistory from './VersionHistory';
 import FindReplaceDialog from './FindReplaceDialog';
+import TemplateComparePanel from './TemplateComparePanel';
 import DocumentStatusBadge from '@/components/documents/DocumentStatusBadge';
 
 // Styles
@@ -135,6 +136,7 @@ export default function DocumentEditor({
   const [commentsCollapsed, setCommentsCollapsed] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [showComparePanel, setShowComparePanel] = useState(false);
   const [contentLoaded, setContentLoaded] = useState(false);
   const [docUnlocked, setDocUnlocked] = useState(false);
 
@@ -602,6 +604,8 @@ export default function DocumentEditor({
         onStatusChange={handleStatusChange}
         onFindReplace={() => setShowFindReplace((prev) => !prev)}
         readOnly={isReadOnly}
+        hasTemplateBaseline={!!document.templateBaseline}
+        onCompareTemplate={() => setShowComparePanel(true)}
       />
 
       {/* ── FINAL LOCKED BANNER ─────────────────────────────────────────── */}
@@ -689,6 +693,15 @@ export default function DocumentEditor({
           onClick={() => setShowVersionHistory(false)}
         />
       )}
+
+      {/* ── TEMPLATE COMPARISON PANEL ────────────────────────────────── */}
+      <TemplateComparePanel
+        open={showComparePanel}
+        onClose={() => setShowComparePanel(false)}
+        templateBaseline={document.templateBaseline ?? ''}
+        currentContent={editor?.getHTML() ?? document.content ?? ''}
+        documentTitle={document.displayName}
+      />
     </div>
   );
 }

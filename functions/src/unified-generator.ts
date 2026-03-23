@@ -710,6 +710,7 @@ export async function generateDocument(
       warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
       validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
       promptVersion: generatedDoc.promptVersion,
+      templateBaseline: generatedDoc.templateBaseline,
     });
   } catch (saveError) {
     console.error(`[unifiedGenerator] Failed to save ${docType}:`, saveError);

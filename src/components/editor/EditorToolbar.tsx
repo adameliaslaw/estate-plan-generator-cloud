@@ -55,6 +55,7 @@ import {
   Unlock,
   FileCheck,
   FileEdit,
+  Columns,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -99,6 +100,10 @@ interface EditorToolbarProps {
   onFindReplace: () => void;
   readOnly?: boolean;
   className?: string;
+  /** Whether this document has a template baseline for comparison */
+  hasTemplateBaseline?: boolean;
+  /** Open the template comparison panel */
+  onCompareTemplate?: () => void;
 }
 
 // ── Small helper: Toolbar button ──────────────────────────────────────────────
@@ -301,6 +306,8 @@ export default function EditorToolbar({
   onFindReplace,
   readOnly = false,
   className,
+  hasTemplateBaseline,
+  onCompareTemplate,
 }: EditorToolbarProps) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [textColor, setTextColor] = useState('#000000');
@@ -801,6 +808,30 @@ export default function EditorToolbar({
         >
           <Search className="h-4 w-4" />
         </ToolbarButton>
+
+        {/* Compare with Template (only for hybrid docs) */}
+        {hasTemplateBaseline && onCompareTemplate && (
+          <>
+            <Separator orientation="vertical" className="mx-1 h-5" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 px-2 text-xs text-[#2b6cb0] hover:bg-[#ebf4ff] hover:text-[#1a365d] font-medium pointer-events-auto opacity-100"
+                  type="button"
+                  onClick={onCompareTemplate}
+                >
+                  <Columns className="h-4 w-4" />
+                  Compare with Template
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                <p>View template baseline vs AI-enhanced content side by side</p>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
 
         <Separator orientation="vertical" className="mx-1 h-5" />
 

@@ -51,6 +51,8 @@ export interface GeneratedDoc {
   _truncated?: boolean;
   /** Short hash identifying the prompt version used for generation */
   promptVersion?: string;
+  /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
+  templateBaseline?: string;
 }
 
 // ---------------------------------------------------------------------------

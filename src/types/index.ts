@@ -871,6 +871,8 @@ export interface Document {
   content?: string;
   changeNotes?: string;
   generationMode?: 'batch' | 'chat-draft';
+  /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
+  templateBaseline?: string;
 }
 
 // ============================================================================

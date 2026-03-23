@@ -46,6 +46,8 @@ export interface SaveDocumentParams {
   validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
   /** Short hash identifying the prompt version used for generation */
   promptVersion?: string;
+  /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
+  templateBaseline?: string;
 }
 
 export interface SaveDocumentResult {
@@ -190,6 +192,9 @@ export async function saveDocumentToVault(
   }
   if (params.promptVersion) {
     docData.promptVersion = params.promptVersion;
+  }
+  if (params.templateBaseline) {
+    docData.templateBaseline = params.templateBaseline;
   }
 
   // Version summary on the main document (lightweight — no content)
