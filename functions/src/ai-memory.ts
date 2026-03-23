@@ -425,6 +425,131 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
 }
 
 // ---------------------------------------------------------------------------
+// Correction detection — auto-save attorney corrections to KB (Backlog #10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect legal corrections in chat and auto-save them as Knowledge Base
+ * resources. Runs fire-and-forget alongside extractAndSaveKeyFacts().
+ *
+ * Triggers on patterns like:
+ *  - "Actually, NJ changed this statute in 2024..."
+ *  - "That's incorrect — the correct citation is..."
+ *  - "Update: the fee schedule changed to..."
+ *
+ * Saved resources get auto-embedded by the onKnowledgeResourceWritten
+ * trigger in kb-embeddings.ts — no extra embedding code needed here.
+ */
+export async function extractAndSaveCorrections(
+  firmId: string,
+  conversationId: string,
+  messages: ConversationMessage[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  firmData: Record<string, any>,
+): Promise<void> {
+  // Only process conversations with enough back-and-forth
+  if (messages.length < 4) return;
+
+  // Quick heuristic pre-filter: skip if no user messages contain correction signals
+  const correctionSignals = /\b(actually|incorrect|wrong|outdated|changed|amended|updated|revised|no longer|used to be|correction|clarif(?:y|ication)|new (?:rule|law|statute|regulation)|as of \d{4})\b/i;
+  const userMessages = messages.filter(m => m.role === 'user');
+  const hasSignal = userMessages.some(m => correctionSignals.test(m.content));
+  if (!hasSignal) return;
+
+  const conversationText = messages
+    .map((m) => `${m.role.toUpperCase()}: ${sanitizeForPrompt(m.content).slice(0, 500)}`)
+    .join('\n');
+
+  const systemPrompt = `You are a legal knowledge curator. Analyze the following attorney-client conversation and detect any LEGAL CORRECTIONS — instances where the attorney corrects a legal point, updates a statute citation, clarifies a legal rule, or provides updated legal information.
+
+EXTRACT corrections like:
+- Statute changes ("N.J.S.A. 3B:3-2 was amended in 2024 to...")
+- Case law updates ("The Smith v. Jones ruling now requires...")
+- Practice changes ("The recording fee in Bergen County changed to...")
+- Rule clarifications ("Actually, the waiting period is 30 days, not 60")
+- Regulatory updates ("The IRS changed the estate tax exemption to...")
+
+Do NOT extract:
+- General legal advice or opinions
+- Client-specific instructions (those go to key facts)
+- Routine case discussion
+- Speculative or uncertain statements
+
+Respond with a JSON array of corrections. Each correction should have:
+- "title": concise title describing the correction (e.g., "NJ Changed Witness Requirements for Wills")
+- "content": the full correction with context, statute citations, and effective date if mentioned
+- "tags": relevant tags as an array of strings
+- "docTypes": which document types this affects (e.g., ["will", "trust", "poa"])
+
+If no legal corrections are found, return an empty array: []
+
+Respond ONLY with the JSON array, no markdown fences or extra text.`;
+
+  try {
+    const raw = await callAI(systemPrompt, conversationText, firmData, {
+      temperature: 0.1,
+      maxTokens: 2000,
+    });
+
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const corrections: Array<{
+      title: string;
+      content: string;
+      tags: string[];
+      docTypes: string[];
+    }> = JSON.parse(cleaned);
+
+    if (!Array.isArray(corrections) || corrections.length === 0) return;
+
+    // Save each correction as a KB resource
+    const kbCol = db().collection(`firms/${firmId}/knowledgeBase`);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    for (const correction of corrections) {
+      // Deduplicate: check if a similar correction already exists
+      const existingSnap = await kbCol
+        .where('source', '==', 'chat-correction')
+        .where('title', '==', correction.title)
+        .limit(1)
+        .get();
+
+      if (!existingSnap.empty) {
+        console.log(`[ai-memory] Skipping duplicate correction: "${correction.title}"`);
+        continue;
+      }
+
+      const ref = kbCol.doc();
+      await ref.set({
+        id: ref.id,
+        firmId,
+        category: 'practice_note',
+        title: correction.title,
+        citation: '',
+        content: correction.content,
+        tags: [...(correction.tags ?? []), 'attorney-correction', 'auto-captured'],
+        docTypes: correction.docTypes ?? [],
+        jurisdiction: 'NJ',
+        isActive: true,
+        source: 'chat-correction',
+        sourceUrl: '',
+        conversationId,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: 'system',
+        updatedBy: 'system',
+      });
+
+      console.log(`[ai-memory] ✓ Saved correction to KB: "${correction.title}" (${ref.id})`);
+    }
+
+    console.log(`[ai-memory] Saved ${corrections.length} corrections from conversation ${conversationId}`);
+  } catch (err) {
+    console.warn('[ai-memory] Correction extraction failed:', err);
+    // Non-critical — don't throw
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Layer 3: Firm-wide Memory
 // ---------------------------------------------------------------------------
 

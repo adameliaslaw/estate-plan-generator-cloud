@@ -21,6 +21,7 @@ import {
   loadConversation,
   buildMemoryPrompt,
   extractAndSaveKeyFacts,
+  extractAndSaveCorrections,
   ConversationMessage,
 } from './ai-memory';
 import { generateDocument } from './unified-generator';
@@ -705,6 +706,7 @@ RULES:
         // Extract key facts (fire-and-forget)
         if (clientId && allMessages.length >= 4) {
           extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch(console.error);
+          extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch(console.error);
         }
 
         return result;
@@ -725,6 +727,7 @@ RULES:
       // Extract key facts (fire-and-forget)
       if (clientId && allMessages.length >= 4) {
         extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch(console.error);
+        extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch(console.error);
       }
 
       return { reply: raw, conversationId: convId };

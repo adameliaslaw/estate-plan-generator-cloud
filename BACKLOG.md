@@ -80,11 +80,13 @@ Combine 2-3 small non-legal docs (Summary, Action Steps) into a single AI call w
 
 ---
 
-## 9 · Consolidate flex-prompts into Generator Registry
+## 9 · ~~Consolidate flex-prompts into Generator Registry~~ ✅ DONE
 **Impact:** Single routing table instead of two parallel prompt systems  
 **Source:** Systems Analysis — Priority 3
 
 `flex-prompts.ts` has its own prompt registry for supplementary doc types (Cover Letter, Engagement Letter, Trust Amendment, etc.), separate from the generator registry in `unified-generator.ts`. Merge into one routing table.
+
+**Completed:** Replaced `FLEX_DOC_TYPES` catch-all with explicit switch cases for all 13 flex types in `loadGenerator()`. Added `isFlexDocType()` type guard.
 
 ---
 
