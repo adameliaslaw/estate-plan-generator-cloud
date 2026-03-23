@@ -296,8 +296,8 @@ export default function KnowledgeBasePage() {
     if (!firmId) return;
     setEmbeddingState('running');
     let totalProcessed = 0;
-    let totalSkipped = 0;
     let totalErrors = 0;
+    let totalResources = 0;
     let batchNum = 0;
 
     try {
@@ -307,16 +307,16 @@ export default function KnowledgeBasePage() {
         toast.info(`Processing batch ${batchNum}...`, { id: 'embed-progress' });
         const result = await knowledgeBaseService.backfillEmbeddings(firmId, true);
         totalProcessed += result.processed;
-        totalSkipped += result.skipped;
         totalErrors += result.errors;
+        if (result.total) totalResources = result.total;
 
         // Stop when nothing was processed OR we've handled all items
-        if (result.processed === 0 || totalProcessed + totalErrors >= (result.total ?? Infinity)) break;
+        if (result.processed === 0 || (totalResources > 0 && totalProcessed + totalErrors >= totalResources)) break;
       }
 
       setEmbeddingState('done');
       toast.success(
-        `Embeddings complete! ${totalProcessed} processed, ${totalSkipped} already had embeddings, ${totalErrors} errors.`,
+        `Embeddings complete! ${totalProcessed} of ${totalResources || totalProcessed} resources processed${totalErrors ? `, ${totalErrors} errors` : ''}.`,
         { id: 'embed-progress', duration: 8000 },
       );
     } catch (err) {
@@ -330,8 +330,8 @@ export default function KnowledgeBasePage() {
     if (!firmId) return;
     setTemplateEmbeddingState('running');
     let totalProcessed = 0;
-    let totalSkipped = 0;
     let totalErrors = 0;
+    let totalTemplates = 0;
     let batchNum = 0;
 
     try {
@@ -340,16 +340,16 @@ export default function KnowledgeBasePage() {
         toast.info(`Processing template batch ${batchNum}...`, { id: 'template-embed-progress' });
         const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId, true);
         totalProcessed += result.processed;
-        totalSkipped += result.skipped;
         totalErrors += result.errors;
+        if (result.total) totalTemplates = result.total;
 
         // Stop when nothing was processed OR we've handled all items
-        if (result.processed === 0 || totalProcessed + totalErrors >= (result.total ?? Infinity)) break;
+        if (result.processed === 0 || (totalTemplates > 0 && totalProcessed + totalErrors >= totalTemplates)) break;
       }
 
       setTemplateEmbeddingState('done');
       toast.success(
-        `Template embeddings complete! ${totalProcessed} processed, ${totalSkipped} already embedded, ${totalErrors} errors.`,
+        `Template embeddings complete! ${totalProcessed} of ${totalTemplates || totalProcessed} templates processed${totalErrors ? `, ${totalErrors} errors` : ''}.`,
         { id: 'template-embed-progress', duration: 8000 },
       );
     } catch (err) {

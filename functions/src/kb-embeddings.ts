@@ -357,14 +357,23 @@ export const backfillEmbeddings = onCall(
 
     const skipped = snap.docs.length - needsEmbedding.length;
 
+    // Count total active resources for the frontend progress display
+    const totalSnap = await db
+      .collection(`firms/${firmId}/knowledgeBase`)
+      .where('isActive', '==', true)
+      .count()
+      .get();
+    const total = totalSnap.data().count;
+
     console.log(
-      `[backfillEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors.`,
+      `[backfillEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors, ${total} total.`,
     );
 
     return {
       processed,
       skipped,
       errors,
+      total,
     };
   },
 );
@@ -599,14 +608,23 @@ export const backfillTemplateEmbeddings = onCall(
 
     const skipped = snap.docs.length - needsEmbedding.length;
 
+    // Count total active templates for the frontend progress display
+    const totalSnap = await db
+      .collection(`firms/${firmId}/documentTemplates`)
+      .where('isActive', '==', true)
+      .count()
+      .get();
+    const total = totalSnap.data().count;
+
     console.log(
-      `[backfillTemplateEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors.`,
+      `[backfillTemplateEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors, ${total} total.`,
     );
 
     return {
       processed,
       skipped,
       errors,
+      total,
     };
   },
 );
