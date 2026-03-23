@@ -205,7 +205,7 @@ async function _callOpenAI(
   const client = new OpenAI({ apiKey });
   const model = options.model ?? 'gpt-5.4'; // Default OpenAI model — validated upstream in callAI
   const temperature = options.temperature ?? 0.2;
-  const maxTokens = options.maxTokens ?? 32768;  // GPT-5.4 supports up to 32K output
+  const maxTokens = options.maxTokens ?? 128000;  // GPT-5.4 supports up to 128K output
 
   const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
     model,
@@ -390,7 +390,7 @@ async function _callPerplexity(
         { role: 'user', content: userPrompt }
       ],
       temperature,
-      max_tokens: options.maxTokens ?? 8192,  // Sonar Pro supports up to 8K output
+      max_tokens: options.maxTokens ?? 8000,  // Sonar Pro supports up to 8K output
     }),
   });
 
