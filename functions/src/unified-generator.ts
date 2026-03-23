@@ -28,20 +28,6 @@ import { sanitizeForPrompt } from './ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
 
-// Individual generators
-import { generateWill } from './generators/will-generator';
-import { generatePourOverWill } from './generators/pour-over-will-generator';
-import { generatePOA } from './generators/poa-generator';
-import { generateAdvanceDirective } from './generators/advance-directive-generator';
-import { generateTrust } from './generators/trust-generator';
-import { generateDeed } from './generators/deed-generator';
-import { generateAffidavitOfConsideration } from './generators/affidavit-generator';
-import { generateGitRep3 } from './generators/git-rep3-generator';
-import { generateEstatePlanSummary } from './generators/summary-generator';
-import { generateActionSteps } from './generators/action-steps-generator';
-
-// Flex document generation (AI-based with doc-type-specific prompts)
-import { generateFlexAI } from './flex-prompts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -185,7 +171,8 @@ function checkCompleteness(
 }
 
 // ---------------------------------------------------------------------------
-// Generator registry — replaces both switch statements
+// Generator registry — lazy-loaded to avoid pulling all 10 generators'
+// system prompts (~52KB) into memory on every function invocation.
 // ---------------------------------------------------------------------------
 
 /** Signature shared by all standard generators */
@@ -197,18 +184,38 @@ type StandardGeneratorFn = (
   property?: admin.firestore.DocumentData,
 ) => Promise<GeneratedDoc>;
 
-const STANDARD_GENERATORS: Record<string, StandardGeneratorFn> = {
-  will: generateWill,
-  pourOverWill: generatePourOverWill,
-  poa: generatePOA,
-  livingWill: generateAdvanceDirective,
-  trust: generateTrust,
-  deed: generateDeed,
-  affidavitOfConsideration: generateAffidavitOfConsideration,
-  gitRep3: generateGitRep3,
-  estatePlanSummary: generateEstatePlanSummary,
-  actionSteps: generateActionSteps,
-};
+/** Static set for membership checks — avoids importing generators just to check if a docType is standard */
+const STANDARD_DOC_TYPES = new Set([
+  'will', 'pourOverWill', 'poa', 'livingWill', 'trust',
+  'deed', 'affidavitOfConsideration', 'gitRep3',
+  'estatePlanSummary', 'actionSteps',
+]);
+
+/**
+ * Dynamically import the generator for a given docType.
+ * Returns null if the docType has no standard generator.
+ * The import is cached by Node's module system after the first call.
+ */
+async function loadGenerator(docType: string): Promise<StandardGeneratorFn | null> {
+  switch (docType) {
+    case 'will': return (await import('./generators/will-generator')).generateWill;
+    case 'pourOverWill': return (await import('./generators/pour-over-will-generator')).generatePourOverWill;
+    case 'poa': return (await import('./generators/poa-generator')).generatePOA;
+    case 'livingWill': return (await import('./generators/advance-directive-generator')).generateAdvanceDirective;
+    case 'trust': return (await import('./generators/trust-generator')).generateTrust;
+    case 'deed': return (await import('./generators/deed-generator')).generateDeed;
+    case 'affidavitOfConsideration': return (await import('./generators/affidavit-generator')).generateAffidavitOfConsideration;
+    case 'gitRep3': return (await import('./generators/git-rep3-generator')).generateGitRep3;
+    case 'estatePlanSummary': return (await import('./generators/summary-generator')).generateEstatePlanSummary;
+    case 'actionSteps': return (await import('./generators/action-steps-generator')).generateActionSteps;
+    default: return null;
+  }
+}
+
+/** Lazily load the flex-prompts module */
+async function loadFlexAI(): Promise<typeof import('./flex-prompts')['generateFlexAI']> {
+  return (await import('./flex-prompts')).generateFlexAI;
+}
 
 /** Flex doc types — generated via AI with doc-type-specific system prompts */
 const FLEX_DOC_TYPES = new Set([
@@ -420,17 +427,19 @@ export async function generateDocument(
   let generatedDoc: GeneratedDoc;
 
   if (FLEX_DOC_TYPES.has(docType)) {
-    // Flex document — use AI with doc-type-specific prompt
-    generatedDoc = await generateFlexAI({
+    // Flex document — use AI with doc-type-specific prompt (lazy-loaded)
+    const flexAI = await loadFlexAI();
+    generatedDoc = await flexAI({
       docType,
       clientData,
       firmData,
       customPrompt,
       additionalData,
     });
-  } else if (STANDARD_GENERATORS[docType]) {
-    // Standard document — route through template engine or direct AI
-    const generatorFn = STANDARD_GENERATORS[docType];
+  } else if (STANDARD_DOC_TYPES.has(docType)) {
+    // Standard document — route through template engine or direct AI (lazy-loaded)
+    const generatorFn = await loadGenerator(docType);
+    if (!generatorFn) throw new Error(`Generator loader returned null for known docType: ${docType}`);
 
     // Resolve property for per-property docs
     let property: admin.firestore.DocumentData | undefined;
@@ -506,7 +515,7 @@ export async function generateDocument(
 
       // Auto-retry ONCE for standard generators with error-severity failures
       const hasErrors = structureResult.missing.some(m => m.severity === 'error');
-      if (hasErrors && STANDARD_GENERATORS[docType] && !FLEX_DOC_TYPES.has(docType)) {
+      if (hasErrors && STANDARD_DOC_TYPES.has(docType) && !FLEX_DOC_TYPES.has(docType)) {
         console.info(`[unifiedGenerator] Retrying ${docType} with structural feedback...`);
         const retryInstruction = buildRetryInstruction(structureResult, docType);
 
@@ -520,8 +529,9 @@ export async function generateDocument(
             ].filter(Boolean).join('\n\n'),
           };
 
-          const generatorFn = STANDARD_GENERATORS[docType];
-          const retryDoc = await generatorFn(
+          // Re-use loadGenerator (Node caches the module after first import)
+          const retryGeneratorFn = await loadGenerator(docType);
+          const retryDoc = await retryGeneratorFn!(
             retryClientData, firmData, packageType, trustTypes,
           );
 
