@@ -184,20 +184,37 @@ type StandardGeneratorFn = (
   property?: admin.firestore.DocumentData,
 ) => Promise<GeneratedDoc>;
 
-/** Static set for membership checks — avoids importing generators just to check if a docType is standard */
-const STANDARD_DOC_TYPES = new Set([
+/** All known doc types — used for membership checks */
+const ALL_DOC_TYPES = new Set([
+  // Standard generators
   'will', 'pourOverWill', 'poa', 'livingWill', 'trust',
   'deed', 'affidavitOfConsideration', 'gitRep3',
   'estatePlanSummary', 'actionSteps',
+  // Flex generators (AI with doc-type-specific prompts)
+  'engagementLetter', 'coverLetter', 'invoice', 'certificationOfTrust',
+  'beneficiaryDesignation', 'trustAmendment', 'trustRestatement', 'petTrust',
+  'letterOfInstruction', 'memorandumOfPersonalProp', 'codicil', 'hipaaRelease',
+  'custom',
+]);
+
+/** Flex doc types — skip structural validation retry (no structural expectations) */
+const FLEX_DOC_TYPES = new Set([
+  'engagementLetter', 'coverLetter', 'invoice', 'certificationOfTrust',
+  'beneficiaryDesignation', 'trustAmendment', 'trustRestatement', 'petTrust',
+  'letterOfInstruction', 'memorandumOfPersonalProp', 'codicil', 'hipaaRelease',
+  'custom',
 ]);
 
 /**
  * Dynamically import the generator for a given docType.
- * Returns null if the docType has no standard generator.
- * The import is cached by Node's module system after the first call.
+ * Returns null if the docType is unknown.
+ * Standard generators are imported directly; flex doc types return an
+ * adapter wrapper that delegates to generateFlexAI().
+ * Node's module cache means each import() only loads once.
  */
 async function loadGenerator(docType: string): Promise<StandardGeneratorFn | null> {
   switch (docType) {
+    // --- Standard generators ---
     case 'will': return (await import('./generators/will-generator')).generateWill;
     case 'pourOverWill': return (await import('./generators/pour-over-will-generator')).generatePourOverWill;
     case 'poa': return (await import('./generators/poa-generator')).generatePOA;
@@ -208,31 +225,24 @@ async function loadGenerator(docType: string): Promise<StandardGeneratorFn | nul
     case 'gitRep3': return (await import('./generators/git-rep3-generator')).generateGitRep3;
     case 'estatePlanSummary': return (await import('./generators/summary-docs-generator')).generateEstatePlanSummary;
     case 'actionSteps': return (await import('./generators/summary-docs-generator')).generateActionSteps;
-    default: return null;
+    default:
+      // Flex doc types — adapter wrapper around generateFlexAI
+      if (FLEX_DOC_TYPES.has(docType)) {
+        const { generateFlexAI } = await import('./flex-prompts');
+        return async (clientData: admin.firestore.DocumentData, firmData: admin.firestore.DocumentData) => {
+          const cd = clientData as Record<string, unknown>;
+          return generateFlexAI({
+            docType,
+            clientData,
+            firmData,
+            customPrompt: cd._customPrompt as string | undefined,
+            additionalData: cd._additionalData as Record<string, unknown> | undefined,
+          });
+        };
+      }
+      return null;
   }
 }
-
-/** Lazily load the flex-prompts module */
-async function loadFlexAI(): Promise<typeof import('./flex-prompts')['generateFlexAI']> {
-  return (await import('./flex-prompts')).generateFlexAI;
-}
-
-/** Flex doc types — generated via AI with doc-type-specific system prompts */
-const FLEX_DOC_TYPES = new Set([
-  'engagementLetter',
-  'coverLetter',
-  'invoice',
-  'certificationOfTrust',
-  'beneficiaryDesignation',
-  'trustAmendment',
-  'trustRestatement',
-  'petTrust',
-  'letterOfInstruction',
-  'memorandumOfPersonalProp',
-  'codicil',
-  'hipaaRelease',
-  'custom',
-]);
 
 /** Per-property doc types that generate one document per qualifying property */
 const PER_PROPERTY_DOCS = new Set(['deed', 'affidavitOfConsideration', 'gitRep3']);
@@ -426,65 +436,62 @@ export async function generateDocument(
   const genStartTime = Date.now();
   let generatedDoc: GeneratedDoc;
 
-  if (FLEX_DOC_TYPES.has(docType)) {
-    // Flex document — use AI with doc-type-specific prompt (lazy-loaded)
-    const flexAI = await loadFlexAI();
-    generatedDoc = await flexAI({
-      docType,
-      clientData,
-      firmData,
-      customPrompt,
-      additionalData,
-    });
-  } else if (STANDARD_DOC_TYPES.has(docType)) {
-    // Standard document — route through template engine or direct AI (lazy-loaded)
+  if (ALL_DOC_TYPES.has(docType)) {
+    // Unified dispatch — loads standard generator or flex adapter wrapper
     const generatorFn = await loadGenerator(docType);
     if (!generatorFn) throw new Error(`Generator loader returned null for known docType: ${docType}`);
 
-    // Resolve property for per-property docs
-    let property: admin.firestore.DocumentData | undefined;
-    if (PER_PROPERTY_DOCS.has(docType)) {
-      const properties: admin.firestore.DocumentData[] =
-        (clientData.assets?.realEstate ?? []).filter(
-          (p: admin.firestore.DocumentData) => p.transferToTrust === true,
-        );
+    // For flex docs, inject customPrompt/additionalData into clientData so the adapter can extract them
+    if (FLEX_DOC_TYPES.has(docType)) {
+      (clientData as Record<string, unknown>)._customPrompt = customPrompt;
+      (clientData as Record<string, unknown>)._additionalData = additionalData;
+      generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+    } else {
+      // Resolve property for per-property docs
+      let property: admin.firestore.DocumentData | undefined;
+      if (PER_PROPERTY_DOCS.has(docType)) {
+        const properties: admin.firestore.DocumentData[] =
+          (clientData.assets?.realEstate ?? []).filter(
+            (p: admin.firestore.DocumentData) => p.transferToTrust === true,
+          );
 
-      if (properties.length === 0) {
-        // No qualifying properties — return placeholder
-        generatedDoc = {
-          docType,
-          title: `${getDocTypeDisplayName(docType)} — No Qualifying Properties`,
-          content: `<p>No real estate properties are flagged for trust transfer for this client.</p>`,
-          status: 'draft',
-        };
-      } else {
-        const idx = propertyIndex ?? 0;
-        property = properties[idx] ?? properties[0];
-        // Per-property docs always use AI (complex property-specific logic)
-        generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
-        generatedDoc.propertyAddress = property.address;
+        if (properties.length === 0) {
+          // No qualifying properties — return placeholder
+          generatedDoc = {
+            docType,
+            title: `${getDocTypeDisplayName(docType)} — No Qualifying Properties`,
+            content: `<p>No real estate properties are flagged for trust transfer for this client.</p>`,
+            status: 'draft',
+          };
+        } else {
+          const idx = propertyIndex ?? 0;
+          property = properties[idx] ?? properties[0];
+          // Per-property docs always use AI (complex property-specific logic)
+          generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
+          generatedDoc.propertyAddress = property.address;
+        }
       }
-    }
 
-    // Non-per-property docs (or if we didn't generate one above)
-    if (!generatedDoc!) {
-      // Route based on generation mode
-      if (generationMode !== 'ai' && clientContext) {
-        // Template or hybrid mode — use template engine with AI fallback
-        const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
-        generatedDoc = await generateFromTemplate(
-          clientContext,
-          docType,
-          generationMode,
-          templateId,
-          undefined, // variant
-          aiGenFn,
-          softwareSource,
-          formattingPreset,
-        );
-      } else {
-        // AI-only mode or context aggregation failed — direct AI generation
-        generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+      // Non-per-property docs (or if we didn't generate one above)
+      if (!generatedDoc!) {
+        // Route based on generation mode
+        if (generationMode !== 'ai' && clientContext) {
+          // Template or hybrid mode — use template engine with AI fallback
+          const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
+          generatedDoc = await generateFromTemplate(
+            clientContext,
+            docType,
+            generationMode,
+            templateId,
+            undefined, // variant
+            aiGenFn,
+            softwareSource,
+            formattingPreset,
+          );
+        } else {
+          // AI-only mode or context aggregation failed — direct AI generation
+          generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+        }
       }
     }
   } else {
@@ -515,7 +522,7 @@ export async function generateDocument(
 
       // Auto-retry ONCE for standard generators with error-severity failures
       const hasErrors = structureResult.missing.some(m => m.severity === 'error');
-      if (hasErrors && STANDARD_DOC_TYPES.has(docType) && !FLEX_DOC_TYPES.has(docType)) {
+      if (hasErrors && ALL_DOC_TYPES.has(docType) && !FLEX_DOC_TYPES.has(docType)) {
         console.info(`[unifiedGenerator] Retrying ${docType} with structural feedback...`);
         const retryInstruction = buildRetryInstruction(structureResult, docType);
 
