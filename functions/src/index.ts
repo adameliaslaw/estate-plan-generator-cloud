@@ -52,3 +52,4 @@ export { enhanceTemplate } from './enhance-template';
 export { connectGoogleDrive, onDocumentWrittenSyncToDrive } from './google-drive-sync';
 export { lookupPropertyData } from './property-data';
 export { groundedReviewDocument } from './grounded-review';
+export { estimateGenerationCost } from './cost-estimator';
