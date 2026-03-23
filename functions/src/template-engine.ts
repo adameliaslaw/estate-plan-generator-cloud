@@ -848,6 +848,21 @@ export async function generateFromTemplate(
 
   // Hybrid: template + AI enhancement
   if (mode === 'hybrid') {
+    // Skip AI enhancement if template rendered perfectly (no missing vars).
+    // When the template filled every field cleanly, enhancement adds ~6,000
+    // tokens of cost (3K input + 3K output) with marginal value.
+    if (unresolvedVars.length === 0) {
+      console.info(
+        `[template-engine] Skipping AI enhancement for ${docType} — ` +
+        `template rendered with zero unresolved variables (saving ~6,000 tokens)`,
+      );
+      return {
+        docType,
+        title,
+        content: renderedHtml,
+        status: 'draft',
+      };
+    }
     const enhanced = await enhanceWithAI(renderedHtml, ctx, docType);
     return {
       docType,

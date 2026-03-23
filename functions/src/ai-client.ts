@@ -276,7 +276,17 @@ async function _callAnthropic(
     },
     body: JSON.stringify({
       model,
-      system: finalSystemPrompt,
+      // Prompt caching: send system prompt as a content block array with
+      // cache_control so Anthropic caches the system prompt prefix.
+      // Subsequent calls within 5 minutes pay only 10% of input token cost
+      // for cached content (~90% savings on system prompt tokens).
+      system: [
+        {
+          type: 'text',
+          text: finalSystemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [
         { role: 'user', content: userPrompt }
       ],
@@ -292,6 +302,19 @@ async function _callAnthropic(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = await response.json() as any;
+
+  // Log prompt cache performance metrics
+  if (data.usage) {
+    const cacheRead = data.usage.cache_read_input_tokens ?? 0;
+    const cacheWrite = data.usage.cache_creation_input_tokens ?? 0;
+    if (cacheRead > 0 || cacheWrite > 0) {
+      console.info(
+        `[ai-client] Anthropic cache: read=${cacheRead} tokens, write=${cacheWrite} tokens` +
+        ` (${cacheRead > 0 ? 'HIT' : 'MISS'})`,
+      );
+    }
+  }
+
   return data.content[0]?.text ?? '';
 }
 
