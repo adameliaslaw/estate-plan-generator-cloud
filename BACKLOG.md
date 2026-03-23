@@ -90,11 +90,13 @@ Combine 2-3 small non-legal docs (Summary, Action Steps) into a single AI call w
 
 ---
 
-## 10 · Embed Attorney Corrections into KB
+## 10 · ~~Embed Attorney Corrections into KB~~ ✅ DONE
 **Impact:** Self-improving knowledge base  
 **Source:** Existing backlog
 
 When an attorney corrects a legal point in chat (e.g., "NJ changed this statute in 2024"), detect the correction and offer to save it as a KB resource with embedding.
+
+**Completed:** Added `extractAndSaveCorrections()` to `ai-memory.ts` with regex pre-filter, AI-based correction detection, deduplication, and auto-save as KB resources. Auto-embedded by existing `onKnowledgeResourceWritten` trigger.
 
 ---
 
