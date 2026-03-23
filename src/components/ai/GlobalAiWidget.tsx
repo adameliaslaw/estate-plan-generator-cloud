@@ -304,16 +304,29 @@ export function GlobalAiWidget() {
       const docRef = doc(db, `firms/${firmId}/clients/${clientId}/documents`, docId);
       const now = serverTimestamp();
 
-      // Extract title from first heading or first line
-      const titleMatch = msg.content.match(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/i)
+      // Use AI-provided draftTitle if available, else derive from the draft doc type,
+      // and only fall back to heading extraction as a last resort.
+      // Previously this grabbed the first <h1>/<h2> from the response, which often
+      // pulled a "DRAFTING ISSUES" checklist heading instead of the actual document title.
+      const docTypeLabel = DOC_TYPE_SELECT.find(d => d.value === draftDocType)?.label ?? draftDocType;
+      const headingMatch = msg.content.match(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/i)
         || msg.content.match(/^#\s+(.+)$/m);
-      const title = titleMatch?.[1]?.replace(/<[^>]*>/g, '').trim() || `AI Draft — ${new Date().toLocaleDateString()}`;
+      const extractedHeading = headingMatch?.[1]?.replace(/<[^>]*>/g, '').trim();
+
+      // Priority: AI draftTitle > docType label > extracted heading > generic fallback
+      const title = msg.draftTitle
+        || (docTypeLabel !== draftDocType ? `${docTypeLabel} — ${new Date().toLocaleDateString()}` : null)
+        || extractedHeading
+        || `AI Draft — ${new Date().toLocaleDateString()}`;
+
+      // Use the selected draft doc type instead of always 'custom'
+      const resolvedDocType = mode === 'draft' && draftDocType ? draftDocType : 'custom';
 
       await setDoc(docRef, {
         id: docId,
         firmId,
         clientId,
-        docType: 'custom',
+        docType: resolvedDocType,
         displayName: title,
         status: 'draft',
         content: msg.content,
