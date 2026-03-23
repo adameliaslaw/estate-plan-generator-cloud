@@ -24,11 +24,13 @@ Trust, Pour-Over Will, Deed, Affidavit, and GIT-REP3 currently have no default H
 
 ---
 
-## 3 · Side-by-Side Template Comparison
+## 3 · ~~Side-by-Side Template Comparison~~ ✅ DONE
 **Impact:** Higher attorney confidence in AI output  
 **Source:** Systems Analysis — Priority 4
 
 Show template draft vs AI draft side-by-side for attorney review. Lets the attorney see exactly what the AI changed, added, or omitted compared to the template baseline.
+
+**Completed:** Backend persists `templateBaseline` during hybrid generation. Frontend shows fullscreen side-by-side comparison panel with synchronized scrolling. "Compare with Template" button appears only for hybrid-generated documents.
 
 ---
 
