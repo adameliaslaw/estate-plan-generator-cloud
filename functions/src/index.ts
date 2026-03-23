@@ -45,8 +45,7 @@ export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } fro
 export { seedKnowledgeBase } from './seed-knowledge-base';
 export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables, consolidateTemplateVariables } from './process-template-file';
 export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';
-// backfillEmbeddings & backfillTemplateEmbeddings live in functions-backfill codebase (separate entry point to avoid OOM)
-export { onKnowledgeResourceWritten, onTemplateWritten } from './kb-embeddings';
+export { onKnowledgeResourceWritten, onTemplateWritten, backfillEmbeddings, backfillTemplateEmbeddings } from './kb-embeddings';
 export { getDocumentVersions, getDocumentVersionContent, revertDocumentVersion } from './document-versions';
 export { enhanceTemplate } from './enhance-template';
 export { connectGoogleDrive, onDocumentWrittenSyncToDrive } from './google-drive-sync';
