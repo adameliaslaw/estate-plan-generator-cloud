@@ -625,6 +625,8 @@ export default function DocumentVault({
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="review">In Review</SelectItem>
+              <SelectItem value="incomplete">Incomplete</SelectItem>
+              <SelectItem value="needs_review">Needs Review</SelectItem>
               <SelectItem value="final">Final</SelectItem>
             </SelectContent>
           </Select>
@@ -800,6 +802,8 @@ export default function DocumentVault({
                           !!(doc.createdAt as { seconds: number } | undefined)?.seconds &&
                           clientUpdatedAt.seconds > (doc.createdAt as { seconds: number }).seconds
                         }
+                        warnings={doc.warnings}
+                        validationFindings={doc.validationFindings}
                       />
                     </td>
 

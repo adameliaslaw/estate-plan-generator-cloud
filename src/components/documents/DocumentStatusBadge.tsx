@@ -2,9 +2,11 @@
  * DocumentStatusBadge.tsx
  *
  * Reusable badge component for document status.
- * draft   → amber / yellow
- * review  → blue
- * final   → green
+ * draft        → amber / yellow
+ * review       → blue
+ * final        → green
+ * incomplete   → red  (with specific missing-data list)
+ * needs_review → purple (with validation findings)
  *
  * When `isStale` is true on a draft, shows a warning indicator
  * that the source data has changed since the document was generated.
@@ -25,6 +27,10 @@ interface DocumentStatusBadgeProps {
   isStale?: boolean;
   size?: 'sm' | 'md';
   className?: string;
+  /** Completeness warnings — specific missing data fields */
+  warnings?: string[];
+  /** Structural validation findings */
+  validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
 }
 
 const STATUS_CONFIG: Record<
@@ -57,11 +63,47 @@ const STATUS_CONFIG: Record<
   },
 };
 
+/** Build a detailed tooltip string from warnings or validation findings. */
+function buildTooltip(
+  baseTooltip: string,
+  warnings?: string[],
+  validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>,
+): string {
+  const parts: string[] = [baseTooltip];
+
+  if (warnings && warnings.length > 0) {
+    parts.push('');
+    parts.push('Missing data:');
+    for (const w of warnings.slice(0, 5)) {
+      parts.push(`• ${w}`);
+    }
+    if (warnings.length > 5) {
+      parts.push(`• …and ${warnings.length - 5} more`);
+    }
+  }
+
+  if (validationFindings && validationFindings.length > 0) {
+    parts.push('');
+    parts.push('Validation issues:');
+    for (const f of validationFindings.slice(0, 5)) {
+      const sev = f.severity === 'error' ? '❌' : '⚠️';
+      parts.push(`${sev} ${f.name}`);
+    }
+    if (validationFindings.length > 5) {
+      parts.push(`…and ${validationFindings.length - 5} more`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
 export default function DocumentStatusBadge({
   status,
   isStale = false,
   size = 'sm',
   className,
+  warnings,
+  validationFindings,
 }: DocumentStatusBadgeProps) {
   const config = STATUS_CONFIG[status] ?? {
     label: status,
@@ -95,9 +137,10 @@ export default function DocumentStatusBadge({
     );
   }
 
-  // Statuses with icons and tooltips
+  // Statuses with icons and tooltips (incomplete, needs_review)
   if (config.icon) {
     const IconComponent = config.icon === 'incomplete' ? AlertCircle : Eye;
+    const tooltip = buildTooltip(config.tooltip ?? '', warnings, validationFindings);
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -114,8 +157,8 @@ export default function DocumentStatusBadge({
               {config.label}
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs text-xs">
-            {config.tooltip}
+          <TooltipContent side="top" className="max-w-xs whitespace-pre-line text-xs">
+            {tooltip}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

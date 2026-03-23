@@ -591,6 +591,8 @@ export async function generateDocument(
       propertyAddress: generatedDoc.propertyAddress,
       changeNotes,
       tags,
+      warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
+      validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
     });
   } catch (saveError) {
     console.error(`[unifiedGenerator] Failed to save ${docType}:`, saveError);

@@ -504,7 +504,7 @@ export default function DocumentEditor({
             </div>
           )}
 
-          <DocumentStatusBadge status={status} size="sm" />
+          <DocumentStatusBadge status={status} size="sm" warnings={document.warnings} validationFindings={document.validationFindings} />
         </div>
 
         {/* Right side: save indicator, unlock button */}

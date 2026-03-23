@@ -860,6 +860,17 @@ export interface Document {
   updatedAt: Timestamp;
   createdBy: string;
   updatedBy: string;
+
+  // Quality signals (set by generation pipeline)
+  /** Completeness warnings — which required data fields are missing */
+  warnings?: string[];
+  /** Structural validation findings from post-generation checks */
+  validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
+
+  // Content (loaded via Firestore listener)
+  content?: string;
+  changeNotes?: string;
+  generationMode?: 'batch' | 'chat-draft';
 }
 
 // ============================================================================

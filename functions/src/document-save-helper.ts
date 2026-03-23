@@ -40,6 +40,10 @@ export interface SaveDocumentParams {
   documentId?: string;
   /** For per-property docs (deeds, affidavits, etc.) */
   propertyAddress?: string;
+  /** Completeness warnings — which required data fields are missing */
+  warnings?: string[];
+  /** Structural validation findings from post-generation checks */
+  validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
 }
 
 export interface SaveDocumentResult {
@@ -156,7 +160,7 @@ export async function saveDocumentToVault(
     clientId: params.clientId,
     docType: params.docType,
     displayName: params.displayName,
-    status: 'draft',
+    status: params.status ?? 'draft',
     content: params.content,
     storagePath: '',
     fileName: `${docId}.html`,
@@ -174,6 +178,14 @@ export async function saveDocumentToVault(
     updatedAt: now,
     updatedBy: params.createdBy,
   };
+
+  // Persist quality signals when present
+  if (params.warnings && params.warnings.length > 0) {
+    docData.warnings = params.warnings;
+  }
+  if (params.validationFindings && params.validationFindings.length > 0) {
+    docData.validationFindings = params.validationFindings;
+  }
 
   // Version summary on the main document (lightweight — no content)
   const versionEntry = {
