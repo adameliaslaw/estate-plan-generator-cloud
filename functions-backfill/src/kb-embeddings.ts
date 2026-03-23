@@ -117,8 +117,9 @@ function chunkText(
 
   const chunks: string[] = [];
   let start = 0;
+  const MAX_CHUNKS = 200; // Safety cap to prevent runaway allocation
 
-  while (start < text.length) {
+  while (start < text.length && chunks.length < MAX_CHUNKS) {
     let end = start + chunkSize;
 
     // Try to break at a sentence or paragraph boundary
@@ -136,8 +137,13 @@ function chunkText(
     end = Math.min(end, text.length);
     chunks.push(text.slice(start, end).trim());
 
-    // Advance with overlap
-    start = end - overlap;
+    // Advance with overlap — guarantee forward progress
+    const nextStart = end - overlap;
+    if (nextStart <= start) {
+      start = end; // Force advance when overlap would stall
+    } else {
+      start = nextStart;
+    }
     if (start >= text.length) break;
   }
 
