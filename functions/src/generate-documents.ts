@@ -192,12 +192,12 @@ export const generateDocuments = functions
       updatedBy: auth.uid,
     });
 
-    const draftCount = allResults.filter((r) => r.status === 'draft').length;
+    const successCount = allResults.filter((r) => r.status !== 'error').length;
     const errorCount = allResults.filter((r) => r.status === 'error').length;
 
     console.log(
       `[generateDocuments] Completed. Generated ${allResults.length} documents ` +
-      `(${draftCount} draft, ${errorCount} errors).`,
+      `(${successCount} succeeded, ${errorCount} errors).`,
     );
 
     // ------------------------------------------------------------------
@@ -205,7 +205,7 @@ export const generateDocuments = functions
     // ------------------------------------------------------------------
     return {
       success: true,
-      documentsGenerated: draftCount,
+      documentsGenerated: successCount,
       documentsErrored: errorCount,
       results: allResults.map((r) => ({
         docType: r.docType,
