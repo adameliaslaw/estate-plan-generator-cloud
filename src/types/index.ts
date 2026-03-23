@@ -23,19 +23,30 @@ export type UserCapability =
 export type PackageType = 'foundation' | 'guardian' | 'fortress';
 
 export type DocType =
+  // Standard generators
   | 'will'
+  | 'pourOverWill'
   | 'poa'
   | 'livingWill'
   | 'trust'
-  | 'pourOverWill'
   | 'deed'
   | 'affidavitOfConsideration'
   | 'gitRep3'
-  | 'coverLetter'
-  | 'engagementLetter'
-  | 'invoice'
   | 'estatePlanSummary'
   | 'actionSteps'
+  // Flex generators
+  | 'engagementLetter'
+  | 'coverLetter'
+  | 'invoice'
+  | 'certificationOfTrust'
+  | 'beneficiaryDesignation'
+  | 'trustAmendment'
+  | 'trustRestatement'
+  | 'petTrust'
+  | 'letterOfInstruction'
+  | 'memorandumOfPersonalProp'
+  | 'codicil'
+  | 'hipaaRelease'
   | 'custom';
 
 export type DocStatus = 'draft' | 'review' | 'final' | 'incomplete' | 'needs_review';
