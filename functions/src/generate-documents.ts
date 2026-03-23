@@ -18,6 +18,7 @@ import {
   getDocTypeDisplayName,
   UnifiedGenerateResult,
 } from './unified-generator';
+import { aggregateClientContext } from './client-context-aggregator';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,7 +142,22 @@ export const generateDocuments = functions
     );
 
     // ------------------------------------------------------------------
-    // 3. Generate all documents concurrently via unified generator
+    // 3. Pre-load context ONCE (Phase 3 optimization)
+    //    aggregateClientContext is expensive (Firestore reads + vector
+    //    search). Without this, each doc generation calls it independently
+    //    — 5 docs × 4 calls = 20 redundant Firestore operations.
+    // ------------------------------------------------------------------
+    let preloadedContext: Awaited<ReturnType<typeof aggregateClientContext>> | undefined;
+    try {
+      preloadedContext = await aggregateClientContext(firmId, clientId);
+      console.log(`[generateDocuments] Pre-loaded context (${preloadedContext.knowledgeResources.length} KB resources, ` +
+        `${preloadedContext.existingDocuments.length} existing docs, ${preloadedContext.notes.length} notes)`);
+    } catch (ctxErr) {
+      console.warn('[generateDocuments] Context pre-load failed, each doc will re-aggregate:', ctxErr);
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Generate all documents concurrently via unified generator
     // ------------------------------------------------------------------
     const allResults: UnifiedGenerateResult[] = [];
 
@@ -158,6 +174,7 @@ export const generateDocuments = functions
           createdBy: auth.uid,
           triggerSource: 'batch',
           modelOverride,
+          preloadedContext,
         }),
       ),
     );
@@ -182,7 +199,7 @@ export const generateDocuments = functions
     }
 
     // ------------------------------------------------------------------
-    // 4. Update client record
+    // 5. Update client record
     // ------------------------------------------------------------------
     const db = admin.firestore();
     await db.doc(`firms/${firmId}/clients/${clientId}`).update({
@@ -201,7 +218,7 @@ export const generateDocuments = functions
     );
 
     // ------------------------------------------------------------------
-    // 5. Return summary
+    // 6. Return summary
     // ------------------------------------------------------------------
     return {
       success: true,
