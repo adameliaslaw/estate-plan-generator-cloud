@@ -99,7 +99,7 @@ export interface UnifiedGenerateResult {
 // Pre-generation completeness gate — critical fields per doc type
 // ---------------------------------------------------------------------------
 
-const CRITICAL_FIELDS: Record<string, Array<{ path: string; label: string }>> = {
+const CRITICAL_FIELDS: Record<string, Array<{ path: string; altPath?: string; label: string }>> = {
   will: [
     { path: 'personalInfo.firstName', label: 'Client first name' },
     { path: 'personalInfo.lastName', label: 'Client last name' },
@@ -124,7 +124,10 @@ const CRITICAL_FIELDS: Record<string, Array<{ path: string; label: string }>> = 
   livingWill: [
     { path: 'personalInfo.firstName', label: 'Client first name' },
     { path: 'personalInfo.lastName', label: 'Client last name' },
-    { path: 'fiduciaries.healthcareProxy.primary', label: 'Healthcare proxy' },
+    // Healthcare proxy data lives at two paths depending on questionnaire version:
+    // - fiduciaries.healthcareProxy.agent (questionnaire types / client dashboard)
+    // - fiduciaries.healthcareRep.primary (questionnaire-steps.ts)
+    { path: 'fiduciaries.healthcareProxy.agent', altPath: 'fiduciaries.healthcareRep.primary', label: 'Healthcare proxy agent' },
   ],
   deed: [
     { path: 'personalInfo.firstName', label: 'Client first name' },
@@ -171,7 +174,10 @@ function checkCompleteness(
 
   const warnings: string[] = [];
   for (const rule of rules) {
-    if (!hasNestedField(clientData, rule.path)) {
+    // Check primary path, then altPath fallback if provided
+    const found = hasNestedField(clientData, rule.path)
+      || (rule.altPath ? hasNestedField(clientData, rule.altPath) : false);
+    if (!found) {
       warnings.push(`Missing: ${rule.label} (${rule.path})`);
     }
   }
