@@ -7,10 +7,10 @@ dist/
 functions/lib/
 functions-backfill/lib/
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Environment variables (any directory)
+**/.env
+**/.env.local
+**/.env.*.local
 
 # Sensitive credentials — NEVER commit these
 service-account.json
@@ -35,6 +35,10 @@ ui-debug.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary & debug files
+tmp/
+tmp-*
 
 # Test
 coverage/
