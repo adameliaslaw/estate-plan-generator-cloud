@@ -975,11 +975,19 @@ ${rawTemplateHtml}
 
 Generate the complete HTML document now. Return ONLY the HTML.`;
 
+  // Log a warning for very large templates so we can monitor output quality
+  if (rawTemplateHtml.length > 50000) {
+    console.warn(
+      `[template-engine] Large template for ${docType}: ${rawTemplateHtml.length} chars (~${Math.round(rawTemplateHtml.length / 4)} tokens). ` +
+      `Output quality may degrade for extremely long templates.`,
+    );
+  }
+
   try {
     let result = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
-      maxTokens: 16384,
+      maxTokens: 32768,
     });
 
     if (result && result.trim().length > 100) {
@@ -1076,11 +1084,19 @@ ${templateHtml}
 
 Return the enhanced HTML document.`;
 
+  // Log a warning for very large rendered templates
+  if (templateHtml.length > 50000) {
+    console.warn(
+      `[template-engine] Large rendered document for ${docType}: ${templateHtml.length} chars (~${Math.round(templateHtml.length / 4)} tokens). ` +
+      `Output quality may degrade for extremely long documents.`,
+    );
+  }
+
   try {
     const enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
-      maxTokens: 16384,
+      maxTokens: 32768,
     });
 
     // If AI returned something reasonable, use it; otherwise fall back to template

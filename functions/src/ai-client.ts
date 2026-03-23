@@ -205,7 +205,7 @@ async function _callOpenAI(
   const client = new OpenAI({ apiKey });
   const model = options.model ?? 'gpt-5.4'; // Default OpenAI model — validated upstream in callAI
   const temperature = options.temperature ?? 0.2;
-  const maxTokens = options.maxTokens ?? 8192;
+  const maxTokens = options.maxTokens ?? 32768;  // GPT-5.4 supports up to 32K output
 
   const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
     model,
@@ -257,7 +257,7 @@ async function _callAnthropic(
 
   const model = options.model ?? 'claude-sonnet-4-6';
   const temperature = options.temperature ?? 0.2;
-  const maxTokens = options.maxTokens ?? 8192;
+  const maxTokens = options.maxTokens ?? 64000;  // Claude Sonnet 4 supports up to 64K output
 
   // If JSON mode is requested, explicitly instruct Claude to output ONLY JSON
   let finalSystemPrompt = systemPrompt;
@@ -326,6 +326,7 @@ async function _callGemini(
     ],
     generationConfig: {
       temperature,
+      maxOutputTokens: options.maxTokens ?? 65536,  // Gemini 2.5 Flash supports up to 65K output
     }
   };
 
@@ -389,6 +390,7 @@ async function _callPerplexity(
         { role: 'user', content: userPrompt }
       ],
       temperature,
+      max_tokens: options.maxTokens ?? 8192,  // Sonar Pro supports up to 8K output
     }),
   });
 
