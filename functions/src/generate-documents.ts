@@ -15,8 +15,10 @@ import * as admin from 'firebase-admin';
 import { GenerationMode } from './template-engine';
 import {
   generateDocumentWithPropertyExpansion,
+  generateBatchedSummaryDocs,
   getDocTypeDisplayName,
   UnifiedGenerateResult,
+  BATCHABLE_SUMMARY_DOCS,
 } from './unified-generator';
 import { aggregateClientContext } from './client-context-aggregator';
 
@@ -159,12 +161,61 @@ export const generateDocuments = functions
     }
 
     // ------------------------------------------------------------------
-    // 4. Generate all documents concurrently via unified generator
+    // 4. Partition batchable vs standard doc types (Backlog #8)
+    //    Summary docs (estatePlanSummary + actionSteps) can be combined
+    //    into a single AI call, halving API calls for those doc types.
     // ------------------------------------------------------------------
+    const batchableDocs = documentsToGenerate.filter(d => (BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
+    const standardDocs = documentsToGenerate.filter(d => !(BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
+
     const allResults: UnifiedGenerateResult[] = [];
 
+    // 4a. Generate batchable summary docs in a single AI call
+    if (batchableDocs.length >= 2) {
+      console.log(`[generateDocuments] Batch-aware: combining ${batchableDocs.join(' + ')} into single AI call`);
+      try {
+        const batchResults = await generateBatchedSummaryDocs({
+          firmId,
+          clientId,
+          generationMode,
+          softwareSource,
+          formattingPreset,
+          trustTypes,
+          createdBy: auth.uid,
+          triggerSource: 'batch',
+          modelOverride,
+          preloadedContext,
+        });
+        allResults.push(...batchResults);
+      } catch (batchErr) {
+        console.error('[generateDocuments] Batch summary generation failed:', batchErr);
+        // Fall back to individual generation
+        for (const docType of batchableDocs) {
+          try {
+            const results = await generateDocumentWithPropertyExpansion({
+              firmId, clientId, docType, generationMode, softwareSource, formattingPreset,
+              trustTypes, createdBy: auth.uid, triggerSource: 'batch', modelOverride, preloadedContext,
+            });
+            allResults.push(...results);
+          } catch (indErr) {
+            console.error(`[generateDocuments] Fallback generation failed for ${docType}:`, indErr);
+            allResults.push({
+              docType,
+              title: `Error — ${getDocTypeDisplayName(docType)}`,
+              content: `<p>Error: ${indErr instanceof Error ? indErr.message : 'Unknown error'}</p>`,
+              status: 'error', docId: docType, isNew: false, currentVersion: 0,
+            });
+          }
+        }
+      }
+    } else {
+      // Only 1 or 0 batchable docs — no benefit from combining, treat as standard
+      standardDocs.push(...batchableDocs);
+    }
+
+    // 4b. Generate standard docs concurrently
     const settled = await Promise.allSettled(
-      documentsToGenerate.map((docType) =>
+      standardDocs.map((docType) =>
         generateDocumentWithPropertyExpansion({
           firmId,
           clientId,
@@ -183,7 +234,7 @@ export const generateDocuments = functions
 
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i];
-      const docType = documentsToGenerate[i];
+      const docType = standardDocs[i];
       if (result.status === 'fulfilled') {
         allResults.push(...result.value);
       } else {

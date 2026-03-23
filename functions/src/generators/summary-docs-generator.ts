@@ -12,7 +12,7 @@
 
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
-import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { DOCUMENT_SCHEMA, BATCH_SUMMARY_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
@@ -607,4 +607,236 @@ Generate the complete action steps checklist. For each real property, include th
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),
   };
+}
+
+// ===========================================================================
+// BATCH-AWARE COMBINED GENERATION (Backlog #8)
+// ===========================================================================
+
+/**
+ * Generate BOTH estatePlanSummary AND actionSteps in a single AI call.
+ *
+ * This amortizes the system prompt tokens (~4KB combined) and reduces
+ * API calls from 2 to 1 during batch generation. The AI returns a JSON
+ * object with both documents.
+ *
+ * Falls back to individual generation if the combined call fails.
+ *
+ * Only used by the batch pipeline (generate-documents.ts). Single-document
+ * regeneration continues to use the individual functions above.
+ */
+export async function generateBatchSummaryDocs(
+  clientData: admin.firestore.DocumentData,
+  firmData: admin.firestore.DocumentData,
+  packageType: string,
+  trustTypes?: string[],
+): Promise<{ estatePlanSummary: GeneratedDoc; actionSteps: GeneratedDoc }> {
+  const ctx = buildSummaryDocContext(clientData, firmData, packageType);
+  const pi = ctx.safe.personalInfo ?? {};
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // --- Package doc list (for summary) ---
+  const packageDisplayNames: Record<string, string> = {
+    foundation: 'Basic Estate Plan',
+    guardian: 'Revocable Trust',
+    fortress: 'Irrevocable Trust',
+  };
+  const packageDocs = ctx.hasTrust
+    ? ['Revocable Living Trust', 'Pour-Over Will', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Deeds (one per property)', 'Affidavit of Consideration (one per property)', 'GIT/REP-3 (one per property)', 'Estate Plan Summary', 'Action Steps Checklist']
+    : ['Last Will and Testament', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Estate Plan Summary', 'Action Steps Checklist'];
+
+  // --- County recording info (for action steps) ---
+  const countyRecordingDetails = ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) => {
+    const county = sanitizeForPrompt(r.county ?? pi.county ?? '');
+    const info = getCountyRecordingInfo(county);
+    return {
+      address: sanitizeForPrompt(r.address ?? ''),
+      city: sanitizeForPrompt(r.city ?? ''),
+      county,
+      recordingOffice: info.office,
+      recordingAddress: info.address,
+      phone: info.phone,
+      website: info.website,
+      fee: info.approxFee,
+      mortgage: r.mortgageBalance ? `${sanitizeForPrompt(r.mortgageLender ?? 'lender')} ($${r.mortgageBalance.toLocaleString()})` : 'None',
+    };
+  });
+
+  const bankAccounts: admin.firestore.DocumentData[] = (ctx.assets.bankAccounts ?? []).filter(
+    (b: admin.firestore.DocumentData) => b.transferToTrust,
+  );
+  const investmentAccounts: admin.firestore.DocumentData[] = (ctx.assets.investmentAccounts ?? []).filter(
+    (i: admin.firestore.DocumentData) => i.transferToTrust,
+  );
+  const retirementAccounts: admin.firestore.DocumentData[] = ctx.assets.retirementAccounts ?? [];
+  const lifeInsurance: admin.firestore.DocumentData[] = ctx.assets.lifeInsurance ?? [];
+  const executor = ctx.fiduciaries.executor ?? {};
+  const proxy = ctx.fiduciaries.healthcareProxy ?? {};
+
+  // --- Combined system prompt ---
+  const combinedSystemPrompt = `
+You are an expert New Jersey estate planning attorney. You will generate TWO documents in a SINGLE response:
+
+1. ESTATE PLAN SUMMARY — a client-friendly overview of their complete estate plan (NOT a legal document)
+2. ACTION STEPS CHECKLIST — a personalized post-signing checklist with specific filing instructions
+
+DOCUMENT 1 — ESTATE PLAN SUMMARY:
+${SUMMARY_SYSTEM_PROMPT}
+
+DOCUMENT 2 — ACTION STEPS CHECKLIST:
+${ACTION_STEPS_SYSTEM_PROMPT}
+
+OUTPUT FORMAT — You MUST return a single JSON object with both documents:
+{
+  "estatePlanSummary": {
+    "title": "...",
+    "content": "<complete HTML for estate plan summary>",
+    "metadata": { "wordCount": <n>, "estimatedPages": <n>, "executionRequirements": [], "witnessRequired": false, "notarizationRequired": false }
+  },
+  "actionSteps": {
+    "title": "...",
+    "content": "<complete HTML for action steps checklist>",
+    "metadata": { "wordCount": <n>, "estimatedPages": <n>, "executionRequirements": [], "witnessRequired": false, "notarizationRequired": false }
+  }
+}
+
+CRITICAL: Both documents must be complete and thorough. Do not abbreviate either document to save space.
+`.trim();
+
+  // --- Combined user prompt ---
+  const combinedUserPrompt = `
+Generate BOTH the Estate Plan Summary AND the Action Steps Checklist for this client:
+
+CLIENT DATA BLOCK:
+${ctx.serializedData ?? '(Client data not available — use the details below)'}
+
+SHARED DETAILS:
+  Client: ${ctx.clientFullName}
+  Date: ${today}
+  Package: ${packageDisplayNames[packageType] ?? packageType} Package
+  ${ctx.hasTrust ? `Trust: ${ctx.trustName}` : ''}
+
+  Documents in this package:
+  ${packageDocs.map(d => `• ${d}`).join('\n  ')}
+
+  Healthcare preferences:
+    Life support: ${ctx.healthPrefs.lifeSupport === 'withhold' ? 'Withhold if terminal/PVS' : ctx.healthPrefs.lifeSupport === 'provide' ? 'Provide all treatment' : 'Defer to representative'}
+    Organ donation: ${ctx.healthPrefs.organDonation ? 'Yes' : 'No'}
+
+  Real estate:
+  ${ctx.realEstate.length === 0 ? 'None.' : ctx.realEstate.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred'}`
+  ).join('\n  ')}
+
+  Properties to deed into trust (${ctx.propertiesForTrust.length}):
+  ${ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, ${sanitizeForPrompt(r.county)} County`
+  ).join('\n  ') || 'None.'}
+
+  Special notes:
+    Gift-making power: ${ctx.poa.giftingPower ? 'Yes' : 'No'}
+    Spendthrift: ${ctx.distribution.spendthriftProvision ? 'Yes' : 'No'}
+    Special needs child: ${ctx.specialConsiderations.hasSpecialNeedsChild ? 'Yes' : 'No'}
+    No-contest clause: ${ctx.distribution.noContestClause ? 'Yes' : 'No'}
+    Digital assets: ${ctx.specialConsiderations.hasDigitalAssets ? 'Yes' : 'No'}
+
+  Firm: ${sanitizeForPrompt(ctx.safeFirm.firmName ?? '')}
+    Phone: ${ctx.safeFirm.firmPhone ?? ''}
+    Email: ${ctx.safeFirm.firmEmail ?? ''}
+
+ACTION STEPS-SPECIFIC DETAILS:
+  Properties to deed into trust (${ctx.propertiesForTrust.length}):
+  ${ctx.propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) => `
+    Property ${i + 1}: ${r.address}, ${r.city}, NJ
+    County: ${r.county}
+    Recording Office: ${r.recordingOffice}
+    Address: ${r.recordingAddress}
+    Phone: ${r.phone}
+    Website: ${r.website}
+    Approximate Recording Fee: ${r.fee}
+    Mortgage: ${r.mortgage}
+    Documents to file: Deed + Affidavit of Consideration + GIT/REP-3 + filing fee
+  `).join('\n')}
+
+  Bank/investment accounts to re-title (${bankAccounts.length + investmentAccounts.length}):
+  ${[...bankAccounts, ...investmentAccounts].map((a: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(a.institution ?? '')} — ${a.accountType}`
+  ).join('\n  ') || 'None specified.'}
+
+  Retirement accounts (update beneficiary designations only — do NOT transfer to trust):
+  ${retirementAccounts.map((r: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(r.institution ?? '')} ${r.accountType} — current beneficiary: ${sanitizeForPrompt(r.primaryBeneficiary ?? 'unknown')}`
+  ).join('\n  ') || 'None.'}
+
+  Life insurance (update beneficiary designations):
+  ${lifeInsurance.map((l: admin.firestore.DocumentData) =>
+    `• ${sanitizeForPrompt(l.company ?? '')} — current beneficiary: ${sanitizeForPrompt(l.primaryBeneficiary ?? 'unknown')} — transfer to trust: ${l.transferToTrust ? 'Yes (ILIT consideration)' : 'No'}`
+  ).join('\n  ') || 'None.'}
+
+  Key contacts to give copies of documents:
+    Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} — ${sanitizeForPrompt(executor.primary?.phone ?? '')} — ${sanitizeForPrompt(executor.primary?.email ?? '')}
+    Alternate Executor: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
+    POA Agent: ${sanitizeForPrompt(ctx.poa.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(ctx.poa.agent?.phone ?? '')}
+    Healthcare Rep: ${sanitizeForPrompt(proxy.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(proxy.agent?.phone ?? '')}
+
+Generate BOTH documents now. For the Estate Plan Summary, use client's actual names throughout. For the Action Steps, include specific county recording information.
+`.trim();
+
+  // --- Single AI call for both documents ---
+  const t0 = Date.now();
+  try {
+    const raw = await callAI(combinedSystemPrompt, combinedUserPrompt, ctx.safeFirm, {
+      model: ctx.safeFirm?.documentDraftingModel || 'gpt-5.4',
+      temperature: 0.3,
+      maxTokens: 16384, // Both docs combined need more tokens
+      jsonMode: true,
+      jsonSchema: BATCH_SUMMARY_SCHEMA,
+    });
+
+    const parsed = parseAIJson<{
+      estatePlanSummary: { title: string; content: string; _truncated?: boolean };
+      actionSteps: { title: string; content: string; _truncated?: boolean };
+    }>(raw);
+
+    // Validate we got both documents
+    if (!parsed.estatePlanSummary?.content || !parsed.actionSteps?.content) {
+      throw new Error('Combined AI response missing one or both documents');
+    }
+
+    console.info(
+      `[summaryDocsGenerator] ✓ Batch generation: 2 docs in 1 API call (${Date.now() - t0}ms). ` +
+      `Summary: ${parsed.estatePlanSummary.content.length} chars, ` +
+      `ActionSteps: ${parsed.actionSteps.content.length} chars`,
+    );
+
+    return {
+      estatePlanSummary: {
+        docType: 'estatePlanSummary',
+        title: buildStandardTitle('estatePlanSummary', ctx.clientFullName),
+        content: parsed.estatePlanSummary.content,
+        status: 'draft',
+        ...(parsed.estatePlanSummary._truncated && { _truncated: true }),
+      },
+      actionSteps: {
+        docType: 'actionSteps',
+        title: buildStandardTitle('actionSteps', ctx.clientFullName),
+        content: parsed.actionSteps.content,
+        status: 'draft',
+        ...(parsed.actionSteps._truncated && { _truncated: true }),
+      },
+    };
+  } catch (batchErr) {
+    // Fallback: generate individually if combined call fails
+    console.warn(
+      `[summaryDocsGenerator] Combined generation failed (${Date.now() - t0}ms), ` +
+      `falling back to individual calls: ${batchErr instanceof Error ? batchErr.message : 'Unknown error'}`,
+    );
+
+    const [summary, steps] = await Promise.all([
+      generateEstatePlanSummary(clientData, firmData, packageType, trustTypes),
+      generateActionSteps(clientData, firmData, packageType, trustTypes),
+    ]);
+
+    return { estatePlanSummary: summary, actionSteps: steps };
+  }
 }

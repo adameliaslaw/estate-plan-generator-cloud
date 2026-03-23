@@ -791,3 +791,173 @@ export async function generateDocumentWithPropertyExpansion(
   // Non-per-property doc — single result
   return [await generateDocument(params)];
 }
+
+// ---------------------------------------------------------------------------
+// Batch-aware summary docs (Backlog #8)
+// ---------------------------------------------------------------------------
+
+/** Doc types eligible for batch-aware prompt sharing */
+export const BATCHABLE_SUMMARY_DOCS = new Set<StandardDocType>(['estatePlanSummary', 'actionSteps']);
+
+/**
+ * Generate both summary docs (estatePlanSummary + actionSteps) in a single
+ * AI call. Handles validation and saving for each doc individually.
+ *
+ * Used by generate-documents.ts during batch generation to reduce API calls.
+ */
+export async function generateBatchedSummaryDocs(
+  params: Omit<UnifiedGenerateParams, 'docType'>,
+): Promise<UnifiedGenerateResult[]> {
+  const {
+    firmId,
+    clientId,
+    generationMode = 'hybrid',
+    trustTypes,
+    createdBy,
+    modelOverride,
+    customInstructions,
+  } = params;
+
+  const db = admin.firestore();
+
+  // ------------------------------------------------------------------
+  // 1. Fetch client + firm data
+  // ------------------------------------------------------------------
+  let clientData: admin.firestore.DocumentData;
+  let firmData: admin.firestore.DocumentData;
+
+  if (params.preloadedContext) {
+    clientData = params.preloadedContext.client;
+    firmData = params.preloadedContext.firm;
+    console.log('[batchSummaryDocs] Reusing preloaded context');
+  } else {
+    const [clientSnap, firmSnap] = await Promise.all([
+      db.doc(`firms/${firmId}/clients/${clientId}`).get(),
+      db.doc(`firms/${firmId}`).get(),
+    ]);
+
+    if (!clientSnap.exists) throw new Error(`Client ${clientId} not found in firm ${firmId}.`);
+    if (!firmSnap.exists) throw new Error(`Firm ${firmId} not found.`);
+
+    clientData = clientSnap.data()!;
+    firmData = firmSnap.data()!;
+  }
+
+  if (modelOverride) {
+    (firmData as Record<string, unknown>).documentDraftingModel = modelOverride;
+  }
+  if (customInstructions) {
+    const { sanitizeForPrompt } = await import('./ai-client');
+    clientData = { ...clientData, _customInstructions: sanitizeForPrompt(customInstructions) };
+  }
+
+  const packageType = clientData.packageDetails?.packageType ?? 'foundation';
+
+  // Serialize client data
+  try {
+    const serialized = serializeClientData(clientData, firmData, 'estatePlanSummary');
+    clientData = {
+      ...clientData,
+      _serializedClientData: serialized.text,
+      _clientFullName: serialized.clientFullName,
+      _spouseFullName: serialized.spouseFullName,
+    };
+  } catch (serErr) {
+    console.warn('[batchSummaryDocs] Client data serialization failed:', serErr);
+  }
+
+  // ------------------------------------------------------------------
+  // 2. Call the combined generator
+  // ------------------------------------------------------------------
+  const { generateBatchSummaryDocs } = await import('./generators/summary-docs-generator');
+  const genStartTime = Date.now();
+
+  const batchResult = await generateBatchSummaryDocs(clientData, firmData, packageType, trustTypes);
+  const genElapsedMs = Date.now() - genStartTime;
+
+  console.info(`[batchSummaryDocs] Combined generation complete: ${genElapsedMs}ms`);
+
+  // ------------------------------------------------------------------
+  // 3. Post-process, validate, and save each document individually
+  // ------------------------------------------------------------------
+  const results: UnifiedGenerateResult[] = [];
+
+  for (const [docType, generatedDoc] of [
+    ['estatePlanSummary', batchResult.estatePlanSummary],
+    ['actionSteps', batchResult.actionSteps],
+  ] as const) {
+    // Validation
+    let validationFindings: Array<{ name: string; severity: 'error' | 'warning' }> = [];
+    if (generatedDoc.content) {
+      const structureResult = validateDocumentStructure(generatedDoc.content, docType);
+      if (!structureResult.valid) {
+        validationFindings = structureResult.missing;
+        console.warn(
+          `[batchSummaryDocs] ⚠ Structural validation for ${docType}: ` +
+          `missing=[${structureResult.missing.map(m => m.name).join(', ')}]`,
+        );
+      }
+    }
+
+    // Determine status
+    const completenessWarnings = checkCompleteness(clientData as Record<string, unknown>, docType);
+    let finalStatus: 'draft' | 'incomplete' | 'needs_review' | 'error' = 'draft';
+    const hasValidationErrors = validationFindings.some(f => f.severity === 'error');
+    if (hasValidationErrors || generatedDoc._truncated) {
+      finalStatus = 'needs_review';
+    } else if (completenessWarnings.length > 0) {
+      finalStatus = 'incomplete';
+    }
+
+    // Save
+    try {
+      const saveResult = await saveDocumentToVault({
+        firmId,
+        clientId,
+        docType,
+        displayName: generatedDoc.title,
+        content: generatedDoc.content,
+        status: finalStatus,
+        createdBy,
+        documentId: docType,
+        generationMode: 'batch',
+        warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
+        validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
+        promptVersion: generatedDoc.promptVersion,
+      });
+
+      // Record draft history (fire-and-forget)
+      recordDraftHistory(firmId, clientId, {
+        docType,
+        title: generatedDoc.title,
+        generatedAt: new Date().toISOString(),
+        generationMode: generationMode ?? 'hybrid',
+      }).catch(console.error);
+
+      results.push({
+        docType,
+        title: generatedDoc.title,
+        content: generatedDoc.content,
+        status: finalStatus,
+        docId: saveResult.docId,
+        isNew: saveResult.isNew,
+        currentVersion: saveResult.currentVersion,
+        warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
+        validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
+      });
+    } catch (saveError) {
+      console.error(`[batchSummaryDocs] Failed to save ${docType}:`, saveError);
+      results.push({
+        docType,
+        title: generatedDoc.title,
+        content: generatedDoc.content,
+        status: 'error',
+        docId: docType,
+        isNew: false,
+        currentVersion: 0,
+      });
+    }
+  }
+
+  return results;
+}
