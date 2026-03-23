@@ -100,8 +100,10 @@ When an attorney corrects a legal point in chat (e.g., "NJ changed this statute 
 
 ---
 
-## 11 · Fix Backfill Toast "Skipped" Count
+## 11 · ~~Fix Backfill Toast "Skipped" Count~~ ✅ DONE
 **Impact:** UI accuracy  
 **Source:** Existing backlog
 
 The "already had embeddings" count in the backfill toast is misleading with `forceAll=true` — it accumulates the "not in this batch" count across all batches. Show unique totals instead.
+
+**Completed:** Backend now returns `total` count via Firestore `count()` query. Frontend removed misleading `totalSkipped` accumulation and shows "X of Y processed" with accurate totals.
