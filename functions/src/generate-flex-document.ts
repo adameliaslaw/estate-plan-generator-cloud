@@ -37,8 +37,8 @@ interface FlexDocumentRequest {
 
 export const generateFlexDocument = onCall(
   {
-    timeoutSeconds: 300,
-    memory: '512MiB',
+    timeoutSeconds: 540,
+    memory: '1GiB',
     region: 'us-east1',
   },
   async (request: any /* CallableRequest */) => {
@@ -97,10 +97,18 @@ export const generateFlexDocument = onCall(
         status: result.status,
       };
     } catch (error) {
-      console.error(`[generateFlexDocument] Error for ${docType}:`, error);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errStack = error instanceof Error ? error.stack : '';
+      console.error(`[generateFlexDocument] FAILED for ${docType}:`, {
+        message: errMsg,
+        stack: errStack,
+        firmId,
+        clientId,
+        docType,
+      });
       throw new HttpsError(
         'internal',
-        `Failed to generate ${docType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to generate ${docType}: ${errMsg}`,
       );
     }
   },
