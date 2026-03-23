@@ -144,7 +144,27 @@ export async function callAI(
   }
 
   if (provider === 'anthropic') {
-    return _callAnthropic(systemPrompt, userPrompt, firmData, options);
+    try {
+      return await _callAnthropic(systemPrompt, userPrompt, firmData, options);
+    } catch (err) {
+      // Detect Anthropic content-filter rejections and fall back to Gemini.
+      // POA and healthcare directive language commonly triggers Claude's safety filter.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('content filtering policy') || msg.includes('Output blocked')) {
+        console.warn(
+          `[callAI] Anthropic content filter blocked output. Falling back to OpenAI. ` +
+          `Error: ${msg.slice(0, 200)}`,
+        );
+        const openaiKey = firmData?.openAiApiKey ?? firmData?.settings?.openAiApiKey;
+        if (openaiKey) {
+          return _callOpenAI(systemPrompt, userPrompt, firmData, {
+            ...options,
+            model: undefined, // Use OpenAI default
+          });
+        }
+      }
+      throw err; // Re-throw if not a content-filter issue or no Gemini key
+    }
   } else if (provider === 'gemini') {
     return _callGemini(systemPrompt, userPrompt, firmData, options);
   } else if (provider === 'perplexity') {
