@@ -20,6 +20,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -213,7 +214,7 @@ Generate the complete ${trustType} now. Include all standard articles, comprehen
 
   return {
     docType: 'trust',
-    title: parsed.title ?? `The ${clientFullName} Revocable Living Trust`,
+    title: buildStandardTitle('trust', clientFullName),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

@@ -21,6 +21,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ Generate the complete Advance Directive now. Mark the declarant's ACTUAL choices
 
   return {
     docType: 'livingWill',
-    title: parsed.title ?? `Advance Directive for Health Care of ${clientFullName}`,
+    title: buildStandardTitle('livingWill', clientFullName),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

@@ -15,6 +15,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -165,7 +166,7 @@ Generate the complete pour-over will now. The POUR-OVER ARTICLE must name the tr
 
   return {
     docType: 'pourOverWill',
-    title: parsed.title ?? `Pour-Over Will of ${clientFullName}`,
+    title: buildStandardTitle('pourOverWill', clientFullName),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

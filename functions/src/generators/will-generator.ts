@@ -17,6 +17,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -142,7 +143,7 @@ Generate the complete, execution-ready will now. Include all required articles, 
 
   return {
     docType: 'will',
-    title: parsed.title ?? `Last Will and Testament of ${clientFullName}`,
+    title: buildStandardTitle('will', clientFullName),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

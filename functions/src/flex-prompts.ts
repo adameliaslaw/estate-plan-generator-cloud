@@ -15,6 +15,7 @@ import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
 import { DOCUMENT_SCHEMA } from './document-schemas';
+import { buildStandardTitle } from './unified-generator';
 
 // ---------------------------------------------------------------------------
 // System prompts per flex document type
@@ -347,7 +348,7 @@ Generate the complete document now.
     const parsed = parseAIJson<{ title: string; content: string }>(raw);
     return {
       docType,
-      title: parsed.title ?? `${docType} — ${clientFullName}`,
+      title: buildStandardTitle(docType, clientFullName),
       content: parsed.content ?? '',
       status: 'draft',
     };

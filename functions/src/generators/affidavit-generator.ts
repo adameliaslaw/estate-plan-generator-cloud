@@ -19,6 +19,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,7 @@ Generate the complete affidavit. Include the state/county caption, deponent ID, 
 
   return {
     docType: 'affidavitOfConsideration',
-    title: parsed.title ?? `Affidavit of Consideration — ${shortAddress}`,
+    title: buildStandardTitle('affidavitOfConsideration', clientFullName, shortAddress),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

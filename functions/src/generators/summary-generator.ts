@@ -11,6 +11,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -203,7 +204,7 @@ Generate the complete estate plan summary. Use the client's actual names through
 
   return {
     docType: 'estatePlanSummary',
-    title: parsed.title ?? `Estate Plan Summary — ${clientFullName}`,
+    title: buildStandardTitle('estatePlanSummary', clientFullName),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

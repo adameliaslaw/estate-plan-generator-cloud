@@ -264,6 +264,38 @@ export function getDocTypeDisplayName(docType: string): string {
   return DOC_TYPE_DISPLAY_NAMES[docType] ?? docType;
 }
 
+/**
+ * Build a standardized document title.
+ *
+ * Standard format: "{Doc Type} of {Client Full Name}"
+ * Exceptions:
+ *   - Trust: "The {Name} Revocable Living Trust" (legal convention)
+ *   - Per-property docs: "{Doc Type} of {Name} — {Address}"
+ *
+ * All generators, template-engine, and flex-prompts should use this
+ * instead of ad-hoc title formatting — ensures consistent vault sorting.
+ */
+export function buildStandardTitle(
+  docType: string,
+  clientFullName: string,
+  propertyAddress?: string,
+): string {
+  const displayName = getDocTypeDisplayName(docType);
+
+  // Trust follows legal convention: "The {Name} Revocable Living Trust"
+  if (docType === 'trust') {
+    return `The ${clientFullName} Revocable Living Trust`;
+  }
+
+  // Per-property docs include the address
+  if (PER_PROPERTY_DOCS.has(docType) && propertyAddress) {
+    return `${displayName} of ${clientFullName} — ${propertyAddress}`;
+  }
+
+  // Standard format for everything else
+  return `${displayName} of ${clientFullName}`;
+}
+
 // ---------------------------------------------------------------------------
 // Core unified generation function
 // ---------------------------------------------------------------------------

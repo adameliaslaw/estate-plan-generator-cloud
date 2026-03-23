@@ -20,6 +20,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -193,7 +194,7 @@ Generate the complete deed. Include the RTF exemption clause, full property desc
 
   return {
     docType: 'deed',
-    title: parsed.title ?? `Bargain and Sale Deed — ${shortAddress}`,
+    title: buildStandardTitle('deed', clientFullName, shortAddress),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),

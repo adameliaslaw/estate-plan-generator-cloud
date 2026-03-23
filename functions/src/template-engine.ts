@@ -18,6 +18,7 @@ import { getFormattingPreset } from './config/formatting-presets';
 import { ClientContext } from './client-context-aggregator';
 import { callAI, sanitizeObject } from './ai-client';
 import { GeneratedDoc } from './generate-documents';
+import { buildStandardTitle } from './unified-generator';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -764,7 +765,7 @@ export async function generateFromTemplate(
     (!template.variables || template.variables.length === 0);
 
   if (isRawUploadedTemplate) {
-    const title = `${template.name} — ${ctx.computed.clientFullName}`;
+    const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
     if (mode === 'hybrid') {
       console.info(
@@ -807,7 +808,7 @@ export async function generateFromTemplate(
       );
       return {
         docType,
-        title: `${template.name} — ${ctx.computed.clientFullName}`,
+        title: buildStandardTitle(docType, ctx.computed.clientFullName),
         content: templateGuided,
         status: 'draft',
       };
@@ -835,7 +836,7 @@ export async function generateFromTemplate(
       `<span style="background:#fff3cd;color:#856404;padding:0 4px;border-radius:2px;" title="Unresolved template variable">[MISSING: ${varName.trim()}]</span>`,
     );
   }
-  const title = `${template.name} — ${ctx.computed.clientFullName}`;
+  const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
   if (mode === 'template') {
     return {

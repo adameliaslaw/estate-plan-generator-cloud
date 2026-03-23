@@ -21,6 +21,7 @@
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-client';
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
+import { buildStandardTitle } from '../unified-generator';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -178,7 +179,7 @@ Generate the complete GIT/REP-3 form styled as an official NJ tax form. Clearly 
 
   return {
     docType: 'gitRep3',
-    title: parsed.title ?? `GIT/REP-3 — ${shortAddress}`,
+    title: buildStandardTitle('gitRep3', clientFullName, shortAddress),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),
