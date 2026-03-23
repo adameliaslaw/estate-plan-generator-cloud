@@ -60,6 +60,19 @@ function isDocType(s: string): s is DocType {
   return (ALL_DOC_TYPES as Set<string>).has(s);
 }
 
+/** All flex doc type strings for the runtime type guard */
+const FLEX_DOC_TYPE_STRINGS: ReadonlySet<string> = new Set<string>([
+  'engagementLetter', 'coverLetter', 'invoice', 'certificationOfTrust',
+  'beneficiaryDesignation', 'trustAmendment', 'trustRestatement', 'petTrust',
+  'letterOfInstruction', 'memorandumOfPersonalProp', 'codicil', 'hipaaRelease',
+  'custom',
+]);
+
+/** Runtime type-guard: checks if a string is a flex doc type (skips structural validation, uses timestamp IDs) */
+export function isFlexDocType(s: string): s is FlexDocType {
+  return FLEX_DOC_TYPE_STRINGS.has(s);
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -228,13 +241,7 @@ const ALL_DOC_TYPES = new Set<DocType>([
   'custom',
 ]);
 
-/** Flex doc types — skip structural validation retry (no structural expectations) */
-const FLEX_DOC_TYPES = new Set<FlexDocType>([
-  'engagementLetter', 'coverLetter', 'invoice', 'certificationOfTrust',
-  'beneficiaryDesignation', 'trustAmendment', 'trustRestatement', 'petTrust',
-  'letterOfInstruction', 'memorandumOfPersonalProp', 'codicil', 'hipaaRelease',
-  'custom',
-]);
+// (Flex doc types are identified via isFlexDocType() — no separate set needed)
 
 /**
  * Dynamically import the generator for a given docType.
@@ -256,21 +263,35 @@ async function loadGenerator(docType: DocType): Promise<StandardGeneratorFn | nu
     case 'gitRep3': return (await import('./generators/git-rep3-generator')).generateGitRep3;
     case 'estatePlanSummary': return (await import('./generators/summary-docs-generator')).generateEstatePlanSummary;
     case 'actionSteps': return (await import('./generators/summary-docs-generator')).generateActionSteps;
+
+    // --- Flex generators (all route through generateFlexAI adapter) ---
+    case 'engagementLetter':
+    case 'coverLetter':
+    case 'invoice':
+    case 'certificationOfTrust':
+    case 'beneficiaryDesignation':
+    case 'trustAmendment':
+    case 'trustRestatement':
+    case 'petTrust':
+    case 'letterOfInstruction':
+    case 'memorandumOfPersonalProp':
+    case 'codicil':
+    case 'hipaaRelease':
+    case 'custom': {
+      const { generateFlexAI } = await import('./flex-prompts');
+      return async (clientData: admin.firestore.DocumentData, firmData: admin.firestore.DocumentData) => {
+        const cd = clientData as Record<string, unknown>;
+        return generateFlexAI({
+          docType,
+          clientData,
+          firmData,
+          customPrompt: cd._customPrompt as string | undefined,
+          additionalData: cd._additionalData as Record<string, unknown> | undefined,
+        });
+      };
+    }
+
     default:
-      // Flex doc types — adapter wrapper around generateFlexAI
-      if (FLEX_DOC_TYPES.has(docType)) {
-        const { generateFlexAI } = await import('./flex-prompts');
-        return async (clientData: admin.firestore.DocumentData, firmData: admin.firestore.DocumentData) => {
-          const cd = clientData as Record<string, unknown>;
-          return generateFlexAI({
-            docType,
-            clientData,
-            firmData,
-            customPrompt: cd._customPrompt as string | undefined,
-            additionalData: cd._additionalData as Record<string, unknown> | undefined,
-          });
-        };
-      }
       return null;
   }
 }
@@ -482,7 +503,7 @@ export async function generateDocument(
     if (!generatorFn) throw new Error(`Generator loader returned null for known docType: ${docType}`);
 
     // For flex docs, inject customPrompt/additionalData into clientData so the adapter can extract them
-    if ((FLEX_DOC_TYPES as Set<string>).has(docType)) {
+    if (isFlexDocType(docType)) {
       (clientData as Record<string, unknown>)._customPrompt = customPrompt;
       (clientData as Record<string, unknown>)._additionalData = additionalData;
       generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
@@ -562,7 +583,7 @@ export async function generateDocument(
 
       // Auto-retry ONCE for standard generators with error-severity failures
       const hasErrors = structureResult.missing.some(m => m.severity === 'error');
-      if (hasErrors && isDocType(docType) && !(FLEX_DOC_TYPES as Set<string>).has(docType)) {
+      if (hasErrors && isDocType(docType) && !isFlexDocType(docType)) {
         console.info(`[unifiedGenerator] Retrying ${docType} with structural feedback...`);
         const retryInstruction = buildRetryInstruction(structureResult, docType);
 
@@ -654,7 +675,7 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   // 4. Save to vault via shared helper
   // ------------------------------------------------------------------
-  const isFlexType = (FLEX_DOC_TYPES as Set<string>).has(docType);
+  const isFlexType = isFlexDocType(docType);
   const suffix = propertyIndex !== undefined ? `_${propertyIndex}` : '';
 
   // Flex docs use timestamp-based IDs (multiples allowed); standard docs use deterministic IDs
