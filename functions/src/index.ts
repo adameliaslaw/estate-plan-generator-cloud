@@ -44,6 +44,7 @@ export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource,
 export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';
 export { seedKnowledgeBase } from './seed-knowledge-base';
 export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables, consolidateTemplateVariables } from './process-template-file';
+export { retemplatizeTemplates } from './retemplatize-templates';
 export { bulkProcessKnowledgeFiles } from './bulk-knowledge-import';
 // backfillEmbeddings & backfillTemplateEmbeddings are in functions-backfill codebase (lightweight entry point avoids OOM)
 export { onKnowledgeResourceWritten, onTemplateWritten } from './kb-embeddings';

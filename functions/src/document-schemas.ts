@@ -157,50 +157,6 @@ export const DOCUMENT_REVIEW_SCHEMA = {
   strict: true,
 };
 
-// ---------------------------------------------------------------------------
-// Batch summary docs schema — combines two documents in one AI response
-// ---------------------------------------------------------------------------
-
-/**
- * Batch summary response: { estatePlanSummary: { title, content, metadata },
- *                           actionSteps: { title, content, metadata } }
- * Used by: summary-docs-generator.ts (batch mode only)
- */
-const docSubSchema = {
-  type: 'object' as const,
-  properties: {
-    title: { type: 'string' as const, description: 'Display title for the document' },
-    content: { type: 'string' as const, description: 'Complete HTML body (no html/body/head tags)' },
-    metadata: {
-      type: 'object' as const,
-      properties: {
-        wordCount: { type: 'number' as const },
-        estimatedPages: { type: 'number' as const },
-        executionRequirements: { type: 'array' as const, items: { type: 'string' as const } },
-        witnessRequired: { type: 'boolean' as const },
-        notarizationRequired: { type: 'boolean' as const },
-      },
-      required: ['wordCount', 'estimatedPages', 'executionRequirements', 'witnessRequired', 'notarizationRequired'] as const,
-      additionalProperties: false,
-    },
-  },
-  required: ['title', 'content', 'metadata'] as const,
-  additionalProperties: false,
-};
-
-export const BATCH_SUMMARY_SCHEMA = {
-  name: 'batch_summary_docs',
-  schema: {
-    type: 'object' as const,
-    properties: {
-      estatePlanSummary: docSubSchema,
-      actionSteps: docSubSchema,
-    },
-    required: ['estatePlanSummary', 'actionSteps'] as const,
-    additionalProperties: false,
-  },
-  strict: true,
-};
 
 // ---------------------------------------------------------------------------
 // Schema lookup by usage context
@@ -211,5 +167,4 @@ export const SCHEMAS = {
   document: DOCUMENT_SCHEMA,
   complianceCheck: COMPLIANCE_CHECK_SCHEMA,
   documentReview: DOCUMENT_REVIEW_SCHEMA,
-  batchSummary: BATCH_SUMMARY_SCHEMA,
 } as const;

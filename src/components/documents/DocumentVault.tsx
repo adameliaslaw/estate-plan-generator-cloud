@@ -98,7 +98,6 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   engagementLetter: 'Engagement Letter',
   invoice: 'Invoice',
   estatePlanSummary: 'Estate Plan Summary',
-  actionSteps: 'Action Steps',
   certificationOfTrust: 'Certification of Trust',
   beneficiaryDesignationLetter: 'Beneficiary Designation Letter',
   trustAmendment: 'Trust Amendment',
@@ -121,7 +120,6 @@ const TYPE_BADGE: Record<string, string> = {
   engagementLetter: 'bg-slate-100 text-slate-600 ring-slate-200',
   invoice: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   estatePlanSummary: 'bg-sky-50 text-sky-700 ring-sky-200',
-  actionSteps: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
   custom: 'bg-gray-100 text-gray-600 ring-gray-200',
 };
 

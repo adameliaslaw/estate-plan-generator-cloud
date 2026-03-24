@@ -88,7 +88,6 @@ export const DOC_TYPES = {
   ENGAGEMENT_LETTER: 'engagementLetter',
   INVOICE: 'invoice',
   ESTATE_PLAN_SUMMARY: 'estatePlanSummary',
-  ACTION_STEPS: 'actionSteps',
   CUSTOM: 'custom',
 } as const;
 
@@ -387,13 +386,12 @@ export const COLLECTIONS = {
 // Package → included document types map
 // ---------------------------------------------------------------------------
 export const PACKAGE_DOCUMENTS: Record<string, readonly string[]> = {
-  foundation: ['will', 'poa', 'livingWill', 'estatePlanSummary', 'actionSteps'],
+  foundation: ['will', 'poa', 'livingWill', 'estatePlanSummary'],
   guardian: [
     'will',
     'poa',
     'livingWill',
     'estatePlanSummary',
-    'actionSteps',
   ],
   fortress: [
     'trust',
@@ -404,7 +402,6 @@ export const PACKAGE_DOCUMENTS: Record<string, readonly string[]> = {
     'affidavitOfConsideration',
     'gitRep3',
     'estatePlanSummary',
-    'actionSteps',
   ],
 } as const;
 

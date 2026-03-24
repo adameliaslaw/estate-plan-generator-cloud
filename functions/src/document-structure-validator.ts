@@ -278,7 +278,6 @@ const RULES_BY_DOC_TYPE: Record<string, StructureRule[]> = {
     { name: 'Property Reference', patterns: [p('block.*lot'), p('property'), p('address')], severity: 'error' },
   ],
   estatePlanSummary: SUMMARY_RULES,
-  actionSteps: SUMMARY_RULES,
 };
 
 /** Minimum expected text length (HTML stripped) per doc type */
@@ -291,8 +290,7 @@ const MIN_TEXT_LENGTH: Record<string, number> = {
   pourOverWill: 2000,
   affidavitOfConsideration: 300,
   gitRep3: 300,
-  estatePlanSummary: 500,
-  actionSteps: 300,
+  estatePlanSummary: 1000,
 };
 
 // ---------------------------------------------------------------------------

@@ -33,7 +33,6 @@ export type DocType =
   | 'affidavitOfConsideration'
   | 'gitRep3'
   | 'estatePlanSummary'
-  | 'actionSteps'
   // Flex generators
   | 'engagementLetter'
   | 'coverLetter'

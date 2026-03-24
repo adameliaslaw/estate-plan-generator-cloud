@@ -15,10 +15,8 @@ import * as admin from 'firebase-admin';
 import { GenerationMode } from './template-engine';
 import {
   generateDocumentWithPropertyExpansion,
-  generateBatchedSummaryDocs,
   getDocTypeDisplayName,
   UnifiedGenerateResult,
-  BATCHABLE_SUMMARY_DOCS,
 } from './unified-generator';
 import { aggregateClientContext } from './client-context-aggregator';
 
@@ -62,14 +60,13 @@ export interface GeneratedDoc {
 function getDocumentsForPackage(packageType: string): string[] {
   switch (packageType) {
     case 'foundation':
-      return ['will', 'poa', 'livingWill', 'estatePlanSummary', 'actionSteps'];
+      return ['will', 'poa', 'livingWill', 'estatePlanSummary'];
     case 'guardian':
       return [
         'will',
         'poa',
         'livingWill',
         'estatePlanSummary',
-        'actionSteps',
       ];
     case 'fortress':
       return [
@@ -81,10 +78,9 @@ function getDocumentsForPackage(packageType: string): string[] {
         'affidavitOfConsideration',
         'gitRep3',
         'estatePlanSummary',
-        'actionSteps',
       ];
     default:
-      return ['will', 'poa', 'livingWill', 'estatePlanSummary', 'actionSteps'];
+      return ['will', 'poa', 'livingWill', 'estatePlanSummary'];
   }
 }
 
@@ -159,94 +155,44 @@ export const generateDocuments = functions
     }
 
     // ------------------------------------------------------------------
-    // 4. Partition batchable vs standard doc types (Backlog #8)
-    //    Summary docs (estatePlanSummary + actionSteps) can be combined
-    //    into a single AI call, halving API calls for those doc types.
+    // 4. Generate all documents concurrently
     // ------------------------------------------------------------------
-    // In template mode, skip summary docs entirely — they require AI calls
-    // and the user explicitly chose template mode for speed. Summary/action-steps
-    // docs can be generated on-demand via the "Add Document" flow.
-    const isTemplateMode = generationMode === 'template';
-    const batchableDocs = isTemplateMode
-      ? []
-      : documentsToGenerate.filter(d => (BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
-    const standardDocs = isTemplateMode
-      ? documentsToGenerate.filter(d => !(BATCHABLE_SUMMARY_DOCS as Set<string>).has(d))
-      : documentsToGenerate.filter(d => !(BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
-
     const allResults: UnifiedGenerateResult[] = [];
 
-    // 4a. Build a single promise array for ALL doc generation (batch + standard)
-    //     Running everything concurrently avoids the batch summary blocking standard docs.
-    const allPromises: Array<{ type: 'batch' | 'standard'; docTypes: string[]; promise: Promise<UnifiedGenerateResult[]> }> = [];
+    const allPromises = documentsToGenerate.map(docType =>
+      generateDocumentWithPropertyExpansion({
+        firmId,
+        clientId,
+        docType,
+        generationMode,
+        softwareSource,
+        formattingPreset,
+        trustTypes,
+        createdBy: auth.uid,
+        triggerSource: 'batch',
+        modelOverride,
+        preloadedContext,
+      }),
+    );
 
-    if (batchableDocs.length >= 2) {
-      console.log(`[generateDocuments] Batch-aware: combining ${batchableDocs.join(' + ')} into single AI call`);
-      allPromises.push({
-        type: 'batch',
-        docTypes: batchableDocs,
-        promise: generateBatchedSummaryDocs({
-          firmId,
-          clientId,
-          generationMode,
-          softwareSource,
-          formattingPreset,
-          trustTypes,
-          createdBy: auth.uid,
-          triggerSource: 'batch',
-          modelOverride,
-          preloadedContext,
-        }),
-      });
-    } else {
-      // Only 1 or 0 batchable docs — no benefit from combining, treat as standard
-      standardDocs.push(...batchableDocs);
-    }
-
-    // 4b. Add standard docs as individual concurrent promises
-    for (const docType of standardDocs) {
-      allPromises.push({
-        type: 'standard',
-        docTypes: [docType],
-        promise: generateDocumentWithPropertyExpansion({
-          firmId,
-          clientId,
-          docType,
-          generationMode,
-          softwareSource,
-          formattingPreset,
-          trustTypes,
-          createdBy: auth.uid,
-          triggerSource: 'batch',
-          modelOverride,
-          preloadedContext,
-        }),
-      });
-    }
-
-    // 4c. Run ALL concurrently
-    const settled = await Promise.allSettled(allPromises.map(p => p.promise));
+    const settled = await Promise.allSettled(allPromises);
 
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i];
-      const entry = allPromises[i];
+      const docType = documentsToGenerate[i];
       if (result.status === 'fulfilled') {
         allResults.push(...result.value);
       } else {
-        const label = entry.docTypes.join('+');
-        console.error(`[generateDocuments] Fatal error generating ${label}:`, result.reason);
-        // Create an error result for each doc type in this entry
-        for (const docType of entry.docTypes) {
-          allResults.push({
-            docType,
-            title: `Error — ${getDocTypeDisplayName(docType)}`,
-            content: `<p>An unexpected error occurred while generating this document: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}</p>`,
-            status: 'error',
-            docId: docType,
-            isNew: false,
-            currentVersion: 0,
-          });
-        }
+        console.error(`[generateDocuments] Fatal error generating ${docType}:`, result.reason);
+        allResults.push({
+          docType,
+          title: `Error — ${getDocTypeDisplayName(docType)}`,
+          content: `<p>An unexpected error occurred while generating this document: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}</p>`,
+          status: 'error',
+          docId: docType,
+          isNew: false,
+          currentVersion: 0,
+        });
       }
     }
 

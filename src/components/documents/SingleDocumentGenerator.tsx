@@ -39,8 +39,7 @@ const STANDARD_DOC_TYPES = [
   { value: 'deed', label: 'Deed', description: 'Trust transfer deed (per property)' },
   { value: 'affidavitOfConsideration', label: 'Affidavit of Consideration', description: 'NJ transfer tax affidavit' },
   { value: 'gitRep3', label: 'GIT/REP-3 Certificate', description: 'NJ income tax exemption certificate' },
-  { value: 'estatePlanSummary', label: 'Estate Plan Summary', description: 'Client-facing summary of the plan' },
-  { value: 'actionSteps', label: 'Action Steps Checklist', description: 'Post-signing to-do list' },
+  { value: 'estatePlanSummary', label: 'Estate Plan Summary', description: 'Client-facing summary with action steps checklist' },
 ] as const;
 
 // ── Props ─────────────────────────────────────────────────────────────────────
