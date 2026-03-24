@@ -391,12 +391,16 @@ export function QuestionnaireProvider({
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
           try {
             // Compute progress fields for dashboard display
-            const visibleStepCount = QUESTIONNAIRE_STEPS.filter((step) => {
+            const currentlyVisibleSteps = QUESTIONNAIRE_STEPS.filter((step) => {
               if (!step.condition) return true;
               return evaluateCondition(step.condition, data);
-            }).length;
+            });
+            const visibleStepCount = currentlyVisibleSteps.length;
+            const visibleStepIds = new Set(currentlyVisibleSteps.map((s) => s.id));
+            // Only count completed steps that are still visible (skip logic may hide old ones)
+            const visibleCompletedCount = data.completedSteps.filter((id) => visibleStepIds.has(id)).length;
             const percentComplete = visibleStepCount > 0
-              ? Math.round((data.completedSteps.length / visibleStepCount) * 100)
+              ? Math.min(100, Math.round((visibleCompletedCount / visibleStepCount) * 100))
               : 0;
 
             // Determine which sections have all visible steps completed
@@ -531,8 +535,11 @@ export function QuestionnaireProvider({
 
   const progress = useMemo(() => {
     if (totalSteps === 0) return 0;
-    return Math.round((state.data.completedSteps.length / totalSteps) * 100);
-  }, [state.data.completedSteps.length, totalSteps]);
+    // Only count completed steps that are currently visible
+    const visibleStepIds = new Set(visibleSteps.map((s) => s.id));
+    const visibleCompletedCount = state.data.completedSteps.filter((id) => visibleStepIds.has(id)).length;
+    return Math.min(100, Math.round((visibleCompletedCount / totalSteps) * 100));
+  }, [state.data.completedSteps, totalSteps, visibleSteps]);
 
   // ── Computed: section progress ───────────────────────────────────────────
 

@@ -542,10 +542,10 @@ export default function ClientDashboardPage() {
                 {qProgress?.status === 'in_progress' && qProgress.percentComplete > 0 && (
                   <div className="flex items-center gap-2">
                     <Progress
-                      value={qProgress.percentComplete}
+                      value={Math.min(100, qProgress.percentComplete)}
                       className="h-1.5 w-24"
                     />
-                    <span className="text-xs text-gray-400">{qProgress.percentComplete}%</span>
+                    <span className="text-xs text-gray-400">{Math.min(100, qProgress.percentComplete)}%</span>
                   </div>
                 )}
 
@@ -937,11 +937,11 @@ export default function ClientDashboardPage() {
                       </span>
                     )}
                     <span className="text-sm font-semibold text-gray-700">
-                      {qProgress?.percentComplete ?? 0}%
+                      {Math.min(100, qProgress?.percentComplete ?? 0)}%
                     </span>
                   </div>
                 </div>
-                <Progress value={qProgress?.percentComplete ?? 0} className="h-2" />
+                <Progress value={Math.min(100, qProgress?.percentComplete ?? 0)} className="h-2" />
 
                 {/* Current step — live indicator */}
                 {qProgress?.status === 'in_progress' && qProgress.currentStepTitle && (
