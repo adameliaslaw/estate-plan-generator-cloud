@@ -59,22 +59,25 @@ const PACKAGE_BADGE: Record<string, string> = {
 };
 
 // Ordered list of documents per package — shown in progress indicator
+// Must match getDocumentsForPackage() in generate-documents.ts
 const PACKAGE_DOCS: Record<string, string[]> = {
   foundation: [
     'Last Will and Testament',
     'Durable Power of Attorney',
     'Advance Health Care Directive',
-    'Engagement Letter',
     'Cover Letter',
+    'Engagement Letter',
+    'Estate Plan Summary',
+    'Action Steps Checklist',
   ],
   guardian: [
     'Last Will and Testament',
     'Durable Power of Attorney',
     'Advance Health Care Directive',
+    'Cover Letter',
+    'Engagement Letter',
     'Estate Plan Summary',
     'Action Steps Checklist',
-    'Engagement Letter',
-    'Cover Letter',
   ],
   fortress: [
     'Revocable Living Trust',
@@ -84,11 +87,11 @@ const PACKAGE_DOCS: Record<string, string[]> = {
     'Deed of Transfer',
     'Affidavit of Consideration',
     'GIT/REP-3 Form',
+    'Cover Letter',
+    'Engagement Letter',
+    'Invoice / Fee Statement',
     'Estate Plan Summary',
     'Action Steps Checklist',
-    'Engagement Letter',
-    'Cover Letter',
-    'Invoice / Fee Statement',
   ],
 };
 

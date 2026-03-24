@@ -62,33 +62,34 @@ export interface GeneratedDoc {
 function getDocumentsForPackage(packageType: string): string[] {
   switch (packageType) {
     case 'foundation':
-      return ['poa', 'livingWill', 'will', 'estatePlanSummary', 'actionSteps'];
+      return ['will', 'poa', 'livingWill', 'coverLetter', 'engagementLetter', 'estatePlanSummary', 'actionSteps'];
     case 'guardian':
       return [
-        'trust',
+        'will',
         'poa',
         'livingWill',
-        'pourOverWill',
-        'deed',
-        'affidavitOfConsideration',
-        'gitRep3',
+        'coverLetter',
+        'engagementLetter',
         'estatePlanSummary',
         'actionSteps',
       ];
     case 'fortress':
       return [
         'trust',
+        'pourOverWill',
         'poa',
         'livingWill',
-        'pourOverWill',
         'deed',
         'affidavitOfConsideration',
         'gitRep3',
+        'coverLetter',
+        'engagementLetter',
+        'invoice',
         'estatePlanSummary',
         'actionSteps',
       ];
     default:
-      return ['poa', 'livingWill', 'will', 'estatePlanSummary', 'actionSteps'];
+      return ['will', 'poa', 'livingWill', 'coverLetter', 'engagementLetter', 'estatePlanSummary', 'actionSteps'];
   }
 }
 

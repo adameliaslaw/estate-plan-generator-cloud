@@ -387,7 +387,7 @@ export const COLLECTIONS = {
 // Package → included document types map
 // ---------------------------------------------------------------------------
 export const PACKAGE_DOCUMENTS: Record<string, readonly string[]> = {
-  foundation: ['will', 'poa', 'livingWill', 'coverLetter', 'engagementLetter'],
+  foundation: ['will', 'poa', 'livingWill', 'coverLetter', 'engagementLetter', 'estatePlanSummary', 'actionSteps'],
   guardian: [
     'will',
     'poa',

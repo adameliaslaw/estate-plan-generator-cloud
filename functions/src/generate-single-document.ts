@@ -32,6 +32,10 @@ interface GenerateSingleRequest {
   generationMode?: GenerationMode;
   /** Specific template variant ID to use */
   templateId?: string;
+  /** Preferred software source for template selection */
+  softwareSource?: string;
+  /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
+  formattingPreset?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +65,7 @@ export const generateSingleDocument = onCall(
       );
     }
 
-    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'hybrid', templateId } =
+    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'hybrid', templateId, softwareSource, formattingPreset } =
       request.data as GenerateSingleRequest;
 
     if (!firmId || !clientId || !docType) {
@@ -90,6 +94,8 @@ export const generateSingleDocument = onCall(
         docType,
         generationMode,
         customInstructions,
+        softwareSource,
+        formattingPreset,
         propertyIndex,
         templateId,
         trustTypes,
