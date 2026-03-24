@@ -62,14 +62,12 @@ export interface GeneratedDoc {
 function getDocumentsForPackage(packageType: string): string[] {
   switch (packageType) {
     case 'foundation':
-      return ['will', 'poa', 'livingWill', 'coverLetter', 'engagementLetter', 'estatePlanSummary', 'actionSteps'];
+      return ['will', 'poa', 'livingWill', 'estatePlanSummary', 'actionSteps'];
     case 'guardian':
       return [
         'will',
         'poa',
         'livingWill',
-        'coverLetter',
-        'engagementLetter',
         'estatePlanSummary',
         'actionSteps',
       ];
@@ -82,14 +80,11 @@ function getDocumentsForPackage(packageType: string): string[] {
         'deed',
         'affidavitOfConsideration',
         'gitRep3',
-        'coverLetter',
-        'engagementLetter',
-        'invoice',
         'estatePlanSummary',
         'actionSteps',
       ];
     default:
-      return ['will', 'poa', 'livingWill', 'coverLetter', 'engagementLetter', 'estatePlanSummary', 'actionSteps'];
+      return ['will', 'poa', 'livingWill', 'estatePlanSummary', 'actionSteps'];
   }
 }
 
