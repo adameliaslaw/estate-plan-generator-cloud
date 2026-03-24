@@ -15,6 +15,19 @@
 import Handlebars from 'handlebars';
 import * as admin from 'firebase-admin';
 import { getFormattingPreset } from './config/formatting-presets';
+
+/**
+ * Strip markdown code fences that AI models frequently wrap HTML in.
+ * Handles ```html, ```HTML, and bare ``` fences.
+ */
+function stripHtmlFences(text: string): string {
+  let cleaned = text.trim();
+  // Strip leading ```html or ```
+  cleaned = cleaned.replace(/^```(?:html)?\s*\n?/i, '');
+  // Strip trailing ```
+  cleaned = cleaned.replace(/\n?\s*```\s*$/i, '');
+  return cleaned.trim();
+}
 import { ClientContext } from './client-context-aggregator';
 import { callAI, sanitizeObject } from './ai-client';
 import { searchTemplatesByDocType } from './kb-vector-search';
@@ -879,6 +892,11 @@ Generate the complete HTML document now. Return ONLY the HTML.`;
       maxTokens: 32768,
     });
 
+    // Strip markdown fences — AI often wraps HTML in ```html ... ```
+    if (result) {
+      result = stripHtmlFences(result);
+    }
+
     if (result && result.trim().length > 100) {
       // ── Phase 3: Restore preserved styles ──────────────────────────
       if (preservedStyles) {
@@ -982,11 +1000,16 @@ Return the enhanced HTML document.`;
   }
 
   try {
-    const enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
+    let enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
       maxTokens: 32768,
     });
+
+    // Strip markdown fences — AI often wraps HTML in ```html ... ```
+    if (enhanced) {
+      enhanced = stripHtmlFences(enhanced);
+    }
 
     // If AI returned something reasonable, use it; otherwise fall back to template
     if (enhanced && enhanced.trim().length > 100) {
