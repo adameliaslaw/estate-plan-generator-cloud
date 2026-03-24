@@ -151,7 +151,7 @@ export default function ClientPortalPage() {
 
   // ── Questionnaire progress ──
   const qProgress = client.questionnaireProgress;
-  const qPercent = qProgress?.percentComplete ?? 0;
+  const qPercent = Math.min(100, qProgress?.percentComplete ?? 0);
   const qStatus = qProgress?.status ?? 'not_started';
 
   // Split upcoming vs past events
