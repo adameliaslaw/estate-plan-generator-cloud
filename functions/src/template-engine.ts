@@ -642,22 +642,15 @@ export async function generateFromTemplate(
   if (isRawUploadedTemplate) {
     const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
-    if (mode === 'hybrid') {
-      console.info(
-        `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-        `(source=${template.softwareSource}) → template-referenced AI`,
-      );
-      const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
-      return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
-    }
-
-    // Template mode with a raw DOCX — no variable substitution possible,
-    // return the raw extracted HTML as-is.
+    // Raw uploaded templates contain a SAMPLE client's data — they cannot
+    // be served as-is for any mode. Both 'template' and 'hybrid' must route
+    // through template-referenced AI to populate the actual client's data.
     console.info(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-      `(source=${template.softwareSource}) → serving raw HTML (template mode)`,
+      `(source=${template.softwareSource}) → template-referenced AI (mode=${mode})`,
     );
-    return { docType, title, content: template.content, status: 'draft', promptVersion };
+    const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
+    return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
   }
 
   // ── Handlebars rendering (for templates WITH variables) ─────────────────

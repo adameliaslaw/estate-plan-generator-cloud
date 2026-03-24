@@ -168,11 +168,16 @@ export const generateDocuments = functions
 
     const allResults: UnifiedGenerateResult[] = [];
 
-    // 4a. Generate batchable summary docs in a single AI call
+    // 4a. Build a single promise array for ALL doc generation (batch + standard)
+    //     Running everything concurrently avoids the batch summary blocking standard docs.
+    const allPromises: Array<{ type: 'batch' | 'standard'; docTypes: string[]; promise: Promise<UnifiedGenerateResult[]> }> = [];
+
     if (batchableDocs.length >= 2) {
       console.log(`[generateDocuments] Batch-aware: combining ${batchableDocs.join(' + ')} into single AI call`);
-      try {
-        const batchResults = await generateBatchedSummaryDocs({
+      allPromises.push({
+        type: 'batch',
+        docTypes: batchableDocs,
+        promise: generateBatchedSummaryDocs({
           firmId,
           clientId,
           generationMode,
@@ -183,38 +188,19 @@ export const generateDocuments = functions
           triggerSource: 'batch',
           modelOverride,
           preloadedContext,
-        });
-        allResults.push(...batchResults);
-      } catch (batchErr) {
-        console.error('[generateDocuments] Batch summary generation failed:', batchErr);
-        // Fall back to individual generation
-        for (const docType of batchableDocs) {
-          try {
-            const results = await generateDocumentWithPropertyExpansion({
-              firmId, clientId, docType, generationMode, softwareSource, formattingPreset,
-              trustTypes, createdBy: auth.uid, triggerSource: 'batch', modelOverride, preloadedContext,
-            });
-            allResults.push(...results);
-          } catch (indErr) {
-            console.error(`[generateDocuments] Fallback generation failed for ${docType}:`, indErr);
-            allResults.push({
-              docType,
-              title: `Error — ${getDocTypeDisplayName(docType)}`,
-              content: `<p>Error: ${indErr instanceof Error ? indErr.message : 'Unknown error'}</p>`,
-              status: 'error', docId: docType, isNew: false, currentVersion: 0,
-            });
-          }
-        }
-      }
+        }),
+      });
     } else {
       // Only 1 or 0 batchable docs — no benefit from combining, treat as standard
       standardDocs.push(...batchableDocs);
     }
 
-    // 4b. Generate standard docs concurrently
-    const settled = await Promise.allSettled(
-      standardDocs.map((docType) =>
-        generateDocumentWithPropertyExpansion({
+    // 4b. Add standard docs as individual concurrent promises
+    for (const docType of standardDocs) {
+      allPromises.push({
+        type: 'standard',
+        docTypes: [docType],
+        promise: generateDocumentWithPropertyExpansion({
           firmId,
           clientId,
           docType,
@@ -227,25 +213,32 @@ export const generateDocuments = functions
           modelOverride,
           preloadedContext,
         }),
-      ),
-    );
+      });
+    }
+
+    // 4c. Run ALL concurrently
+    const settled = await Promise.allSettled(allPromises.map(p => p.promise));
 
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i];
-      const docType = standardDocs[i];
+      const entry = allPromises[i];
       if (result.status === 'fulfilled') {
         allResults.push(...result.value);
       } else {
-        console.error(`[generateDocuments] Fatal error generating ${docType}:`, result.reason);
-        allResults.push({
-          docType,
-          title: `Error — ${getDocTypeDisplayName(docType)}`,
-          content: `<p>An unexpected error occurred while generating this document: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}</p>`,
-          status: 'error',
-          docId: docType,
-          isNew: false,
-          currentVersion: 0,
-        });
+        const label = entry.docTypes.join('+');
+        console.error(`[generateDocuments] Fatal error generating ${label}:`, result.reason);
+        // Create an error result for each doc type in this entry
+        for (const docType of entry.docTypes) {
+          allResults.push({
+            docType,
+            title: `Error — ${getDocTypeDisplayName(docType)}`,
+            content: `<p>An unexpected error occurred while generating this document: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}</p>`,
+            status: 'error',
+            docId: docType,
+            isNew: false,
+            currentVersion: 0,
+          });
+        }
       }
     }
 
