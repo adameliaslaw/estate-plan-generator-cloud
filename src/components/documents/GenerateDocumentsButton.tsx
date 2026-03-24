@@ -66,14 +66,12 @@ const PACKAGE_DOCS: Record<string, string[]> = {
     'Durable Power of Attorney',
     'Advance Health Care Directive',
     'Estate Plan Summary',
-    'Action Steps Checklist',
   ],
   guardian: [
     'Last Will and Testament',
     'Durable Power of Attorney',
     'Advance Health Care Directive',
     'Estate Plan Summary',
-    'Action Steps Checklist',
   ],
   fortress: [
     'Revocable Living Trust',
@@ -84,7 +82,6 @@ const PACKAGE_DOCS: Record<string, string[]> = {
     'Affidavit of Consideration',
     'GIT/REP-3 Form',
     'Estate Plan Summary',
-    'Action Steps Checklist',
   ],
 };
 

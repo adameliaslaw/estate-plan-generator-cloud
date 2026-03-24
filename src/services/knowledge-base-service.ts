@@ -433,4 +433,40 @@ export const templateService = {
     });
     return res.data as { templateId: string; version: number };
   },
+  /**
+   * Re-templatize raw uploaded templates that have no Handlebars variables.
+   * Runs AI templatization to replace literal sample client data with {{variables}}.
+   */
+  async retemplatizeTemplates(
+    firmId: string,
+    dryRun = false,
+  ): Promise<{
+    processed: number;
+    total: number;
+    dryRun: boolean;
+    results: {
+      templateId: string;
+      docType: string;
+      name: string;
+      variablesFound: number;
+      status: 'success' | 'skipped' | 'error';
+      error?: string;
+    }[];
+  }> {
+    const fn = httpsCallable(functions, 'retemplatizeTemplates', { timeout: 540000 });
+    const res = await fn({ firmId, dryRun });
+    return res.data as {
+      processed: number;
+      total: number;
+      dryRun: boolean;
+      results: {
+        templateId: string;
+        docType: string;
+        name: string;
+        variablesFound: number;
+        status: 'success' | 'skipped' | 'error';
+        error?: string;
+      }[];
+    };
+  },
 };

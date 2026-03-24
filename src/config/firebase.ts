@@ -108,3 +108,9 @@ if (useEmulators) {
 }
 
 export { app, auth, db, storage, functions };
+
+// Expose for admin console scripts (CSP blocks external imports)
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__firebase = { app, auth, db, storage, functions };
+}
