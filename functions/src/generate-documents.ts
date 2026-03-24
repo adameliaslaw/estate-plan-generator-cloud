@@ -163,8 +163,16 @@ export const generateDocuments = functions
     //    Summary docs (estatePlanSummary + actionSteps) can be combined
     //    into a single AI call, halving API calls for those doc types.
     // ------------------------------------------------------------------
-    const batchableDocs = documentsToGenerate.filter(d => (BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
-    const standardDocs = documentsToGenerate.filter(d => !(BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
+    // In template mode, skip summary docs entirely — they require AI calls
+    // and the user explicitly chose template mode for speed. Summary/action-steps
+    // docs can be generated on-demand via the "Add Document" flow.
+    const isTemplateMode = generationMode === 'template';
+    const batchableDocs = isTemplateMode
+      ? []
+      : documentsToGenerate.filter(d => (BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
+    const standardDocs = isTemplateMode
+      ? documentsToGenerate.filter(d => !(BATCHABLE_SUMMARY_DOCS as Set<string>).has(d))
+      : documentsToGenerate.filter(d => !(BATCHABLE_SUMMARY_DOCS as Set<string>).has(d));
 
     const allResults: UnifiedGenerateResult[] = [];
 

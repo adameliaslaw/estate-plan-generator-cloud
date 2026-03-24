@@ -655,15 +655,23 @@ export async function generateFromTemplate(
   if (isRawUploadedTemplate) {
     const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
-    // Raw uploaded templates contain a SAMPLE client's data — they cannot
-    // be served as-is for any mode. Both 'template' and 'hybrid' must route
-    // through template-referenced AI to populate the actual client's data.
+    if (mode === 'hybrid') {
+      // Hybrid mode: use the raw template as a formatting reference for AI
+      console.info(
+        `[template-engine] Smart route: raw uploaded template for ${docType} ` +
+        `(source=${template.softwareSource}) → template-referenced AI (hybrid)`,
+      );
+      const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
+      return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
+    }
+
+    // Template mode: serve the raw uploaded HTML directly (fast — no AI call).
+    // The template is a complete document from a sample client.
     console.info(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-      `(source=${template.softwareSource}) → template-referenced AI (mode=${mode})`,
+      `(source=${template.softwareSource}) → serving raw HTML (template mode)`,
     );
-    const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
-    return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
+    return { docType, title, content: template.content, status: 'draft', promptVersion };
   }
 
   // ── Handlebars rendering (for templates WITH variables) ─────────────────
