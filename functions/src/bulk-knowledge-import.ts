@@ -177,7 +177,7 @@ Analyze the following text and extract structured metadata. Return a valid JSON 
   "citation": "legal citation if present (e.g., N.J.S.A. 3B:3-2), or empty string",
   "category": one of "statute", "case_law", "cle_material", "checklist", "form_template", "practice_note", "custom",
   "tags": ["array", "of", "relevant", "tags"],
-  "docTypes": ["array of applicable document types from: will, pourOverWill, poa, livingWill, trust, deed, affidavitOfConsideration, gitRep3, estatePlanSummary, actionSteps"],
+  "docTypes": ["array of applicable document types from: will, pourOverWill, poa, livingWill, trust, deed, affidavitOfConsideration, gitRep3, estatePlanSummary"],
   "summary": "one paragraph summary of the content"
 }
 Respond with ONLY the JSON object, no markdown fences.`;

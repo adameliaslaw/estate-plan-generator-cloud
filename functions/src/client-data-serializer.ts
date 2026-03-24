@@ -238,7 +238,7 @@ export function serializeClientData(
   // 5. Assets (included for doc types that need them)
   const assetDocTypes = new Set([
     'will', 'trust', 'deed', 'affidavitOfConsideration', 'gitRep3',
-    'estatePlanSummary', 'actionSteps', 'pourOverWill',
+    'estatePlanSummary', 'pourOverWill',
   ]);
   if (assetDocTypes.has(docType)) {
     const assetLines: string[] = ['ASSETS:'];
@@ -332,7 +332,7 @@ export function serializeClientData(
 
   // 6. Distribution
   const distDocTypes = new Set([
-    'will', 'trust', 'pourOverWill', 'estatePlanSummary', 'actionSteps',
+    'will', 'trust', 'pourOverWill', 'estatePlanSummary',
   ]);
   if (distDocTypes.has(docType)) {
     const distLines: string[] = ['DISTRIBUTION PLAN:'];
@@ -427,7 +427,7 @@ export function serializeClientData(
   }
 
   // 8. Healthcare preferences (for advance directive / living will)
-  const healthDocTypes = new Set(['livingWill', 'estatePlanSummary', 'actionSteps']);
+  const healthDocTypes = new Set(['livingWill', 'estatePlanSummary']);
   if (healthDocTypes.has(docType)) {
     const hp = safe.healthcarePreferences ?? {};
     sections.push(`HEALTHCARE PREFERENCES:

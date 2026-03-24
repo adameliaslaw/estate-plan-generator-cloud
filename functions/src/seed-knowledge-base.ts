@@ -312,7 +312,7 @@ const NJ_STATUTES: SeedResource[] = [
     content:
       'NJ allows simplified administration for small estates: (1) Summary Administration (3B:10-3): For estates where the entire estate passes to the surviving spouse, executrix/executor may seek summary judgment. (2) Small Estate Affidavit (3B:10-4): If the total value of the decedent\'s personally owned property (excluding real property) does not exceed $50,000 and at least 30 days have elapsed since death, the entitled person may collect assets by presenting a small estate affidavit to the holder of the property. This avoids the need for formal probate.',
     tags: ['probate', 'small-estate', 'simplified', 'affidavit', 'administration'],
-    docTypes: ['estatePlanSummary', 'actionSteps'],
+    docTypes: ['estatePlanSummary'],
   },
 
   // ── CHECKLISTS ──────────────────────────────────────────────────────────────
@@ -332,7 +332,7 @@ const NJ_STATUTES: SeedResource[] = [
     content:
       'REAL PROPERTY:\n□ Deed prepared from individual name to trust\n□ RTF-1EE (exempt transfer) completed\n□ GIT/REP-3 (tax exemption) completed\n□ Deed recorded with county recording office\n□ Homeowner\'s insurance updated to reflect trust ownership\n□ Mortgage company notified (if applicable — most mortgages have due-on-sale clauses but exempt transfers to revocable trusts)\n\nBANK ACCOUNTS:\n□ Re-title checking/savings to trust name (or add POD/TOD to trust)\n□ New checks ordered with trust name\n□ Online banking access updated\n□ Safe deposit box re-titled\n\nINVESTMENT/BROKERAGE ACCOUNTS:\n□ Re-title to trust (or designate trust as TOD beneficiary)\n□ New account number/title reflects trust\n□ Updated investment authority documentation\n\nRETIREMENT ACCOUNTS (DO NOT TRANSFER TO TRUST):\n□ Update primary beneficiary designation (typically spouse)\n□ Update contingent beneficiary to trust (for IRA/401k stretch planning)\n□ Confirm with custodian that designations are on file\n\nLIFE INSURANCE:\n□ Change owner to ILIT (if applicable)\n□ Change beneficiary per estate plan instructions\n□ Confirm with insurance company\n\nBUSINESS INTERESTS:\n□ Assign LLC/partnership interests to trust\n□ Update operating agreement to reflect trust ownership\n□ Maintain personal guarantee obligations if required\n\nPERSONAL PROPERTY:\n□ Execute assignment of personal property to trust\n□ Vehicle titles generally NOT transferred (use TOD registration)\n\nDIGITAL ASSETS:\n□ Document digital asset inventory\n□ Include access credentials in secure location referenced in trust\n□ Consider digital asset trust provisions',
     tags: ['trust', 'funding', 'checklist', 'retitling', 'beneficiary-designation'],
-    docTypes: ['trust', 'deed', 'actionSteps', 'estatePlanSummary'],
+    docTypes: ['trust', 'deed', 'estatePlanSummary'],
   },
   {
     category: 'checklist',
@@ -341,7 +341,7 @@ const NJ_STATUTES: SeedResource[] = [
     content:
       'LIFE INSURANCE POLICIES:\n□ List all policies (term, whole, universal, group through employer)\n□ Verify primary and contingent beneficiary for each policy\n□ Consider ILIT ownership for estate tax planning\n\nRETIREMENT ACCOUNTS:\n□ IRA / Roth IRA — verify primary and contingent beneficiaries\n□ 401(k) / 403(b) / 457 — verify beneficiary (spousal consent may be required for non-spouse)\n□ Pension plans — verify survivor benefit elections\n□ Annuities — verify beneficiary designations\n\nTRANSFER ON DEATH (TOD) / PAYABLE ON DEATH (POD):\n□ Brokerage accounts — TOD beneficiary registered\n□ Bank accounts — POD beneficiary designated\n□ NJ allows TOD for vehicle titles\n\nHEALTH SAVINGS ACCOUNTS (HSA):\n□ Verify beneficiary (surviving spouse can inherit as own HSA)\n\nCOMMON ISSUES:\n□ Stale beneficiaries (ex-spouse still listed)\n□ Minor children listed directly (should use UTMA or trust)\n□ Estate listed as beneficiary (causes probate, no stretch IRA)\n□ No contingent beneficiary listed\n□ Beneficiary designations that conflict with trust/will\n\nRECUMMENDATIONS:\n□ Review all beneficiary designations at least every 3 years\n□ Review immediately after: marriage, divorce, birth, adoption, death of beneficiary\n□ Keep copies of all submitted beneficiary designation forms\n□ Bring original designation forms to initial planning consultation',
     tags: ['beneficiary', 'designation', 'review', 'life-insurance', 'retirement', 'checklist'],
-    docTypes: ['estatePlanSummary', 'actionSteps'],
+    docTypes: ['estatePlanSummary'],
   },
 
   // ── PRACTICE NOTES ──────────────────────────────────────────────────────────
@@ -370,7 +370,7 @@ const NJ_STATUTES: SeedResource[] = [
     content:
       'ESTATE TAX: NJ repealed its estate tax effective January 1, 2018. Estates of decedents dying on or after January 1, 2018 are not subject to NJ estate tax. Federal estate tax still applies (2026 unified credit: $5.49M per person, subject to sunset).\n\nINHERITANCE TAX: NJ still imposes an inheritance tax (N.J.S.A. 54:34 et seq.) based on the relationship between the decedent and the beneficiary:\n• Class A (spouse, children, grandchildren, parents): exempt\n• Class C (siblings, spouse/widow of child): first $25,000 exempt, 11-16% on excess\n• Class D (all others, including friends, non-relatives, cousins): 15-16% on entire amount\n• Class E (charitable organizations, government): exempt\n\nPLANNING IMPLICATIONS:\n- Life insurance payable to Class A beneficiaries: no NJ inheritance tax\n- Life insurance payable to Class D beneficiaries (e.g., unmarried partner): consider ILIT to avoid both estate and inheritance tax\n- Transfers to trusts: the inheritance tax applies based on the relationship of the ultimate beneficiary, not the trust\n- Due date: 8 months from date of death; interest accrues from date of death',
     tags: ['estate-tax', 'inheritance-tax', 'NJ', 'tax-planning', 'exemptions'],
-    docTypes: ['estatePlanSummary', 'trust', 'will', 'actionSteps'],
+    docTypes: ['estatePlanSummary', 'trust', 'will'],
   },
   {
     category: 'practice_note',

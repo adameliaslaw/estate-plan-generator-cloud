@@ -342,7 +342,7 @@ ${AVAILABLE_TAGS}
 
 Respond with a valid JSON object (no markdown fences):
 {
-  "suggestedDocType": "one of: will, pourOverWill, trust, poa, livingWill, deed, affidavitOfConsideration, gitRep3, estatePlanSummary, actionSteps",
+  "suggestedDocType": "one of: will, pourOverWill, trust, poa, livingWill, deed, affidavitOfConsideration, gitRep3, estatePlanSummary",
   "suggestedTags": ["array of tag values from the AVAILABLE TEMPLATE TAGS list above"],
   "documentSummary": "one paragraph summary of what this template is for"
 }`;

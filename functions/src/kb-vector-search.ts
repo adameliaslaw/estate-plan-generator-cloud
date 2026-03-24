@@ -88,7 +88,6 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
   affidavitOfConsideration: 'affidavit of consideration',
   gitRep3: 'GIT/REP-3 exemption certificate',
   estatePlanSummary: 'estate plan summary letter',
-  actionSteps: 'post-signing action steps',
 };
 
 // ---------------------------------------------------------------------------

@@ -69,8 +69,7 @@ const ESTIMATED_OUTPUT_TOKENS: Record<string, number> = {
   deed:                    2500,
   affidavitOfConsideration: 1500,
   gitRep3:                 1200,
-  estatePlanSummary:       2000,
-  actionSteps:             1500,
+  estatePlanSummary:       3500,
   // Flex generators
   engagementLetter:        2000,
   coverLetter:             1000,
