@@ -211,6 +211,10 @@ interface SummaryDocContext {
   distribution: admin.firestore.DocumentData;
   healthPrefs: admin.firestore.DocumentData;
   specialConsiderations: admin.firestore.DocumentData;
+  /** Married-couple fields */
+  hasSpouse: boolean;
+  spouseFullName: string;
+  spouseFiduciaries: admin.firestore.DocumentData;
 }
 
 function buildSummaryDocContext(
@@ -244,6 +248,18 @@ function buildSummaryDocContext(
   const realEstate: admin.firestore.DocumentData[] = assets.realEstate ?? [];
   const propertiesForTrust = realEstate.filter((r: admin.firestore.DocumentData) => r.transferToTrust);
 
+  // Spouse info
+  const spouseInfo = safe.spouseInfo ?? {};
+  const maritalStatus = safe.personalInfo?.maritalStatus;
+  const hasSpouse = (maritalStatus === 'Married' || maritalStatus === 'Domestic Partnership') && !!spouseInfo.firstName;
+  const spouseFullName = hasSpouse
+    ? [spouseInfo.firstName, spouseInfo.middleName, spouseInfo.lastName, spouseInfo.suffix]
+        .filter(Boolean)
+        .join(' ')
+    : '';
+  // Spouse's fiduciary appointments (if the questionnaire captures them separately)
+  const spouseFiduciaries = safe.spouseFiduciaries ?? {};
+
   return {
     safe,
     safeFirm,
@@ -259,6 +275,9 @@ function buildSummaryDocContext(
     distribution,
     healthPrefs,
     specialConsiderations,
+    hasSpouse,
+    spouseFullName,
+    spouseFiduciaries,
   };
 }
 
@@ -363,6 +382,17 @@ FORMATTING:
 • Include county clerk tables for each property in the trust funding section.
 • Style to look like a professional client summary — not a legal document.
 
+MARRIED / DOMESTIC PARTNER COUPLES:
+If the client is married or has a domestic partner, you MUST:
+• Title the document "Estate Plan Summary of [Client Name] & [Spouse Name]"
+• Reference BOTH spouses by name throughout the document.
+• In Section 1 (At a Glance), show the complete combined document list — listing EACH spouse's individual documents separately (e.g., "Durable Power of Attorney — John Doe", "Durable Power of Attorney — Jane Doe").
+• In Section 2 (Documents), describe EACH spouse's documents individually — e.g., "John's Last Will and Testament" and "Jane's Last Will and Testament."
+• In Section 3 (Fiduciaries), list fiduciary appointments for BOTH spouses in a single combined table or two clearly labeled sub-tables.
+• Joint documents like a Revocable Living Trust should be clearly described as joint: "The Doe Joint Revocable Living Trust."
+• In Section 5 (Incapacity), cover BOTH spouses' POA agents and healthcare representatives.
+• Action steps apply jointly — both spouses need to sign their respective documents.
+
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
 do not rephrase, abbreviate, or reformat any proper nouns.
@@ -396,9 +426,31 @@ export async function generateEstatePlanSummary(
     fortress: 'Irrevocable Trust',
   };
 
-  const packageDocs = ctx.hasTrust
+  const packageDocsBase = ctx.hasTrust
     ? ['Revocable Living Trust', 'Pour-Over Will', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Deeds (one per property)', 'Affidavit of Consideration (one per property)', 'GIT/REP-3 (one per property)', 'Estate Plan Summary']
     : ['Last Will and Testament', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Estate Plan Summary'];
+
+  // For married couples, expand per-spouse doc types to show both names
+  let packageDocs: string[];
+  if (ctx.hasSpouse) {
+    const perSpouseDocs = new Set([
+      'Last Will and Testament',
+      'Pour-Over Will',
+      'Durable Power of Attorney',
+      'Advance Directive for Health Care',
+    ]);
+    packageDocs = [];
+    for (const doc of packageDocsBase) {
+      if (perSpouseDocs.has(doc)) {
+        packageDocs.push(`${doc} — ${ctx.clientFullName}`);
+        packageDocs.push(`${doc} — ${ctx.spouseFullName}`);
+      } else {
+        packageDocs.push(doc);
+      }
+    }
+  } else {
+    packageDocs = packageDocsBase;
+  }
 
   // Build county recording info for each property (for action steps sections)
   const countyRecordingDetails = ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) => {
@@ -429,17 +481,23 @@ export async function generateEstatePlanSummary(
   const executor = ctx.fiduciaries.executor ?? {};
   const proxy = ctx.fiduciaries.healthcareProxy ?? {};
 
+  const summaryTitle = ctx.hasSpouse
+    ? `${ctx.clientFullName} & ${ctx.spouseFullName}`
+    : ctx.clientFullName;
+
   const userPrompt = `
-Generate a complete Estate Plan Summary (including Action Steps Checklist) for this client:
+Generate a complete Estate Plan Summary (including Action Steps Checklist) for this ${ctx.hasSpouse ? 'married couple' : 'client'}:
 
 CLIENT DATA BLOCK:
 ${ctx.serializedData ?? '(Client data not available — use the details below)'}
 
 SHARED DETAILS:
   Client: ${ctx.clientFullName}
+  ${ctx.hasSpouse ? `Spouse: ${ctx.spouseFullName}` : ''}
+  ${ctx.hasSpouse ? `Marital Status: ${pi.maritalStatus}` : ''}
   Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
   Package: ${packageDisplayNames[packageType] ?? packageType} Package
-  ${ctx.hasTrust ? `Trust: ${ctx.trustName}` : ''}
+  ${ctx.hasTrust ? `Trust: ${ctx.trustName}${ctx.hasSpouse ? ' (Joint Trust)' : ''}` : ''}
 
   Documents in this package:
   ${packageDocs.map(d => `• ${d}`).join('\n  ')}
@@ -498,8 +556,20 @@ ACTION STEPS DETAILS:
   Firm: ${sanitizeForPrompt(ctx.safeFirm.firmName ?? '')}
     Phone: ${ctx.safeFirm.firmPhone ?? ''}
     Email: ${ctx.safeFirm.firmEmail ?? ''}
-
-Generate the complete document now. Include ALL sections: estate plan overview, documents, fiduciaries, assets, incapacity planning, AND the full action steps checklist with specific county recording information for each property. Use the client's actual names throughout.
+${ctx.hasSpouse ? `
+SPOUSE INFORMATION:
+  Spouse: ${ctx.spouseFullName}
+  This is a MARRIED COUPLE estate plan. Both spouses have their own individual documents (POA, Healthcare Directive, ${ctx.hasTrust ? 'Pour-Over Will' : 'Last Will and Testament'}).
+  ${ctx.hasTrust ? `The Revocable Living Trust is a JOINT trust for both spouses.` : ''}
+  
+  You MUST:
+  - Title this document: "Estate Plan Summary of ${summaryTitle}"
+  - List BOTH spouses' individual documents separately in the document overview
+  - Cover BOTH spouses' fiduciary appointments
+  - Describe incapacity planning for BOTH spouses
+  - All action steps apply to BOTH spouses' documents
+` : ''}
+Generate the complete document now. Include ALL sections: estate plan overview, documents, fiduciaries, assets, incapacity planning, AND the full action steps checklist with specific county recording information for each property. Use the client's actual names throughout.${ctx.hasSpouse ? ` This is a MARRIED COUPLE plan — you MUST cover both ${ctx.clientFullName} and ${ctx.spouseFullName} throughout the entire document.` : ''}
 `.trim();
 
   const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, ctx.safeFirm, {
@@ -514,7 +584,7 @@ Generate the complete document now. Include ALL sections: estate plan overview, 
 
   return {
     docType: 'estatePlanSummary',
-    title: buildStandardTitle('estatePlanSummary', ctx.clientFullName),
+    title: buildStandardTitle('estatePlanSummary', summaryTitle),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),
