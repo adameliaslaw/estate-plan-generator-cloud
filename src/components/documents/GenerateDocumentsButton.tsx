@@ -266,9 +266,9 @@ export default function GenerateDocumentsButton({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="max-h-[65vh] space-y-3 overflow-y-auto py-2">
             {/* Client info */}
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -292,16 +292,19 @@ export default function GenerateDocumentsButton({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Documents to be generated ({packageDocs.length})
               </p>
-              <ul className="space-y-1">
+              <ul className={cn(
+                'gap-x-4 gap-y-0.5',
+                packageDocs.length > 4 ? 'grid grid-cols-2' : 'space-y-1',
+              )}>
                 {packageDocs.map((doc) => (
-                  <li key={doc} className="flex items-center gap-2 text-sm text-gray-700">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <li key={doc} className="flex items-center gap-1.5 text-[13px] leading-tight text-gray-700">
+                    <FileText className="h-3 w-3 shrink-0 text-gray-400" />
                     {doc}
                   </li>
                 ))}
                 {trustTypes && trustTypes.length > 0 && (
-                  <li className="flex items-center gap-2 text-sm text-gray-500 italic">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <li className="flex items-center gap-1.5 text-[13px] leading-tight text-gray-500 italic">
+                    <FileText className="h-3 w-3 shrink-0 text-gray-400" />
                     + {trustTypes.length} trust agreement{trustTypes.length > 1 ? 's' : ''}
                   </li>
                 )}
@@ -313,7 +316,7 @@ export default function GenerateDocumentsButton({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Generation Mode
               </p>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {[
                   { value: 'template' as GenerationMode, label: 'Template', desc: 'Fast, consistent. Uses your uploaded templates with client data.', badge: 'Recommended' },
                   { value: 'ai' as GenerationMode, label: 'AI', desc: 'Full AI generation from scratch (current behavior).', badge: '' },
@@ -322,7 +325,7 @@ export default function GenerateDocumentsButton({
                   <label
                     key={mode.value}
                     className={cn(
-                      'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                      'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors',
                       generationMode === mode.value
                         ? 'border-[#2b6cb0] bg-blue-50/50'
                         : 'border-gray-200 hover:bg-gray-50',
@@ -337,7 +340,7 @@ export default function GenerateDocumentsButton({
                       className="mt-0.5 text-[#2b6cb0] focus:ring-[#2b6cb0]"
                     />
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-gray-900">{mode.label}</span>
                         {mode.badge && (
                           <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -345,7 +348,7 @@ export default function GenerateDocumentsButton({
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500">{mode.desc}</p>
+                      <p className="text-[11px] leading-tight text-gray-500">{mode.desc}</p>
                     </div>
                   </label>
                 ))}
