@@ -107,6 +107,12 @@ export interface UnifiedGenerateParams {
   modelOverride?: string;
   /** Pre-loaded client context — skips redundant aggregation when caller already has it */
   preloadedContext?: ClientContext;
+  /**
+   * For married-couple generation: 'client' = primary client, 'spouse' = spouse.
+   * When 'spouse', personalInfo ↔ spouseInfo are swapped so generators treat
+   * the spouse as the primary person without per-generator changes.
+   */
+  spouseRole?: 'client' | 'spouse';
 }
 
 export interface UnifiedGenerateResult {
@@ -445,6 +451,22 @@ export async function generateDocument(
     clientData = { ...clientData, _customInstructions: safe };
   }
 
+  // ------------------------------------------------------------------
+  // 1a. Spouse data swap — for married-couple generation
+  //     When spouseRole='spouse', swap personalInfo ↔ spouseInfo so
+  //     generators treat the spouse as the primary person.
+  // ------------------------------------------------------------------
+  if (params.spouseRole === 'spouse' && clientData.spouseInfo) {
+    const originalPersonal = { ...clientData.personalInfo };
+    const originalSpouse = { ...clientData.spouseInfo };
+    console.log(`[unifiedGenerator] Spouse swap for ${docType}: ${originalSpouse.firstName ?? 'unknown'} ↔ ${originalPersonal.firstName ?? 'unknown'}`);
+    clientData = {
+      ...clientData,
+      personalInfo: originalSpouse,
+      spouseInfo: originalPersonal,
+    };
+  }
+
   const packageType = clientData.packageDetails?.packageType ?? 'foundation';
 
   // ------------------------------------------------------------------
@@ -675,11 +697,12 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   const isFlexType = isFlexDocType(docType);
   const suffix = propertyIndex !== undefined ? `_${propertyIndex}` : '';
+  const spouseSuffix = params.spouseRole === 'spouse' ? '_spouse' : '';
 
   // Flex docs use timestamp-based IDs (multiples allowed); standard docs use deterministic IDs
   const documentId = isFlexType
     ? `${docType}_${Date.now()}`
-    : `${docType}${suffix}`;
+    : `${docType}${suffix}${spouseSuffix}`;
 
   const changeNotes = customInstructions
     ? `Regenerated with custom instructions: ${sanitizeForPrompt(customInstructions).slice(0, 200)}`

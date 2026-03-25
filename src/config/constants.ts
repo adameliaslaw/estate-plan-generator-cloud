@@ -388,7 +388,8 @@ export const COLLECTIONS = {
 export const PACKAGE_DOCUMENTS: Record<string, readonly string[]> = {
   foundation: ['will', 'poa', 'livingWill', 'estatePlanSummary'],
   guardian: [
-    'will',
+    'trust',
+    'pourOverWill',
     'poa',
     'livingWill',
     'estatePlanSummary',

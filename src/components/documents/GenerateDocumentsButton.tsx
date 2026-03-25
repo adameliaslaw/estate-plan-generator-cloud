@@ -68,7 +68,8 @@ const PACKAGE_DOCS: Record<string, string[]> = {
     'Estate Plan Summary',
   ],
   guardian: [
-    'Last Will and Testament',
+    'Revocable Living Trust',
+    'Pour-Over Will',
     'Durable Power of Attorney',
     'Advance Health Care Directive',
     'Estate Plan Summary',
@@ -85,6 +86,29 @@ const PACKAGE_DOCS: Record<string, string[]> = {
   ],
 };
 
+// Per-spouse doc labels — these get duplicated for married couples
+const PER_SPOUSE_LABELS = new Set([
+  'Last Will and Testament',
+  'Durable Power of Attorney',
+  'Advance Health Care Directive',
+  'Pour-Over Will',
+]);
+
+/** Expand progress list for married couples with Client/Spouse labels */
+function getExpandedDocs(baseDocs: string[], isMarried: boolean): string[] {
+  if (!isMarried) return baseDocs;
+  const expanded: string[] = [];
+  for (const doc of baseDocs) {
+    if (PER_SPOUSE_LABELS.has(doc)) {
+      expanded.push(`${doc} — Client`);
+      expanded.push(`${doc} — Spouse`);
+    } else {
+      expanded.push(doc);
+    }
+  }
+  return expanded;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Phase = 'idle' | 'confirming' | 'generating' | 'success' | 'error';
@@ -98,6 +122,8 @@ interface Props {
   disabled?: boolean;
   onSuccess?: (response: GenerateDocumentsResponse) => void;
   variant?: 'default' | 'compact';
+  /** When true, expands per-spouse doc types to show client + spouse entries */
+  isMarried?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -111,6 +137,7 @@ export default function GenerateDocumentsButton({
   disabled = false,
   onSuccess,
   variant = 'default',
+  isMarried = false,
 }: Props) {
   const { userProfile } = useAuth();
   const [phase, setPhase] = useState<Phase>('idle');
@@ -123,7 +150,8 @@ export default function GenerateDocumentsButton({
   const [formattingPreset, setFormattingPreset] = useState('');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
-  const packageDocs = PACKAGE_DOCS[packageType] ?? [];
+  const baseDocs = PACKAGE_DOCS[packageType] ?? [];
+  const packageDocs = getExpandedDocs(baseDocs, isMarried);
 
   // ── Simulate incremental progress while Cloud Function runs ────────────────
   const startProgressSimulation = () => {

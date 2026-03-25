@@ -143,6 +143,7 @@ interface EmptyStateProps {
   packageType: PackageType;
   trustTypes?: string[];
   questionnaireComplete: boolean;
+  isMarried?: boolean;
 }
 
 function EmptyState({
@@ -152,6 +153,7 @@ function EmptyState({
   packageType,
   trustTypes,
   questionnaireComplete,
+  isMarried,
 }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50/50 py-16 text-center">
@@ -174,6 +176,7 @@ function EmptyState({
             trustTypes={trustTypes}
             clientName={clientName}
             disabled={!questionnaireComplete}
+            isMarried={isMarried}
           />
         </div>
       )}
@@ -390,6 +393,7 @@ interface Props {
   trustTypes?: string[];
   questionnaireComplete: boolean;
   clientUpdatedAt?: { seconds: number } | null;
+  isMarried?: boolean;
 }
 
 export default function DocumentVault({
@@ -400,6 +404,7 @@ export default function DocumentVault({
   trustTypes,
   questionnaireComplete,
   clientUpdatedAt,
+  isMarried,
 }: Props) {
   // ── Firestore ────────────────────────────────────────────────────────────
   const { data: documents, loading, error: loadError } = useCollection<Document>(
@@ -542,6 +547,7 @@ export default function DocumentVault({
           packageType={packageType}
           trustTypes={trustTypes}
           questionnaireComplete={questionnaireComplete}
+          isMarried={isMarried}
         />
 
         {/* Flex doc generator still available */}
@@ -712,6 +718,7 @@ export default function DocumentVault({
               trustTypes={trustTypes}
               clientName={clientName}
               variant="compact"
+              isMarried={isMarried}
             />
           )}
         </div>

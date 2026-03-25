@@ -409,6 +409,7 @@ export default function ClientDashboardPage() {
     : clientFullName || 'Client';
 
   const packageType = pkg?.packageType ?? 'foundation';
+  const isMarried = info?.maritalStatus === 'Married' || info?.maritalStatus === 'Domestic Partnership';
   const qStatusCfg = Q_STATUS_CONFIG[qProgress?.status ?? 'not_started'];
   const QIcon = qStatusCfg.icon;
 
@@ -702,6 +703,7 @@ export default function ClientDashboardPage() {
                   trustTypes={client.trusts?.map((t) => t.trustType)}
                   clientName={displayHeading}
                   disabled={!isQuestionnaireComplete}
+                  isMarried={isMarried}
                 />
               </div>
             </div>
@@ -1070,6 +1072,7 @@ export default function ClientDashboardPage() {
             trustTypes={client.trusts?.map((t) => t.trustType)}
             questionnaireComplete={isQuestionnaireComplete}
             clientUpdatedAt={client.updatedAt as { seconds: number } | null}
+            isMarried={isMarried}
           />
         </TabsContent>
 

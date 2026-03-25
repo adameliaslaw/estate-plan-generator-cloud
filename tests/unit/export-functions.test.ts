@@ -214,9 +214,10 @@ describe('Batch export — ZIP file structure', () => {
     expect(files.some((f) => f.includes('livingWill'))).toBe(true);
   });
 
-  it('guardian package batch export includes all foundation documents', () => {
+  it('guardian package batch export includes trust, pourOverWill, poa, livingWill', () => {
     const files = getBatchExportFileNames('guardian', 'Rodriguez', 'pdf');
-    expect(files.some((f) => f.includes('will'))).toBe(true);
+    expect(files.some((f) => f.includes('trust'))).toBe(true);
+    expect(files.some((f) => f.includes('pourOverWill'))).toBe(true);
     expect(files.some((f) => f.includes('poa'))).toBe(true);
     expect(files.some((f) => f.includes('livingWill'))).toBe(true);
   });

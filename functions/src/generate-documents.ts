@@ -11,7 +11,6 @@
 import * as functions from 'firebase-functions';
 const { HttpsError } = functions.https;
 import * as admin from 'firebase-admin';
-
 import { GenerationMode } from './template-engine';
 import {
   generateDocumentWithPropertyExpansion,
@@ -63,7 +62,8 @@ function getDocumentsForPackage(packageType: string): string[] {
       return ['will', 'poa', 'livingWill', 'estatePlanSummary'];
     case 'guardian':
       return [
-        'will',
+        'trust',
+        'pourOverWill',
         'poa',
         'livingWill',
         'estatePlanSummary',
@@ -82,6 +82,50 @@ function getDocumentsForPackage(packageType: string): string[] {
     default:
       return ['will', 'poa', 'livingWill', 'estatePlanSummary'];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Per-spouse doc types — each spouse gets their own copy
+// Joint/shared docs (trust, deed, affidavit, gitRep3, estatePlanSummary)
+// only generate once for the couple.
+// ---------------------------------------------------------------------------
+
+const PER_SPOUSE_DOC_TYPES = new Set(['poa', 'livingWill', 'will', 'pourOverWill']);
+
+/** Determine if this client is in a living marriage/domestic partnership */
+function isMarriedCouple(clientData: admin.firestore.DocumentData): boolean {
+  const status = clientData.personalInfo?.maritalStatus;
+  return status === 'Married' || status === 'Domestic Partnership';
+}
+
+interface DocGenEntry {
+  docType: string;
+  spouseRole?: 'client' | 'spouse';
+}
+
+/**
+ * Expand the base document list for married couples.
+ * Per-spouse doc types get duplicated (one for each spouse).
+ * Joint docs remain as-is.
+ */
+function expandForMarriedCouple(
+  baseDocs: string[],
+  married: boolean,
+): DocGenEntry[] {
+  if (!married) {
+    return baseDocs.map(docType => ({ docType }));
+  }
+
+  const entries: DocGenEntry[] = [];
+  for (const docType of baseDocs) {
+    if (PER_SPOUSE_DOC_TYPES.has(docType)) {
+      entries.push({ docType, spouseRole: 'client' });
+      entries.push({ docType, spouseRole: 'spouse' });
+    } else {
+      entries.push({ docType });
+    }
+  }
+  return entries;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,14 +173,25 @@ export const generateDocuments = functions
     }
 
     // ------------------------------------------------------------------
-    // 2. Determine document list
+    // 2. Determine document list (with married-couple expansion)
     // ------------------------------------------------------------------
-    const documentsToGenerate = getDocumentsForPackage(packageType);
+    const baseDocs = getDocumentsForPackage(packageType);
+
+    // Fetch client data to check marital status for spouse expansion
+    const db = admin.firestore();
+    const clientSnap = await db.doc(`firms/${firmId}/clients/${clientId}`).get();
+    if (!clientSnap.exists) {
+      throw new HttpsError('not-found', `Client ${clientId} not found.`);
+    }
+    const clientData = clientSnap.data()!;
+    const married = isMarriedCouple(clientData);
+    const documentsToGenerate = expandForMarriedCouple(baseDocs, married);
 
     console.log(
       `[generateDocuments] Starting generation for client=${clientId} package=${packageType} mode=${generationMode}` +
+      ` married=${married}` +
       (softwareSource ? ` software=${softwareSource}` : ''),
-      `documents=[${documentsToGenerate.join(', ')}]`,
+      `documents=[${documentsToGenerate.map(e => e.spouseRole ? `${e.docType}(${e.spouseRole})` : e.docType).join(', ')}]`,
     );
 
     // ------------------------------------------------------------------
@@ -159,11 +214,11 @@ export const generateDocuments = functions
     // ------------------------------------------------------------------
     const allResults: UnifiedGenerateResult[] = [];
 
-    const allPromises = documentsToGenerate.map(docType =>
+    const allPromises = documentsToGenerate.map(entry =>
       generateDocumentWithPropertyExpansion({
         firmId,
         clientId,
-        docType,
+        docType: entry.docType,
         generationMode,
         softwareSource,
         formattingPreset,
@@ -172,6 +227,7 @@ export const generateDocuments = functions
         triggerSource: 'batch',
         modelOverride,
         preloadedContext,
+        spouseRole: entry.spouseRole,
       }),
     );
 
@@ -179,17 +235,18 @@ export const generateDocuments = functions
 
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i];
-      const docType = documentsToGenerate[i];
+      const entry = documentsToGenerate[i];
       if (result.status === 'fulfilled') {
         allResults.push(...result.value);
       } else {
-        console.error(`[generateDocuments] Fatal error generating ${docType}:`, result.reason);
+        console.error(`[generateDocuments] Fatal error generating ${entry.docType}:`, result.reason);
+        const spouseSuffix = entry.spouseRole === 'spouse' ? '_spouse' : '';
         allResults.push({
-          docType,
-          title: `Error — ${getDocTypeDisplayName(docType)}`,
+          docType: entry.docType,
+          title: `Error — ${getDocTypeDisplayName(entry.docType)}${entry.spouseRole === 'spouse' ? ' (Spouse)' : ''}`,
           content: `<p>An unexpected error occurred while generating this document: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}</p>`,
           status: 'error',
-          docId: docType,
+          docId: `${entry.docType}${spouseSuffix}`,
           isNew: false,
           currentVersion: 0,
         });
@@ -199,7 +256,6 @@ export const generateDocuments = functions
     // ------------------------------------------------------------------
     // 5. Update client record
     // ------------------------------------------------------------------
-    const db = admin.firestore();
     await db.doc(`firms/${firmId}/clients/${clientId}`).update({
       documentsGenerated: true,
       'packageDetails.packageType': packageType,

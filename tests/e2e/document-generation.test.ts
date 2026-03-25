@@ -158,11 +158,12 @@ describe('Document Generation — Guardian package', () => {
     }
   });
 
-  it('Guardian package includes "will" (Pour-Over or standard)', () => {
-    // Guardian plan has a will (either standard will or pour-over will)
-    const hasWill = PACKAGE_DOCUMENTS.guardian.includes('will') ||
-                    PACKAGE_DOCUMENTS.guardian.includes('pourOverWill');
-    expect(hasWill).toBe(true);
+  it('Guardian package includes "trust" (Revocable)', () => {
+    expect(PACKAGE_DOCUMENTS.guardian).toContain(DOC_TYPES.TRUST);
+  });
+
+  it('Guardian package includes "pourOverWill"', () => {
+    expect(PACKAGE_DOCUMENTS.guardian).toContain(DOC_TYPES.POUR_OVER_WILL);
   });
 
   it('Guardian package includes "poa"', () => {
