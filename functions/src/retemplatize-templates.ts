@@ -128,9 +128,10 @@ export const retemplatizeTemplates = onCall(
       throw new HttpsError('permission-denied', 'Only admin or attorney can retemplatize.');
     }
 
-    const { firmId, dryRun = false } = request.data as {
+    const { firmId, dryRun = false, force = false } = request.data as {
       firmId: string;
       dryRun?: boolean;
+      force?: boolean;
     };
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
@@ -138,22 +139,29 @@ export const retemplatizeTemplates = onCall(
     const db = admin.firestore();
     const col = db.collection(`firms/${firmId}/documentTemplates`);
 
-    // Find all templates that have a softwareSource but no variables
+    // Find all templates that have a softwareSource
     const snapshot = await col.where('softwareSource', '!=', '').get();
 
     const rawTemplates = snapshot.docs.filter((doc) => {
       const data = doc.data();
       const vars = data.variables ?? [];
-      return vars.length === 0 && data.content && data.content.length > 100;
+      const hasContent = data.content && data.content.length > 100;
+      if (!hasContent) return false;
+      // In force mode, process ALL templates (even ones with variables)
+      // In normal mode, only process templates without variables
+      return force || vars.length === 0;
     });
 
     console.log(
-      `[retemplatize] Found ${rawTemplates.length} raw templates out of ${snapshot.size} ` +
-      `with softwareSource (firmId=${firmId}, dryRun=${dryRun})`,
+      `[retemplatize] Found ${rawTemplates.length} templates out of ${snapshot.size} ` +
+      `with softwareSource (firmId=${firmId}, dryRun=${dryRun}, force=${force})`,
     );
 
     if (rawTemplates.length === 0) {
-      return { processed: 0, total: 0, results: [], message: 'No raw templates to process.' };
+      return { processed: 0, total: 0, results: [], message: force
+        ? 'No templates with softwareSource found.'
+        : 'No raw templates to process. Try force=true to re-process already-templatized templates.'
+      };
     }
 
     // Fetch firm data for AI routing
@@ -176,15 +184,33 @@ export const retemplatizeTemplates = onCall(
       const templateId = doc.id;
       const docType = data.docType ?? 'unknown';
       const name = data.name ?? templateId;
-      const originalContent = data.content as string;
 
-      console.log(`[retemplatize] Processing: ${name} (${docType}, ${originalContent.length} chars)`);
+      // For force mode, use rawContent if available (original untouched HTML),
+      // otherwise use current content. If current content has {{variables}},
+      // strip them back to blank placeholders for clean re-templatization.
+      let sourceContent: string;
+      if (data.rawContent && typeof data.rawContent === 'string' && data.rawContent.length > 100) {
+        // rawContent was preserved from a previous run — use it
+        sourceContent = data.rawContent;
+        console.log(`[retemplatize] ${name}: Using preserved rawContent (${sourceContent.length} chars)`);
+      } else {
+        sourceContent = data.content as string;
+        // If content already has Handlebars variables, strip them for clean re-templatization
+        const varCount = (sourceContent.match(/\{\{[^}]+\}\}/g) ?? []).length;
+        if (varCount > 0) {
+          console.log(`[retemplatize] ${name}: Stripping ${varCount} existing variables from content`);
+          // Replace {{variable}} with a generic placeholder so the AI sees clean text
+          sourceContent = sourceContent.replace(/\{\{[^}]+\}\}/g, '_______________');
+        }
+      }
+
+      console.log(`[retemplatize] Processing: ${name} (${docType}, ${sourceContent.length} chars)`);
 
       try {
         // Pass 1: AI templatization
         let templatized = await callAI(
           TEMPLATIZE_SYSTEM_PROMPT,
-          originalContent,
+          sourceContent,
           firmData,
           { temperature: 0, maxTokens: 16384 },
         );
@@ -203,7 +229,7 @@ export const retemplatizeTemplates = onCall(
         }
 
         // Pass 2: Structural fidelity validation
-        const fidelity = compareHtmlStructure(originalContent, templatized);
+        const fidelity = compareHtmlStructure(sourceContent, templatized);
         console.log(
           `[retemplatize] ${name}: Structural fidelity = ${(fidelity.score * 100).toFixed(1)}% ` +
           `(tags: ${fidelity.originalTagCount} → ${fidelity.modifiedTagCount})`,
@@ -217,7 +243,7 @@ export const retemplatizeTemplates = onCall(
           );
 
           const retryInstruction = buildFidelityRetryInstruction(fidelity);
-          const retryPrompt = `${retryInstruction}\n\nOriginal HTML to templatize (preserve ALL tags exactly):\n\n${originalContent}`;
+          const retryPrompt = `${retryInstruction}\n\nOriginal HTML to templatize (preserve ALL tags exactly):\n\n${sourceContent}`;
 
           let retryResult = await callAI(
             TEMPLATIZE_SYSTEM_PROMPT,
@@ -231,7 +257,7 @@ export const retemplatizeTemplates = onCall(
           const retryHasHtml = /<[a-z][\s\S]*>/i.test(retryResult);
 
           if (retryHasVars && retryHasHtml) {
-            const retryFidelity = compareHtmlStructure(originalContent, retryResult);
+            const retryFidelity = compareHtmlStructure(sourceContent, retryResult);
             console.log(
               `[retemplatize] ${name}: Retry fidelity = ${(retryFidelity.score * 100).toFixed(1)}% ` +
               `(was ${(fidelity.score * 100).toFixed(1)}%)`,
@@ -250,7 +276,7 @@ export const retemplatizeTemplates = onCall(
         }
 
         // Final fidelity score for reporting
-        const finalFidelity = compareHtmlStructure(originalContent, templatized);
+        const finalFidelity = compareHtmlStructure(sourceContent, templatized);
 
         // Extract variables programmatically
         const variables = extractTemplateVariables(templatized);
@@ -258,12 +284,17 @@ export const retemplatizeTemplates = onCall(
 
         if (!dryRun) {
           // Update template in Firestore
-          await col.doc(templateId).update({
+          // Preserve rawContent (original untouched HTML) if not already saved
+          const updateData: Record<string, unknown> = {
             content: templatized,
             variables,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          console.log(`[retemplatize] ${name}: Updated in Firestore`);
+          };
+          if (!data.rawContent) {
+            updateData.rawContent = data.content; // Save the original before overwriting
+          }
+          await col.doc(templateId).update(updateData);
+          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'})`);
         }
 
         results.push({
