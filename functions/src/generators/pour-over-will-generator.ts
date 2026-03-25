@@ -16,13 +16,14 @@ import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-cl
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
+import { getFormattingPreset } from '../config/formatting-presets';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
-const POUR_OVER_WILL_SYSTEM_PROMPT = `
+const POUR_OVER_WILL_SYSTEM_PROMPT_BASE = `
 You are an expert New Jersey estate planning attorney generating a complete, execution-ready Pour-Over Will.
 
 A Pour-Over Will is a companion document to a Revocable Living Trust. It directs that the testator's probate estate — any assets not already titled in the trust — shall be "poured over" into the trust at death. This ensures all assets pass through the trust's distribution scheme rather than through intestacy.
@@ -59,10 +60,7 @@ CRITICAL POUR-OVER LANGUAGE REQUIREMENTS:
 3. State that distributions shall be made as if the will assets had originally been part of the trust.
 4. Include a savings clause: if the trust is not in existence or is revoked, then the residue passes to [backup beneficiaries].
 
-FORMATTING:
-• Full HTML output (no <html>/<body>/<head>).
-• <h1> for title, <h2> for articles, <p> for paragraphs, <table> for signature blocks.
-• Fill ALL client data — no "[NAME]" placeholder tokens.
+%%FORMATTING_RULES%%
 
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
@@ -81,6 +79,11 @@ OUTPUT FORMAT — JSON only (no markdown):
   }
 }
 `.trim();
+
+const DEFAULT_POW_FORMATTING = `FORMATTING:
+• Full HTML output (no <html>/<body>/<head>).
+• <h1> for title, <h2> for articles, <p> for paragraphs, <table> for signature blocks.
+• Fill ALL client data — no "[NAME]" placeholder tokens.`;
 
 // ---------------------------------------------------------------------------
 // Generator
@@ -154,7 +157,15 @@ POUR-OVER SPECIFIC DETAILS:
 Generate the complete pour-over will now. The POUR-OVER ARTICLE must name the trust by its exact full name and date, include "as amended" language, and specify the trustee. Include full execution block, NJ witness attestation, and complete N.J.S.A. 3B:3-4 self-proving affidavit.
 `.trim();
 
-  const raw = await callAI(POUR_OVER_WILL_SYSTEM_PROMPT, userPrompt, safeFirm, {
+  // Resolve formatting preset from firmData
+  const presetKey = (safeFirm as Record<string, unknown>)?.formattingPreset as string | undefined;
+  const preset = presetKey ? getFormattingPreset(presetKey) : undefined;
+  const formattingRules = preset?.promptBlock
+    ? `${preset.promptBlock}\n\n• Fill ALL client data — no "[NAME]" placeholder tokens.`
+    : DEFAULT_POW_FORMATTING;
+  const systemPrompt = POUR_OVER_WILL_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+
+  const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
     maxTokens: 16384,

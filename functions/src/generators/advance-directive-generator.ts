@@ -22,13 +22,14 @@ import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-cl
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
+import { getFormattingPreset } from '../config/formatting-presets';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
-const ADVANCE_DIRECTIVE_SYSTEM_PROMPT = `
+const ADVANCE_DIRECTIVE_SYSTEM_PROMPT_BASE = `
 You are an expert New Jersey estate planning and healthcare law attorney generating a complete, execution-ready New Jersey Advance Directive for Health Care.
 
 GOVERNING LAW:
@@ -81,12 +82,7 @@ EXECUTION BLOCK:
   • WITNESS ATTESTATION: Two witnesses (neither is: healthcare representative, blood relative, heir, or healthcare facility employee/operator) — include full statutory disqualification attestation
   • Notarization: Notary is NOT required for a valid NJ advance directive, but include optional notary block for added weight
 
-FORMATTING:
-• Full HTML (no <html>/<body>/<head>).
-• <h1> for document title, <h2> for Parts, <h3> for subsections, <p> for text.
-• Use checkboxes or clearly labeled choice blocks for the instruction directive options.
-• Mark the declarant's ACTUAL choices clearly (checked/selected) based on client data.
-• Fill ALL client data — no "[NAME]" tokens.
+%%FORMATTING_RULES%%
 
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
@@ -105,6 +101,13 @@ OUTPUT FORMAT — JSON only:
   }
 }
 `.trim();
+
+const DEFAULT_AD_FORMATTING = `FORMATTING:
+• Full HTML (no <html>/<body>/<head>).
+• <h1> for document title, <h2> for Parts, <h3> for subsections, <p> for text.
+• Use checkboxes or clearly labeled choice blocks for the instruction directive options.
+• Mark the declarant's ACTUAL choices clearly (checked/selected) based on client data.
+• Fill ALL client data — no "[NAME]" tokens.`;
 
 // ---------------------------------------------------------------------------
 // Generator
@@ -153,7 +156,15 @@ HEALTHCARE DIRECTIVE CHOICES:
 Generate the complete Advance Directive now. Mark the declarant's ACTUAL choices clearly. Include Part One (proxy), Part Two (instruction directive with all subsections), Part Three (general provisions), full execution block, and witness attestation with the NJ statutory disqualification language.
 `.trim();
 
-  const raw = await callAI(ADVANCE_DIRECTIVE_SYSTEM_PROMPT, userPrompt, safeFirm, {
+  // Resolve formatting preset from firmData
+  const presetKey = (safeFirm as Record<string, unknown>)?.formattingPreset as string | undefined;
+  const preset = presetKey ? getFormattingPreset(presetKey) : undefined;
+  const formattingRules = preset?.promptBlock
+    ? `${preset.promptBlock}\n\n• Mark the declarant's ACTUAL choices clearly (checked/selected) based on client data.\n• Fill ALL client data — no "[NAME]" tokens.`
+    : DEFAULT_AD_FORMATTING;
+  const systemPrompt = ADVANCE_DIRECTIVE_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+
+  const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
     maxTokens: 16384,

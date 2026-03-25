@@ -21,13 +21,14 @@ import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-cl
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
+import { getFormattingPreset } from '../config/formatting-presets';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
-const TRUST_SYSTEM_PROMPT = `
+const TRUST_SYSTEM_PROMPT_BASE = `
 You are an expert New Jersey estate planning attorney generating a complete, execution-ready Revocable Living Trust (or the specified trust type).
 
 GOVERNING LAW:
@@ -72,11 +73,7 @@ EXECUTION BLOCK:
   Notary acknowledgment (notarization recommended but not required for validity in NJ)
   Witness attestation (recommended for real estate transfers)
 
-FORMATTING:
-• Full HTML (no <html>/<body>/<head>).
-• <h1> for title, <h2> for articles, <h3> for subsections, <p> for text.
-• Schedule A as a formatted table.
-• Do NOT leave any "[NAME]" tokens — use actual data.
+%%FORMATTING_RULES%%
 
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
@@ -95,6 +92,12 @@ OUTPUT FORMAT — JSON only:
   }
 }
 `.trim();
+
+const DEFAULT_TRUST_FORMATTING = `FORMATTING:
+• Full HTML (no <html>/<body>/<head>).
+• <h1> for title, <h2> for articles, <h3> for subsections, <p> for text.
+• Schedule A as a formatted table.
+• Do NOT leave any "[NAME]" tokens — use actual data.`;
 
 // ---------------------------------------------------------------------------
 // Generator
@@ -202,7 +205,15 @@ TRUST-SPECIFIC DETAILS:
 Generate the complete ${trustType} now. Include all standard articles, comprehensive trustee powers per N.J.S.A. 3B:14-23, successor trustee provisions, distribution plan, Schedule A, execution block, and notary acknowledgment.
 `.trim();
 
-  const raw = await callAI(TRUST_SYSTEM_PROMPT, userPrompt, safeFirm, {
+  // Resolve formatting preset from firmData
+  const presetKey = (safeFirm as Record<string, unknown>)?.formattingPreset as string | undefined;
+  const preset = presetKey ? getFormattingPreset(presetKey) : undefined;
+  const formattingRules = preset?.promptBlock
+    ? `${preset.promptBlock}\n\n• Schedule A as a formatted table.\n• Do NOT leave any "[NAME]" tokens — use actual data.`
+    : DEFAULT_TRUST_FORMATTING;
+  const systemPrompt = TRUST_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+
+  const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
     maxTokens: 32768,

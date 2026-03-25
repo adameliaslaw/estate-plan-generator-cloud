@@ -12,6 +12,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI } from './ai-client';
 import { extractTemplateVariables } from './template-engine';
+import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
 
 // ---------------------------------------------------------------------------
 // Templatization prompt — same as processTemplateFile Phase 1
@@ -166,6 +167,7 @@ export const retemplatizeTemplates = onCall(
       variablesFound: number;
       status: 'success' | 'skipped' | 'error';
       error?: string;
+      fidelityScore?: number;
     }[] = [];
 
     // Process templates sequentially to avoid AI rate limits
@@ -174,14 +176,15 @@ export const retemplatizeTemplates = onCall(
       const templateId = doc.id;
       const docType = data.docType ?? 'unknown';
       const name = data.name ?? templateId;
+      const originalContent = data.content as string;
 
-      console.log(`[retemplatize] Processing: ${name} (${docType}, ${data.content.length} chars)`);
+      console.log(`[retemplatize] Processing: ${name} (${docType}, ${originalContent.length} chars)`);
 
       try {
-        // Single-pass AI templatization
+        // Pass 1: AI templatization
         let templatized = await callAI(
           TEMPLATIZE_SYSTEM_PROMPT,
-          data.content,
+          originalContent,
           firmData,
           { temperature: 0, maxTokens: 16384 },
         );
@@ -189,7 +192,7 @@ export const retemplatizeTemplates = onCall(
         // Strip markdown fences
         templatized = stripFences(templatized);
 
-        // Validate
+        // Basic validity check
         const hasVariables = /\{\{[^}]+\}\}/.test(templatized);
         const looksLikeHtml = /<[a-z][\s\S]*>/i.test(templatized);
 
@@ -199,9 +202,59 @@ export const retemplatizeTemplates = onCall(
           continue;
         }
 
+        // Pass 2: Structural fidelity validation
+        const fidelity = compareHtmlStructure(originalContent, templatized);
+        console.log(
+          `[retemplatize] ${name}: Structural fidelity = ${(fidelity.score * 100).toFixed(1)}% ` +
+          `(tags: ${fidelity.originalTagCount} → ${fidelity.modifiedTagCount})`,
+        );
+
+        // Pass 3: Retry with structural feedback if fidelity is too low
+        if (!fidelity.passes) {
+          console.warn(
+            `[retemplatize] ${name}: Fidelity too low (${(fidelity.score * 100).toFixed(1)}%). ` +
+            `Retrying with structural feedback...`,
+          );
+
+          const retryInstruction = buildFidelityRetryInstruction(fidelity);
+          const retryPrompt = `${retryInstruction}\n\nOriginal HTML to templatize (preserve ALL tags exactly):\n\n${originalContent}`;
+
+          let retryResult = await callAI(
+            TEMPLATIZE_SYSTEM_PROMPT,
+            retryPrompt,
+            firmData,
+            { temperature: 0, maxTokens: 16384 },
+          );
+          retryResult = stripFences(retryResult);
+
+          const retryHasVars = /\{\{[^}]+\}\}/.test(retryResult);
+          const retryHasHtml = /<[a-z][\s\S]*>/i.test(retryResult);
+
+          if (retryHasVars && retryHasHtml) {
+            const retryFidelity = compareHtmlStructure(originalContent, retryResult);
+            console.log(
+              `[retemplatize] ${name}: Retry fidelity = ${(retryFidelity.score * 100).toFixed(1)}% ` +
+              `(was ${(fidelity.score * 100).toFixed(1)}%)`,
+            );
+
+            // Use retry if it improved fidelity
+            if (retryFidelity.score > fidelity.score) {
+              templatized = retryResult;
+              console.info(`[retemplatize] ${name}: Retry improved fidelity, using retry output.`);
+            } else {
+              console.info(`[retemplatize] ${name}: Retry did not improve, keeping original output.`);
+            }
+          } else {
+            console.warn(`[retemplatize] ${name}: Retry output invalid, keeping original.`);
+          }
+        }
+
+        // Final fidelity score for reporting
+        const finalFidelity = compareHtmlStructure(originalContent, templatized);
+
         // Extract variables programmatically
         const variables = extractTemplateVariables(templatized);
-        console.log(`[retemplatize] ${name}: ${variables.length} variables found`);
+        console.log(`[retemplatize] ${name}: ${variables.length} variables found, fidelity=${(finalFidelity.score * 100).toFixed(1)}%`);
 
         if (!dryRun) {
           // Update template in Firestore
@@ -213,7 +266,12 @@ export const retemplatizeTemplates = onCall(
           console.log(`[retemplatize] ${name}: Updated in Firestore`);
         }
 
-        results.push({ templateId, docType, name, variablesFound: variables.length, status: 'success' });
+        results.push({
+          templateId, docType, name,
+          variablesFound: variables.length,
+          status: 'success',
+          fidelityScore: finalFidelity.score,
+        });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[retemplatize] ${name}: Error — ${errMsg}`);

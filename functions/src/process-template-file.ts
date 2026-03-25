@@ -15,6 +15,7 @@ const { PDFParse } = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
 import { extractTemplateVariables } from './template-engine';
+import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
 
 // ---------------------------------------------------------------------------
 // Helper: truncate text at a word boundary
@@ -451,6 +452,57 @@ Respond with a valid JSON object (no markdown fences):
         }
 
         // -------------------------------------------------------------------
+        // Phase 1b: Structural fidelity validation
+        // Compare tag structure of original vs templatized to ensure the AI
+        // didn't alter document formatting during templatization.
+        // -------------------------------------------------------------------
+        const fidelity = compareHtmlStructure(extractedHtml, templatizedHtml);
+        console.log(
+          `[processTemplateFile] Structural fidelity = ${(fidelity.score * 100).toFixed(1)}% ` +
+          `(tags: ${fidelity.originalTagCount} → ${fidelity.modifiedTagCount})`,
+        );
+
+        if (!fidelity.passes) {
+          console.warn(
+            `[processTemplateFile] Fidelity too low (${(fidelity.score * 100).toFixed(1)}%). ` +
+            `Retrying with structural feedback...`,
+          );
+
+          const retryInstruction = buildFidelityRetryInstruction(fidelity);
+          const retryPrompt = `${retryInstruction}\n\nOriginal HTML to templatize (preserve ALL tags exactly):\n\n${extractedHtml}`;
+
+          let retryResult = await callAI(
+            templatizeSystemPrompt,
+            retryPrompt,
+            firmData,
+            { temperature: 0, maxTokens: 16384 },
+          );
+
+          // Clean markdown fences from retry
+          retryResult = retryResult.trim();
+          if (retryResult.startsWith('```html')) retryResult = retryResult.replace(/^```html\s*\n?/i, '');
+          if (retryResult.startsWith('```')) retryResult = retryResult.replace(/^```\s*\n?/, '');
+          if (retryResult.endsWith('```')) retryResult = retryResult.replace(/\n?```\s*$/, '');
+
+          const retryHasVars = /\{\{[^}]+\}\}/.test(retryResult);
+          const retryHasHtml = /<[a-z][\s\S]*>/i.test(retryResult);
+
+          if (retryHasVars && retryHasHtml) {
+            const retryFidelity = compareHtmlStructure(extractedHtml, retryResult);
+            console.log(
+              `[processTemplateFile] Retry fidelity = ${(retryFidelity.score * 100).toFixed(1)}% ` +
+              `(was ${(fidelity.score * 100).toFixed(1)}%)`,
+            );
+            if (retryFidelity.score > fidelity.score) {
+              templatizedHtml = retryResult;
+              console.info('[processTemplateFile] Retry improved fidelity, using retry output.');
+            } else {
+              console.info('[processTemplateFile] Retry did not improve, keeping original output.');
+            }
+          }
+        }
+
+        // -------------------------------------------------------------------
         // POST-PROCESSING: Fiduciary Path Enforcement
         // When the same person serves in multiple fiduciary roles, the AI
         // often reuses the first path it assigned. This step ensures each
@@ -632,6 +684,9 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
       }
     }
 
+    // Final fidelity score
+    const finalFidelity = compareHtmlStructure(extractedHtml, templatizedHtml);
+
     return {
       success: true,
       extractedHtml: templatizedHtml,
@@ -644,6 +699,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
       fileName,
       fileType: ext,
       learningStats: learningCtx.stats,
+      fidelityScore: finalFidelity.score,
     };
   },
 );

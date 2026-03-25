@@ -18,13 +18,14 @@ import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-cl
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
+import { getFormattingPreset } from '../config/formatting-presets';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
-const WILL_SYSTEM_PROMPT = `
+const WILL_SYSTEM_PROMPT_BASE = `
 You are an expert New Jersey estate planning attorney generating a complete, execution-ready Last Will and Testament.
 
 GOVERNING LAW:
@@ -52,13 +53,7 @@ DOCUMENT STRUCTURE (required articles):
   WITNESS ATTESTATION — Standard NJ witness attestation clause with two witness signature/address lines
   SELF-PROVING AFFIDAVIT — Full statutory language per N.J.S.A. 3B:3-4 with notary block
 
-FORMATTING RULES:
-• Output the full document as well-structured HTML (no <html>/<body>/<head>).
-• Use <h1> for the document title, <h2> for articles, <p> for paragraphs, <table> for signature blocks.
-• Use blank lines / margin styling in signatures for physical signing.
-• NEVER fabricate statutes, case citations, or legal standards.
-• Fill ALL placeholders with actual client data — do not leave "[NAME]" tokens.
-• If a field is unknown, use a blank line "_______________" as a fill-in.
+%%FORMATTING_RULES%%
 
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
@@ -78,6 +73,15 @@ Respond with a valid JSON object only (no markdown fences):
   }
 }
 `.trim();
+
+// Default formatting rules (when no preset is active)
+const DEFAULT_FORMATTING_RULES = `FORMATTING RULES:
+• Output the full document as well-structured HTML (no <html>/<body>/<head>).
+• Use <h1> for the document title, <h2> for articles, <p> for paragraphs, <table> for signature blocks.
+• Use blank lines / margin styling in signatures for physical signing.
+• NEVER fabricate statutes, case citations, or legal standards.
+• Fill ALL placeholders with actual client data — do not leave "[NAME]" tokens.
+• If a field is unknown, use a blank line "_______________" as a fill-in.`;
 
 // ---------------------------------------------------------------------------
 // Generator
@@ -131,7 +135,18 @@ WILL-SPECIFIC DETAILS:
 Generate the complete, execution-ready will now. Include all required articles, the full NJ witness attestation, and the complete N.J.S.A. 3B:3-4 self-proving affidavit with notary block.
 `.trim();
 
-  const raw = await callAI(WILL_SYSTEM_PROMPT, userPrompt, safeFirm, {
+  // Resolve formatting preset from firmData
+  const presetKey = (safeFirm as Record<string, unknown>)?.formattingPreset as string | undefined;
+  const preset = presetKey ? getFormattingPreset(presetKey) : undefined;
+
+  // Build system prompt with appropriate formatting rules
+  const formattingRules = preset?.promptBlock
+    ? `${preset.promptBlock}\n\n• NEVER fabricate statutes, case citations, or legal standards.\n• Fill ALL placeholders with actual client data — do not leave "[NAME]" tokens.\n• If a field is unknown, use a blank line "_______________" as a fill-in.`
+    : DEFAULT_FORMATTING_RULES;
+
+  const systemPrompt = WILL_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+
+  const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
     maxTokens: 16384,

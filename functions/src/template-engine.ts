@@ -14,7 +14,7 @@
 
 import Handlebars from 'handlebars';
 import * as admin from 'firebase-admin';
-import { getFormattingPreset } from './config/formatting-presets';
+
 
 /**
  * Strip markdown code fences that AI models frequently wrap HTML in.
@@ -31,6 +31,7 @@ function stripHtmlFences(text: string): string {
 import { ClientContext } from './client-context-aggregator';
 import { callAI, sanitizeObject } from './ai-client';
 import { searchTemplatesByDocType } from './kb-vector-search';
+import { compareHtmlStructure } from './template-fidelity-validator';
 import { GeneratedDoc } from './generate-documents';
 import { buildStandardTitle } from './unified-generator';
 import { computePromptHash } from './unified-generator';
@@ -656,12 +657,12 @@ export async function generateFromTemplate(
     const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
     if (mode === 'hybrid') {
-      // Hybrid mode: use the raw template as a formatting reference for AI
+      // Hybrid mode: focused text substitution only — preserves HTML structure
       console.info(
         `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-        `(source=${template.softwareSource}) → template-referenced AI (hybrid)`,
+        `(source=${template.softwareSource}) → focused substitution (hybrid)`,
       );
-      const content = await generateFromTemplateReference(template.content, ctx, docType, formattingPreset);
+      const content = await substituteTemplateValues(template.content, ctx, docType, formattingPreset);
       return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
     }
 
@@ -686,10 +687,10 @@ export async function generateFromTemplate(
       `(template="${template.name}"): ${errMsg.slice(0, 200)}`,
     );
     if (mode === 'hybrid') {
-      // Template has invalid HBS syntax — use the raw template as a formatting
-      // reference for AI generation instead of falling back to standalone AI
-      console.info(`[template-engine] Using raw template as formatting reference for ${docType}`);
-      const templateGuided = await generateFromTemplateReference(
+      // Template has invalid HBS syntax — use focused text substitution
+      // to preserve the template's formatting while swapping client data
+      console.info(`[template-engine] Using focused substitution for ${docType} (HBS failed)`);
+      const substituted = await substituteTemplateValues(
         template.content,
         ctx,
         docType,
@@ -698,7 +699,7 @@ export async function generateFromTemplate(
       return {
         docType,
         title: buildStandardTitle(docType, ctx.computed.clientFullName),
-        content: templateGuided,
+        content: substituted,
         status: 'draft',
         promptVersion,
         templateBaseline: template.content,
@@ -772,37 +773,37 @@ export async function generateFromTemplate(
 }
 
 // ---------------------------------------------------------------------------
-// Template-referenced AI generation (when Handlebars can't compile the template)
+// Focused text substitution for raw templates (preserves HTML structure)
 // ---------------------------------------------------------------------------
 
 /**
- * Use a raw template as a formatting/structure reference for AI generation.
- * Called when Handlebars can't compile the template (common with uploaded DOCX
- * files that contain syntax like `===` that conflicts with Handlebars).
+ * Substitute client-specific text values in a raw template WITHOUT altering
+ * the HTML structure. Unlike the old `generateFromTemplateReference()` which
+ * asked AI to regenerate the entire document (losing formatting), this function
+ * tells the AI to change ONLY text content while preserving every HTML tag,
+ * attribute, CSS class, and structural element exactly as-is.
  *
- * Instead of ignoring the template entirely, we pass its full HTML to the AI
- * and instruct it to generate a new document following the same structure,
- * formatting, headings, and legal style — but populated with the actual
- * client's data from the questionnaire.
+ * If the substitution corrupts the structure (fidelity < 85%), falls back to
+ * the raw template with [NEEDS EDITING] markers.
  */
-async function generateFromTemplateReference(
+async function substituteTemplateValues(
   rawTemplateHtml: string,
   ctx: ClientContext,
   docType: string,
-  formattingPreset?: string,
+  _formattingPreset?: string,
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
   const templateData = buildTemplateData(ctx);
 
-  // ── Phase 3: Extract and preserve template styles ──────────────────────
-  // DOCX-uploaded templates often have <style> blocks with fonts, margins,
-  // and spacing. The AI won't reproduce these exactly, so we extract them
-  // and prepend them to the AI's output.
+  // Extract and preserve <style> blocks — AI should not touch these
   const styleRegex = /<style[^>]*>[\s\S]*?<\/style>/gi;
   const styleBlocks = rawTemplateHtml.match(styleRegex) ?? [];
   const preservedStyles = styleBlocks.join('\n');
 
-  // Build a concise client data summary for the AI
+  // Strip styles from the template before sending to AI (reduces tokens)
+  const templateWithoutStyles = rawTemplateHtml.replace(styleRegex, '');
+
+  // Build the substitution map: original text → replacement text
   const pi = templateData.personalInfo as Record<string, unknown> ?? {};
   const spouse = templateData.spouseInfo as Record<string, unknown>;
   const children = templateData.children as Array<Record<string, unknown>> ?? [];
@@ -813,24 +814,25 @@ async function generateFromTemplateReference(
   const clientFullName = ctx.computed.clientFullName;
   const isFemale = ctx.client.isFemale;
 
-  const clientSummary = `
-CLIENT: ${clientFullName}
-Gender: ${isFemale ? 'Female' : 'Male'} (use ${isFemale ? 'she/her' : 'he/his'} pronouns)
-Date of Birth: ${pi.dateOfBirth ?? 'Not provided'}
-Address: ${pi.address ?? ''}, ${pi.city ?? ''}, ${pi.state ?? 'NJ'} ${pi.zip ?? ''}
-County: ${pi.county ?? ''}
-Marital Status: ${pi.maritalStatus ?? ''}
-${spouse ? `Spouse: ${(spouse as Record<string, unknown>).firstName ?? ''} ${(spouse as Record<string, unknown>).lastName ?? ''}` : ''}
+  const clientDataBlock = `
+NEW CLIENT DATA (replace ALL sample/template client data with these values):
+  Full Name: ${clientFullName}
+  Gender: ${isFemale ? 'Female' : 'Male'} (use ${isFemale ? 'she/her/hers' : 'he/his/him'} pronouns)
+  Date of Birth: ${pi.dob ?? pi.dateOfBirth ?? '_______________'}
+  Address: ${pi.address ?? '_______________'}, ${pi.city ?? '_______________'}, ${pi.state ?? 'NJ'} ${pi.zip ?? '_______________'}
+  County: ${pi.county ?? '_______________'}
+  Marital Status: ${pi.maritalStatus ?? '_______________'}
+  ${spouse ? `Spouse: ${(spouse as Record<string, unknown>).firstName ?? ''} ${(spouse as Record<string, unknown>).middleName ?? ''} ${(spouse as Record<string, unknown>).lastName ?? ''}`.trim() : 'Spouse: N/A'}
 
 CHILDREN (${children.length}):
-${children.length === 0 ? 'None.' : children.map((c) =>
-    `• ${c.name ?? 'Unknown'}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [Special Needs]' : ''}`
+${children.length === 0 ? '  None.' : children.map((c) =>
+    `  • ${c.name ?? 'Unknown'}, born ${c.dob ?? 'unknown'}, ${c.isMinor ? 'minor' : 'adult'}${c.specialNeeds ? ' [Special Needs]' : ''}`
   ).join('\n')}
 
 FIDUCIARIES:
 ${JSON.stringify(fiduciaries, null, 2).slice(0, 2000)}
 
-DISTRIBUTION:
+DISTRIBUTION PLAN:
 ${JSON.stringify(distribution, null, 2).slice(0, 1500)}
 
 HEALTHCARE PREFERENCES:
@@ -841,51 +843,33 @@ FIRM: ${safeFirm.firmName ?? ''}
   Email: ${safeFirm.firmEmail ?? ''}
 `.trim();
 
-  // Knowledge base context
-  const kbContext = ctx.knowledgeResources
-    .map((r) => `[${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}:\n${r.content}`)
-    .join('\n\n');
+  const systemPrompt = `You are an expert editor performing TEXT-ONLY substitutions on a legal document.
 
-  const systemPrompt = `You are an expert New Jersey estate planning attorney. You are given a REFERENCE TEMPLATE — an existing legal document that defines the exact formatting, structure, headings, clause ordering, and legal style that the firm uses.
+CRITICAL RULES — FOLLOW EXACTLY:
+1. You will receive an HTML document with a sample client's data.
+2. Replace ONLY the sample client's names, addresses, dates, fiduciary names, and personal details with the new client's data provided below.
+3. Adjust gender-specific language (he/she, his/her, husband/wife, etc.) to match the new client.
+4. DO NOT change, add, remove, or reorder ANY HTML tags (<p>, <div>, <strong>, <u>, etc.).
+5. DO NOT change ANY CSS classes, inline styles, or tag attributes.
+6. DO NOT add or remove any sections, articles, or paragraphs.
+7. DO NOT add new legal provisions, headings, or content not in the original.
+8. DO NOT wrap output in markdown code fences.
+9. Preserve ALL whitespace patterns, line breaks within text, and blank paragraphs.
+10. If a piece of data is not available, use "_______________" as a placeholder blank line.
+11. Return the COMPLETE HTML document with ONLY the text values changed.
+12. The output MUST have the exact same number and type of HTML tags as the input.
 
-Your job is to generate a NEW document of the same type for a DIFFERENT CLIENT, following the template's formatting exactly:
-- Use the SAME heading hierarchy, section ordering, and clause structure
-- Use the SAME legal language patterns and provision wording
-- Replace ALL client-specific details (names, addresses, fiduciaries, distribution plans, etc.) with the new client's actual data
-- Ensure gender-specific language matches the new client (he/she, his/her, etc.)
-- Add or remove clauses only where the new client's situation differs materially (e.g., no children section if no children)
+Think of yourself as a find-and-replace tool — you change text content only, never structure.`;
 
-CRITICAL RULES:
-- Follow the template's structure EXACTLY
-- Do NOT add new sections the template doesn't have
-- Do NOT remove sections unless they're truly inapplicable to this client
-- Cite the specific statute (N.J.S.A.) for every legal provision — do NOT fabricate citations
-- Return ONLY the complete HTML document — no JSON wrapper, no markdown fences
-- Preserve the professional appearance and layout of the original template
-- Do NOT include <style> blocks — they will be preserved separately
+  const userPrompt = `Substitute the sample client data in this ${docType} document with the new client's data.
 
-${(() => {
-  // Load formatting preset prompt block (if specified)
-  const preset = formattingPreset ? getFormattingPreset(formattingPreset) : undefined;
-  if (preset?.promptBlock) {
-    return preset.promptBlock;
-  }
-  return 'Output clean semantic HTML with standard tags (h1, h2, h3, p, ul, ol, table). Do NOT use custom CSS classes.';
-})()}
+${clientDataBlock}
 
-KNOWLEDGE BASE (for accurate statutory references):
-${kbContext || 'No specific resources available.'}`;
+HTML DOCUMENT (change ONLY the text content, preserve ALL HTML tags exactly):
+${templateWithoutStyles}
 
-  const userPrompt = `Generate a complete ${docType} document for this client using the reference template below.
+Return the complete HTML with substitutions applied. Do NOT include <style> blocks.`;
 
-${clientSummary}
-
-REFERENCE TEMPLATE (follow this formatting exactly):
-${rawTemplateHtml}
-
-Generate the complete HTML document now. Return ONLY the HTML.`;
-
-  // Log a warning for very large templates so we can monitor output quality
   if (rawTemplateHtml.length > 50000) {
     console.warn(
       `[template-engine] Large template for ${docType}: ${rawTemplateHtml.length} chars (~${Math.round(rawTemplateHtml.length / 4)} tokens). ` +
@@ -896,40 +880,50 @@ Generate the complete HTML document now. Return ONLY the HTML.`;
   try {
     let result = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
-      temperature: 0.15,
+      temperature: 0.05, // Very low temp for faithful substitution
       maxTokens: 32768,
     });
 
-    // Strip markdown fences — AI often wraps HTML in ```html ... ```
     if (result) {
       result = stripHtmlFences(result);
     }
 
-    if (result && result.trim().length > 100) {
-      // ── Phase 3: Restore preserved styles ──────────────────────────
-      if (preservedStyles) {
-        // If the AI output already has a style block, don't duplicate
-        if (!styleRegex.test(result)) {
-          result = preservedStyles + '\n' + result;
-          console.info(`[template-engine] Restored ${styleBlocks.length} style block(s) from template for ${docType}`);
-        }
-      }
-
-      // ── Phase 3: Validate HTML structure ───────────────────────────
-      // If AI returned plain text with no HTML tags, wrap it in basic structure
-      const hasHtmlTags = /<(?:h[1-6]|p|div|section|article|table)\b/i.test(result);
-      if (!hasHtmlTags) {
-        console.warn(`[template-engine] AI output for ${docType} has no HTML structure, wrapping in <div>`);
-        result = `<div class="generated-document">\n${result}\n</div>`;
-      }
-
-      return result;
+    if (!result || result.trim().length < 100) {
+      console.warn(`[template-engine] Substitution output too short for ${docType}, using raw template`);
+      return rawTemplateHtml;
     }
-    // If AI returned too little, return the raw template
-    console.warn(`[template-engine] AI output too short for ${docType} (${result?.trim().length ?? 0} chars), using raw template`);
-    return rawTemplateHtml;
+
+    // ── Structural fidelity validation ─────────────────────────────
+    // Verify the AI didn't alter the HTML structure during substitution
+    const fidelity = compareHtmlStructure(templateWithoutStyles, result);
+    console.info(
+      `[template-engine] Substitution fidelity for ${docType}: ${(fidelity.score * 100).toFixed(1)}% ` +
+      `(tags: ${fidelity.originalTagCount} → ${fidelity.modifiedTagCount})`,
+    );
+
+    if (!fidelity.passes) {
+      console.warn(
+        `[template-engine] Substitution corrupted structure for ${docType} ` +
+        `(score=${(fidelity.score * 100).toFixed(1)}%). ` +
+        `Falling back to raw template with editing markers.`,
+      );
+      // Return raw template with a visible editing notice
+      const notice = '<div style="background:#fff3cd;color:#856404;padding:12px;margin:0 0 16px 0;border:1px solid #ffc107;border-radius:4px;font-weight:bold;">⚠️ This document contains sample client data. Please review and edit all names, addresses, and personal details for the actual client.</div>';
+      return preservedStyles + '\n' + notice + '\n' + templateWithoutStyles;
+    }
+
+    // Restore preserved styles
+    if (preservedStyles) {
+      const hasStyles = /<style[^>]*>[\s\S]*?<\/style>/gi.test(result);
+      if (!hasStyles) {
+        result = preservedStyles + '\n' + result;
+      }
+    }
+
+    return result;
   } catch (err) {
-    console.error('[template-engine] Template-referenced generation failed:', err);
+    console.error('[template-engine] Focused substitution failed:', err);
+    // Fallback to raw template
     return rawTemplateHtml;
   }
 }

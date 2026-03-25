@@ -18,13 +18,14 @@ import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from '../ai-cl
 import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
+import { getFormattingPreset } from '../config/formatting-presets';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
-const POA_SYSTEM_PROMPT = `
+const POA_SYSTEM_PROMPT_BASE = `
 You are an expert New Jersey estate planning attorney generating a complete, execution-ready Durable Power of Attorney (POA).
 
 GOVERNING LAW:
@@ -61,11 +62,7 @@ SPRINGING POA TRIGGER LANGUAGE:
   If effective date = "springing": 
   "This power of attorney shall become effective upon my incapacity. 'Incapacity' means I am unable to manage my property and affairs effectively, as determined in writing by two licensed physicians."
 
-FORMATTING:
-• Full HTML (no <html>/<body>/<head>).
-• <h1> for title, <h2> for sections, <p> for text, <table> for signature block.
-• Include all agent name/address lines as fill-in fields.
-• Do NOT leave any "[NAME]" tokens — use actual client data.
+%%FORMATTING_RULES%%
 
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
@@ -84,6 +81,12 @@ OUTPUT FORMAT — JSON only:
   }
 }
 `.trim();
+
+const DEFAULT_POA_FORMATTING = `FORMATTING:
+• Full HTML (no <html>/<body>/<head>).
+• <h1> for title, <h2> for sections, <p> for text, <table> for signature block.
+• Include all agent name/address lines as fill-in fields.
+• Do NOT leave any "[NAME]" tokens — use actual client data.`;
 
 // ---------------------------------------------------------------------------
 // Generator
@@ -141,7 +144,15 @@ ${financialPowers.map((p: string) => `    • ${sanitizeForPrompt(p)}`).join('\n
 Generate the complete Durable POA now. Include all enumerated powers, the exact N.J.S.A. 46:2B-8.2 durability clause, ${poa.giftingPower ? 'gift-making authority,' : ''} third-party reliance clause, and full NJ notary acknowledgment block.
 `.trim();
 
-  const raw = await callAI(POA_SYSTEM_PROMPT, userPrompt, safeFirm, {
+  // Resolve formatting preset from firmData
+  const presetKey = (safeFirm as Record<string, unknown>)?.formattingPreset as string | undefined;
+  const preset = presetKey ? getFormattingPreset(presetKey) : undefined;
+  const formattingRules = preset?.promptBlock
+    ? `${preset.promptBlock}\n\n• Do NOT leave any "[NAME]" tokens — use actual client data.`
+    : DEFAULT_POA_FORMATTING;
+  const systemPrompt = POA_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+
+  const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.15,
     maxTokens: 16384,
