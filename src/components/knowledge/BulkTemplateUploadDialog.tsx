@@ -100,6 +100,7 @@ export function BulkTemplateUploadDialog({
       description: string;
       tags: string[];
       content: string;
+      rawContent: string;
       rawText: string;
     }
 
@@ -146,6 +147,7 @@ export function BulkTemplateUploadDialog({
           description: processed.documentSummary || '',
           tags: processed.suggestedTags || [],
           content: processed.extractedHtml || processed.extractedText || '',
+          rawContent: (processed as { rawContent?: string }).rawContent || '',
           rawText: (processed as { rawExtractedText?: string }).rawExtractedText || processed.extractedText || '',
         });
       } catch (err) {
@@ -245,6 +247,7 @@ export function BulkTemplateUploadDialog({
           folder: folder.trim() || undefined,
           fileUrl: pf.fileUrl,
           originalFileName: pf.file.name,
+          rawContent: pf.rawContent || undefined,
         });
 
         // Show the MERGED variable count (not the raw AI count)

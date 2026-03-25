@@ -690,6 +690,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
     return {
       success: true,
       extractedHtml: templatizedHtml,
+      rawContent: extractedHtml, // Original pre-templatization HTML for future re-runs
       extractedText: truncateAtWordBoundary(extractedText, 5000),
       rawExtractedText: truncateAtWordBoundary(extractedText, 20000),
       detectedVariables,

@@ -58,6 +58,7 @@ export const uploadTemplate = onCall(
       templateId, // If provided, update existing
       fileUrl,
       originalFileName,
+      rawContent, // Original pre-templatization HTML
     } = request.data;
 
     if (!firmId || !docType || !name) {
@@ -119,6 +120,9 @@ export const uploadTemplate = onCall(
       if (content) {
         updateData.content = content;
       }
+      if (rawContent) {
+        updateData.rawContent = rawContent;
+      }
       await ref.update(updateData);
 
       console.log(`[uploadTemplate] Updated template ${templateId} (v${currentVersion})`);
@@ -151,6 +155,7 @@ export const uploadTemplate = onCall(
         ...template,
         softwareSource: softwareSource ?? '',
         folder: folder ?? '',
+        ...(rawContent ? { rawContent } : {}),
       });
       console.log(`[uploadTemplate] Created template ${ref.id} for ${docType} (${variant ?? 'standard'})`);
       return { success: true, templateId: ref.id, version: 1 };

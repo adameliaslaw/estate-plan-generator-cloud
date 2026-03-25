@@ -278,6 +278,7 @@ export const templateService = {
     templateId?: string;
     fileUrl?: string;
     originalFileName?: string;
+    rawContent?: string;
   }): Promise<{ templateId: string; version: number }> {
     const fn = httpsCallable(functions, 'uploadTemplate');
     const res = await fn(data);
