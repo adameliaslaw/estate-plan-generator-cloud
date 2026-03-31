@@ -107,22 +107,10 @@ function buildTrStyledParagraph(node: HtmlNode, config: TrStyleConfig): Paragrap
   const inlineStyle: InlineStyle = {};
   if (config.bold) inlineStyle.bold = true;
   if (config.underline) inlineStyle.underline = true;
+  if (config.allCaps) inlineStyle.allCaps = true;
+  if (config.fontSize) inlineStyle.fontSize = config.fontSize;
 
-  let runs = buildTextRuns(children, inlineStyle);
-
-  // For allCaps, override the text runs with allCaps formatting
-  if (config.allCaps && runs.length > 0) {
-    const text = extractText(node);
-    runs = [
-      new TextRun({
-        text: text.toUpperCase(),
-        bold: inlineStyle.bold,
-        underline: config.underline ? { type: UnderlineType.SINGLE } : undefined,
-        font: 'Times New Roman',
-        size: config.fontSize ?? 24,
-      }),
-    ];
-  }
+  const runs = buildTextRuns(children, inlineStyle);
 
   // For affidavit tab layout, add tab stops
   const tabStopDefs = config.tabStops
@@ -300,6 +288,8 @@ interface InlineStyle {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  allCaps?: boolean;
+  fontSize?: number;
 }
 
 function buildTextRuns(nodes: HtmlNode[], style: InlineStyle = {}): TextRun[] {
@@ -315,8 +305,9 @@ function buildTextRuns(nodes: HtmlNode[], style: InlineStyle = {}): TextRun[] {
             bold: style.bold,
             italics: style.italic,
             underline: style.underline ? { type: UnderlineType.SINGLE } : undefined,
+            allCaps: style.allCaps,
             font: 'Times New Roman',
-            size: 24, // 12pt (half-points)
+            size: style.fontSize ?? 24, // 12pt (half-points)
           }),
         );
       }
@@ -333,6 +324,12 @@ function buildTextRuns(nodes: HtmlNode[], style: InlineStyle = {}): TextRun[] {
       if (tag === 'strong' || tag === 'b') newStyle.bold = true;
       if (tag === 'em' || tag === 'i') newStyle.italic = true;
       if (tag === 'u') newStyle.underline = true;
+
+      // Extract styles from inline style="" attribute
+      const styleAttr = (node.attrs?.style ?? '').toLowerCase();
+      if (styleAttr.includes('font-weight: bold') || styleAttr.includes('font-weight: 700') || styleAttr.includes('font-weight:bold')) newStyle.bold = true;
+      if (styleAttr.includes('font-style: italic') || styleAttr.includes('font-style:italic')) newStyle.italic = true;
+      if (styleAttr.includes('text-decoration: underline') || styleAttr.includes('text-decoration:underline')) newStyle.underline = true;
 
       // Recursively build runs for children
       runs.push(...buildTextRuns(children, newStyle));
@@ -400,11 +397,34 @@ function convertNode(
   // ── Paragraph ─────────────────────────────────────────────────────────────
   if (tag === 'p') {
     const runs = buildTextRuns(children);
+    
+    const styleAttr = (node.attrs?.style ?? '').toLowerCase();
+    
+    // Parse alignment
+    const alignmentStr = node.attrs?.['text-align'] ?? node.attrs?.align ?? '';
+    let alignment: (typeof AlignmentType)[keyof typeof AlignmentType] = AlignmentType.JUSTIFIED;
+    if (alignmentStr.includes('center') || styleAttr.includes('text-align: center')) alignment = AlignmentType.CENTER;
+    if (alignmentStr.includes('right') || styleAttr.includes('text-align: right')) alignment = AlignmentType.RIGHT;
+    if (alignmentStr.includes('left') || styleAttr.includes('text-align: left')) alignment = AlignmentType.LEFT;
+
+    // Parse spacing
+    const spacing: { after?: number; line?: number; before?: number } = { after: 160 };
+    if (styleAttr.includes('line-height:')) {
+      const match = styleAttr.match(/line-height:\s*([\d.]+)/);
+      if (match) {
+        const lh = parseFloat(match[1]);
+        if (lh >= 1.0) {
+          spacing.line = Math.round(lh * 240);
+          spacing.after = 0; // Remove default paragraph spacing if line-height is forcing layout
+        }
+      }
+    }
+
     return [
       new Paragraph({
         children: runs.length ? runs : [new TextRun({ text: '' })],
-        alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 160 },
+        alignment,
+        spacing,
       }),
     ];
   }
