@@ -606,9 +606,13 @@ export async function generateDocument(
         `placeholders=${structureResult.placeholderCount}`,
       );
 
-      // Auto-retry ONCE for standard generators with error-severity failures
+      // Auto-retry ONCE for standard AI generators with error-severity failures.
+      // Do NOT retry for template/hybrid modes — the user's template dictates the legal structure,
+      // and retrying would overwrite their template with a purely AI-generated document.
       const hasErrors = structureResult.missing.some(m => m.severity === 'error');
-      if (hasErrors && isDocType(docType) && !isFlexDocType(docType)) {
+      const isAIGeneration = generationMode === 'ai' || !clientContext;
+      
+      if (hasErrors && isDocType(docType) && !isFlexDocType(docType) && isAIGeneration) {
         console.info(`[unifiedGenerator] Retrying ${docType} with structural feedback...`);
         const retryInstruction = buildRetryInstruction(structureResult, docType);
 
