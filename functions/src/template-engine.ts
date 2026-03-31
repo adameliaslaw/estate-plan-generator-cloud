@@ -647,32 +647,23 @@ export async function generateFromTemplate(
   // ── Smart routing ──────────────────────────────────────────────────────────
   // Uploaded DOCX templates (softwareSource set, no Handlebars variables)
   // should skip Handlebars entirely — the template is a complete document for
-  // a sample client with no {{variables}} to substitute.
+  // a sample client with no {{variables}} to substitute. Route directly to
+  // template-referenced AI which uses the template as a formatting guide.
   const isRawUploadedTemplate =
     !!template.softwareSource &&
     (!template.variables || template.variables.length === 0);
 
   if (isRawUploadedTemplate) {
+    const title = buildStandardTitle(docType, ctx.computed.clientFullName);
+
     console.info(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-      `(source=${template.softwareSource}).`,
+      `(source=${template.softwareSource}) → focused substitution (${mode})`,
     );
-
-    // AI substitution (substituteTemplateValues) fails on large legal documents 
-    // due to LLM output token limits (truncation damages HTML structure).
-    // If we have a native AI generator (which applies perfect format tagging via presets), 
-    // it is significantly faster and more structurally precise to generate from scratch natively.
-    if (aiGeneratorFn) {
-      console.info(`[template-engine] Bypassing slow, lossy LLM substitution. Routing to precise native AI generator.`);
-      const generated = await aiGeneratorFn();
-      // Tag it with the promptVersion so the UI knows which template guided this
-      return { ...generated, promptVersion, templateBaseline: template.content };
-    }
-
-    // Fallback if no native generator exists (extremely rare)
-    console.warn(`[template-engine] No native generator available, falling back to LLM substitution.`);
-    const title = buildStandardTitle(docType, ctx.computed.clientFullName);
     const content = await substituteTemplateValues(template.content, ctx, docType, formattingPreset);
+    
+    // For hybrid mode, we might optionally want to do an enhancement pass later, but right now
+    // substituteTemplateValues focuses purely on client data injection.
     return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
   }
 
@@ -880,9 +871,9 @@ Return the complete HTML with substitutions applied. Do NOT include <style> bloc
 
   try {
     let result = await callAI(systemPrompt, userPrompt, safeFirm, {
-      model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+      model: 'gpt-4o', // Explicitly use gpt-4o which supports up to 16,384 output tokens instead of proxy fallback
       temperature: 0.05, // Very low temp for faithful substitution
-      maxTokens: 32768,
+      maxTokens: 16384,
     });
 
     if (result) {
