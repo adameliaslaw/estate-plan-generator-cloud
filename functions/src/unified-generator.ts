@@ -458,18 +458,46 @@ export async function generateDocument(
 
   // ------------------------------------------------------------------
   // 1a. Spouse data swap — for married-couple generation
-  //     When spouseRole='spouse', swap personalInfo ↔ spouseInfo so
-  //     generators treat the spouse as the primary person.
   // ------------------------------------------------------------------
+  // We must apply the swap to BOTH 'clientData' (for the generator) AND 'clientContext' (for the template engine).
+  let clientContext: ClientContext | null = null;
+  
+  if (params.preloadedContext) {
+    // Deep clone preloaded context so we don't mutate the shared batch instance
+    clientContext = JSON.parse(JSON.stringify(params.preloadedContext));
+  } else {
+    try {
+      clientContext = await aggregateClientContext(firmId, clientId, docType);
+    } catch (ctxErr) {
+      console.warn(`[unifiedGenerator] Context aggregation failed for ${docType}:`, ctxErr);
+    }
+  }
+
   if (params.spouseRole === 'spouse' && clientData.spouseInfo) {
     const originalPersonal = { ...clientData.personalInfo };
     const originalSpouse = { ...clientData.spouseInfo };
     console.log(`[unifiedGenerator] Spouse swap for ${docType}: ${originalSpouse.firstName ?? 'unknown'} ↔ ${originalPersonal.firstName ?? 'unknown'}`);
+    
+    // Swap clientData for generators
     clientData = {
       ...clientData,
       personalInfo: originalSpouse,
       spouseInfo: originalPersonal,
     };
+
+    // Swap clientContext for template engine
+    if (clientContext?.client?.spouseInfo) {
+      const ctxOriginalPersonal = { ...clientContext.client.personalInfo };
+      const ctxOriginalSpouse = { ...clientContext.client.spouseInfo };
+      clientContext.client.personalInfo = ctxOriginalSpouse;
+      clientContext.client.spouseInfo = ctxOriginalPersonal;
+
+      // Swap computed names
+      const originalClientFullName = clientContext.computed.clientFullName;
+      const originalSpouseFullName = clientContext.computed.spouseFullName;
+      clientContext.computed.clientFullName = originalSpouseFullName;
+      clientContext.computed.spouseFullName = originalClientFullName;
+    }
   }
 
   const packageType = clientData.packageDetails?.packageType ?? 'foundation';
@@ -489,7 +517,6 @@ export async function generateDocument(
 
   // ------------------------------------------------------------------
   // 1c. Serialize client data canonically (Phase 1)
-  //     Attach to clientData so generators can use it
   // ------------------------------------------------------------------
   try {
     const serialized = serializeClientData(clientData, firmData, docType);
@@ -501,19 +528,6 @@ export async function generateDocument(
     };
   } catch (serErr) {
     console.warn('[unifiedGenerator] Client data serialization failed (non-blocking):', serErr);
-  }
-
-  // ------------------------------------------------------------------
-  // 2. Aggregate context (always — not just for template/hybrid)
-  //    Reuse preloadedContext when available to avoid redundant Firestore reads
-  // ------------------------------------------------------------------
-  let clientContext: ClientContext | null = params.preloadedContext ?? null;
-  if (!clientContext) {
-    try {
-      clientContext = await aggregateClientContext(firmId, clientId, docType);
-    } catch (ctxErr) {
-      console.warn(`[unifiedGenerator] Context aggregation failed for ${docType}:`, ctxErr);
-    }
   }
 
   // ------------------------------------------------------------------
