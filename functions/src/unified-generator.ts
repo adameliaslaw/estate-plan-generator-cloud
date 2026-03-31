@@ -445,6 +445,11 @@ export async function generateDocument(
     (firmData as Record<string, unknown>).documentDraftingModel = modelOverride;
   }
 
+  // Inject formatting preset if specified (so generators can apply correct paragraph classes)
+  if (formattingPreset) {
+    (firmData as Record<string, unknown>).formattingPreset = formattingPreset;
+  }
+
   // Inject custom instructions into client data for generators
   if (customInstructions) {
     const safe = sanitizeForPrompt(customInstructions);

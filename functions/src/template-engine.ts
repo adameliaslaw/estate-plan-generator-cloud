@@ -656,23 +656,15 @@ export async function generateFromTemplate(
   if (isRawUploadedTemplate) {
     const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
-    if (mode === 'hybrid') {
-      // Hybrid mode: focused text substitution only — preserves HTML structure
-      console.info(
-        `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-        `(source=${template.softwareSource}) → focused substitution (hybrid)`,
-      );
-      const content = await substituteTemplateValues(template.content, ctx, docType, formattingPreset);
-      return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
-    }
-
-    // Template mode: serve the raw uploaded HTML directly (fast — no AI call).
-    // The template is a complete document from a sample client.
     console.info(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-      `(source=${template.softwareSource}) → serving raw HTML (template mode)`,
+      `(source=${template.softwareSource}) → focused substitution (${mode})`,
     );
-    return { docType, title, content: template.content, status: 'draft', promptVersion };
+    const content = await substituteTemplateValues(template.content, ctx, docType, formattingPreset);
+    
+    // For hybrid mode, we might optionally want to do an enhancement pass later, but right now
+    // substituteTemplateValues focuses purely on client data injection.
+    return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
   }
 
   // ── Handlebars rendering (for templates WITH variables) ─────────────────
