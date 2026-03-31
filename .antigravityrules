@@ -1,0 +1,12 @@
+---
+description: Post-update deployment instructions
+---
+
+# Deploy Updates Rule
+
+Whenever you make updates to the codebase and the user asks to finalize or deploy, or if the update fixes a primary user request, you MUST routinely test on the cloud by pushing the code to git and deploying to Firebase by following the `/deploy` workflow found in `.agents/workflows/deploy.md`.
+
+You should:
+1. Stage and commit changes (using git add and git commit).
+2. Push to GitHub with `git push origin main`.
+3. Check what was changed and run the appropriate `npx firebase-tools deploy` command (or `firebase deploy` if installed globally) as specified in the `/deploy` workflow so that changes are available on the cloud.
