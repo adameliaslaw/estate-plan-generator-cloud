@@ -54,3 +54,4 @@ export { connectGoogleDrive, onDocumentWrittenSyncToDrive } from './google-drive
 export { lookupPropertyData } from './property-data';
 export { groundedReviewDocument } from './grounded-review';
 export { estimateGenerationCost } from './cost-estimator';
+export { cleanupTemplates } from './cleanup-templates';

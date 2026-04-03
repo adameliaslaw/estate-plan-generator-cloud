@@ -10,3 +10,8 @@ You should:
 1. Stage and commit changes (using git add and git commit).
 2. Push to GitHub with `git push origin main`.
 3. Check what was changed and run the appropriate `npx firebase-tools deploy` command (or `firebase deploy` if installed globally) as specified in the `/deploy` workflow so that changes are available on the cloud.
+
+# General execution rules
+- Ask any questions you have.
+- Do not guess.
+- Do not assume.

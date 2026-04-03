@@ -128,10 +128,11 @@ export const retemplatizeTemplates = onCall(
       throw new HttpsError('permission-denied', 'Only admin or attorney can retemplatize.');
     }
 
-    const { firmId, dryRun = false, force = false } = request.data as {
+    const { firmId, dryRun = false, force = false, limit = 3 } = request.data as {
       firmId: string;
       dryRun?: boolean;
       force?: boolean;
+      limit?: number;
     };
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
@@ -152,9 +153,13 @@ export const retemplatizeTemplates = onCall(
       return force || vars.length === 0;
     });
 
+    // Apply limit to avoid timeout — process a batch at a time
+    const batch = rawTemplates.slice(0, limit);
+    const remaining = rawTemplates.length - batch.length;
+
     console.log(
-      `[retemplatize] Found ${rawTemplates.length} templates out of ${snapshot.size} ` +
-      `with softwareSource (firmId=${firmId}, dryRun=${dryRun}, force=${force})`,
+      `[retemplatize] Found ${rawTemplates.length} templates, processing ${batch.length} this batch ` +
+      `(${remaining} remaining). firmId=${firmId}, dryRun=${dryRun}, force=${force}`,
     );
 
     if (rawTemplates.length === 0) {
@@ -179,7 +184,7 @@ export const retemplatizeTemplates = onCall(
     }[] = [];
 
     // Process templates sequentially to avoid AI rate limits
-    for (const doc of rawTemplates) {
+    for (const doc of batch) {
       const data = doc.data();
       const templateId = doc.id;
       const docType = data.docType ?? 'unknown';
@@ -314,13 +319,14 @@ export const retemplatizeTemplates = onCall(
     const errorCount = results.filter(r => r.status === 'error').length;
 
     console.log(
-      `[retemplatize] Complete. ${successCount} succeeded, ${errorCount} errors, ` +
-      `${results.length - successCount - errorCount} skipped. dryRun=${dryRun}`,
+      `[retemplatize] Batch complete. ${successCount} succeeded, ${errorCount} errors, ` +
+      `${results.length - successCount - errorCount} skipped. ${remaining} remaining. dryRun=${dryRun}`,
     );
 
     return {
       processed: successCount,
       total: rawTemplates.length,
+      remaining,
       dryRun,
       results,
     };
