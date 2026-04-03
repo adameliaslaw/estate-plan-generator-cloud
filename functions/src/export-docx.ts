@@ -156,6 +156,9 @@ function parseHtml(html: string): HtmlNode[] {
   // Use a simple recursive-descent approach
   const cleaned = html
     .replace(/<!--[\s\S]*?-->/g, '')   // strip comments
+    .replace(/<style[\s\S]*?<\/style>/gi, '')   // strip <style> blocks (CSS is not DOCX content)
+    .replace(/<script[\s\S]*?<\/script>/gi, '') // strip <script> blocks
+    .replace(/<head[\s\S]*?<\/head>/gi, '')     // strip <head> blocks (meta tags, title, etc.)
     .replace(/<\s*(br|hr)\s*\/?>/gi, (m) =>
       m.toLowerCase().startsWith('<br') ? '<br/>' : '<hr/>',
     )
@@ -496,8 +499,8 @@ function convertNode(
     return [convertTable(node)];
   }
 
-  // ── div / section / article / main — treat as transparent containers ──────
-  if (['div', 'section', 'article', 'main', 'body'].includes(tag)) {
+  // ── div / section / article / main / html — treat as transparent containers ──
+  if (['div', 'section', 'article', 'main', 'body', 'html', 'header', 'footer', 'nav', 'aside'].includes(tag)) {
     return children.flatMap((c) => convertNode(c, listLevel, listType));
   }
 

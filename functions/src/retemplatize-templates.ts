@@ -60,10 +60,11 @@ specialConsiderations.funeralWishes, specialConsiderations.funeralRepresentative
 specialConsiderations.petDetails, specialConsiderations.petCaretaker
 
 FIRM DATA FIELDS:
-firm.name, firm.address, firm.city, firm.state, firm.zip, firm.phone
+firm.name (aliased from firmName), firm.address, firm.city, firm.state, firm.zip, firm.phone, firm.email, firm.website
 firm.attorneyName, firm.attorneyId
 firm.witness1Name, firm.witness1Address
 firm.witness2Name, firm.witness2Address
+Alternate flat paths: firmName, firmAddress, firmPhone, firmEmail, firmWebsite, barNumber
 
 COMPUTED FIELDS:
 clientFullName, spouseFullName, hasSpouse, hasMinorChildren
@@ -94,8 +95,9 @@ REPLACEMENT RULES:
 10. Firm name, office address, and phone → {{firm.name}}, {{firm.address}}, {{firm.city}}, {{firm.state}}, {{firm.zip}}, {{firm.phone}}.
 11. Replace specific dates in headers, execution clauses, and signature blocks with {{todayFormatted}}.
 12. Replace funeral/cremation/burial instructions with {{specialConsiderations.funeralWishes}}.
-13. FOR CHILDREN: If multiple children are listed, use indexed variables: {{children[0].name}}, {{children[1].name}}, etc.
+13. FOR CHILDREN: If multiple children are listed, use Handlebars indexed array syntax WITH A DOT BEFORE THE BRACKET: {{children.[0].name}}, {{children.[1].name}}, etc. NEVER use {{children[0].name}} — the dot before the bracket is REQUIRED by Handlebars.
 14. Compound relationship titles like "sister-in-law" are SINGLE values. NEVER split them.
+15. For firm data, use {{firm.name}}, {{firm.address}}, {{firm.phone}}, etc. (aliased from firmName/firmAddress/firmPhone).
 
 CRITICAL: Replace EVERY instance of client-specific data. Do not leave any proper names.
 PRESERVE: All HTML tags, structural formatting, statutory references, section headings, legal boilerplate.

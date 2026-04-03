@@ -564,8 +564,27 @@ export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
     // Computed
     ...ctx.computed,
 
-    // Firm data
-    firm: ctx.firm,
+    // Firm data — with aliased keys so both {{firmName}} and {{firm.name}} resolve
+    firm: {
+      ...ctx.firm,
+      // Aliases: retemplatize prompt uses firm.name, firm.address, etc.
+      // while the Firestore doc stores firmName, firmAddress, etc.
+      name: ctx.firm.firmName ?? ctx.firm.name ?? '',
+      address: ctx.firm.firmAddress ?? ctx.firm.address ?? '',
+      city: ctx.firm.firmCity ?? ctx.firm.city ?? '',
+      state: ctx.firm.firmState ?? ctx.firm.state ?? '',
+      zip: ctx.firm.firmZip ?? ctx.firm.zip ?? '',
+      phone: ctx.firm.firmPhone ?? ctx.firm.phone ?? '',
+      email: ctx.firm.firmEmail ?? ctx.firm.email ?? '',
+      website: ctx.firm.firmWebsite ?? ctx.firm.website ?? '',
+      // Attorney & witness data
+      attorneyName: ctx.firm.attorneyName ?? '',
+      attorneyId: ctx.firm.barNumber ?? ctx.firm.attorneyId ?? '',
+      witness1Name: ctx.firm.witness1Name ?? '',
+      witness1Address: ctx.firm.witness1Address ?? '',
+      witness2Name: ctx.firm.witness2Name ?? '',
+      witness2Address: ctx.firm.witness2Address ?? '',
+    },
     firmName: ctx.firm.firmName ?? '',
     firmAddress: ctx.firm.firmAddress ?? '',
     firmPhone: ctx.firm.firmPhone ?? '',
