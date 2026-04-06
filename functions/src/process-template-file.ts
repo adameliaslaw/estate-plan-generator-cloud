@@ -263,8 +263,48 @@ export const processTemplateFile = onCall(
 
     if (ext === 'docx') {
       try {
-        const result = await mammoth.convertToHtml({ buffer });
+        // Style map: convert Word paragraph styles to CSS classes.
+        // InteractiveLegal DOCX files use paragraph styles like "tr-title",
+        // "tr-art1", "tr-body1" etc. Mammoth strips these by default unless
+        // we provide explicit mappings. We map all known tr-* styles.
+        const styleMap = [
+          "p[style-name='tr-title'] => p.tr-title:fresh",
+          "p[style-name='tr-cover-title'] => p.tr-cover-title:fresh",
+          "p[style-name='tr-cover'] => p.tr-cover:fresh",
+          "p[style-name='tr-mem-header1'] => p.tr-mem-header1:fresh",
+          "p[style-name='tr-body1'] => p.tr-body1:fresh",
+          "p[style-name='tr-body3'] => p.tr-body3:fresh",
+          "p[style-name='tr-art1'] => p.tr-art1:fresh",
+          "p[style-name='tr-art2'] => p.tr-art2:fresh",
+          "p[style-name='tr-art3b'] => p.tr-art3b:fresh",
+          "p[style-name='tr-art4b'] => p.tr-art4b:fresh",
+          "p[style-name='tr-sig-line'] => p.tr-sig-line:fresh",
+          "p[style-name='tr-sig-name'] => p.tr-sig-name:fresh",
+          "p[style-name='tr-affid'] => p.tr-affid:fresh",
+          "p[style-name='tr-base'] => p.tr-base:fresh",
+          // Variations with different casing or naming conventions
+          "p[style-name='Title'] => p.tr-title:fresh",
+          "p[style-name='Cover Title'] => p.tr-cover-title:fresh",
+          "p[style-name='Cover'] => p.tr-cover:fresh",
+          "p[style-name='Body Text'] => p.tr-body1:fresh",
+          "p[style-name='Body Text 3'] => p.tr-body3:fresh",
+          "p[style-name='Article 1'] => p.tr-art1:fresh",
+          "p[style-name='Article 2'] => p.tr-art2:fresh",
+        ];
+        const result = await mammoth.convertToHtml({ buffer }, { styleMap });
         extractedHtml = result.value;
+        // Log any mammoth conversion warnings (e.g., unmapped styles)
+        if (result.messages.length > 0) {
+          const styleWarnings = result.messages
+            .filter((m: { type: string }) => m.type === 'warning')
+            .map((m: { message: string }) => m.message);
+          if (styleWarnings.length > 0) {
+            console.log(
+              `[processTemplateFile] Mammoth warnings (${styleWarnings.length}): ` +
+              styleWarnings.slice(0, 5).join(' | '),
+            );
+          }
+        }
         // Also get raw text for AI analysis
         const textResult = await mammoth.extractRawText({ buffer });
         extractedText = textResult.value;
