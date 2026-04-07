@@ -7,11 +7,11 @@
 // Firm defaults
 // ---------------------------------------------------------------------------
 export const FIRM_DEFAULTS = {
-  firmName: 'Elias Advisory LLC',
+  firmName: 'Elias Counsel, LLC',
   firmAddress: '168 Prospect Plains Road, Monroe Township, NJ 08831',
   firmPhone: '(609) 655-3200',
   firmEmail: 'info@adameliaslaw.com',
-  firmWebsite: 'https://www.eliasadvisory.com',
+  firmWebsite: 'https://www.adameliaslaw.com',
   barNumber: '050422014',
   primaryColor: '#1a365d',
   accentColor: '#2b6cb0',
