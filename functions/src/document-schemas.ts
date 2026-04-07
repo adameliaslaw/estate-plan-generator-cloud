@@ -183,8 +183,12 @@ export const ESTATE_EXTRACTION_SCHEMA = {
         type: 'string' as const,
         description: 'Brief description of the trustee succession or appointment logic',
       },
+      is_married: {
+        type: 'boolean' as const,
+        description: 'Whether the client is married or has a spouse',
+      },
     },
-    required: ['client_name', 'executor', 'trustee_logic'],
+    required: ['client_name', 'executor', 'trustee_logic', 'is_married'],
     additionalProperties: false,
   },
   strict: true,

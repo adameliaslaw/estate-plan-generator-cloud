@@ -76,6 +76,7 @@ export const generateEstateDocument = functions
       client_name: string;
       executor: string;
       trustee_logic: string;
+      is_married: boolean;
     }>(
       'gemini-1.5-flash',
       extractionPrompt,
@@ -87,12 +88,28 @@ export const generateEstateDocument = functions
     // ── 4. Document Assembly (docxtemplater) ─────────────────────────────────
     console.log('[generateEstateDocument] Assembling Word document...');
 
-    // Template path: lib/templates/estate-document.docx (post-build)
-    // Local build path: templates/estate-document.docx
-    const templatePath = path.join(__dirname, 'templates', 'estate-document.docx');
+    // Template Routing Logic
+    let templateName = 'Generic_Will.docx';
+    if (extractedData.is_married === true) {
+      templateName = 'NJ_Will_Married.docx';
+    } else if (extractedData.is_married === false) {
+      templateName = 'NJ_Will_Single.docx';
+    }
+
+    console.log(`[generateEstateDocument] Using template: ${templateName}`);
+
+    // Template path: lib/templates/[templateName] (post-build)
+    const templatePath = path.join(__dirname, 'templates', templateName);
     if (!fs.existsSync(templatePath)) {
       console.error('[generateEstateDocument] Template not found at:', templatePath);
-      throw new functions.https.HttpsError('internal', 'Document template missing.');
+      // Fallback to Generic_Will if specific one is missing in the bundle
+      const fallbackPath = path.join(__dirname, 'templates', 'Generic_Will.docx');
+      if (fs.existsSync(fallbackPath)) {
+        console.warn('[generateEstateDocument] Falling back to Generic_Will.docx');
+        templateName = 'Generic_Will.docx';
+      } else {
+        throw new functions.https.HttpsError('internal', `Document template missing: ${templateName}`);
+      }
     }
 
     const content = fs.readFileSync(templatePath, 'binary');
