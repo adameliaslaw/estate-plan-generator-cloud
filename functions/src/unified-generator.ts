@@ -595,7 +595,7 @@ export async function generateDocument(
             spouse_name: string;
             [key: string]: unknown;
           }>(
-            'gemini-1.5-flash',
+            'gemini-2.5-flash',
             extractionPrompt,
             ESTATE_EXTRACTION_SCHEMA.schema as Record<string, unknown>,
             firmGeminiKey,
