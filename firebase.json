@@ -38,20 +38,11 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"],
-      "predeploy": ["npm --prefix functions run build"]
-    },
-    {
-      "source": "functions-backfill",
-      "codebase": "backfill",
-      "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"],
-      "predeploy": ["npm --prefix functions-backfill run build"]
-    }
-  ],
+  "functions": {
+    "source": "functions",
+    "predeploy": ["npm --prefix functions run build"],
+    "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"]
+  },
   "storage": {
     "rules": "storage.rules"
   },
