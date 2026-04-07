@@ -40,9 +40,10 @@ export const generateEstateDocument = functions
       throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    const { firmId, clientId } = data as {
+    const { firmId, clientId, docType = 'will' } = data as {
       firmId?: string;
       clientId?: string;
+      docType?: 'will' | 'poa' | 'hc';
     };
 
     if (!firmId || !clientId) {
@@ -53,12 +54,12 @@ export const generateEstateDocument = functions
     }
 
     // ── 2. Data Retrieval ────────────────────────────────────────────────────
-    console.log(`[generateEstateDocument] Fetching context for client ${clientId}...`);
-    const contextData = await aggregateClientContext(firmId, clientId, 'will');
+    console.log(`[generateEstateDocument] Fetching context for client ${clientId} for ${docType}...`);
+    const contextData = await aggregateClientContext(firmId, clientId, docType);
     const { text: serializedData } = serializeClientData(
       contextData.client,
       contextData.firm,
-      'will',
+      docType,
     );
 
     // ── 3. AI Data Extraction (Vertex AI) ────────────────────────────────────
@@ -76,6 +77,8 @@ export const generateEstateDocument = functions
     const extractedData = await callVertexAIStructured<{
       client_name: string;
       executor: string;
+      successor_executor: string;
+      client_address: string;
       trustee_logic: string;
       is_married: boolean;
       has_trust: boolean;
@@ -107,6 +110,7 @@ export const generateEstateDocument = functions
     let templateName = getTemplateName({
       is_married: extractedData.is_married,
       has_trust: extractedData.has_trust,
+      doc_type: docType,
     });
 
     console.log(`[generateEstateDocument] Using template: ${templateName}`);
@@ -173,8 +177,8 @@ export const generateEstateDocument = functions
       id: docId,
       firmId,
       clientId,
-      docType: 'will', // Using 'will' as a container for now
-      displayName: `Estate Plan - ${extractedData.client_name}`,
+      docType: docType,
+      displayName: `${docType.toUpperCase()} - ${extractedData.client_name}`,
       status: 'review',
       storagePath,
       fileName: `${docId}.docx`,

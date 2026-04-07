@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { lazy, Suspense } from 'react';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -30,6 +30,8 @@ const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
+const LandingPage = lazy(() => import('@/pages/LandingPage'));
+
 
 // Constants
 import { ROUTES } from '@/config/constants';
@@ -57,7 +59,14 @@ export default function App() {
         <Suspense fallback={<LoadingSpinner fullScreen />}>
           <Routes>
             {/* ── Root redirect ── */}
-            <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/tools" element={<LandingPage />} />
+            <Route path="/news" element={<LandingPage />} />
+            <Route path="/blog" element={<LandingPage />} />
+            <Route path="/about" element={<LandingPage />} />
+            <Route path="/contact" element={<LandingPage />} />
+            <Route path="/assessment" element={<LandingPage />} />
+
 
             {/* ── Public auth routes ── */}
             <Route path={ROUTES.LOGIN} element={<LoginPage />} />

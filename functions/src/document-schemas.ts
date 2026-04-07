@@ -191,6 +191,14 @@ export const ESTATE_EXTRACTION_SCHEMA = {
         type: 'boolean' as const,
         description: 'Whether the client context references or requires a trust-based will structure',
       },
+      successor_executor: {
+        type: 'string' as const,
+        description: 'Name of the backup or successor executor',
+      },
+      client_address: {
+        type: 'string' as const,
+        description: 'Primary residential address of the client',
+      },
       testator_pronoun: {
         type: 'string' as const,
         description: 'The correct nominative pronoun for the client (e.g., "he", "she", "they")',
@@ -200,7 +208,17 @@ export const ESTATE_EXTRACTION_SCHEMA = {
         description: 'The relationship of the executor to the client (e.g., "my husband", "my dear friend")',
       },
     },
-    required: ['client_name', 'executor', 'trustee_logic', 'is_married', 'has_trust', 'testator_pronoun', 'executor_relationship'],
+    required: [
+      'client_name',
+      'executor',
+      'successor_executor',
+      'client_address',
+      'trustee_logic',
+      'is_married',
+      'has_trust',
+      'testator_pronoun',
+      'executor_relationship',
+    ],
     additionalProperties: false,
   },
   strict: true,

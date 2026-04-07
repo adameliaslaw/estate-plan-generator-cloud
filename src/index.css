@@ -208,3 +208,35 @@
 .tr-sig-name    { margin-left: 3.5in; font-weight: bold; margin-bottom: 10pt; font-family: 'Times New Roman', Times, serif; }
 .tr-affid       { margin: 0 0 6pt; font-size: 11pt; font-family: 'Times New Roman', Times, serif; }
 .tr-base        { margin: 0 0 6pt; min-height: 1.5em; font-family: 'Times New Roman', Times, serif; }
+
+/* Premium UI Enhancements */
+@layer utilities {
+  .glass-header {
+    @apply bg-white/80 backdrop-blur-lg border-b border-white/20;
+  }
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#1a365d] to-[#2b6cb0];
+  }
+}
+
+/* Custom Animations */
+@keyframes slow-pan {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+.animate-slow-pan {
+  background-size: 200% 200%;
+  animation: slow-pan 20s linear infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
