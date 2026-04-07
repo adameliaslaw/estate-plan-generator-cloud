@@ -44,9 +44,8 @@ Map each paragraph to the appropriate class based on its role:
                                 "SELF-PROVING AFFIDAVIT". Centered, underlined.
   <p class="tr-body1">        → Primary body text — introductory paragraphs, general provisions. Justified.
   <p class="tr-body3">        → Witness/attestation ceremonial text (e.g., "IN WITNESS WHEREOF").
-  <p class="tr-art1">         → Article-level headings — major sections (e.g., "ARTICLE I", "FAMILY INFORMATION").
-                                Centered, bold. Preceded by a blank <p class="tr-base"></p> spacer.
-  <p class="tr-art2">         → Sub-article provisions — substantive clauses with inline bold sub-headings.
+  <p class="tr-art1">         → Article-level headings (centered, bold). Used for both "ARTICLE I" and titles like "FAMILY INFORMATION".
+  <p class="tr-art2">         → Sub-article provisions — substantive justified clauses with inline bold sub-headings.
                                 Use text-indent for lettered sub-sections (A., B., C.).
   <p class="tr-art3b">        → Sub-sub-article items — numbered items (1., 2., 3.) under Art2 sections.
                                 Indented further than Art2.

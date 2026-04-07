@@ -276,7 +276,7 @@ export const processTemplateFile = onCall(
           "p[style-name='TR_Body'] => p.tr-body1:fresh",
           "p[style-name='TR_Body3'] => p.tr-body3:fresh",
           "p[style-name='TR_Art1'] => p.tr-art1:fresh",
-          "p[style-name='TR_Art2'] => p.tr-art2:fresh",
+          "p[style-name='TR_Art2'] => p.tr-art1:fresh",
           "p[style-name='TR_Art3'] => p.tr-art3b:fresh",
           "p[style-name='TR_Art3B'] => p.tr-art3b:fresh",
           "p[style-name='TR_Art4B'] => p.tr-art4b:fresh",
