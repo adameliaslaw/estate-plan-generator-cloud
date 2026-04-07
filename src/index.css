@@ -192,3 +192,19 @@
   height: 100% !important;
   border: none !important;
 }
+/* -- TR_ styles (template-referenced document formatting) ------------- */
+.tr-title       { text-align: center; text-decoration: underline; text-transform: uppercase; font-size: 14pt; font-weight: bold; margin: 0 0 18pt; page-break-after: avoid; font-family: 'Times New Roman', Times, serif; }
+.tr-cover-title { text-align: center; font-size: 14pt; margin: 36pt 0 18pt; font-family: 'Times New Roman', Times, serif; }
+.tr-cover       { text-align: center; margin: 0 0 6pt; font-family: 'Times New Roman', Times, serif; }
+.tr-mem-header1 { text-align: center; text-decoration: underline; margin: 24pt 0 14pt; page-break-after: avoid; font-family: 'Times New Roman', Times, serif; }
+.tr-body1       { text-align: justify; margin: 0 0 10pt; font-family: 'Times New Roman', Times, serif; }
+.tr-body3       { text-align: justify; margin: 10pt 0; font-family: 'Times New Roman', Times, serif; }
+.tr-art1        { text-align: center; font-weight: bold; margin: 24pt 0 14pt; page-break-after: avoid; font-family: 'Times New Roman', Times, serif; }
+.tr-art1 + .tr-art1 { margin-top: 5pt; }
+.tr-art2        { text-align: justify; margin: 0 0 10pt; font-family: 'Times New Roman', Times, serif; }
+.tr-art3b       { text-align: justify; text-indent: 1in; margin: 0 0 8pt; font-family: 'Times New Roman', Times, serif; }
+.tr-art4b       { text-align: justify; text-indent: 1.5in; margin: 0 0 8pt; font-family: 'Times New Roman', Times, serif; }
+.tr-sig-line    { margin-left: 3.5in; margin-bottom: 4pt; font-family: 'Times New Roman', Times, serif; }
+.tr-sig-name    { margin-left: 3.5in; font-weight: bold; margin-bottom: 10pt; font-family: 'Times New Roman', Times, serif; }
+.tr-affid       { margin: 0 0 6pt; font-size: 11pt; font-family: 'Times New Roman', Times, serif; }
+.tr-base        { margin: 0 0 6pt; min-height: 1.5em; font-family: 'Times New Roman', Times, serif; }

@@ -276,7 +276,7 @@ export const processTemplateFile = onCall(
           "p[style-name='TR_Body'] => p.tr-body1:fresh",
           "p[style-name='TR_Body3'] => p.tr-body3:fresh",
           "p[style-name='TR_Art1'] => p.tr-art1:fresh",
-          "p[style-name='TR_Art2'] => p.tr-art1:fresh",
+          "p[style-name='TR_Art2'] => p.tr-art2:fresh",
           "p[style-name='TR_Art3'] => p.tr-art3b:fresh",
           "p[style-name='TR_Art3B'] => p.tr-art3b:fresh",
           "p[style-name='TR_Art4B'] => p.tr-art4b:fresh",
@@ -290,7 +290,7 @@ export const processTemplateFile = onCall(
           "r[style-name='Object'] => ",
         ];
         const result = await mammoth.convertToHtml({ buffer }, { styleMap });
-        extractedHtml = result.value;
+        extractedHtml = postProcessTemplateHtml(result.value);
         // Log any mammoth conversion warnings (e.g., unmapped styles)
         if (result.messages.length > 0) {
           const styleWarnings = result.messages
@@ -877,3 +877,61 @@ export const confirmTemplateVariables = onCall(
     return { success: true, confirmed: variables.length };
   },
 );
+/**
+ * Post-processes converted HTML from mammoth to restore professional formatting
+ * that mammoth typically strips (like Word auto-numbering).
+ */
+function postProcessTemplateHtml(html: string): string {
+  if (!html) return html;
+
+  // 1. Identify section headers (tr-art1) and add missing ARTICLE numbering.
+  // We use Roman numerals (I, II, III...) for InteractiveLegal standards.
+  const romanNumerals = [
+    'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+    'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'
+  ];
+  
+  let articleIndex = 0;
+  
+  // Use a regex to find <p class="tr-art1">...</p> blocks.
+  // We only number headers that don't already have "ARTICLE" in them.
+  return html.replace(/<p class="tr-art1">(.*?)<\/p>/gi, (match, content) => {
+    const plainText = content.replace(/<[^>]*>/g, '').trim();
+    
+    // Skip if it already contains "ARTICLE"
+    if (plainText.toUpperCase().includes('ARTICLE')) {
+      // If it has 'ARTICLE', we still want to keep track of the index if it follows our sequence
+      const numMatch = plainText.match(/ARTICLE\s+([IVXLCDM]+)/i);
+      if (numMatch) {
+         const foundRoman = numMatch[1].toUpperCase();
+         const foundIdx = romanNumerals.indexOf(foundRoman);
+         if (foundIdx !== -1) {
+           articleIndex = foundIdx + 1;
+         }
+      }
+      return match;
+    }
+
+    // Skip short fragments or specific sub-heading patterns that shouldn't be Articles
+    // (though TR_Art2 mapping fix above should handle most of these).
+    const skipPatterns = [
+      /^if\s+my/i,
+      /^appointment\s+of/i,
+      /^distribution\s+to/i,
+      /^power\s+to/i,
+      /^reliance\s+upon/i,
+      /^executor\s+as/i,
+      /^effect\s+of/i
+    ];
+    
+    if (skipPatterns.some(pattern => pattern.test(plainText))) {
+      return `<p class="tr-art2">${content}</p>`; // Convert mis-mapped sub-headings to tr-art2
+    }
+
+    // It's a section header! Prepend numbering.
+    const roman = romanNumerals[articleIndex] || (articleIndex + 1).toString();
+    articleIndex++;
+    
+    return `<p class="tr-art1"><strong>ARTICLE ${roman} — </strong>${content}</p>`;
+  });
+}
