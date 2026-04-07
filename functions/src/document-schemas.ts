@@ -171,11 +171,11 @@ export const ESTATE_EXTRACTION_SCHEMA = {
   schema: {
     type: 'object' as const,
     properties: {
-      testator_name: {
+      client_name: {
         type: 'string' as const,
         description: 'Full legal name of the testator / document creator',
       },
-      executor_primary: {
+      executor: {
         type: 'string' as const,
         description: 'Name of the primary executor',
       },
@@ -200,7 +200,7 @@ export const ESTATE_EXTRACTION_SCHEMA = {
         description: 'The relationship of the executor to the client (e.g., "my husband", "my dear friend")',
       },
     },
-    required: ['testator_name', 'executor_primary', 'trustee_logic', 'is_married', 'has_trust', 'testator_pronoun', 'executor_relationship'],
+    required: ['client_name', 'executor', 'trustee_logic', 'is_married', 'has_trust', 'testator_pronoun', 'executor_relationship'],
     additionalProperties: false,
   },
   strict: true,
