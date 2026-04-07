@@ -187,8 +187,20 @@ export const ESTATE_EXTRACTION_SCHEMA = {
         type: 'boolean' as const,
         description: 'Whether the client is married or has a spouse',
       },
+      has_trust: {
+        type: 'boolean' as const,
+        description: 'Whether the client context references or requires a trust-based will structure',
+      },
+      testator_pronoun: {
+        type: 'string' as const,
+        description: 'The correct nominative pronoun for the client (e.g., "he", "she", "they")',
+      },
+      executor_relationship: {
+        type: 'string' as const,
+        description: 'The relationship of the executor to the client (e.g., "my husband", "my dear friend")',
+      },
     },
-    required: ['client_name', 'executor', 'trustee_logic', 'is_married'],
+    required: ['client_name', 'executor', 'trustee_logic', 'is_married', 'has_trust', 'testator_pronoun', 'executor_relationship'],
     additionalProperties: false,
   },
   strict: true,

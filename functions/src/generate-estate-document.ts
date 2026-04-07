@@ -17,6 +17,7 @@ import { callVertexAIStructured } from './vertex-ai-client';
 import { ESTATE_EXTRACTION_SCHEMA } from './document-schemas';
 import { aggregateClientContext } from './client-context-aggregator';
 import { serializeClientData } from './client-data-serializer';
+import { getTemplateName, FALLBACK_TEMPLATE } from './template-map';
 
 /**
  * Cloud Function to generate an estate document (Word .docx).
@@ -77,6 +78,9 @@ export const generateEstateDocument = functions
       executor: string;
       trustee_logic: string;
       is_married: boolean;
+      has_trust: boolean;
+      testator_pronoun: string;
+      executor_relationship: string;
     }>(
       'gemini-1.5-flash',
       extractionPrompt,
@@ -88,25 +92,24 @@ export const generateEstateDocument = functions
     // ── 4. Document Assembly (docxtemplater) ─────────────────────────────────
     console.log('[generateEstateDocument] Assembling Word document...');
 
-    // Template Routing Logic
-    let templateName = 'Generic_Will.docx';
-    if (extractedData.is_married === true) {
-      templateName = 'NJ_Will_Married.docx';
-    } else if (extractedData.is_married === false) {
-      templateName = 'NJ_Will_Single.docx';
-    }
+    // Template Routing Logic via template-map.ts
+    let templateName = getTemplateName({
+      is_married: extractedData.is_married,
+      has_trust: extractedData.has_trust,
+    });
 
     console.log(`[generateEstateDocument] Using template: ${templateName}`);
 
     // Template path: lib/templates/[templateName] (post-build)
-    const templatePath = path.join(__dirname, 'templates', templateName);
+    let templatePath = path.join(__dirname, 'templates', templateName);
     if (!fs.existsSync(templatePath)) {
       console.error('[generateEstateDocument] Template not found at:', templatePath);
-      // Fallback to Generic_Will if specific one is missing in the bundle
-      const fallbackPath = path.join(__dirname, 'templates', 'Generic_Will.docx');
+      // Fallback to FALLBACK_TEMPLATE (Generic_Will.docx)
+      const fallbackPath = path.join(__dirname, 'templates', FALLBACK_TEMPLATE);
       if (fs.existsSync(fallbackPath)) {
-        console.warn('[generateEstateDocument] Falling back to Generic_Will.docx');
-        templateName = 'Generic_Will.docx';
+        console.warn(`[generateEstateDocument] Falling back to: ${FALLBACK_TEMPLATE}`);
+        templateName = FALLBACK_TEMPLATE;
+        templatePath = fallbackPath;
       } else {
         throw new functions.https.HttpsError('internal', `Document template missing: ${templateName}`);
       }
@@ -119,7 +122,7 @@ export const generateEstateDocument = functions
       linebreaks: true,
     });
 
-    // Render the document with the extracted AI data
+    // Render the document with the extracted AI data (includes Grammar fields)
     doc.render(extractedData);
 
     const buffer = doc.getZip().generate({
