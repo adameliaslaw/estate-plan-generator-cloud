@@ -1,34 +1,21 @@
-/**
- * functions/src/unified-generator.ts
- *
- * Unified document generation pipeline — the SINGLE source of truth for all
- * document generation in the application.
- *
- * Every generation path (batch, single, flex, chat draft) calls this module's
- * `generateDocument()` function. This eliminates:
- *   - Duplicated generator dispatch logic (was in generate-documents.ts AND generate-single-document.ts)
- *   - Siloed flex generation (was in generate-flex-document.ts with its own context/save)
- *   - Double-generation in chat drafts (was in chat-ai.ts with fragile response parsing)
- *
- * The function always:
- *   1. Aggregates full client context via `aggregateClientContext`
- *   2. Resolves the generator from a registry (no switch statements)
- *   3. Routes through the template engine when appropriate
- *   4. Saves via the shared `saveDocumentToVault` helper
- *   5. Records draft history for AI learning
- */
-
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext, ClientContext } from './client-context-aggregator';
 import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper';
 import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
+import { callVertexAIStructured } from './vertex-ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
 import { buildEstatePlanSummaryTemplateData } from './generators/summary-docs-generator';
+import { ESTATE_EXTRACTION_SCHEMA } from './document-schemas';
+import { getTemplateName, FALLBACK_TEMPLATE } from './template-map';
 
 
 
@@ -125,6 +112,7 @@ export interface UnifiedGenerateResult {
   docId: string;
   isNew: boolean;
   currentVersion: number;
+  storagePath?: string;
   propertyAddress?: string;
   propertyIndex?: number;
   /** Pre-generation warnings (missing critical fields) */
@@ -398,7 +386,7 @@ export async function generateDocument(
     firmId,
     clientId,
     docType,
-    generationMode = 'hybrid',
+    generationMode = 'high-fidelity',
     customInstructions,
     softwareSource,
     formattingPreset,
@@ -576,9 +564,62 @@ export async function generateDocument(
 
       // Non-per-property docs (or if we didn't generate one above)
       if (!generatedDoc!) {
-        // Route based on generation mode
-        if (generationMode !== 'ai' && clientContext) {
-          // Template or hybrid mode — use template engine with AI fallback
+        // --- High-Fidelity Binary Generation Path ---
+        if (generationMode === 'high-fidelity' || (docType === 'will' || docType === 'poa' || docType === 'livingWill' || docType === 'trust' || docType === 'pourOverWill')) {
+          console.log(`[unifiedGenerator] Running high-fidelity extraction for ${docType}...`);
+          
+          const extractionPrompt = `
+            You are an expert estate planning assistant.
+            Your task is to extract specific legal appointment and identity data from the following client questionnaire summary for a ${docType}.
+            
+            Respond ONLY with valid JSON matching the provided schema.
+            
+            CLIENT DATA:
+            ${clientData._serializedClientData}
+          `;
+
+          const extractedData = await callVertexAIStructured<{
+            is_married: boolean;
+            has_trust: boolean;
+            client_name: string;
+            executor: string;
+            spouse_name: string;
+            [key: string]: unknown;
+          }>(
+            'gemini-1.5-flash',
+            extractionPrompt,
+            ESTATE_EXTRACTION_SCHEMA.schema as Record<string, unknown>,
+          );
+
+          // Template Routing
+          const templateName = getTemplateName({
+            is_married: extractedData.is_married,
+            has_trust: extractedData.has_trust,
+            doc_type: docType as "will" | "poa" | "hc" | "trust" | "pourOverWill",
+          });
+
+          const templatePath = path.join(__dirname, 'templates', templateName);
+          const finalTemplatePath = fs.existsSync(templatePath) 
+            ? templatePath 
+            : path.join(__dirname, 'templates', FALLBACK_TEMPLATE);
+
+          const content = fs.readFileSync(finalTemplatePath, 'binary');
+          const zip = new PizZip(content);
+          const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+          doc.render(extractedData);
+
+          const buffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+          generatedDoc = {
+            docType,
+            title: buildStandardTitle(docType, clientData._clientFullName),
+            content: '', // No HTML content for binary docs
+            status: 'draft',
+            _binaryBuffer: buffer,
+            _extractedData: extractedData,
+          };
+        } else if (generationMode !== 'ai' && clientContext) {
+          // Legacy Template or hybrid mode (HTML based)
           const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
 
           // Special case: Estate Plan Summary needs its own complex data mapper 
@@ -758,6 +799,8 @@ export async function generateDocument(
       docType,
       displayName: generatedDoc.title,
       content: generatedDoc.content,
+      binaryBuffer: generatedDoc._binaryBuffer,
+      extractedData: generatedDoc._extractedData,
       status: finalStatus === 'error' ? 'error' : finalStatus,
       createdBy,
       documentId,
@@ -805,6 +848,7 @@ export async function generateDocument(
     docId: saveResult.docId,
     isNew: saveResult.isNew,
     currentVersion: saveResult.currentVersion,
+    storagePath: saveResult.storagePath,
     propertyAddress: generatedDoc.propertyAddress,
     propertyIndex,
     warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,

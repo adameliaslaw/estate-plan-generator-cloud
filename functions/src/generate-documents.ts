@@ -50,6 +50,10 @@ export interface GeneratedDoc {
   promptVersion?: string;
   /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
   templateBaseline?: string;
+  /** Binary version of the document (for high-fidelity .docx generation) */
+  _binaryBuffer?: Buffer;
+  /** AI-extracted structured data (for debugging and review) */
+  _extractedData?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------

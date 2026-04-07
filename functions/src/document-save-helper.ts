@@ -48,12 +48,17 @@ export interface SaveDocumentParams {
   promptVersion?: string;
   /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
   templateBaseline?: string;
+  /** Binary version of the document (for high-fidelity .docx generation) */
+  binaryBuffer?: Buffer;
+  /** AI-extracted structured data (for debugging and review) */
+  extractedData?: Record<string, unknown>;
 }
 
 export interface SaveDocumentResult {
   docId: string;
   isNew: boolean;
   currentVersion: number;
+  storagePath?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,19 +102,13 @@ export async function saveDocumentToVault(
   // Never save a document with empty/blank content — this is the #1 cause
   // of blank documents appearing in the vault. Error-status docs are
   // allowed to have minimal content (they're informational).
-  if (params.status !== 'error') {
+  if (params.status !== 'error' && !params.binaryBuffer) {
     const textOnly = (params.content ?? '').replace(/<[^>]*>/g, '').trim();
     if (textOnly.length === 0) {
       throw new Error(
         `[saveDocumentToVault] Refusing to save ${params.docType} with empty content. ` +
         `firmId=${params.firmId}, clientId=${params.clientId}. ` +
         `This usually means AI generation failed or returned malformed JSON.`,
-      );
-    }
-    if (textOnly.length < 100) {
-      console.warn(
-        `[saveDocumentToVault] Suspiciously short content for ${params.docType} ` +
-        `(${textOnly.length} chars). firmId=${params.firmId}, clientId=${params.clientId}.`,
       );
     }
   }
@@ -196,6 +195,37 @@ export async function saveDocumentToVault(
   if (params.templateBaseline) {
     docData.templateBaseline = params.templateBaseline;
   }
+  if (params.binaryBuffer) {
+    docData.hasBinary = true;
+    docData.mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    docData.fileName = `${docId}.docx`;
+  }
+  if (params.extractedData) {
+    docData.extractedData = params.extractedData;
+  }
+
+  // ── Handle Binary Storage Upload ─────────────────────────────────────
+  let finalStoragePath = '';
+  if (params.binaryBuffer) {
+    finalStoragePath = `firms/${params.firmId}/clients/${params.clientId}/documents/${docId}.docx`;
+    console.log(`[saveDocumentToVault] Uploading binary buffer to ${finalStoragePath}...`);
+    
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(finalStoragePath);
+    
+    await file.save(params.binaryBuffer, {
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      metadata: {
+        firmId: params.firmId,
+        clientId: params.clientId,
+        docId,
+        aiModel: params.aiModel ?? 'unknown',
+        generatedAt: new Date().toISOString(),
+      },
+    });
+    
+    docData.storagePath = finalStoragePath;
+  }
 
   // Version summary on the main document (lightweight — no content)
   const versionEntry = {
@@ -219,6 +249,7 @@ export async function saveDocumentToVault(
     docId,
     isNew: !existing.exists,
     currentVersion,
+    storagePath: finalStoragePath || undefined,
   };
 }
 

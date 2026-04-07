@@ -40,9 +40,6 @@ import { documentService, type GenerateDocumentsResponse } from '@/services/docu
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { logSystemActivity } from '@/utils/activity-logger';
-import type { GenerationMode } from '@/services/knowledge-base-service';
-import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sources';
-import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -145,9 +142,6 @@ export default function GenerateDocumentsButton({
   const [currentDoc, setCurrentDoc] = useState('');
   const [result, setResult] = useState<GenerateDocumentsResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
-  const [generationMode, setGenerationMode] = useState<GenerationMode>('template');
-  const [softwareSource, setSoftwareSource] = useState('');
-  const [formattingPreset, setFormattingPreset] = useState('');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const baseDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -181,9 +175,7 @@ export default function GenerateDocumentsButton({
         clientId,
         packageType,
         trustTypes,
-        generationMode,
-        ...(softwareSource ? { softwareSource } : {}),
-        ...(formattingPreset ? { formattingPreset } : {}),
+        generationMode: 'template', // Hardcode to high-fidelity template mode
       });
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
@@ -261,8 +253,8 @@ export default function GenerateDocumentsButton({
               Generate Estate Plan Documents
             </DialogTitle>
             <DialogDescription>
-              This will use AI to draft all documents for this client. You will be able to review
-              and edit each document before finalizing.
+              This will use the high-fidelity document generation pipeline to draft all legal documents
+              for this client. Your exact formatting and legal standards will be maintained.
             </DialogDescription>
           </DialogHeader>
 
@@ -311,95 +303,7 @@ export default function GenerateDocumentsButton({
               </ul>
             </div>
 
-            {/* Generation Mode Selector */}
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Generation Mode
-              </p>
-              <div className="space-y-1.5">
-                {[
-                  { value: 'template' as GenerationMode, label: 'Template', desc: 'Fast, consistent. Uses your uploaded templates with client data.', badge: 'Recommended' },
-                  { value: 'ai' as GenerationMode, label: 'AI', desc: 'Full AI generation from scratch (current behavior).', badge: '' },
-                  { value: 'hybrid' as GenerationMode, label: 'Hybrid', desc: 'Template base, enhanced by AI using Knowledge Base resources.', badge: '' },
-                ].map((mode) => (
-                  <label
-                    key={mode.value}
-                    className={cn(
-                      'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors',
-                      generationMode === mode.value
-                        ? 'border-[#2b6cb0] bg-blue-50/50'
-                        : 'border-gray-200 hover:bg-gray-50',
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name="generationMode"
-                      value={mode.value}
-                      checked={generationMode === mode.value}
-                      onChange={() => setGenerationMode(mode.value)}
-                      className="mt-0.5 text-[#2b6cb0] focus:ring-[#2b6cb0]"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-gray-900">{mode.label}</span>
-                        {mode.badge && (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                            {mode.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] leading-tight text-gray-500">{mode.desc}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Software Source Selector */}
-            {generationMode !== 'ai' && (
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Template Source
-                </p>
-                <select
-                  title="Software Source"
-                  value={softwareSource}
-                  onChange={(e) => setSoftwareSource(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
-                >
-                  {SOFTWARE_SOURCES.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-                {softwareSource && (
-                  <p className="mt-1 text-[10px] text-gray-400">
-                    Templates from {getSoftwareSourceLabel(softwareSource)} will be used. Falls back to any available template if none match.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Formatting Preset Selector */}
-            {generationMode !== 'ai' && (
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Document Formatting
-                </p>
-                <select
-                  title="Formatting Preset"
-                  value={formattingPreset}
-                  onChange={(e) => setFormattingPreset(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2b6cb0] focus:outline-none"
-                >
-                  {FORMATTING_PRESET_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[10px] text-gray-400">
-                  Controls paragraph styling and layout in exported DOCX/PDF documents.
-                </p>
-              </div>
-            )}
+            {/* Selectors removed for pipeline unification */}
 
             <Alert className="border-amber-200 bg-amber-50">
               <AlertCircle className="h-4 w-4 text-amber-600" />

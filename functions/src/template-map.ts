@@ -7,14 +7,11 @@
 export interface TemplateSelectionData {
   is_married: boolean;
   has_trust: boolean;
-  doc_type?: 'will' | 'poa' | 'hc';
+  doc_type?: 'will' | 'poa' | 'hc' | 'trust' | 'pourOverWill';
 }
 
 /**
  * Determines the correct .docx filename based on the client's status and document type.
- *
- * @param data  The extracted data including marital status, trust, and doc type.
- * @returns     The filename of the corresponding .docx template.
  */
 export function getTemplateName(data: TemplateSelectionData): string {
   const type = data.doc_type || 'will';
@@ -25,6 +22,15 @@ export function getTemplateName(data: TemplateSelectionData): string {
 
   if (type === 'hc') {
     return data.is_married ? 'NJ_HC_Married.docx' : 'NJ_HC_Single.docx';
+  }
+
+  if (type === 'trust') {
+    // Current legacy samples only have Married Trust, fallback to it if needed
+    return data.is_married ? 'Married_Trust.docx' : 'Married_Trust.docx'; 
+  }
+
+  if (type === 'pourOverWill') {
+    return 'NJ_Pourover_Will.docx';
   }
 
   // Default to Will logic

@@ -9,7 +9,7 @@
  * generation, save, and context logic lives in unified-generator.ts.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 
 import { GenerationMode } from './template-engine';
@@ -48,7 +48,7 @@ export const generateSingleDocument = onCall(
     memory: '512MiB',
     region: 'us-east1',
   },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<GenerateSingleRequest>) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
@@ -65,7 +65,7 @@ export const generateSingleDocument = onCall(
       );
     }
 
-    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'hybrid', templateId, softwareSource, formattingPreset } =
+    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'template', templateId, softwareSource, formattingPreset } =
       request.data as GenerateSingleRequest;
 
     if (!firmId || !clientId || !docType) {
