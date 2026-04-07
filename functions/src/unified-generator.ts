@@ -569,7 +569,14 @@ export async function generateDocument(
         // --- High-Fidelity Binary Generation Path ---
         if (generationMode === 'high-fidelity' || (docType === 'will' || docType === 'poa' || docType === 'livingWill' || docType === 'trust' || docType === 'pourOverWill')) {
           console.log(`[unifiedGenerator] Running high-fidelity extraction for ${docType}...`);
-          
+
+          // Fetch the firm's Gemini API key from Firestore (same pattern as kb-embeddings)
+          const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
+          const firmGeminiKey = (firmSnap.data()?.geminiApiKey as string | undefined) ?? '';
+          if (!firmGeminiKey) {
+            throw new Error(`[unifiedGenerator] No geminiApiKey configured for firm ${firmId}. Add it in Firm Settings.`);
+          }
+
           const extractionPrompt = `
             You are an expert estate planning assistant.
             Your task is to extract specific legal appointment and identity data from the following client questionnaire summary for a ${docType}.
@@ -591,6 +598,7 @@ export async function generateDocument(
             'gemini-1.5-flash',
             extractionPrompt,
             ESTATE_EXTRACTION_SCHEMA.schema as Record<string, unknown>,
+            firmGeminiKey,
           );
 
           // Template Routing

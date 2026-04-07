@@ -3,22 +3,12 @@
  *
  * Client for Google Gen AI (Gemini) using the @google/genai SDK.
  * Specifically handles structured data extraction using JSON response schemas.
+ *
+ * API key is passed by the caller (fetched from the firm's Firestore geminiApiKey field)
+ * rather than read from a global secret, so each firm uses its own key.
  */
 
 import { GoogleGenAI } from '@google/genai';
-
-// Initialize the Gen AI client using the API key secret.
-// VERTEX_AI_KEY must be set in Firebase Secret Management.
-const apiKey = process.env.VERTEX_AI_KEY;
-
-// Fail early if no API key is provided
-if (!apiKey) {
-  console.warn('VERTEX_AI_KEY is not set in environment or secret management');
-}
-
-const client = new GoogleGenAI({
-  apiKey: apiKey || '',
-});
 
 /**
  * Call Google Gen AI (Gemini) to extract structured data from a prompt.
@@ -26,18 +16,22 @@ const client = new GoogleGenAI({
  * @param modelName  The model ID to use (e.g. 'gemini-1.5-flash').
  * @param prompt     The instructions and context to process.
  * @param schema     The JSON Schema for the structured output.
+ * @param apiKey     The Gemini API key (from the firm's Firestore geminiApiKey field).
  */
 export async function callVertexAIStructured<T>(
   modelName: string,
   prompt: string,
   schema: Record<string, unknown>,
+  apiKey: string,
 ): Promise<T> {
   if (!apiKey) {
-    throw new Error('VERTEX_AI_KEY is required for structured AI extraction');
+    throw new Error('Gemini API key is required for structured AI extraction. Configure it in Firm Settings.');
   }
 
   // Map incoming modelName if it has 'vertexai/' prefix (old SDK artifacts)
   const modelId = modelName.includes('/') ? modelName.split('/').pop() || modelName : modelName;
+
+  const client = new GoogleGenAI({ apiKey });
 
   try {
     const response = await client.models.generateContent({
@@ -54,9 +48,6 @@ export async function callVertexAIStructured<T>(
       throw new Error('Google Gen AI extraction failed: No response text returned');
     }
 
-    // The SDK often returns JSON within markdown backticks if not perfectly parsed,
-    // though structured output mode usually prevents this.
-    // We clean it just in case.
     const cleanText = responseText.replace(/^```json/, '').replace(/```$/, '').trim();
 
     try {
@@ -71,3 +62,4 @@ export async function callVertexAIStructured<T>(
     throw new Error(`Google Gen AI extraction failed: ${errorMessage}`);
   }
 }
+
