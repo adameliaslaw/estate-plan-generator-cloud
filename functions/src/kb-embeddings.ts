@@ -407,7 +407,7 @@ export const onTemplateWritten = onDocumentWritten(
   {
     document: 'firms/{firmId}/documentTemplates/{templateId}',
     region: 'us-east1',
-    memory: '1GiB',
+    memory: '2GiB',
     timeoutSeconds: 120,
   },
   async (event) => {

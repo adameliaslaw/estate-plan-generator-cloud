@@ -47,6 +47,7 @@ export const generateSingleDocument = onCall(
     timeoutSeconds: 300,
     memory: '512MiB',
     region: 'us-east1',
+    secrets: ['VERTEX_AI_KEY'],
   },
   async (request: CallableRequest<GenerateSingleRequest>) => {
     // ------------------------------------------------------------------
