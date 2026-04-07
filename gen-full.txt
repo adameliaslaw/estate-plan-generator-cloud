@@ -1,0 +1,299 @@
+﻿TIME_UTC: 2026-04-07 03:31:17.661
+LOG: [ai-client] Model "claude-opus-4-6" not in anthropic allowlist. Falling back to "claude-sonnet-4-6". Update KNOWN_MODELS if this model is valid.
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG: [template-engine] No template found for estatePlanSummary (mode=template), falling back to AI generation.
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG: [getTemplate] Template for docType="estatePlanSummary" is missing required "content" field. firmId=elias-counsel, templateId=(query)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG: }
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:   }
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     options: {}
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     opaqueData: Map(0) {},
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     internalRepr: Map(1) { 'x-debug-tracking-id' => [Array] },
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:   metadata: Metadata {
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:   details: `Missing vector index configuration. Please create the required index with the following gcloud command: gcloud firestore indexes composite create --project=estate-plan-generator --collection-group=documentTemplates --query-scope=COLLECTION --field-config=order=ASCENDING,field-path=docType --field-config=order=ASCENDING,field-path=isActive --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding`,
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:   code: 9,
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:458:26 {
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async /workspace/lib/generate-documents.js:191:21
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async Promise.allSettled (index 6)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async generateDocumentWithPropertyExpansion (/workspace/lib/unified-generator.js:700:13)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async generateDocument (/workspace/lib/unified-generator.js:455:36)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async generateFromTemplate (/workspace/lib/template-engine.js:590:22)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at async getTemplate (/workspace/lib/template-engine.js:443:29)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at searchTemplatesByDocType (/workspace/lib/kb-vector-search.js:441:14)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at VectorQuery.get (/workspace/node_modules/@google-cloud/firestore/build/src/reference/vector-query.js:98:39)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at VectorQuery._getResponse (/workspace/node_modules/@google-cloud/firestore/build/src/reference/vector-query.js:105:32)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at QueryUtil._getResponse (/workspace/node_modules/@google-cloud/firestore/build/src/reference/query-util.js:44:23)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG: Caused by: Error
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at /workspace/node_modules/google-gax/build/src/createApiCall.js:112:30
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at StreamingApiCaller.call (/workspace/node_modules/google-gax/build/src/streamingCalls/streamingApiCaller.js:54:16)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at StreamProxy.setStream (/workspace/node_modules/google-gax/build/src/streamingCalls/streaming.js:225:37)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at retryRequest (/workspace/node_modules/retry-request/index.js:119:5)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at makeRequest (/workspace/node_modules/retry-request/index.js:159:28)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at Object.request (/workspace/node_modules/google-gax/build/src/streamingCalls/streaming.js:234:40)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at /workspace/node_modules/google-gax/build/src/normalCalls/timeout.js:44:16
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at /workspace/node_modules/google-gax/build/src/streamingCalls/streamingApiCaller.js:38:28
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at /workspace/node_modules/@google-cloud/firestore/build/src/v1/firestore_client.js:242:33
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at ServiceClientImpl.<anonymous> (/workspace/node_modules/@grpc/grpc-js/build/src/make-client.js:105:19)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at ServiceClientImpl.makeServerStreamRequest (/workspace/node_modules/@grpc/grpc-js/build/src/client.js:342:32)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG: for call at
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at process.processTicksAndRejections (node:internal/process/task_queues:77:11)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at /workspace/node_modules/@grpc/grpc-js/build/src/resolving-call.js:135:78
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at Object.onReceiveStatus (/workspace/node_modules/@grpc/grpc-js/build/src/client-interceptors.js:327:181)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at Object.onReceiveStatus (/workspace/node_modules/@grpc/grpc-js/build/src/client.js:359:73)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG:     at callErrorFromStatus (/workspace/node_modules/@grpc/grpc-js/build/src/call.js:32:19)
+
+TIME_UTC: 2026-04-07 03:31:17.659
+LOG: [kb-vector-search] Template vector search fallback failed (index may not exist): Error: 9 FAILED_PRECONDITION: Missing vector index configuration. Please create the required index with the following gcloud command: gcloud firestore indexes composite create --project=estate-plan-generator --collection-group=documentTemplates --query-scope=COLLECTION --field-config=order=ASCENDING,field-path=docType --field-config=order=ASCENDING,field-path=isActive --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
+
+TIME_UTC: 2026-04-07 03:31:17.435
+LOG: [unifiedGenerator] ? will generated: 17191 chars, 429ms, mode=template, status=draft
+
+TIME_UTC: 2026-04-07 03:31:17.347
+LOG: [unifiedGenerator] ? will generated: 17166 chars, 321ms, mode=template, status=draft
+
+TIME_UTC: 2026-04-07 03:31:17.249
+LOG: [unifiedGenerator] ? poa generated: 17201 chars, 210ms, mode=template, status=needs_review
+
+TIME_UTC: 2026-04-07 03:31:17.249
+LOG: [unifiedGenerator] ? STRUCTURAL VALIDATION FAILED for poa: missing=[Notary Block], minLength=true, truncated=false, placeholders=0
+
+TIME_UTC: 2026-04-07 03:31:17.230
+LOG: [unifiedGenerator] ? livingWill generated: 8580 chars, 183ms, mode=template, status=needs_review
+
+TIME_UTC: 2026-04-07 03:31:17.230
+LOG: [unifiedGenerator] ? STRUCTURAL VALIDATION FAILED for livingWill: missing=[Signature and Date], minLength=true, truncated=false, placeholders=0
+
+TIME_UTC: 2026-04-07 03:31:17.229
+LOG: [template-engine] 25 unresolved variables in livingWill: clientFullName, personalInfo.address, personalInfo.city, personalInfo.state, spouseTitle, fiduciaries.healthcareProxy.primary.name, personalInfo.address, personalInfo.city, personalInfo.state, fiduciaries.healthcareProxy.alternate.name | relationship
+
+TIME_UTC: 2026-04-07 03:31:17.229
+LOG: Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARA
+
+TIME_UTC: 2026-04-07 03:31:17.229
+LOG: -----------------------^
+
+TIME_UTC: 2026-04-07 03:31:17.229
+LOG: ...roxy.alternate.name | relationship}}, <s
+
+TIME_UTC: 2026-04-07 03:31:17.229
+LOG: [template-engine] Handlebars render failed for docType="livingWill" (template="Sean Byrnes  HC 11.3.25"): Parse error on line 1:
+
+TIME_UTC: 2026-04-07 03:31:17.200
+LOG: [unifiedGenerator] ? poa generated: 17278 chars, 168ms, mode=template, status=needs_review
+
+TIME_UTC: 2026-04-07 03:31:17.200
+LOG: [unifiedGenerator] ? STRUCTURAL VALIDATION FAILED for poa: missing=[Notary Block], minLength=true, truncated=false, placeholders=0
+
+TIME_UTC: 2026-04-07 03:31:17.177
+LOG: [unifiedGenerator] ? livingWill generated: 8580 chars, 123ms, mode=template, status=needs_review
+
+TIME_UTC: 2026-04-07 03:31:17.176
+LOG: [unifiedGenerator] ? STRUCTURAL VALIDATION FAILED for livingWill: missing=[Signature and Date], minLength=true, truncated=false, placeholders=0
+
+TIME_UTC: 2026-04-07 03:31:17.175
+LOG: [template-engine] 25 unresolved variables in livingWill: clientFullName, personalInfo.address, personalInfo.city, personalInfo.state, spouseTitle, fiduciaries.healthcareProxy.primary.name, personalInfo.address, personalInfo.city, personalInfo.state, fiduciaries.healthcareProxy.alternate.name | relationship
+
+TIME_UTC: 2026-04-07 03:31:17.175
+LOG: Expecting 'CLOSE_RAW_BLOCK', 'CLOSE', 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'CLOSE_SEXPR', 'ID', 'OPEN_BLOCK_PARA
+
+TIME_UTC: 2026-04-07 03:31:17.175
+LOG: -----------------------^
+
+TIME_UTC: 2026-04-07 03:31:17.175
+LOG: ...roxy.alternate.name | relationship}}, <s
+
+TIME_UTC: 2026-04-07 03:31:17.175
+LOG: [template-engine] Handlebars render failed for docType="livingWill" (template="Sean Byrnes  HC 11.3.25"): Parse error on line 1:
+
+TIME_UTC: 2026-04-07 03:31:17.153
+LOG: [getTemplate] No template found for docType="estatePlanSummary" softwareSource="interactivelegal", falling back.
+
+TIME_UTC: 2026-04-07 03:31:17.053
+LOG: [unifiedGenerator] Reusing preloaded context for estatePlanSummary (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:17.053
+LOG: [unifiedGenerator] Spouse swap for livingWill: Adam ? Karen
+
+TIME_UTC: 2026-04-07 03:31:17.047
+LOG: [unifiedGenerator] Reusing preloaded context for livingWill (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:17.040
+LOG: [unifiedGenerator] Reusing preloaded context for livingWill (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:17.039
+LOG: [unifiedGenerator] Spouse swap for poa: Adam ? Karen
+
+TIME_UTC: 2026-04-07 03:31:17.032
+LOG: [unifiedGenerator] Reusing preloaded context for poa (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:17.027
+LOG: [unifiedGenerator] Reusing preloaded context for poa (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:17.012
+LOG: [unifiedGenerator] Spouse swap for will: Adam ? Karen
+
+TIME_UTC: 2026-04-07 03:31:17.007
+LOG: [unifiedGenerator] Reusing preloaded context for will (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:16.992
+LOG: [unifiedGenerator] Reusing preloaded context for will (skipped 2 Firestore reads)
+
+TIME_UTC: 2026-04-07 03:31:16.991
+LOG: [generateDocuments] Pre-loaded context (3 KB resources, 27 existing docs, 9 notes)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG: }
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:   }
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     options: {}
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     opaqueData: Map(0) {},
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     internalRepr: Map(1) { 'x-debug-tracking-id' => [Array] },
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:   metadata: Metadata {
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:   details: `Missing vector index configuration. Please create the required index with the following gcloud command: gcloud firestore indexes composite create --project=estate-plan-generator --collection-group=chatInsights --query-scope=COLLECTION --field-config=order=ASCENDING,field-path=isActive --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding`,
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:   code: 9,
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:458:26 {
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at async /workspace/lib/generate-documents.js:166:28
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at async aggregateClientContext (/workspace/lib/client-context-aggregator.js:82:46)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at async Promise.all (index 2)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at searchKnowledgeBase (/workspace/lib/kb-vector-search.js:332:14)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at VectorQuery.get (/workspace/node_modules/@google-cloud/firestore/build/src/reference/vector-query.js:98:39)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at VectorQuery._getResponse (/workspace/node_modules/@google-cloud/firestore/build/src/reference/vector-query.js:105:32)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at QueryUtil._getResponse (/workspace/node_modules/@google-cloud/firestore/build/src/reference/query-util.js:44:23)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG: Caused by: Error
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at /workspace/node_modules/google-gax/build/src/createApiCall.js:112:30
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at StreamingApiCaller.call (/workspace/node_modules/google-gax/build/src/streamingCalls/streamingApiCaller.js:54:16)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at StreamProxy.setStream (/workspace/node_modules/google-gax/build/src/streamingCalls/streaming.js:225:37)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at retryRequest (/workspace/node_modules/retry-request/index.js:119:5)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at makeRequest (/workspace/node_modules/retry-request/index.js:159:28)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at Object.request (/workspace/node_modules/google-gax/build/src/streamingCalls/streaming.js:234:40)
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at /workspace/node_modules/google-gax/build/src/normalCalls/timeout.js:44:16
+
+TIME_UTC: 2026-04-07 03:31:16.971
+LOG:     at /workspace/node_modules/google-gax/build/src/streamingCalls/streamingApiCaller.js:38:28

@@ -609,7 +609,10 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   let validationFindings: Array<{ name: string; severity: 'error' | 'warning' }> = [];
 
-  if (generatedDoc.status !== 'error' && generatedDoc.content) {
+  if (generatedDoc.status !== 'error' && generatedDoc.content && generationMode !== 'template') {
+    // Skip structural validation for template mode — the uploaded template from
+    // legal software (e.g. InteractiveLegal) is authoritative. Validation is only
+    // meaningful for AI-generated content where sections might be missed.
     const structureResult = validateDocumentStructure(generatedDoc.content, docType);
 
     if (!structureResult.valid) {
