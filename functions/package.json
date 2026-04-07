@@ -23,6 +23,9 @@
     "handlebars": "^4.7.8",
     "mammoth": "^1.11.0",
     "openai": "^4.70.0",
+    "@google-cloud/vertexai": "^1.10.4",
+    "docxtemplater": "^3.68.3",
+    "pizzip": "^3.2.0",
     "pdf-parse": "^2.4.5",
     "puppeteer-core": "^24.38.0"
   },

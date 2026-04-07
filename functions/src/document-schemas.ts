@@ -159,6 +159,38 @@ export const DOCUMENT_REVIEW_SCHEMA = {
 
 
 // ---------------------------------------------------------------------------
+// Estate document extraction schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Extraction response: { client_name, executor, trustee_logic }
+ * Used by: generate-estate-document.ts (Vertex AI)
+ */
+export const ESTATE_EXTRACTION_SCHEMA = {
+  name: 'estate_extraction',
+  schema: {
+    type: 'object' as const,
+    properties: {
+      client_name: {
+        type: 'string' as const,
+        description: 'Full legal name of the client',
+      },
+      executor: {
+        type: 'string' as const,
+        description: 'Name of the primary executor/personal representative',
+      },
+      trustee_logic: {
+        type: 'string' as const,
+        description: 'Brief description of the trustee succession or appointment logic',
+      },
+    },
+    required: ['client_name', 'executor', 'trustee_logic'],
+    additionalProperties: false,
+  },
+  strict: true,
+};
+
+// ---------------------------------------------------------------------------
 // Schema lookup by usage context
 // ---------------------------------------------------------------------------
 

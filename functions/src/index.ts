@@ -9,6 +9,7 @@ import * as admin from 'firebase-admin';
 admin.initializeApp();
 
 export { generateDocuments } from './generate-documents';
+export { generateEstateDocument } from './generate-estate-document';
 export { generateSingleDocument } from './generate-single-document';
 export { reviewDocument } from './review-document';
 export { generateFlexDocument } from './generate-flex-document';
