@@ -74,8 +74,8 @@ export const generateEstateDocument = functions
     `;
 
     const extractedData = await callVertexAIStructured<{
-      client_name: string;
-      executor: string;
+      testator_name: string;
+      executor_primary: string;
       trustee_logic: string;
       is_married: boolean;
       has_trust: boolean;
@@ -91,6 +91,17 @@ export const generateEstateDocument = functions
 
     // ── 4. Document Assembly (docxtemplater) ─────────────────────────────────
     console.log('[generateEstateDocument] Assembling Word document...');
+
+    // Pre-Render Validation Steps
+    if (!extractedData.testator_name || extractedData.testator_name.trim() === '') {
+      throw new functions.https.HttpsError('failed-precondition', 'Missing Testator Name');
+    }
+    if (!extractedData.executor_primary || extractedData.executor_primary.trim() === '') {
+      throw new functions.https.HttpsError('failed-precondition', 'Missing Primary Executor');
+    }
+    if (!extractedData.testator_pronoun || extractedData.testator_pronoun.trim() === '') {
+      throw new functions.https.HttpsError('failed-precondition', 'Missing Testator Pronoun');
+    }
 
     // Template Routing Logic via template-map.ts
     let templateName = getTemplateName({
@@ -163,7 +174,7 @@ export const generateEstateDocument = functions
       firmId,
       clientId,
       docType: 'will', // Using 'will' as a container for now
-      displayName: `Estate Plan - ${extractedData.client_name}`,
+      displayName: `Estate Plan - ${extractedData.testator_name}`,
       status: 'review',
       storagePath,
       fileName: `${docId}.docx`,
@@ -181,6 +192,6 @@ export const generateEstateDocument = functions
       success: true,
       docId,
       storagePath,
-      displayName: `Estate Plan - ${extractedData.client_name}`,
+      displayName: `Estate Plan - ${extractedData.testator_name}`,
     };
   });
