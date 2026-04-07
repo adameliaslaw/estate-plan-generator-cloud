@@ -264,32 +264,30 @@ export const processTemplateFile = onCall(
     if (ext === 'docx') {
       try {
         // Style map: convert Word paragraph styles to CSS classes.
-        // InteractiveLegal DOCX files use paragraph styles like "tr-title",
-        // "tr-art1", "tr-body1" etc. Mammoth strips these by default unless
-        // we provide explicit mappings. We map all known tr-* styles.
+        // InteractiveLegal DOCX files use underscore-separated paragraph styles
+        // like "TR_Title", "TR_Art1", "TR_Body1" etc. Discovered by inspecting
+        // mammoth warnings on actual DOCX files. Map to our tr-* CSS classes.
         const styleMap = [
-          "p[style-name='tr-title'] => p.tr-title:fresh",
-          "p[style-name='tr-cover-title'] => p.tr-cover-title:fresh",
-          "p[style-name='tr-cover'] => p.tr-cover:fresh",
-          "p[style-name='tr-mem-header1'] => p.tr-mem-header1:fresh",
-          "p[style-name='tr-body1'] => p.tr-body1:fresh",
-          "p[style-name='tr-body3'] => p.tr-body3:fresh",
-          "p[style-name='tr-art1'] => p.tr-art1:fresh",
-          "p[style-name='tr-art2'] => p.tr-art2:fresh",
-          "p[style-name='tr-art3b'] => p.tr-art3b:fresh",
-          "p[style-name='tr-art4b'] => p.tr-art4b:fresh",
-          "p[style-name='tr-sig-line'] => p.tr-sig-line:fresh",
-          "p[style-name='tr-sig-name'] => p.tr-sig-name:fresh",
-          "p[style-name='tr-affid'] => p.tr-affid:fresh",
-          "p[style-name='tr-base'] => p.tr-base:fresh",
-          // Variations with different casing or naming conventions
-          "p[style-name='Title'] => p.tr-title:fresh",
-          "p[style-name='Cover Title'] => p.tr-cover-title:fresh",
-          "p[style-name='Cover'] => p.tr-cover:fresh",
-          "p[style-name='Body Text'] => p.tr-body1:fresh",
-          "p[style-name='Body Text 3'] => p.tr-body3:fresh",
-          "p[style-name='Article 1'] => p.tr-art1:fresh",
-          "p[style-name='Article 2'] => p.tr-art2:fresh",
+          // Paragraph styles (from actual DOCX inspection)
+          "p[style-name='TR_Title'] => p.tr-title:fresh",
+          "p[style-name='TR_CoverTitle'] => p.tr-cover-title:fresh",
+          "p[style-name='TR_Cover'] => p.tr-cover:fresh",
+          "p[style-name='TR_Body1'] => p.tr-body1:fresh",
+          "p[style-name='TR_Body'] => p.tr-body1:fresh",
+          "p[style-name='TR_Body3'] => p.tr-body3:fresh",
+          "p[style-name='TR_Art1'] => p.tr-art1:fresh",
+          "p[style-name='TR_Art2'] => p.tr-art2:fresh",
+          "p[style-name='TR_Art3'] => p.tr-art3b:fresh",
+          "p[style-name='TR_Art3B'] => p.tr-art3b:fresh",
+          "p[style-name='TR_Art4B'] => p.tr-art4b:fresh",
+          "p[style-name='TR_SigLine'] => p.tr-sig-line:fresh",
+          "p[style-name='TR_SigName'] => p.tr-sig-name:fresh",
+          "p[style-name='TR_Affid'] => p.tr-affid:fresh",
+          "p[style-name='TR_Base'] => p.tr-base:fresh",
+          "p[style-name='TR_MemHeader1'] => p.tr-mem-header1:fresh",
+          // Run (character) styles
+          "r[style-name='TR_ParaHdr'] => strong",
+          "r[style-name='Object'] => ",
         ];
         const result = await mammoth.convertToHtml({ buffer }, { styleMap });
         extractedHtml = result.value;
