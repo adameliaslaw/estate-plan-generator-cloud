@@ -9,7 +9,7 @@
     "deploy": "firebase deploy --only functions"
   },
   "engines": {
-    "node": "20"
+    "node": ">=20"
   },
   "dependencies": {
     "@sparticuz/chromium": "^143.0.4",

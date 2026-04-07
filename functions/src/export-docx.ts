@@ -77,7 +77,7 @@ const TR_STYLE_MAP: Record<string, TrStyleConfig> = {
   'tr-body3':        { alignment: AlignmentType.JUSTIFIED, spacing: { before: 160, after: 160 } },
 
   // Article hierarchy
-  'tr-art1':         { alignment: AlignmentType.CENTER, bold: true, spacing: { before: 360, after: 240 } },
+  'tr-art1':         { alignment: AlignmentType.CENTER, bold: true, spacing: { before: 240, after: 120 } },
   'tr-art2':         { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160 } },
   'tr-art3b':        { alignment: AlignmentType.JUSTIFIED, indent: { firstLine: convertInchesToTwip(1.0) }, spacing: { after: 120 } },
   'tr-art4b':        { alignment: AlignmentType.JUSTIFIED, indent: { firstLine: convertInchesToTwip(1.5) }, spacing: { after: 120 } },

@@ -28,6 +28,8 @@ import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
+import { buildEstatePlanSummaryTemplateData } from './generators/summary-docs-generator';
+
 
 
 // ---------------------------------------------------------------------------
@@ -578,6 +580,14 @@ export async function generateDocument(
         if (generationMode !== 'ai' && clientContext) {
           // Template or hybrid mode — use template engine with AI fallback
           const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
+
+          // Special case: Estate Plan Summary needs its own complex data mapper 
+          // (it's not just a simple questionnaire field lookup)
+          let additionalData: Record<string, unknown> | undefined;
+          if (docType === 'estatePlanSummary') {
+            additionalData = buildEstatePlanSummaryTemplateData(clientData, firmData, packageType);
+          }
+
           generatedDoc = await generateFromTemplate(
             clientContext,
             docType,
@@ -587,6 +597,7 @@ export async function generateDocument(
             aiGenFn,
             softwareSource,
             formattingPreset,
+            additionalData,
           );
         } else {
           // AI-only mode or context aggregation failed — direct AI generation

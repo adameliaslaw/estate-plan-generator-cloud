@@ -411,12 +411,11 @@ OUTPUT FORMAT — JSON only:
 }
 `.trim();
 
-export async function generateEstatePlanSummary(
+export function buildEstatePlanSummaryTemplateData(
   clientData: admin.firestore.DocumentData,
   firmData: admin.firestore.DocumentData,
   packageType: string,
-  _trustTypes?: string[],
-): Promise<GeneratedDoc> {
+) {
   const ctx = buildSummaryDocContext(clientData, firmData, packageType);
   const pi = ctx.safe.personalInfo ?? {};
 
@@ -430,7 +429,6 @@ export async function generateEstatePlanSummary(
     ? ['Revocable Living Trust', 'Pour-Over Will', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Deeds (one per property)', 'Affidavit of Consideration (one per property)', 'GIT/REP-3 (one per property)', 'Estate Plan Summary']
     : ['Last Will and Testament', 'Durable Power of Attorney', 'Advance Directive for Health Care', 'Estate Plan Summary'];
 
-  // For married couples, expand per-spouse doc types to show both names
   let packageDocs: string[];
   if (ctx.hasSpouse) {
     const perSpouseDocs = new Set([
@@ -452,7 +450,6 @@ export async function generateEstatePlanSummary(
     packageDocs = packageDocsBase;
   }
 
-  // Build county recording info for each property (for action steps sections)
   const countyRecordingDetails = ctx.propertiesForTrust.map((r: admin.firestore.DocumentData) => {
     const county = sanitizeForPrompt(r.county ?? pi.county ?? '');
     const info = getCountyRecordingInfo(county);
@@ -469,111 +466,56 @@ export async function generateEstatePlanSummary(
     };
   });
 
-  const bankAccounts: admin.firestore.DocumentData[] = (ctx.assets.bankAccounts ?? []).filter(
-    (b: admin.firestore.DocumentData) => b.transferToTrust,
-  );
-  const investmentAccounts: admin.firestore.DocumentData[] = (ctx.assets.investmentAccounts ?? []).filter(
-    (i: admin.firestore.DocumentData) => i.transferToTrust,
-  );
-  const retirementAccounts: admin.firestore.DocumentData[] = ctx.assets.retirementAccounts ?? [];
-  const lifeInsurance: admin.firestore.DocumentData[] = ctx.assets.lifeInsurance ?? [];
-
-  const executor = ctx.fiduciaries.executor ?? {};
-  const proxy = ctx.fiduciaries.healthcareProxy ?? {};
-
   const summaryTitle = ctx.hasSpouse
     ? `${ctx.clientFullName} & ${ctx.spouseFullName}`
     : ctx.clientFullName;
 
+  return {
+    summaryTitle,
+    packageDocs,
+    executorName: ctx.fiduciaries.executor?.primary?.name ?? 'TBD',
+    executorAlt: ctx.fiduciaries.executor?.alternate?.name ?? 'None',
+    trusteeName: ctx.fiduciaries.trustee?.primary?.name ?? 'TBD',
+    trusteeAlt: ctx.fiduciaries.trustee?.alternate?.name ?? 'None',
+    poaName: ctx.poa.agent?.name ?? 'TBD',
+    proxyName: ctx.fiduciaries.healthcareProxy?.agent?.name ?? 'TBD',
+    propertiesToDeed: countyRecordingDetails,
+    packageDisplayName: packageDisplayNames[packageType] ?? packageType,
+    trustName: ctx.trustName,
+    hasTrust: ctx.hasTrust,
+    hasSpouse: ctx.hasSpouse,
+    clientFullName: ctx.clientFullName,
+    spouseFullName: ctx.spouseFullName,
+    serializedData: ctx.serializedData,
+  };
+}
+
+export async function generateEstatePlanSummary(
+  clientData: admin.firestore.DocumentData,
+  firmData: admin.firestore.DocumentData,
+  packageType: string,
+  _trustTypes?: string[],
+): Promise<GeneratedDoc> {
+  const templateData = buildEstatePlanSummaryTemplateData(clientData, firmData, packageType);
+
   const userPrompt = `
-Generate a complete Estate Plan Summary (including Action Steps Checklist) for this ${ctx.hasSpouse ? 'married couple' : 'client'}:
+Generate a complete Estate Plan Summary (including Action Steps Checklist) for this ${templateData.hasSpouse ? 'married couple' : 'client'}:
 
 CLIENT DATA BLOCK:
-${ctx.serializedData ?? '(Client data not available — use the details below)'}
+${templateData.serializedData ?? '(Client data not available)'}
 
 SHARED DETAILS:
-  Client: ${ctx.clientFullName}
-  ${ctx.hasSpouse ? `Spouse: ${ctx.spouseFullName}` : ''}
-  ${ctx.hasSpouse ? `Marital Status: ${pi.maritalStatus}` : ''}
-  Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-  Package: ${packageDisplayNames[packageType] ?? packageType} Package
-  ${ctx.hasTrust ? `Trust: ${ctx.trustName}${ctx.hasSpouse ? ' (Joint Trust)' : ''}` : ''}
+  Client: ${templateData.clientFullName}
+  ${templateData.hasSpouse ? `Spouse: ${templateData.spouseFullName}` : ''}
+  Package: ${templateData.packageDisplayName} Package
+  ${templateData.hasTrust ? `Trust: ${templateData.trustName}` : ''}
+  Documents: ${templateData.packageDocs.join(', ')}
 
-  Documents in this package:
-  ${packageDocs.map(d => `• ${d}`).join('\n  ')}
-
-  Healthcare preferences (key):
-    Life support: ${ctx.healthPrefs.lifeSupport === 'withhold' ? 'Withhold if terminal/PVS' : ctx.healthPrefs.lifeSupport === 'provide' ? 'Provide all treatment' : 'Defer to representative'}
-    Organ donation: ${ctx.healthPrefs.organDonation ? 'Yes' : 'No'}
-
-  Real estate:
-  ${ctx.realEstate.length === 0 ? 'None.' : ctx.realEstate.map((r: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(r.address)}, ${sanitizeForPrompt(r.city)}, NJ — ${r.transferToTrust ? 'Being transferred to trust' : 'NOT being transferred'}`
-  ).join('\n  ')}
-
-  Special notes:
-    Gift-making power: ${ctx.poa.giftingPower ? 'Yes' : 'No'}
-    Spendthrift: ${ctx.distribution.spendthriftProvision ? 'Yes' : 'No'}
-    Special needs child: ${ctx.specialConsiderations.hasSpecialNeedsChild ? 'Yes' : 'No'}
-    No-contest clause: ${ctx.distribution.noContestClause ? 'Yes' : 'No'}
-    Digital assets: ${ctx.specialConsiderations.hasDigitalAssets ? 'Yes' : 'No'}
-
-ACTION STEPS DETAILS:
-  Properties to deed into trust (${ctx.propertiesForTrust.length}):
-  ${ctx.propertiesForTrust.length === 0 ? 'None.' : countyRecordingDetails.map((r, i) => `
-    Property ${i + 1}: ${r.address}, ${r.city}, NJ
-    County: ${r.county}
-    Recording Office: ${r.recordingOffice}
-    Address: ${r.recordingAddress}
-    Phone: ${r.phone}
-    Website: ${r.website}
-    Approximate Recording Fee: ${r.fee}
-    Mortgage: ${r.mortgage}
-    Documents to file: Deed + Affidavit of Consideration + GIT/REP-3 + filing fee
-  `).join('\n')}
-
-  Bank/investment accounts to re-title (${bankAccounts.length + investmentAccounts.length}):
-  ${[...bankAccounts, ...investmentAccounts].map((a: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(a.institution ?? '')} — ${a.accountType}`
-  ).join('\n  ') || 'None specified.'}
-
-  Retirement accounts (update beneficiary designations only — do NOT transfer to trust):
-  ${retirementAccounts.map((r: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(r.institution ?? '')} ${r.accountType} — current beneficiary: ${sanitizeForPrompt(r.primaryBeneficiary ?? 'unknown')}`
-  ).join('\n  ') || 'None.'}
-
-  Life insurance (update beneficiary designations):
-  ${lifeInsurance.map((l: admin.firestore.DocumentData) =>
-    `• ${sanitizeForPrompt(l.company ?? '')} — current beneficiary: ${sanitizeForPrompt(l.primaryBeneficiary ?? 'unknown')} — transfer to trust: ${l.transferToTrust ? 'Yes (ILIT consideration)' : 'No'}`
-  ).join('\n  ') || 'None.'}
-
-  Key contacts to give copies of documents:
-    Executor: ${sanitizeForPrompt(executor.primary?.name ?? 'TBD')} — ${sanitizeForPrompt(executor.primary?.phone ?? '')} — ${sanitizeForPrompt(executor.primary?.email ?? '')}
-    Alternate Executor: ${sanitizeForPrompt(executor.alternate?.name ?? 'None')}
-    POA Agent: ${sanitizeForPrompt(ctx.poa.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(ctx.poa.agent?.phone ?? '')}
-    Healthcare Rep: ${sanitizeForPrompt(proxy.agent?.name ?? 'TBD')} — ${sanitizeForPrompt(proxy.agent?.phone ?? '')}
-
-  Firm: ${sanitizeForPrompt(ctx.safeFirm.firmName ?? '')}
-    Phone: ${ctx.safeFirm.firmPhone ?? ''}
-    Email: ${ctx.safeFirm.firmEmail ?? ''}
-${ctx.hasSpouse ? `
-SPOUSE INFORMATION:
-  Spouse: ${ctx.spouseFullName}
-  This is a MARRIED COUPLE estate plan. Both spouses have their own individual documents (POA, Healthcare Directive, ${ctx.hasTrust ? 'Pour-Over Will' : 'Last Will and Testament'}).
-  ${ctx.hasTrust ? `The Revocable Living Trust is a JOINT trust for both spouses.` : ''}
-  
-  You MUST:
-  - Title this document: "Estate Plan Summary of ${summaryTitle}"
-  - List BOTH spouses' individual documents separately in the document overview
-  - Cover BOTH spouses' fiduciary appointments
-  - Describe incapacity planning for BOTH spouses
-  - All action steps apply to BOTH spouses' documents
-` : ''}
-Generate the complete document now. Include ALL sections: estate plan overview, documents, fiduciaries, assets, incapacity planning, AND the full action steps checklist with specific county recording information for each property. Use the client's actual names throughout.${ctx.hasSpouse ? ` This is a MARRIED COUPLE plan — you MUST cover both ${ctx.clientFullName} and ${ctx.spouseFullName} throughout the entire document.` : ''}
+Generate the complete document now. Use the client's actual names.
 `.trim();
 
-  const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, ctx.safeFirm, {
-    model: ctx.safeFirm?.documentDraftingModel || 'gpt-5.4',
+  const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, firmData, {
+    model: firmData?.documentDraftingModel || 'gpt-5.4',
     temperature: 0.3,
     maxTokens: 16384,
     jsonMode: true,
@@ -584,9 +526,10 @@ Generate the complete document now. Include ALL sections: estate plan overview, 
 
   return {
     docType: 'estatePlanSummary',
-    title: buildStandardTitle('estatePlanSummary', summaryTitle),
+    title: buildStandardTitle('estatePlanSummary', templateData.summaryTitle),
     content: parsed.content ?? '',
     status: 'draft',
     ...(parsed._truncated && { _truncated: true }),
   };
 }
+

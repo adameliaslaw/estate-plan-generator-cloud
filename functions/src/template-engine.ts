@@ -606,13 +606,15 @@ export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
 export function renderTemplate(
   templateContent: string,
   ctx: ClientContext,
+  additionalData?: Record<string, unknown>,
 ): string {
   ensureHelpers();
 
   const compiled = Handlebars.compile(templateContent);
-  const templateData = buildTemplateData(ctx);
+  const baseData = buildTemplateData(ctx);
+  const finalData = additionalData ? { ...baseData, ...additionalData } : baseData;
 
-  return compiled(templateData);
+  return compiled(finalData);
 }
 
 // ---------------------------------------------------------------------------
@@ -636,6 +638,7 @@ export async function generateFromTemplate(
   aiGeneratorFn?: () => Promise<GeneratedDoc>,
   softwareSource?: string,
   formattingPreset?: string,
+  additionalData?: Record<string, unknown>,
 ): Promise<GeneratedDoc> {
   const firmId = ctx.firm.id ?? ctx.client.firmId;
 
@@ -690,7 +693,7 @@ export async function generateFromTemplate(
   // Render template — guard against invalid Handlebars syntax in uploaded templates
   let renderedHtml: string;
   try {
-    renderedHtml = renderTemplate(template.content, ctx);
+    renderedHtml = renderTemplate(template.content, ctx, additionalData);
   } catch (renderErr) {
     const errMsg = renderErr instanceof Error ? renderErr.message : String(renderErr);
     console.warn(

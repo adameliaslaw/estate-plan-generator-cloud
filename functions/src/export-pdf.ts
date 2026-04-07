@@ -238,6 +238,7 @@ export function buildLegalDocumentHtml(
     .tr-body1       { text-align: justify; margin: 0 0 10pt; }
     .tr-body3       { text-align: justify; margin: 10pt 0; }
     .tr-art1        { text-align: center; font-weight: bold; margin: 24pt 0 14pt; page-break-after: avoid; }
+    .tr-art1 + .tr-art1 { margin-top: 5pt; }
     .tr-art2        { text-align: justify; margin: 0 0 10pt; }
     .tr-art3b       { text-align: justify; text-indent: 1in; margin: 0 0 8pt; }
     .tr-art4b       { text-align: justify; text-indent: 1.5in; margin: 0 0 8pt; }
