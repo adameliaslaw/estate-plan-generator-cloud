@@ -40,6 +40,15 @@ import { documentService, type GenerateDocumentsResponse } from '@/services/docu
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { logSystemActivity } from '@/utils/activity-logger';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SOFTWARE_SOURCES } from '@/config/software-sources';
+import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -142,6 +151,8 @@ export default function GenerateDocumentsButton({
   const [currentDoc, setCurrentDoc] = useState('');
   const [result, setResult] = useState<GenerateDocumentsResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [softwareSource, setSoftwareSource] = useState('interactivelegal');
+  const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const baseDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -175,7 +186,9 @@ export default function GenerateDocumentsButton({
         clientId,
         packageType,
         trustTypes,
-        generationMode: 'template', // Hardcode to high-fidelity template mode
+        generationMode: 'template',
+        softwareSource: softwareSource === 'none' ? '' : softwareSource,
+        formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
@@ -303,7 +316,44 @@ export default function GenerateDocumentsButton({
               </ul>
             </div>
 
-            {/* Selectors removed for pipeline unification */}
+            {/* Source & Formatting Selectors */}
+            <div className="grid grid-cols-2 gap-3 pb-2 pt-1">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Template Source
+                </label>
+                <Select value={softwareSource} onValueChange={setSoftwareSource}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOFTWARE_SOURCES.map((s) => (
+                      <SelectItem key={s.value} value={s.value || 'none'} className="text-xs">
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Formatting Style
+                </label>
+                <Select value={formattingPreset} onValueChange={setFormattingPreset}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FORMATTING_PRESET_OPTIONS.map((p) => (
+                      <SelectItem key={p.value} value={p.value || 'none'} className="text-xs">
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             <Alert className="border-amber-200 bg-amber-50">
               <AlertCircle className="h-4 w-4 text-amber-600" />
