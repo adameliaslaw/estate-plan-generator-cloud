@@ -137,7 +137,7 @@ function expandForMarriedCouple(
 // ---------------------------------------------------------------------------
 
 export const generateDocuments = functions
-  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .runWith({ timeoutSeconds: 540, memory: '1GB', secrets: ['VERTEX_AI_KEY'] })
   .region('us-east1')
   .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
