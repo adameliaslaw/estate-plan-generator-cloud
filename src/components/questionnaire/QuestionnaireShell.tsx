@@ -488,15 +488,14 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
 
       // Send the firm notification (wrap in try/catch to prevent blocking if email fails)
       const clientName = `${data.personalInfo?.firstName || 'Client'} ${data.personalInfo?.lastName || ''}`.trim() || 'A Client';
-
       try {
         const attorneyEmail = userProfile?.role === 'attorney'
           ? userProfile.email
           : 'info@adameliaslaw.com'; // fallback to firm email
 
         await documentService.sendQuestionnaireCompleteNotification({
-          firmId,
-          clientId,
+          firmId: firmId!,
+          clientId: clientId!,
           clientName,
           attorneyEmail,
         });
@@ -504,6 +503,15 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
         console.warn('Failed to send complete notification, but questionnaire was saved.', notifyErr);
         // We still want to show the success screen even if the email notification fails.
       }
+
+      // Trigger background vaulting (snapshot of the questionnaire data)
+      documentService.generateSingleDocument({
+        firmId: firmId!,
+        clientId: clientId!,
+        docType: 'questionnaire',
+      }).catch((err) => {
+        console.error('Failed to vault questionnaire snapshot:', err);
+      });
 
       try {
         await logSystemActivity(firmId, userProfile, 'completing questionnaire', {
@@ -579,6 +587,15 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
       } catch {
         // Non-fatal — save still succeeded
       }
+
+      // Trigger background vaulting (snapshot of the questionnaire data)
+      documentService.generateSingleDocument({
+        firmId,
+        clientId,
+        docType: 'questionnaire',
+      }).catch((err) => {
+        console.error('Failed to vault questionnaire snapshot (staff edit):', err);
+      });
 
       toast.success('Questionnaire changes saved.');
       navigate(-1);

@@ -27,19 +27,26 @@ export interface GenerateDocumentsResponse {
   results: Array<{ docType: string; title: string; status: string }>;
 }
 
-export interface RegenerateDocumentRequest {
+export interface GenerateSingleDocumentRequest {
   firmId: string;
   clientId: string;
   docType: string;
+  propertyIndex?: number;
   customInstructions?: string;
+  trustTypes?: string[];
+  generationMode?: 'template' | 'ai' | 'hybrid';
+  templateId?: string;
+  softwareSource?: string;
+  formattingPreset?: string;
 }
 
-export interface RegenerateDocumentResponse {
+export interface GenerateSingleDocumentResponse {
   success: boolean;
+  docId: string;
   docType: string;
   title: string;
   status: string;
-  documentId: string;
+  version: number;
 }
 
 export interface ReviewDocumentRequest {
@@ -140,10 +147,10 @@ export const documentService = {
   },
 
   /**
-   * Regenerate a single document, optionally with custom instructions.
+   * Generate/Regenerate a single document, optionally with custom instructions.
    */
-  async regenerateDocument(params: RegenerateDocumentRequest): Promise<RegenerateDocumentResponse> {
-    const fn = httpsCallable<RegenerateDocumentRequest, RegenerateDocumentResponse>(
+  async generateSingleDocument(params: GenerateSingleDocumentRequest): Promise<GenerateSingleDocumentResponse> {
+    const fn = httpsCallable<GenerateSingleDocumentRequest, GenerateSingleDocumentResponse>(
       functions,
       'generateSingleDocument',
       { timeout: 540000 }, // 9 min — matches server-side timeout

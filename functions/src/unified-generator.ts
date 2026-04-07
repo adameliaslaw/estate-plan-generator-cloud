@@ -29,7 +29,7 @@ import { getTemplateName, FALLBACK_TEMPLATE } from './template-map';
 export type StandardDocType =
   | 'will' | 'pourOverWill' | 'poa' | 'livingWill' | 'trust'
   | 'deed' | 'affidavitOfConsideration' | 'gitRep3'
-  | 'estatePlanSummary';
+  | 'estatePlanSummary' | 'questionnaire';
 
 /** Flex generators — AI with doc-type-specific prompts via flex-prompts.ts */
 export type FlexDocType =
@@ -229,7 +229,7 @@ const ALL_DOC_TYPES = new Set<DocType>([
   // Standard generators
   'will', 'pourOverWill', 'poa', 'livingWill', 'trust',
   'deed', 'affidavitOfConsideration', 'gitRep3',
-  'estatePlanSummary',
+  'estatePlanSummary', 'questionnaire',
   // Flex generators (AI with doc-type-specific prompts)
   'engagementLetter', 'coverLetter', 'invoice', 'certificationOfTrust',
   'beneficiaryDesignation', 'trustAmendment', 'trustRestatement', 'petTrust',
@@ -258,6 +258,7 @@ async function loadGenerator(docType: DocType): Promise<StandardGeneratorFn | nu
     case 'affidavitOfConsideration': return (await import('./generators/affidavit-generator')).generateAffidavitOfConsideration;
     case 'gitRep3': return (await import('./generators/git-rep3-generator')).generateGitRep3;
     case 'estatePlanSummary': return (await import('./generators/summary-docs-generator')).generateEstatePlanSummary;
+    case 'questionnaire': return (await import('./generators/questionnaire-generator')).generateQuestionnaire;
 
     // --- Flex generators (all route through generateFlexAI adapter) ---
     case 'engagementLetter':
@@ -308,6 +309,7 @@ const DOC_TYPE_DISPLAY_NAMES: Record<DocType, string> = {
   affidavitOfConsideration: 'Affidavit of Consideration',
   gitRep3: 'GIT/REP-3 Exemption Certificate',
   estatePlanSummary: 'Estate Plan Summary',
+  questionnaire: 'Questionnaire Summary',
   engagementLetter: 'Engagement Letter',
   coverLetter: 'Cover Letter',
   invoice: 'Invoice',

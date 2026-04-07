@@ -57,19 +57,27 @@ export const generateSingleDocument = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in to generate documents.');
     }
 
-    const role = auth.token.role as string | undefined;
-    if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
-      throw new HttpsError(
-        'permission-denied',
-        'Only attorneys, paralegals, and administrators can generate documents.',
-      );
-    }
-
     const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'template', templateId, softwareSource, formattingPreset } =
       request.data as GenerateSingleRequest;
 
     if (!firmId || !clientId || !docType) {
       throw new HttpsError('invalid-argument', 'firmId, clientId, and docType are required.');
+    }
+
+    const role = auth.token.role as string | undefined;
+    const isStaff = role && ['admin', 'attorney', 'paralegal'].includes(role);
+    const isClient = role === 'client';
+
+    if (!isStaff && !(isClient && docType === 'questionnaire')) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only staff members can generate legal documents. Clients can only vault their questionnaire summary.',
+      );
+    }
+
+    // Verify client access
+    if (isClient && auth.uid !== clientId) {
+      throw new HttpsError('permission-denied', 'You can only vault your own questionnaire.');
     }
 
     // Verify caller is in the same firm
