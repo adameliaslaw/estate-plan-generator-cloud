@@ -153,6 +153,7 @@ export default function GenerateDocumentsButton({
   const [errorMessage, setErrorMessage] = useState('');
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
+  const [generationMode, setGenerationMode] = useState('high-fidelity');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const baseDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -186,7 +187,7 @@ export default function GenerateDocumentsButton({
         clientId,
         packageType,
         trustTypes,
-        generationMode: 'template',
+        generationMode: generationMode as 'template' | 'ai' | 'hybrid' | 'high-fidelity',
         softwareSource: softwareSource === 'none' ? '' : softwareSource,
         formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
@@ -352,6 +353,26 @@ export default function GenerateDocumentsButton({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-1.5 col-span-2 mt-1 border-t border-gray-100 pt-3">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Generation Mode
+                </label>
+                <Select value={generationMode} onValueChange={setGenerationMode}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high-fidelity" className="text-xs text-[#1a365d] font-medium">Template: High Fidelity (Recommended)</SelectItem>
+                    <SelectItem value="hybrid" className="text-xs">Template: Enhanced (Hybrid)</SelectItem>
+                    <SelectItem value="template" className="text-xs">Template: Exact Fidelity (Legacy)</SelectItem>
+                    <SelectItem value="ai" className="text-xs">AI Drafting (From Scratch)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-[10px] text-gray-400">
+                  High Fidelity merges precise legal text from the Firm Knowledge Base with the client's responses.
+                </p>
               </div>
             </div>
 

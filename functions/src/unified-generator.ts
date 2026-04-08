@@ -1,21 +1,16 @@
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import * as path from 'path';
-import * as fs from 'fs';
-import PizZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
+
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext, ClientContext } from './client-context-aggregator';
 import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper';
 import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
-import { callVertexAIStructured } from './vertex-ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
 import { buildEstatePlanSummaryTemplateData } from './generators/summary-docs-generator';
-import { ESTATE_EXTRACTION_SCHEMA } from './document-schemas';
-import { getTemplateName, FALLBACK_TEMPLATE } from './template-map';
+
 
 
 
@@ -566,69 +561,7 @@ export async function generateDocument(
 
       // Non-per-property docs (or if we didn't generate one above)
       if (!generatedDoc!) {
-        // --- High-Fidelity Binary Generation Path ---
-        if (generationMode === 'high-fidelity') {
-          console.log(`[unifiedGenerator] Running high-fidelity extraction for ${docType}...`);
-
-          // Fetch the firm's Gemini API key from Firestore (same pattern as kb-embeddings)
-          const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
-          const firmGeminiKey = (firmSnap.data()?.geminiApiKey as string | undefined) ?? '';
-          if (!firmGeminiKey) {
-            throw new Error(`[unifiedGenerator] No geminiApiKey configured for firm ${firmId}. Add it in Firm Settings.`);
-          }
-
-          const extractionPrompt = `
-            You are an expert estate planning assistant.
-            Your task is to extract specific legal appointment and identity data from the following client questionnaire summary for a ${docType}.
-            
-            Respond ONLY with valid JSON matching the provided schema.
-            
-            CLIENT DATA:
-            ${clientData._serializedClientData}
-          `;
-
-          const extractedData = await callVertexAIStructured<{
-            is_married: boolean;
-            has_trust: boolean;
-            client_name: string;
-            executor: string;
-            spouse_name: string;
-            [key: string]: unknown;
-          }>(
-            'gemini-2.5-flash',
-            extractionPrompt,
-            ESTATE_EXTRACTION_SCHEMA.schema as Record<string, unknown>,
-            firmGeminiKey,
-          );
-
-          // Template Routing
-          const templateName = getTemplateName({
-            is_married: extractedData.is_married,
-            has_trust: extractedData.has_trust,
-            doc_type: docType as "will" | "poa" | "hc" | "trust" | "pourOverWill",
-          });
-
-          const templatePath = path.join(__dirname, 'templates', templateName);
-          const finalTemplatePath = fs.existsSync(templatePath) 
-            ? templatePath 
-            : path.join(__dirname, 'templates', FALLBACK_TEMPLATE);
-
-          const content = fs.readFileSync(finalTemplatePath, 'binary');
-          const zip = new PizZip(content);
-          const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
-          doc.render(extractedData);
-
-          const buffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-
-          generatedDoc = {
-            docType,
-            title: buildStandardTitle(docType, clientData._clientFullName),
-            content: '', // No HTML content for binary docs
-            status: 'draft',
-            _binaryBuffer: buffer,
-            _extractedData: extractedData,
-          };
-        } else if (generationMode !== 'ai' && clientContext) {
+        if (generationMode !== 'ai' && clientContext) {
           // Legacy Template or hybrid mode (HTML based)
           const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
 

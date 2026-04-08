@@ -67,7 +67,7 @@ export interface DocumentTemplate {
   updatedBy: string;
 }
 
-export type GenerationMode = 'template' | 'ai' | 'hybrid';
+export type GenerationMode = 'template' | 'ai' | 'hybrid' | 'high-fidelity';
 
 export interface ValidationResult {
   valid: boolean;

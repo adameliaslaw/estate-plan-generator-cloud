@@ -15,7 +15,7 @@ export interface GenerateDocumentsRequest {
   clientId: string;
   packageType: 'foundation' | 'guardian' | 'fortress';
   trustTypes?: string[];
-  generationMode?: 'template' | 'ai' | 'hybrid';
+  generationMode?: 'template' | 'ai' | 'hybrid' | 'high-fidelity';
   softwareSource?: string;
   /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
   formattingPreset?: string;
@@ -34,7 +34,7 @@ export interface GenerateSingleDocumentRequest {
   propertyIndex?: number;
   customInstructions?: string;
   trustTypes?: string[];
-  generationMode?: 'template' | 'ai' | 'hybrid';
+  generationMode?: 'template' | 'ai' | 'hybrid' | 'high-fidelity';
   templateId?: string;
   softwareSource?: string;
   formattingPreset?: string;
