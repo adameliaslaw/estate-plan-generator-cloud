@@ -567,7 +567,7 @@ export async function generateDocument(
       // Non-per-property docs (or if we didn't generate one above)
       if (!generatedDoc!) {
         // --- High-Fidelity Binary Generation Path ---
-        if (generationMode === 'high-fidelity' || (docType === 'will' || docType === 'poa' || docType === 'livingWill' || docType === 'trust' || docType === 'pourOverWill')) {
+        if (generationMode === 'high-fidelity') {
           console.log(`[unifiedGenerator] Running high-fidelity extraction for ${docType}...`);
 
           // Fetch the firm's Gemini API key from Firestore (same pattern as kb-embeddings)
