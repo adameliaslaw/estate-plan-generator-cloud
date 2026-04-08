@@ -8,8 +8,7 @@
  * generation, save, and context logic lives in unified-generator.ts.
  */
 
-import * as functions from 'firebase-functions';
-const { HttpsError } = functions.https;
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { GenerationMode } from './template-engine';
 import {
@@ -136,14 +135,18 @@ function expandForMarriedCouple(
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const generateDocuments = functions
-  .runWith({ timeoutSeconds: 540, memory: '1GB', secrets: ['VERTEX_AI_KEY'] })
-  .region('us-east1')
-  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
+export const generateDocuments = onCall(
+  {
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    region: 'us-east1',
+    secrets: ['VERTEX_AI_KEY'],
+  },
+  async (request: CallableRequest<GenerateRequest>) => {
     // ------------------------------------------------------------------
     // 1. Authentication & authorization
     // ------------------------------------------------------------------
-    const auth = context.auth;
+    const auth = request.auth;
     if (!auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to generate documents.');
     }
@@ -156,7 +159,7 @@ export const generateDocuments = functions
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource, formattingPreset } = data as GenerateRequest;
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource, formattingPreset } = request.data;
 
     if (!firmId || !clientId || !packageType) {
       throw new HttpsError(
@@ -290,4 +293,5 @@ export const generateDocuments = functions
       })),
     };
   },
-  );
+);
+
