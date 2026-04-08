@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { X, FileText, Loader2, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -222,7 +223,7 @@ function DocxViewer({ bytes }: DocxViewerProps) {
           fontFamily: '"Times New Roman", Times, Georgia, serif',
           fontSize: '12pt', lineHeight: '1.6', color: '#1a1a1a',
         }}
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
       />
     </div>
   );
@@ -435,7 +436,7 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
                   fontFamily: '"Times New Roman", Times, Georgia, serif',
                   fontSize: '12pt', lineHeight: '1.6', color: '#1a1a1a',
                 }}
-                dangerouslySetInnerHTML={{ __html: inlineHtml || fetchedHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(inlineHtml || fetchedHtml) }}
               />
             </div>
           )}

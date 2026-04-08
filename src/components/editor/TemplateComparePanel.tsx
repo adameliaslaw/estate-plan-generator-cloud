@@ -20,6 +20,7 @@
  */
 
 import { useRef, useCallback, useState } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import {
   X,
   Columns,
@@ -151,7 +152,7 @@ export default function TemplateComparePanel({
           onScroll={() => handleScroll('left')}
         >
           <div className="legal-editor-content compare-pane mx-auto max-w-[850px] px-12 py-10">
-            <div dangerouslySetInnerHTML={{ __html: templateBaseline }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(templateBaseline) }} />
           </div>
         </div>
 
@@ -162,7 +163,7 @@ export default function TemplateComparePanel({
           onScroll={() => handleScroll('right')}
         >
           <div className="legal-editor-content compare-pane mx-auto max-w-[850px] px-12 py-10">
-            <div dangerouslySetInnerHTML={{ __html: currentContent }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentContent) }} />
           </div>
         </div>
       </div>

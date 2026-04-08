@@ -31,6 +31,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import {
   History,
   X,
@@ -392,17 +393,10 @@ function VersionPreviewModal({
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto mx-6 my-4 rounded-lg border border-gray-200">
-          {/* SECURITY NOTE: version.content is HTML produced by the TipTap
-              editor and stored in Firestore. It is NOT user-submitted freeform
-              input — the attorney controls all content through the document
-              editor UI. The content is validated server-side on save.
-              For additional hardening, integrate DOMPurify before rendering:
-                import DOMPurify from 'dompurify';
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content) }} */}
           <div
             className="p-12 font-serif text-base leading-relaxed"
             style={{ fontFamily: 'Times New Roman, Times, serif', fontSize: '16px' }}
-            dangerouslySetInnerHTML={{ __html: version.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(version.content) }}
           />
         </div>
         <DialogFooter className="px-6 pb-5 gap-2">

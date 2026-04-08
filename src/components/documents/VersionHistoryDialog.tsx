@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { History, RotateCcw, Eye, Loader2, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -234,7 +235,7 @@ export default function VersionHistoryDialog({
                     </div>
                     <div
                       className="prose prose-sm max-h-64 overflow-y-auto text-sm"
-                      dangerouslySetInnerHTML={{ __html: previewContent }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewContent) }}
                     />
                   </div>
                 )}
