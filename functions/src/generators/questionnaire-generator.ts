@@ -134,6 +134,9 @@ export async function generateQuestionnaire(
     field('Occupation', pi.occupation),
     field('Employer', pi.employer),
   )}
+      ${row(
+    field('NJ Pregnancy Provision (isFemale)', d.isFemale),
+  )}
       <div class="field">
         <span class="label">Home Address</span>
         <span class="value">${[pi.street, `${pi.city || ''}, ${pi.state || ''} ${pi.zip || ''}`.trim(), pi.county ? `${pi.county} County` : ''].filter(v => v && v !== ', ').join('<br/>')|| '—'}</span>
@@ -788,6 +791,30 @@ export async function generateQuestionnaire(
       ${d.referralSource ? field('Referral Source', d.referralSource) : ''}
     </div>
   `;
+
+  // ── Section 10: Uploaded Documents ──────────────────────────────────────
+  const uploads = (d.uploads as Array<Record<string, unknown>>) || [];
+  if (uploads.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">Uploaded Documents (${uploads.length})</div>
+        <table>
+          <thead><tr><th>File Name</th><th>Type</th><th>Size</th><th>Uploaded On</th></tr></thead>
+          <tbody>
+            ${uploads.map((u) => {
+              const kb = u.size ? `${Math.round(Number(u.size) / 1024)} KB` : '—';
+              return `<tr>
+                <td>${val(u.name)}</td>
+                <td>${val(u.type)}</td>
+                <td>${kb}</td>
+                <td>${val(u.date)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
 
   // ── Close ──────────────────────────────────────────────────────────────────
   html += `</div>`; // end .questionnaire-summary
