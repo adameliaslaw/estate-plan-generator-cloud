@@ -68,7 +68,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     setSuccessMessage('');
 
     try {
-      const result = await documentService.regenerateDocument({
+      const result = await documentService.generateSingleDocument({
         firmId,
         clientId,
         docType: selectedDocType,
