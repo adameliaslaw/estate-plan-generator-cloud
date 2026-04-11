@@ -1,4 +1,14 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+
+interface GoogleTokenResponse {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  token_type?: string;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+}
 import * as admin from 'firebase-admin';
 
 export const exchangeGoogleAuthCode = onCall(
@@ -8,7 +18,7 @@ export const exchangeGoogleAuthCode = onCall(
         memory: '256MiB',
         secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
     },
-    async (request: any /* CallableRequest */) => {
+    async (request: CallableRequest<unknown>) => {
         if (!request.auth) {
             throw new HttpsError('unauthenticated', 'Must be logged in to connect Google Calendar.');
         }
@@ -48,7 +58,7 @@ export const exchangeGoogleAuthCode = onCall(
                 throw new Error(`Google API responded with ${response.status}`);
             }
 
-            const tokenData = (await response.json()) as any;
+            const tokenData = (await response.json()) as GoogleTokenResponse;
 
             if (!tokenData.refresh_token) {
                 throw new HttpsError(
@@ -58,7 +68,7 @@ export const exchangeGoogleAuthCode = onCall(
             }
 
             const db = admin.firestore();
-            const newExpiry = Date.now() + tokenData.expires_in * 1000;
+            const newExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
 
             await db.doc(`firms/${firmId}`).update({
                 'googleCalendar.connected': true,
@@ -70,10 +80,11 @@ export const exchangeGoogleAuthCode = onCall(
             });
 
             return { success: true };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[exchangeGoogleAuthCode] Error exchanging token:', error);
             if (error instanceof HttpsError) throw error;
-            throw new HttpsError('internal', `Failed to exchange auth token: ${error.message}`);
+            const errMsg = error instanceof Error ? error.message : String(error);
+            throw new HttpsError('internal', `Failed to exchange auth token: ${errMsg}`);
         }
     }
 );

@@ -8,7 +8,7 @@
  * Firestore path: firms/{firmId}/knowledgeBase/{resourceId}
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI, parseAIJson } from './ai-client';
 
@@ -49,7 +49,7 @@ export interface KnowledgeResource {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function assertFirmAccess(auth: any, firmId: string): void {
+function assertFirmAccess(auth: NonNullable<CallableRequest['auth']>, firmId: string): void {
   const role = auth.token.role as string | undefined;
   if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
     throw new HttpsError('permission-denied', 'Only staff members can manage the knowledge base.');
@@ -72,9 +72,12 @@ function kbCollection(firmId: string) {
 
 export const addKnowledgeResource = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { firmId, category, title, citation, content, tags, docTypes, jurisdiction, source, sourceUrl } = request.data;
+    const { firmId, category, title, citation, content, tags, docTypes, jurisdiction, source, sourceUrl } = request.data as {
+      firmId: string; category: KnowledgeCategory; title: string; citation?: string; content: string;
+      tags?: string[]; docTypes?: string[]; jurisdiction?: string; source?: string; sourceUrl?: string;
+    };
 
     if (!firmId || !title || !content || !category) {
       throw new HttpsError('invalid-argument', 'firmId, category, title, and content are required.');
@@ -116,9 +119,9 @@ export const addKnowledgeResource = onCall(
 
 export const updateKnowledgeResource = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { firmId, resourceId, ...updates } = request.data;
+    const { firmId, resourceId, ...updates } = request.data as { firmId: string; resourceId: string; [key: string]: unknown };
 
     if (!firmId || !resourceId) {
       throw new HttpsError('invalid-argument', 'firmId and resourceId are required.');
@@ -153,9 +156,9 @@ export const updateKnowledgeResource = onCall(
 
 export const deleteKnowledgeResource = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { firmId, resourceId } = request.data;
+    const { firmId, resourceId } = request.data as { firmId: string; resourceId: string };
 
     if (!firmId || !resourceId) {
       throw new HttpsError('invalid-argument', 'firmId and resourceId are required.');
@@ -185,9 +188,11 @@ export const deleteKnowledgeResource = onCall(
 
 export const searchKnowledgeResources = onCall(
   { region: 'us-east1', memory: '256MiB' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { firmId, category, docType, tag, activeOnly = true } = request.data;
+    const { firmId, category, docType, tag, activeOnly = true } = request.data as {
+      firmId: string; category?: string; docType?: string; tag?: string; activeOnly?: boolean;
+    };
 
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
@@ -216,7 +221,7 @@ export const searchKnowledgeResources = onCall(
 
     // Client-side filter for tag (Firestore can't do array-contains on two fields)
     if (tag) {
-      results = results.filter((r: any) => (r.tags ?? []).includes(tag));
+      results = results.filter((r: Record<string, unknown>) => (r.tags as string[] ?? []).includes(tag));
     }
 
     return { success: true, resources: results, count: results.length };
@@ -229,9 +234,12 @@ export const searchKnowledgeResources = onCall(
 
 export const bulkImportKnowledgeResources = onCall(
   { region: 'us-east1', memory: '512MiB', timeoutSeconds: 60 },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { firmId, resources } = request.data;
+    const { firmId, resources } = request.data as {
+      firmId: string;
+      resources: { title?: string; content?: string; category?: string; citation?: string; tags?: string[]; docTypes?: string[]; jurisdiction?: string; source?: string; sourceUrl?: string }[];
+    };
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
     if (!Array.isArray(resources) || resources.length === 0) {
@@ -307,9 +315,9 @@ export const bulkImportKnowledgeResources = onCall(
 
 export const analyzeKnowledgeContent = onCall(
   { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30 },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { text } = request.data;
+    const { text } = request.data as { text: string };
 
     if (!text || typeof text !== 'string' || text.trim().length < 20) {
       throw new HttpsError('invalid-argument', 'Please provide at least 20 characters of text to analyze.');

@@ -19,7 +19,7 @@
  *    and overdue questionnaires, sends reminders. Commented out pending Cloud Scheduler setup.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 
@@ -306,7 +306,7 @@ interface QuestionnaireInvitationRequest {
  */
 export const sendQuestionnaireInvitation = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     // Auth check
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
@@ -409,7 +409,7 @@ interface QuestionnaireCompleteRequest {
  */
 export const sendQuestionnaireCompleteNotification = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
@@ -496,7 +496,7 @@ interface DocumentReadyRequest {
  */
 export const sendDocumentReadyNotification = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
@@ -602,7 +602,7 @@ interface PaymentReceiptRequest {
  */
 export const sendPaymentReceipt = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
@@ -721,7 +721,7 @@ interface PaymentReceivedNotificationRequest {
  */
 export const sendPaymentReceivedNotification = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
@@ -821,7 +821,7 @@ interface AppointmentReminderRequest {
  */
 export const sendAppointmentReminder = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
@@ -972,7 +972,7 @@ interface FollowUpReminderRequest {
  */
 export const sendFollowUpReminder = onCall(
   { region: 'us-east1', invoker: 'public', cors: true },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }

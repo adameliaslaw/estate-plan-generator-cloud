@@ -80,7 +80,7 @@ export const syncClientToLevitate = functions.region('us-east1').firestore
                 }
             }
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(`[syncClientToLevitate] Exception during Levitate sync:`, err);
         }
     });

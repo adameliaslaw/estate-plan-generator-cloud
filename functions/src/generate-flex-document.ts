@@ -13,7 +13,7 @@
  * The flex-specific system prompts live in flex-prompts.ts.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 
 import { generateDocument } from './unified-generator';
 
@@ -41,7 +41,7 @@ export const generateFlexDocument = onCall(
     memory: '1GiB',
     region: 'us-east1',
   },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------

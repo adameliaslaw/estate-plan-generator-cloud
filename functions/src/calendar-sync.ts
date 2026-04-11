@@ -34,6 +34,19 @@ import * as functions from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 
+// Typed shapes for Google OAuth token API responses
+interface GoogleOAuthTokenResponse {
+  access_token?: string;
+  expires_in?: number;
+  token_type?: string;
+  scope?: string;
+}
+
+interface GoogleOAuthErrorResponse {
+  error?: string;
+  error_description?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -232,7 +245,7 @@ async function refreshAccessTokenIfNeeded(
   });
 
   if (!response.ok) {
-    const err = (await response.json()) as any;
+    const err = (await response.json()) as GoogleOAuthErrorResponse;
     console.error('[refreshAccessTokenIfNeeded] Detailed Google API Error Payload:', JSON.stringify(err, null, 2));
 
     if (err.error === 'invalid_grant') {
@@ -245,15 +258,16 @@ async function refreshAccessTokenIfNeeded(
     throw new functions.https.HttpsError('internal', `Token refresh failed: ${err.error} - ${err.error_description || 'No description'}`);
   }
 
-  const { access_token, expires_in } = (await response.json()) as any;
-  const newExpiry = Date.now() + expires_in * 1000;
+  const tokenData = (await response.json()) as GoogleOAuthTokenResponse;
+  const newExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
+  const newAccessToken = tokenData.access_token ?? '';
 
   await db.doc(`firms/${firmId}`).update({
-    'googleCalendar.accessToken': access_token,
+    'googleCalendar.accessToken': newAccessToken,
     'googleCalendar.tokenExpiry': newExpiry,
   });
 
-  return access_token;
+  return newAccessToken;
 }
 
 /**

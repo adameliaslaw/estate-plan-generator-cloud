@@ -13,8 +13,8 @@
  * 4. onPaymentCreated        — Firestore onCreate trigger; fires when a payment is recorded.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { onDocumentWritten, onDocumentCreated, FirestoreEvent, Change, QueryDocumentSnapshot, DocumentSnapshot } from 'firebase-functions/v2/firestore';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 
@@ -135,7 +135,7 @@ interface LogAccessRequest {
  */
 export const logAccess = onCall(
   { region: 'us-east1' },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     // Auth check
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to log access.');
@@ -200,7 +200,7 @@ export const onDocumentStatusChanged = onDocumentWritten(
     document: 'firms/{firmId}/clients/{clientId}/documents/{docId}',
     region: 'us-east1',
   },
-  async (event: any /* FirestoreEvent */) => {
+  async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined>) => {
     const { firmId, clientId, docId } = event.params;
 
     const before = event.data?.before?.data();
@@ -281,7 +281,7 @@ export const onPaymentCreated = onDocumentCreated(
     document: 'firms/{firmId}/clients/{clientId}/payments/{paymentId}',
     region: 'us-east1',
   },
-  async (event: any /* FirestoreEvent */) => {
+  async (event: FirestoreEvent<QueryDocumentSnapshot | undefined>) => {
     const { firmId, clientId, paymentId } = event.params;
     const data = event.data?.data();
 

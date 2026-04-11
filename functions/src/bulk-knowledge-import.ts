@@ -68,8 +68,7 @@ function truncateAtWordBoundary(text: string, maxLen: number): string {
 async function extractFileText(
   buffer: Buffer,
   fileName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  firmData: Record<string, any>,
+  firmData: Record<string, unknown>,
 ): Promise<{ text: string; html: string; ocrPagesCount: number }> {
   const ext = fileName.toLowerCase().split('.').pop();
   let text = '';
@@ -165,8 +164,7 @@ async function enrichResourceWithAI(
   firmId: string,
   resourceId: string,
   rawText: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  firmData: Record<string, any>,
+  firmData: Record<string, unknown>,
 ): Promise<void> {
   const analysisText = truncateAtWordBoundary(rawText, 6000);
 

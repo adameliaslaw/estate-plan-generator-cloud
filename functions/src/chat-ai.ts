@@ -34,8 +34,7 @@ interface ChatAiRequest {
   firmId: string;
   clientId?: string;
   message: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contextParams?: Record<string, any>;
+  contextParams?: Record<string, unknown>;
   history?: { role: 'user' | 'assistant'; content: string }[];
   /** 'chat' for general Q&A, 'draft' for document drafting, 'research' for web-grounded research */
   mode?: 'chat' | 'draft' | 'research';
@@ -174,8 +173,7 @@ async function buildContextString(
   clientId: string | undefined,
   mode: 'chat' | 'draft',
   draftDocType: string | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contextParams: Record<string, any> | undefined,
+  contextParams: Record<string, unknown> | undefined,
 ): Promise<string> {
   let contextStr = '';
 
@@ -246,7 +244,7 @@ async function buildContextString(
   } else {
     // No client selected — still fetch firm + KB using vector search with user's message
     try {
-      const minCtx = await aggregateMinimalContext(firmId, contextParams?.__userMessage);
+      const minCtx = await aggregateMinimalContext(firmId, contextParams?.__userMessage as string | undefined);
       contextStr += `\nFIRM: ${minCtx.firm.firmName ?? ''}, ${minCtx.firm.firmAddress ?? ''}, ${minCtx.firm.firmPhone ?? ''}`;
       contextStr += `\nBar Number: ${minCtx.firm.barNumber ?? ''}`;
 
@@ -731,12 +729,12 @@ RULES:
       }
 
       return { reply: raw, conversationId: convId };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[chatAi] Error:', error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       throw new functions.https.HttpsError(
         'internal',
-        error.message || 'An error occurred bridging to the AI provider.',
+        errMsg || 'An error occurred bridging to the AI provider.',
       );
     }
   },

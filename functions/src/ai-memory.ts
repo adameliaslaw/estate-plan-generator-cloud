@@ -267,8 +267,7 @@ export async function extractAndSaveKeyFacts(
   clientId: string,
   conversationId: string,
   messages: ConversationMessage[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  firmData: Record<string, any>,
+  firmData: Record<string, unknown>,
 ): Promise<void> {
   // Only process conversations with substantial content
   if (messages.length < 4) return;
@@ -444,8 +443,7 @@ export async function extractAndSaveCorrections(
   firmId: string,
   conversationId: string,
   messages: ConversationMessage[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  firmData: Record<string, any>,
+  firmData: Record<string, unknown>,
 ): Promise<void> {
   // Only process conversations with enough back-and-forth
   if (messages.length < 4) return;

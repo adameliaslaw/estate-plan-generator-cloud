@@ -6,7 +6,7 @@
  *   - revertDocumentVersion: restore a prior version (current is snapshotted first)
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { getVersionHistory, revertToVersion } from './document-save-helper';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ import { getVersionHistory, revertToVersion } from './document-save-helper';
 
 export const getDocumentVersions = onCall(
   { timeoutSeconds: 30, memory: '256MiB', region: 'us-east1' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
 
@@ -55,7 +55,7 @@ export const getDocumentVersions = onCall(
 
 export const getDocumentVersionContent = onCall(
   { timeoutSeconds: 30, memory: '256MiB', region: 'us-east1' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
 
@@ -96,7 +96,7 @@ export const getDocumentVersionContent = onCall(
 
 export const revertDocumentVersion = onCall(
   { timeoutSeconds: 60, memory: '256MiB', region: 'us-east1' },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
 

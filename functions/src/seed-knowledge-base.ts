@@ -8,7 +8,7 @@
  * Firestore path: firms/{firmId}/knowledgeBase/{resourceId}
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -418,11 +418,11 @@ const NJ_STATUTES: SeedResource[] = [
 
 export const seedKnowledgeBase = onCall(
   { region: 'us-east1', memory: '512MiB', timeoutSeconds: 120 },
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign in required.');
     }
-    const { firmId } = request.data;
+    const { firmId } = request.data as { firmId: string };
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }

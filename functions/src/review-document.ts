@@ -15,7 +15,7 @@
  * suggestions, compliance notes, and an overall assessment.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from './ai-client';
 import { DOCUMENT_REVIEW_SCHEMA } from './document-schemas';
@@ -276,7 +276,7 @@ export const reviewDocument = onCall(
     memory: '512MiB',
     region: 'us-east1',
   },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------

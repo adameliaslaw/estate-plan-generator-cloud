@@ -12,7 +12,7 @@
  * for the attorney to review and accept/reject in the template editor.
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI } from './ai-client';
 
@@ -64,13 +64,15 @@ export const enhanceTemplate = onCall(
     timeoutSeconds: 120,
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async (request: any) => {
+  async (request: CallableRequest<unknown>) => {
     // Auth check
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
-    const { firmId, templateId, templateContent, templateName, enhancementFocus } = request.data;
+    const { firmId, templateId, templateContent, templateName, enhancementFocus } = request.data as {
+      firmId: string; templateId?: string; templateContent: string; templateName?: string; enhancementFocus?: string;
+    };
 
     if (!firmId || !templateContent) {
       throw new HttpsError('invalid-argument', 'firmId and templateContent are required.');

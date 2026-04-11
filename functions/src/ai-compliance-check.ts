@@ -15,7 +15,7 @@
  *  5. Returns the structured findings to the caller
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, parseAIJson, sanitizeObject } from './ai-client';
 import { COMPLIANCE_CHECK_SCHEMA } from './document-schemas';
@@ -149,7 +149,7 @@ export const checkDocumentCompliance = onCall(
     timeoutSeconds: 120,
     memory: '512MiB',
   },
-  async (request: any /* CallableRequest */) => {
+  async (request: CallableRequest<unknown>) => {
     // ── Auth guard ────────────────────────────────────────────────────────
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Authentication required.');
