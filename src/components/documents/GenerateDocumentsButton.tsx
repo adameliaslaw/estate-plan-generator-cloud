@@ -153,7 +153,7 @@ export default function GenerateDocumentsButton({
   const [errorMessage, setErrorMessage] = useState('');
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
-  const [generationMode, setGenerationMode] = useState('high-fidelity');
+  const [generationMode, setGenerationMode] = useState('hybrid');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
   const baseDocs = PACKAGE_DOCS[packageType] ?? [];
@@ -267,8 +267,8 @@ export default function GenerateDocumentsButton({
               Generate Estate Plan Documents
             </DialogTitle>
             <DialogDescription>
-              This will use the high-fidelity document generation pipeline to draft all legal documents
-              for this client. Your exact formatting and legal standards will be maintained.
+              This will generate all estate plan documents for this client using your selected
+              generation mode. Your formatting and legal standards will be maintained.
             </DialogDescription>
           </DialogHeader>
 
@@ -364,14 +364,14 @@ export default function GenerateDocumentsButton({
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="high-fidelity" className="text-xs text-[#1a365d] font-medium">Template: High Fidelity (Recommended)</SelectItem>
-                    <SelectItem value="hybrid" className="text-xs">Template: Enhanced (Hybrid)</SelectItem>
-                    <SelectItem value="template" className="text-xs">Template: Exact Fidelity (Legacy)</SelectItem>
+                    <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">Template: Enhanced (Hybrid) — Recommended</SelectItem>
+                    <SelectItem value="template" className="text-xs">Template: Exact Fidelity</SelectItem>
                     <SelectItem value="ai" className="text-xs">AI Drafting (From Scratch)</SelectItem>
+                    <SelectItem value="high-fidelity" disabled className="text-xs text-gray-400">Binary DOCX — Coming Soon</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[10px] text-gray-400">
-                  High Fidelity merges precise legal text from the Firm Knowledge Base with the client's responses.
+                  Hybrid mode fills your template with client data then uses AI to enhance any unresolved fields.
                 </p>
               </div>
             </div>

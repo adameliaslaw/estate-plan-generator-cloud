@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
+import { HttpsError } from 'firebase-functions/v2/https';
 
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
@@ -383,7 +384,7 @@ export async function generateDocument(
     firmId,
     clientId,
     docType,
-    generationMode = 'high-fidelity',
+    generationMode = 'hybrid',
     customInstructions,
     softwareSource,
     formattingPreset,
@@ -396,6 +397,14 @@ export async function generateDocument(
     additionalData,
     modelOverride,
   } = params;
+
+  if (generationMode === 'high-fidelity') {
+    throw new HttpsError(
+      'unimplemented',
+      'high-fidelity binary DOCX generation is not yet available. ' +
+      'Select template, hybrid, or ai mode instead.',
+    );
+  }
 
   const db = admin.firestore();
 
