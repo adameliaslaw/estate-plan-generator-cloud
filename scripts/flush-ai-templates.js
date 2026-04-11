@@ -6,8 +6,9 @@
  * were AI-generated rather than uploaded from real estate planning software.
  *
  * Identification logic:
- *   softwareSource == "" / null / undefined  →  AI-generated or untagged  →  DELETE
- *   softwareSource == "InteractiveLegal" etc →  real uploaded template     →  KEEP
+ *   softwareSource == "" / null / undefined  →  AI-generated or untagged   →  DELETE
+ *   softwareSource == "claude" (or any AI provider name)  →  AI-generated  →  DELETE
+ *   softwareSource == "interactivelegal" / real software  →  KEEP
  *
  * Usage:
  *   node scripts/flush-ai-templates.js            # dry run — prints only, deletes nothing
@@ -44,8 +45,12 @@ function formatDate(ts) {
   try { return ts.toDate().toISOString().slice(0, 10); } catch { return 'unknown'; }
 }
 
-function isEmpty(value) {
-  return value === '' || value === null || value === undefined;
+// Known AI provider names that are NOT real estate planning software sources
+const AI_SOURCES = new Set(['claude', 'openai', 'gemini', 'gpt', 'anthropic', 'ai']);
+
+function isAiGenerated(value) {
+  if (value === '' || value === null || value === undefined) return true;
+  return AI_SOURCES.has(String(value).toLowerCase().trim());
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +99,7 @@ async function main() {
         ref:           doc.ref,
       };
 
-      if (isEmpty(record.softwareSource)) {
+      if (isAiGenerated(record.softwareSource)) {
         toDelete.push(record);
       } else {
         kept.push(record);
@@ -116,7 +121,7 @@ async function main() {
   console.log('');
 
   // 4. Print what will be deleted
-  console.log('TO DELETE (softwareSource empty/null — AI-generated or untagged): ' + toDelete.length);
+  console.log('TO DELETE (AI-generated — empty, null, or known AI provider name): ' + toDelete.length);
   if (toDelete.length === 0) {
     console.log('  (none — nothing to flush)');
     console.log('');
