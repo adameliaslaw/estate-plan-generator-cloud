@@ -20,7 +20,9 @@
 
 import DOMPurify from 'dompurify';
 
-const PURIFY_CONFIG: DOMPurify.Config = {
+// DOMPurify.sanitize can return TrustedHTML in Trusted Types environments.
+// We always want a plain string for React's __html prop, so we coerce via String().
+const PURIFY_CONFIG = {
   // Tags needed for legal document and questionnaire rendering
   ALLOWED_TAGS: [
     // Structure
@@ -63,5 +65,5 @@ const PURIFY_CONFIG: DOMPurify.Config = {
  */
 export function sanitizeHtml(html: string | undefined | null): string {
   if (!html) return '';
-  return DOMPurify.sanitize(html, PURIFY_CONFIG) as string;
+  return String(DOMPurify.sanitize(html, PURIFY_CONFIG));
 }

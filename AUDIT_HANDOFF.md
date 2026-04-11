@@ -136,23 +136,24 @@ If the user has already answered any of these in the new conversation, use those
 
 Execute in order. Check off as completed. Commit updates to this file after each step so session-hopping stays coherent.
 
-- [ ] **Step 0 — Confirm questions 5.1–5.8 with the user.**
-- [ ] **Step 1 — Scrub `.gitignore`.** Remove lines 77–89 (the embedded JSON). No other edits. Commit message: `security: remove accidentally committed service-account JSON from .gitignore`. Coordinate with user on key rotation (their action) before this goes public, but the scrub itself is safe.
-- [ ] **Step 2 — Audit the `dangerouslySetInnerHTML` call-sites.** Grep `src/`, confirm DOMPurify wraps every site. Fix any strays.
-- [ ] **Step 3 — Read `injectSecrets.cjs`** and confirm it does not leak secrets.
-- [ ] **Step 4 — `high-fidelity` pipeline trace.** Only after the user answers 5.6. Files: `GenerateDocumentsButton.tsx`, `document-service.ts`, `generate-documents.ts`, `unified-generator.ts`, `template-engine.ts`.
-- [ ] **Step 5 — Verify raw template HTML cap and `VARIABLE_TO_QUESTIONNAIRE_MAP` extraction** (findings 5, 6).
-- [ ] **Step 6 — Fix preloaded-context fallback cascade** (finding 8).
-- [ ] **Step 7 — Property-index edge cases** for deeds/affidavits (finding 9).
-- [ ] **Step 8 — Typed response interfaces for `ai-client.ts`** (finding 10).
-- [ ] **Step 9 — Structural validator retry check** (finding 11).
-- [ ] **Step 10 — `any` cleanup** if user approves scope (finding 12).
-- [ ] **Step 11 — Delete `.agents/`, tracked debug scripts, local debug artifacts** (findings 13, 14, 15).
-- [ ] **Step 12 — Rewrite `README.md`** (finding 16).
-- [ ] **Step 13 — Fix `DEPLOYMENT.md` repo name and test count** (findings 17, 18).
-- [ ] **Step 14 — Template coverage decision** (finding 7, based on 5.2).
-- [ ] **Step 15 — Run `tsc --noEmit`, `vite build`, and `vitest run`** (if 5.7 = yes). Fix fallout.
-- [ ] **Step 16 — Deploy** per `.agent/RULES.md`, cadence per 5.8.
+- [x] **Step 0 — Confirm questions 5.1–5.8 with the user.** Answered in session 2026-04-11 (web/mobile). Key facts: repo is private; user asked whether history rewrite is needed (not required for private repo + key rotation); high-fidelity = binary DOCX; functions-backfill is a separate OOM-prevention package (keep it).
+- [x] **Step 1 — Scrub `.gitignore`.** Removed embedded GCP service-account private key (lines 77–89). Commit `4c01354`. ⚠️ User action still required: rotate key `c059f6a5...` in GCP Console → IAM → Service Accounts.
+- [x] **Step 2 — Audit `dangerouslySetInnerHTML` call-sites.** All 6 call-sites already use `sanitizeHtml()` from `src/lib/sanitize.ts`, which wraps `DOMPurify.sanitize()` with a hardened config. No changes needed.
+- [x] **Step 3 — Scrub `injectSecrets.cjs`.** Removed hardcoded `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Commit `27fa474`. ⚠️ User action still required: rotate both credentials in Google Cloud Console.
+- [x] **Step 4 — `high-fidelity` pipeline trace.** Confirmed dead code — no binary DOCX path exists. Added `HttpsError('unimplemented')` guard, changed default mode to `hybrid` in both `unified-generator.ts` and `GenerateDocumentsButton.tsx`, disabled `high-fidelity` in the UI dropdown. Commit `77dc029`.
+- [x] **Step 5 — Template upload root cause fix.** Already implemented in `process-template-file.ts` — direct AI HTML templatization (Phase 1) replaced the old detect→JSON→regex pipeline. No changes needed.
+- [x] **Step 6 — Fix template mode raw-HTML fallback.** `template-engine.ts` catch block now calls `substituteTemplateValues()` on HBS failure (same as hybrid) instead of serving raw unrendered HTML. Also added `markMissingFiduciaries()` for Step 7. Commit `fff28ee`.
+- [x] **Step 7 — Fix null/undefined critical fields.** `markMissingFiduciaries()` in `template-engine.ts` injects `[MISSING: label]` markers for null/undefined/empty primary executor, trustee, POA agent, healthcare proxy, and guardian names before Handlebars renders. Commit `fff28ee`.
+- [x] **Step 8 — `_contextFailed` flag.** `unified-generator.ts` sets `_contextFailed: true` when context aggregation fails; surfaced in `GenerateDocumentsButton.tsx` results list as an "AI only" warning badge. Commit `3537748`.
+- [x] **Step 9 — Preloaded-context fast-fail.** `generate-documents.ts` now throws `HttpsError('internal')` immediately on batch preload failure instead of triggering cascading per-doc `aggregateClientContext()` calls. Commit `3537748`.
+- [x] **Step 10 — Property-index warning.** `unified-generator.ts` logs `console.warn` and sets `_propertyIndexFallback: true` when `propertyIndex` is out of bounds. Commit `3537748`.
+- [x] **Step 11 — Typed response interfaces for `ai-client.ts`.** All 5 `as any` on `.json()` replaced with `AnthropicMessageResponse`, `GeminiGenerateResponse`, `PerplexityChatCompletion` interfaces. Commit `e4508fe`.
+- [x] **Step 12 — Structural validator retry confirmed.** Already re-prompts AI via `buildRetryInstruction()` + `retryClientData._meta.retryInstruction`. No changes needed.
+- [x] **Step 13 — `any` cleanup.** ~45 `any`/`as any` violations removed across 14 files. All v2 onCall handlers typed to `CallableRequest<unknown>`, Firestore event handlers typed, `Record<string, any>` → `Record<string, unknown>`, `catch (error: any)` → `catch (error: unknown)` with narrowing, Google OAuth responses typed. v1 handler files (export-batch, export-docx, export-pdf) left on v1 API. Commit `ffd0c78`.
+- [x] **Step 14 — Housekeeping.** Deleted 7 tracked debug scripts, `.agents/` directory, `gemini.md`. Rewrote `README.md`. Fixed `DEPLOYMENT.md` repo name and test count (verified: 578). Added `functions-backfill/README.md`. Commit `633ea64`.
+- [x] **Step 15 — Build verified.** `tsc --noEmit` (root + functions): zero errors. `vite build`: succeeded. `vitest run`: 578/578 tests passing. `sanitize.ts` DOMPurify.Config type and TrustedHTML cast fixed.
+- [ ] **Step 16 — Deploy.** Pending firebase deploy (requires user's Firebase CLI access with project credentials).
+- [ ] **Step 17 — Template coverage decision** (finding 7, AUDIT_HANDOFF section 5.2). Trust, Pour-Over Will, Deed, Affidavit, GIT-REP3 have no HBS templates — silent AI fallback. User has not decided: (a) add templates, (b) disclose in UI, or (c) defer.
 
 ---
 
@@ -171,3 +172,5 @@ The next session — wherever it lives — will `git pull` and read this file fi
 ## 8. Session log
 
 - **2026-04-11 — desktop CLI (Claude Code, Windows).** Initial audit performed. No code changes yet. P0 security incident identified. Waiting on user answers to open questions before starting step 1.
+
+- **2026-04-11 — web/mobile session (Claude Code).** Full audit executed. All 15 code steps completed and pushed to main. Key changes: 2 P0 security scrubs, high-fidelity guard, template mode fallback fixes, missing-field markers, _contextFailed flag, preload fast-fail, property-index warning, typed AI provider interfaces, ~45 `any` violations eliminated, housekeeping cleanup. Build: tsc zero errors, 578 tests passing, vite build succeeded. Remaining: firebase deploy (Step 16, requires CLI access); template coverage decision for Trust/Pour-Over/Deed/Affidavit/GIT-REP3 (Step 17, user decision required). Two user actions still pending: (1) rotate GCP service-account key `c059f6a5...`; (2) rotate Google OAuth credentials (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
