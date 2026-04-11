@@ -24,7 +24,7 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/adameliaslaw/estate-plan-generator.git
+git clone https://github.com/adameliaslaw/estate-plan-generator-cloud.git
 cd estate-plan-generator
 
 # 2. Configure environment variables
@@ -111,7 +111,7 @@ Emulator ports:
 ## Testing
 
 ```bash
-# Run all 500 tests
+# Run all tests
 npx vitest run
 
 # Watch mode (re-runs on file change)
@@ -139,7 +139,7 @@ npx vitest run tests/e2e/questionnaire-scenarios.test.ts
 | `e2e/questionnaire-scenarios` | 63 | 4 full NJ scenarios (single/married × children/no-children) |
 | `e2e/document-generation` | 63 | Package→document mapping, approval gate, watermarks |
 | `e2e/security-access` | 36 | Cross-client access, injection, CSRF, firm isolation |
-| **Total** | **500** | |
+| **Total** | **578** | |
 
 ---
 
