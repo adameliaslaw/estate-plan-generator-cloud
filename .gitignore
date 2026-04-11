@@ -73,17 +73,3 @@ functions/*.log
 git_log.txt
 recent_commits.txt
 recent_changes.txt
-
-{
-  "type": "service_account",
-  "project_id": "estate-plan-generator",
-  "private_key_id": "c059f6a569611c0aa9f74fa93fe1d45707f36d21",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDCURNtTu6XFyAD\nVNCgml249MASeO+vOxioDpU/OpqAnIl10d4/nLzyd3GPTMM69KiUEdXFIviOz+ea\nYWfOTwldMfSeSATu4iulZxi3tO/ENhTIdec5jRCjBqsLQDMP5cTRmdU0U+tqsENL\n8BTk328HRzuUkLLvy9i54btvHlUREPv997YKeVIQPr2ZEz8E3Q6SnQIrjlVfTAVI\nbDhTdviiqdxGMKz1zYs5xq8+Zyfa4giGGnr3LSHWkz5oqu/Ax0Y6gpvTO7enrMWY\nFXMQHpxKa95VNf1FrdpDCKr4RwNHe6frELPuW8Ih/ttSXAxgrYY5IOAanvTD9kTD\n6VvYUjApAgMBAAECggEAD2e1aOgQuu0RaPzeDALQ8ACErbI6xk34FsgOham+uqLZ\nCacuvc+jnHwNsQpT5qZOKxb9jJhzfixLXzjeWEPPKT1JowwbSq5RlCuykPXeQFRN\nR4CEE/2eq7NeohC1O6Bqqcyj/iGyZeM9d+q7rVLCuZ/9wDnMhdLyW/eNEDJ7v1N8\nQOO0VIuITHOksCxamnL/dqAuR6VwlYDD0roxfjhCKL+/qjy9H7VnOkZsIaeTiIGA\n0M2HqI9jpHE8eY5fG7r7JsB964DTtV1JXYrZevgL9xghIUBQm7YiNDuplYpn9YfY\nalEVgVDkqOwSq89fcnVAYW3PVtI15Ivw/Bvl6qYgRQKBgQDPK5wmSvg6Uwfli9si\n9WW3R4P8GuWM7uG7w8qPynk42XCOdifLQLOBpXNaU3Xja1RNPXYICtw+YG6qLeK0\n35wnx1yMCWCae2RxFlL48VpPQq68zE0HShdrgMy6ixXEjWi1RnjifFySQiOiUnU9\nP60f4oNrWFL4HgwaLGU6962PkwKBgQDwHeS5NMtel8ELZuRPKj2MqCgr1Q3gnjRR\nhm/y2XsT+YwxDhS0njrjcULfDkSxE3quLcWvRtNy6qCiFdHFvS3eGPdJOSgykF7L\ngbuPugNGBtSwNQ9uw11hShl9oSy0LXY7tH/p5bNG2B4OJ8Klt0/Zrtn9YAWPB75v\norkYKYv+0wKBgQCDK7KPkFJA44eRcI7MQKIpfI911TXYmPu2Hg6oImPEefBJU0h4\n6bt+b9psq4Ft/+v9h9eu2el/WSFYgPsU2KwPh6vyQpG23j/HVoIseuxaWPc4NQbk\ngaX4fDGkPyIGNB7DAB7UEDewp03Wnez7XdDo6kuZcO//h07UV520y1NKHwKBgHHa\nitBywxeYN1XTtOAAtGyUc2/NNyZRfZdGeqCZFK30/s9n0NOPz3Z3BvFDD7ky9lHO\nrFSe7bYooIAafnwXZr9P8TlMG85V/Ezct/W/irvSk1j139pyUj3GZ+3U1aCdidln\njdt3KhmmciHeIoJ3OCqMqRpmRFx8nITMkJ1vXc03AoGBAJ53T2E4v0jHytZaI9if\nWkYc0tyaTb747dshJH6Ozznq5tyn6bD0V9WSJmXBzCh69eJK+azZ5mP28PwqTT9R\nAaegAOuusddS+7df4rhva8GYhE0j498yGZkY19BS3ckdhnhcfPke3nFYal6zC/iv\nQmXkLd89MjgyPf2sl1uMW8js\n-----END PRIVATE KEY-----\n",
-  "client_email": "estate-plan-generator@appspot.gserviceaccount.com",
-  "client_id": "105236374980334661842",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/estate-plan-generator%40appspot.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
