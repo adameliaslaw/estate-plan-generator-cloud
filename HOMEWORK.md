@@ -34,24 +34,15 @@ firebase deploy
 
 ---
 
-## 🔲 #2 — Template coverage decision
+## 🔲 #2 — Upload remaining software templates
 
-Five document types have **no Handlebars templates** — neither in Firestore nor as bundled `.hbs` files:
-- Trust (Revocable Living Trust)
-- Pour-Over Will
-- Deed
-- Affidavit of Consideration
-- GIT-REP3
+Firestore now contains only 9 real InteractiveLegal templates covering:
+- `will` (2), `poa` (2), `livingWill` (2), `pourOverWill` (2), `trust` (1)
 
-When an attorney selects `template` or `hybrid` mode for any of these types, the engine silently falls back to full AI generation. This is functional but undisclosed.
+These doc types have no template yet (AI generation fallback applies):
+- `deed`, `affidavitOfConsideration`, `gitRep3`, `estatePlanSummary`, `questionnaireSummary`
 
-**Choose one:**
-
-**(a) Upload templates** — Use the Knowledge Base admin UI to upload `.hbs` template files for these 5 doc types. The engine will then use them for `template` and `hybrid` modes as intended.
-
-**(b) Add UI disclosure** — In the generation mode selector (`GenerateDocumentsButton.tsx`), warn the user that these doc types have no template and will use AI generation regardless of mode selected. Keeps existing behavior but makes it transparent.
-
-**(c) Defer** — Document the fallback behavior in a comment and leave it for a future session. No user-facing change.
+When InteractiveLegal (or another software source) provides templates for these types, upload them through the Knowledge Base admin UI with the correct `softwareSource` set.
 
 ---
 
@@ -68,7 +59,7 @@ These were handled in code (credentials removed from tracked files) but the cred
 
 ---
 
-## Completed (April 2026 audit session)
+## Completed (April 2026 audit session + cleanup)
 
 - ✅ Service-account private key removed from `.gitignore`
 - ✅ Hardcoded OAuth credentials removed from `injectSecrets.cjs`
@@ -90,3 +81,6 @@ These were handled in code (credentials removed from tracked files) but the cred
 - ✅ `gemini.md` deleted
 - ✅ `functions-backfill/README.md` created with OOM isolation explanation
 - ✅ `AUDIT_HANDOFF.md` updated with session log and all checkbox states
+- ✅ Dead template files removed (11 DOCX + `template-map.ts`) — Firestore is sole template source
+- ✅ AI-generated Firestore templates flushed — 41 records deleted, 9 InteractiveLegal templates remain
+- ✅ `flush-ai-templates.js` script added for future use
