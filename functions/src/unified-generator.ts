@@ -115,6 +115,10 @@ export interface UnifiedGenerateResult {
   warnings?: string[];
   /** Post-generation structural validation findings (missing elements) */
   validationFindings?: Array<{ name: string; severity: 'error' | 'warning' }>;
+  /** True when client context aggregation failed — document generated in degraded AI-only mode */
+  _contextFailed?: boolean;
+  /** True when the requested propertyIndex was out of bounds and fell back to properties[0] */
+  _propertyIndexFallback?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -457,7 +461,8 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   // We must apply the swap to BOTH 'clientData' (for the generator) AND 'clientContext' (for the template engine).
   let clientContext: ClientContext | null = null;
-  
+  let contextFailed = false;
+
   if (params.preloadedContext) {
     // Deep clone preloaded context so we don't mutate the shared batch instance
     clientContext = JSON.parse(JSON.stringify(params.preloadedContext));
@@ -465,7 +470,8 @@ export async function generateDocument(
     try {
       clientContext = await aggregateClientContext(firmId, clientId, docType);
     } catch (ctxErr) {
-      console.warn(`[unifiedGenerator] Context aggregation failed for ${docType}:`, ctxErr);
+      contextFailed = true;
+      console.warn(`[unifiedGenerator] Context aggregation failed for ${docType} — document will generate in AI-only mode:`, ctxErr);
     }
   }
 
@@ -531,6 +537,7 @@ export async function generateDocument(
   // ------------------------------------------------------------------
   const genStartTime = Date.now();
   let generatedDoc: GeneratedDoc;
+  let propertyIndexFallback = false;
 
   if (isDocType(docType)) {
     // Unified dispatch — loads standard generator or flex adapter wrapper
@@ -561,6 +568,13 @@ export async function generateDocument(
           };
         } else {
           const idx = propertyIndex ?? 0;
+          propertyIndexFallback = idx >= properties.length;
+          if (propertyIndexFallback) {
+            console.warn(
+              `[unifiedGenerator] propertyIndex=${idx} out of bounds for ${docType} ` +
+              `(${properties.length} qualifying properties) — falling back to properties[0]`,
+            );
+          }
           property = properties[idx] ?? properties[0];
           // Per-property docs always use AI (complex property-specific logic)
           generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
@@ -745,6 +759,9 @@ export async function generateDocument(
 
   let saveResult: SaveDocumentResult;
   try {
+    if (contextFailed) {
+      console.warn(`[unifiedGenerator] Saving ${docType} with _contextFailed=true (degraded AI-only output)`);
+    }
     saveResult = await saveDocumentToVault({
       firmId,
       clientId,
@@ -777,6 +794,7 @@ export async function generateDocument(
       currentVersion: 0,
       propertyAddress: generatedDoc.propertyAddress,
       propertyIndex,
+      _contextFailed: contextFailed || undefined,
     };
   }
 
@@ -805,6 +823,8 @@ export async function generateDocument(
     propertyIndex,
     warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
     validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
+    _contextFailed: contextFailed || undefined,
+    _propertyIndexFallback: propertyIndexFallback || undefined,
   };
 }
 

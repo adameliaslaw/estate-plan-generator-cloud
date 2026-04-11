@@ -33,6 +33,7 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   RefreshCw,
 } from 'lucide-react';
@@ -480,12 +481,23 @@ export default function GenerateDocumentsButton({
                     className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm"
                   >
                     <span className="text-gray-700">{r.title}</span>
-                    <Badge
-                      variant="outline"
-                      className="border-amber-200 bg-amber-50 text-amber-700 text-xs"
-                    >
-                      {r.status}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {r._contextFailed && (
+                        <span
+                          className="flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                          title="Client context unavailable — generated in AI-only mode. Review carefully."
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          AI only
+                        </span>
+                      )}
+                      <Badge
+                        variant="outline"
+                        className="border-amber-200 bg-amber-50 text-amber-700 text-xs"
+                      >
+                        {r.status}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>

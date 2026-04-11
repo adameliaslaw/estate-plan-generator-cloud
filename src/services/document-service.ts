@@ -24,7 +24,7 @@ export interface GenerateDocumentsRequest {
 export interface GenerateDocumentsResponse {
   success: boolean;
   documentsGenerated: number;
-  results: Array<{ docType: string; title: string; status: string }>;
+  results: Array<{ docType: string; title: string; status: string; propertyAddress?: string; _contextFailed?: boolean }>;
 }
 
 export interface GenerateSingleDocumentRequest {

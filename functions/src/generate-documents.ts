@@ -213,7 +213,15 @@ export const generateDocuments = onCall(
       console.log(`[generateDocuments] Pre-loaded context (${preloadedContext.knowledgeResources.length} KB resources, ` +
         `${preloadedContext.existingDocuments.length} existing docs, ${preloadedContext.notes.length} notes)`);
     } catch (ctxErr) {
-      console.warn('[generateDocuments] Context pre-load failed, each doc will re-aggregate:', ctxErr);
+      // Fail fast — do not let each document independently re-run aggregateClientContext()
+      // in parallel (8-doc batch = 8 simultaneous Firestore/vector calls under load).
+      const msg = ctxErr instanceof Error ? ctxErr.message : String(ctxErr);
+      console.error('[generateDocuments] Context pre-load failed — aborting batch:', ctxErr);
+      throw new HttpsError(
+        'internal',
+        `Failed to load client context before generating documents: ${msg.slice(0, 200)}. ` +
+        'Please try again. If the problem persists, contact support.',
+      );
     }
 
     // ------------------------------------------------------------------
@@ -290,6 +298,7 @@ export const generateDocuments = onCall(
         title: r.title,
         status: r.status,
         propertyAddress: r.propertyAddress,
+        _contextFailed: r._contextFailed || undefined,
       })),
     };
   },
