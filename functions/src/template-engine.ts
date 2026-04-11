@@ -531,6 +531,69 @@ export async function listTemplateVariants(
 // ---------------------------------------------------------------------------
 
 /**
+ * Critical legal fields that must be non-blank for a valid estate plan document.
+ * When the client's Firestore data is missing one of these, Handlebars would
+ * silently render it as "" — indistinguishable from intentional whitespace.
+ * We inject "[MISSING: label]" into the template context before rendering so
+ * the attorney sees a visible placeholder rather than a silent blank.
+ */
+const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
+  { path: ['executor', 'primary', 'name'],        label: 'executor name' },
+  { path: ['executor', 'alternate', 'name'],       label: 'alternate executor name' },
+  { path: ['trustee', 'primary', 'name'],          label: 'trustee name' },
+  { path: ['trustee', 'alternate', 'name'],        label: 'alternate trustee name' },
+  { path: ['powerOfAttorney', 'agent', 'name'],    label: 'POA agent name' },
+  { path: ['healthcareProxy', 'primary', 'name'],  label: 'healthcare proxy name' },
+  { path: ['guardian', 'primary', 'name'],         label: 'guardian name' },
+];
+
+/**
+ * Deep-clone `fiduciaries` and replace null/undefined/"" in critical paths with
+ * a visible "[MISSING: label]" marker.  Only alternate/successor slots are
+ * skipped when they are absent — only the PRIMARY executor, trustee, proxy, and
+ * guardian are truly mandatory for legal validity.
+ *
+ * The clone is intentionally shallow-at-depth-1 to avoid mutating ctx.client.
+ */
+function markMissingFiduciaries(
+  fiduciaries: Record<string, unknown>,
+): Record<string, unknown> {
+  // Shallow clone at depth-1 so we don't mutate the shared ctx object
+  const result: Record<string, unknown> = { ...fiduciaries };
+
+  for (const { path, label } of CRITICAL_LEGAL_FIELDS) {
+    const [role, level, field] = path as [string, string, string];
+
+    // Skip alternate/successor if they aren't in the source data at all —
+    // the attorney may legitimately omit them (single-level appointment).
+    const isAlternate = level === 'alternate';
+    if (isAlternate && !fiduciaries[role]) continue;
+
+    const roleObj = (fiduciaries[role] ?? {}) as Record<string, unknown>;
+    const levelObj = (roleObj[level] ?? {}) as Record<string, unknown>;
+    const value = levelObj[field];
+
+    if (value === null || value === undefined || value === '') {
+      // Only mark primary slots as mandatory; skip silently for optional ones
+      const isPrimary = level === 'primary';
+      if (!isPrimary) continue;
+
+      // Clone the chain down to avoid mutating shared references
+      result[role] = {
+        ...(fiduciaries[role] as Record<string, unknown>),
+        [level]: {
+          ...levelObj,
+          [field]: `[MISSING: ${label}]`,
+        },
+      };
+      console.warn(`[template-engine] Marking missing critical field: fiduciaries.${role}.${level}.${field}`);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Build the flat template data object from a ClientContext.
  * Extracted so it can be reused by both renderTemplate and validateTemplateData.
  */
@@ -543,7 +606,9 @@ export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
     children: ctx.client.children ?? [],
     assets: ctx.client.assets ?? {},
     liabilities: ctx.client.liabilities ?? {},
-    fiduciaries: ctx.client.fiduciaries ?? {},
+    fiduciaries: markMissingFiduciaries(
+      (ctx.client.fiduciaries ?? {}) as Record<string, unknown>,
+    ),
     distribution: ctx.client.distribution ?? {},
     healthcarePreferences: ctx.client.healthcarePreferences ?? {},
     trusts: ctx.client.trusts ?? [],
@@ -719,8 +784,23 @@ export async function generateFromTemplate(
         templateBaseline: template.content,
       };
     }
-    // In template mode, serve the raw unrendered HTML so the user gets something
-    renderedHtml = template.content;
+    // In template mode, fall back to focused text substitution (same as hybrid)
+    // rather than serving raw unrendered HTML with {{variables}} visible
+    console.info(`[template-engine] Using focused substitution for ${docType} (HBS failed, template mode)`);
+    const substituted = await substituteTemplateValues(
+      template.content,
+      ctx,
+      docType,
+      formattingPreset,
+    );
+    return {
+      docType,
+      title: buildStandardTitle(docType, ctx.computed.clientFullName),
+      content: substituted,
+      status: 'draft',
+      promptVersion,
+      templateBaseline: template.content,
+    };
   }
 
   // ── Post-render: flag any unresolved {{variables}} ────────────────────────
