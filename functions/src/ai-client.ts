@@ -15,6 +15,37 @@ import OpenAI from 'openai';
 // Types
 // ---------------------------------------------------------------------------
 
+// Minimal typed shapes for raw fetch-based AI provider responses.
+// These match the stable fields actually used by this module.
+
+interface AnthropicMessageResponse {
+  content: Array<{ type: string; text: string }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  stop_reason?: string;
+}
+
+interface GeminiGenerateResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
+  }>;
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+}
+
+interface PerplexityChatCompletion {
+  choices?: Array<{
+    message?: { content?: string | null; role?: string };
+    finish_reason?: string;
+  }>;
+  citations?: string[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
 export interface CallAIOptions {
   model?: string;
   temperature?: number;
@@ -300,8 +331,7 @@ async function _callAnthropic(
     throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await response.json() as any;
+  const data = await response.json() as AnthropicMessageResponse;
 
   // Log prompt cache performance metrics
   if (data.usage) {
@@ -381,8 +411,7 @@ async function _callGemini(
     throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await response.json() as any;
+  const data = await response.json() as GeminiGenerateResponse;
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
@@ -422,8 +451,7 @@ async function _callPerplexity(
     throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await response.json() as any;
+  const data = await response.json() as PerplexityChatCompletion;
   return data.choices?.[0]?.message?.content ?? '';
 }
 
@@ -475,8 +503,7 @@ export async function callPerplexityWithCitations(
     throw new Error(`Perplexity API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await response.json() as any;
+  const data = await response.json() as PerplexityChatCompletion;
   const content: string = data.choices?.[0]?.message?.content ?? '';
   const citations: string[] = Array.isArray(data.citations) ? data.citations : [];
 
@@ -654,8 +681,7 @@ export async function callAIWithVision(
     return ''; // Non-blocking — return empty on failure
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await response.json() as any;
+  const data = await response.json() as GeminiGenerateResponse;
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
