@@ -4,37 +4,7 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 🔲 #1 — Deploy to Firebase
-
-All 9 commits from the April 2026 audit session are pushed to `main` but not yet deployed to production.
-
-Run from the project root with Firebase CLI authenticated to the `estate-plan-generator` project:
-
-```bash
-firebase deploy --only hosting
-firebase deploy --only functions
-```
-
-Or deploy everything at once:
-
-```bash
-firebase deploy
-```
-
-**What this deploys:**
-- Security fixes: `.gitignore` scrub, `injectSecrets.cjs` credential removal
-- `high-fidelity` mode guard (HttpsError instead of silent degradation)
-- Template mode raw-HTML fallback fix
-- Null/undefined critical field detection (`[MISSING: label]` markers)
-- `_contextFailed` flag propagation + UI warning badge
-- Preloaded context cascade fix (fail-fast on batch preload failure)
-- Property index fallback warning + metadata flag
-- Typed AI response interfaces (no more `as any` in `ai-client.ts`)
-- Full `any` cleanup across 14 functions files
-
----
-
-## 🔲 #2 — Upload remaining software templates
+## 🔲 #1 — Upload remaining software templates
 
 Firestore now contains only 9 real InteractiveLegal templates covering:
 - `will` (2), `poa` (2), `livingWill` (2), `pourOverWill` (2), `trust` (1)
@@ -61,6 +31,8 @@ These were handled in code (credentials removed from tracked files) but the cred
 
 ## Completed (April 2026 audit session + cleanup)
 
+- ✅ Firebase deploy (hosting + functions) — April 2026 audit commits live in production
+- ✅ `firebase-functions` upgraded to v7, `firebase-admin` to v13 — 14 files migrated to `firebase-functions/v1` explicit imports
 - ✅ Service-account private key removed from `.gitignore`
 - ✅ Hardcoded OAuth credentials removed from `injectSecrets.cjs`
 - ✅ `dangerouslySetInnerHTML` audit — all call-sites confirmed sanitized via DOMPurify
