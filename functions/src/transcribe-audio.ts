@@ -15,7 +15,7 @@
  *                  "firms/abc/clients/xyz/notes/note123.m4a")
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import OpenAI, { toFile } from 'openai';
 import { callAI } from './ai-client';

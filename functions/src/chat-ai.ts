@@ -11,7 +11,7 @@
  *  - LLM-agnostic via callAI (routes based on firm's active provider)
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot } from './client-context-aggregator';

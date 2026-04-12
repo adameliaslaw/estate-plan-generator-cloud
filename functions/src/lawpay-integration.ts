@@ -20,7 +20,7 @@
  */
 
 import { onRequest, HttpsError } from 'firebase-functions/v2/https';
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
 
@@ -128,7 +128,7 @@ function getLawPayCredentials(): {
  *   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
  */
 function verifyWebhookSignature(
-  req: import('express').Request,
+  req: { headers: Record<string, string | string[] | undefined> },
   rawBody: string,
 ): boolean {
   const webhookSecret = process.env.LAWPAY_WEBHOOK_SECRET;

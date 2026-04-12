@@ -22,7 +22,7 @@
  *   Signature/notary text → preserved with underline tab stops
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import {
   Document as DocxDocument,

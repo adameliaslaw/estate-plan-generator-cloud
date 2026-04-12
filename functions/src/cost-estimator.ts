@@ -11,7 +11,7 @@
  *  3. Model pricing: per-provider rate cards (updated manually as pricing changes)
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { FirmData } from './ai-client';
 import { validateAndResolveModel } from './ai-client';

@@ -13,7 +13,7 @@
  *   'both' → each document exported as both PDF and DOCX, zipped together
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import archiver from 'archiver';
 import { Readable, PassThrough } from 'stream';

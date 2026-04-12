@@ -30,7 +30,7 @@
  *       for cleaner token handling.  See TODO comments for OAuth refresh flow.
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 
