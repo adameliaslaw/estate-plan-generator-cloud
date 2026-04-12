@@ -2,6 +2,14 @@
   "projects": {
     "default": "estate-plan-generator"
   },
-  "targets": {},
+  "targets": {
+    "estate-plan-generator": {
+      "hosting": {
+        "main": [
+          "estate-plan-generator"
+        ]
+      }
+    }
+  },
   "etags": {}
 }
