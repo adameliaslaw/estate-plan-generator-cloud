@@ -493,6 +493,18 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // COLLECTION GROUP QUERY — documents
+    // Needed so staff can query all documents across clients in a
+    // single firm-scoped call (e.g. dashboard "Awaiting Review" queue).
+    // The query itself filters by firmId; this rule enforces that at
+    // the security layer by checking the doc's own firmId field.
+    // ==========================================================
+    match /{path=**}/documents/{docId} {
+      allow read: if isAdmin()
+                  || (canManageDocuments() && belongsToFirm(resource.data.firmId));
+    }
+
+    // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
     // This is Firestore's built-in behaviour, but calling it out

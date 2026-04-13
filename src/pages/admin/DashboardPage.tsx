@@ -14,14 +14,17 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
+  Sparkles,
+  FileCheck2,
 } from 'lucide-react';
-import { orderBy, limit, doc, updateDoc } from 'firebase/firestore';
+import { orderBy, limit, doc, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
-import { useCollection } from '@/hooks/useFirestore';
+import { useCollection, useCollectionGroup } from '@/hooks/useFirestore';
 import { db } from '@/config/firebase';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { cn } from '@/lib/utils';
-import type { Client } from '@/types';
+import type { Client, Document } from '@/types';
+import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsButton';
 import { TasksList } from '@/components/dashboard/TasksList';
 import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
 import { DashboardPayments } from '@/components/dashboard/DashboardPayments';
@@ -230,6 +233,24 @@ export default function DashboardPage() {
     useMemo(() => [orderBy('createdAt', 'desc'), limit(50)], []) // Grab enough to count active users
   );
 
+  // All documents across this firm, keyed by clientId — used to detect
+  // "Ready to Draft" (zero docs) and "Awaiting Review" (docs in draft/review).
+  const { data: firmDocuments } = useCollectionGroup<Document>(
+    firmId ? 'documents' : null,
+    useMemo(() => (firmId ? [where('firmId', '==', firmId)] : []), [firmId]),
+  );
+
+  const docsByClient = useMemo(() => {
+    const map = new Map<string, Document[]>();
+    for (const d of firmDocuments) {
+      if (!d.clientId) continue;
+      const arr = map.get(d.clientId) ?? [];
+      arr.push(d);
+      map.set(d.clientId, arr);
+    }
+    return map;
+  }, [firmDocuments]);
+
   interface RawActivityItem {
     id: string;
     description: string;
@@ -254,6 +275,30 @@ export default function DashboardPage() {
     ).length;
     return { activeCount, pendingQCount };
   }, [allClients]);
+
+  // ── Action queues ─────────────────────────────────────────────────────────
+  // Clients whose questionnaire is complete but no documents have been generated.
+  const readyToDraft = useMemo(() => {
+    return allClients.filter((c) => {
+      if (c.isArchived) return false;
+      if (c.questionnaireProgress?.status !== 'completed') return false;
+      const docs = docsByClient.get(c.id) ?? [];
+      return docs.length === 0;
+    });
+  }, [allClients, docsByClient]);
+
+  // Clients with at least one document currently awaiting attorney review.
+  const awaitingReview = useMemo(() => {
+    const reviewStatuses = new Set(['draft', 'review', 'needs_review']);
+    return allClients
+      .filter((c) => !c.isArchived)
+      .map((c) => {
+        const docs = docsByClient.get(c.id) ?? [];
+        const pending = docs.filter((d) => reviewStatuses.has(d.status));
+        return { client: c, pendingCount: pending.length };
+      })
+      .filter((x) => x.pendingCount > 0);
+  }, [allClients, docsByClient]);
 
   // ── Activity items ────────────────────────────────────────────────────────
   const allActivityItems = useMemo(() => {
@@ -493,6 +538,131 @@ export default function DashboardPage() {
 
       {/* Analytics widgets */}
       <AnalyticsWidgets clients={allClients} loading={loading} />
+
+      {/* ── Action queues ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Ready to Draft */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-emerald-50 p-1.5">
+                <Sparkles className="h-4 w-4 text-emerald-600" />
+              </div>
+              <h3 className="text-base font-semibold text-[#1a365d]">Ready to Draft</h3>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                {readyToDraft.length}
+              </span>
+            </div>
+            <span className="text-xs text-gray-400">Questionnaire complete · no documents yet</span>
+          </div>
+          {readyToDraft.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
+              <CheckCircle2 className="h-8 w-8 text-gray-300" />
+              <p className="text-sm text-gray-400">All caught up</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {readyToDraft.slice(0, 6).map((client) => {
+                const pkg = client.packageDetails?.packageType;
+                const isMarried = !!client.spouseInfo?.firstName;
+                return (
+                  <li
+                    key={client.id}
+                    className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-emerald-50/40 transition-colors"
+                  >
+                    <button
+                      onClick={() => navigate(ROUTES.CLIENT_DETAIL(client.id))}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="truncate text-sm font-medium text-[#1a365d]">
+                        {clientDisplayName(client)}
+                      </p>
+                      {pkg && (
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {packageLabel[pkg] ?? pkg}
+                        </p>
+                      )}
+                    </button>
+                    {pkg && firmId && (
+                      <GenerateDocumentsButton
+                        firmId={firmId}
+                        clientId={client.id}
+                        packageType={pkg as 'foundation' | 'guardian' | 'fortress'}
+                        trustTypes={client.trusts?.map((t) => t.trustType)}
+                        clientName={clientDisplayName(client)}
+                        isMarried={isMarried}
+                        variant="compact"
+                      />
+                    )}
+                  </li>
+                );
+              })}
+              {readyToDraft.length > 6 && (
+                <li className="px-5 py-2 text-center text-xs text-gray-400">
+                  +{readyToDraft.length - 6} more
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+
+        {/* Awaiting Review */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-amber-50 p-1.5">
+                <FileCheck2 className="h-4 w-4 text-amber-600" />
+              </div>
+              <h3 className="text-base font-semibold text-[#1a365d]">Awaiting Review</h3>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                {awaitingReview.length}
+              </span>
+            </div>
+            <span className="text-xs text-gray-400">Drafts pending attorney sign-off</span>
+          </div>
+          {awaitingReview.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
+              <CheckCircle2 className="h-8 w-8 text-gray-300" />
+              <p className="text-sm text-gray-400">No drafts waiting</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {awaitingReview.slice(0, 6).map(({ client, pendingCount }) => {
+                const pkg = client.packageDetails?.packageType;
+                return (
+                  <li
+                    key={client.id}
+                    onClick={() => navigate(ROUTES.CLIENT_DETAIL(client.id))}
+                    className="flex cursor-pointer items-center justify-between gap-3 px-5 py-3 hover:bg-amber-50/40 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-[#1a365d]">
+                        {clientDisplayName(client)}
+                      </p>
+                      {pkg && (
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {packageLabel[pkg] ?? pkg}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                        {pendingCount} pending
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </li>
+                );
+              })}
+              {awaitingReview.length > 6 && (
+                <li className="px-5 py-2 text-center text-xs text-gray-400">
+                  +{awaitingReview.length - 6} more
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      </div>
 
       {/* Main content row */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
