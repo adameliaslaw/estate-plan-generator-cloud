@@ -73,6 +73,7 @@ import { SECTION_META } from '@/types/questionnaire';
 
 import DocumentVault from '@/components/documents/DocumentVault';
 import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsButton';
+import DeadlinesCard from '@/components/clients/DeadlinesCard';
 import NotesTab from '@/components/dashboard/NotesTab';
 import PaymentsTab from '@/components/dashboard/PaymentsTab';
 import CalendarTab from '@/components/dashboard/CalendarTab';
@@ -1060,6 +1061,13 @@ export default function ClientDashboardPage() {
               ) : null;
             })()
           )}
+
+          {/* Deadlines card */}
+          <DeadlinesCard
+            firmId={firmId}
+            clientId={clientId ?? ''}
+            deadlines={client.deadlines ?? []}
+          />
         </TabsContent>
 
         {/* ── Tab 2: Document Vault ──────────────────────────────────────── */}

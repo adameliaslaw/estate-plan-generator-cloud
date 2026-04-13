@@ -747,6 +747,29 @@ export interface PackageDetails {
 }
 
 // ============================================================================
+// Client deadlines — signing ceremonies, filings, follow-ups
+// Stored inline on the Client record (client.deadlines[]).
+// ============================================================================
+
+export type ClientDeadlineType =
+  | 'signing_ceremony'
+  | 'filing'
+  | 'follow_up'
+  | 'custom';
+
+export interface ClientDeadline {
+  id: string;
+  label: string;
+  /** ISO 8601 date (YYYY-MM-DD) */
+  date: string;
+  type: ClientDeadlineType;
+  completed: boolean;
+  notes?: string;
+  createdAt: Timestamp;
+  createdBy: string;
+}
+
+// ============================================================================
 // Client — /firms/{firmId}/clients/{clientId}
 // ============================================================================
 
@@ -789,6 +812,9 @@ export interface Client {
 
   // Documents array, fetched manually or populated by joining
   documents?: Document[];
+
+  // Matter deadlines (signing ceremonies, filings, follow-ups)
+  deadlines?: ClientDeadline[];
 
   // Status
   isActive: boolean;
