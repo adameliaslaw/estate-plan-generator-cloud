@@ -16,6 +16,22 @@ When InteractiveLegal (or another software source) provides templates for these 
 
 ---
 
+## 🔲 #2 — Future functionality recommendations (not yet scoped)
+
+Ranked by impact. Pick up in a future session.
+
+**Efficiency multipliers:**
+- **Multi-client batch generation** — staff currently runs one client at a time. A "generate for all pending" queue would cut time during busy weeks.
+- **Reporting exports** — analytics widgets exist but are dashboard-only. Add CSV export + weekly email digest for the firm partner.
+
+**Polish:**
+- **Document version diff** — version history and restore already exist, but no side-by-side compare between two versions.
+- **Time-to-completion metrics** — the data is already captured (timestamps on every event); no UI yet for intake → signed-plan duration by client or staff member.
+- **Template variable live preview** — template authoring is blind; add a split-pane showing a template rendered against sample client data.
+- **Smarter AI chat context** — chat-ai already pulls client data/notes/KB. Adding awareness of document status (e.g. "this client's will is in draft, their POA has not been generated") would make "what's left for this client?" a useful question.
+
+---
+
 ## ✅ Credential rotation (still pending user action in GCP/Google consoles)
 
 These were handled in code (credentials removed from tracked files) but the credentials themselves must be revoked:
@@ -31,6 +47,10 @@ These were handled in code (credentials removed from tracked files) but the cred
 
 ## Completed (April 2026 audit session + cleanup)
 
+- ✅ **Dashboard action queues** — "Ready to Draft" (questionnaire-done, docs-pending) with compact one-click Generate buttons, and "Awaiting Review" (docs in draft/review/needs_review) listing clients with pending-doc counts. New firestore collection-group rule for `documents` scoped by `firmId`.
+- ✅ **Deadline tracking** — added `ClientDeadline` type, per-client `DeadlinesCard` on the Info tab for add/complete/delete, and an "Upcoming Deadlines" section on the main dashboard with overdue/today/this-week/future color coding.
+- ✅ **Hosting target lock** — `firebase.json` now targets `main` → `estate-plan-generator` site so deploys can't accidentally clobber `adamelias-ai.web.app` (or vice versa).
+- ✅ **Cross-site hosting collision investigation** — traced adamelias.ai content being served at `estate-plan-generator.web.app`; root cause was the adamelias.ai CI running untargeted `firebase deploy`. Fixed on both sides.
 - ✅ Firebase deploy (hosting + functions) — April 2026 audit commits live in production
 - ✅ `firebase-functions` upgraded to v7, `firebase-admin` to v13 — 14 files migrated to `firebase-functions/v1` explicit imports
 - ✅ Service-account private key removed from `.gitignore`
