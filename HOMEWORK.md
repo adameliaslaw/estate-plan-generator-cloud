@@ -32,6 +32,37 @@ Ranked by impact. Pick up in a future session.
 
 ---
 
+## 🔲 #3 — Google OAuth client: fix origins + rotate credentials
+
+Connecting Google Calendar from Settings → Integrations currently fails with
+`Error 400: redirect_uri_mismatch` for `adam@adameliaslaw.com`. Root cause:
+the OAuth client `749324460027-7f9s3sk22ckmp2r6u2v5u1o51nduck1v.apps.googleusercontent.com`
+(the same one flagged for rotation below) is missing the current app origin
+in its **Authorized JavaScript origins** list.
+
+**Immediate unblock (add missing origins):**
+1. https://console.cloud.google.com/apis/credentials?project=estate-plan-generator
+2. Open the OAuth 2.0 Client ending in `…nduck1v`
+3. Under *Authorized JavaScript origins*, ensure all of these are present:
+   - `https://estate-plan-generator.web.app`
+   - `https://estate-plan-generator.firebaseapp.com`
+   - `http://localhost:5173` (only if running the dev server)
+4. Save and retry the Connect button (~1 min propagation).
+
+**Then rotate (ties into the credential rotation item below):**
+1. Create a **new** OAuth 2.0 Client ID (Web application) with the origins above set from the start.
+2. Update `.env` → `VITE_GOOGLE_CLIENT_ID=<new id>` and rebuild/redeploy hosting.
+3. Store the new secret in Functions secrets:
+   ```bash
+   firebase functions:secrets:set GOOGLE_CLIENT_ID
+   firebase functions:secrets:set GOOGLE_CLIENT_SECRET
+   ```
+4. Redeploy functions, verify Calendar + Drive connect flows, then delete the old client ID in GCP.
+
+Also note: `syncGoogleCalendar` scheduled function is logging `invalid_grant` every 5 minutes — the stored refresh token is revoked. Reconnecting once the origins are fixed will clear it.
+
+---
+
 ## ✅ Credential rotation (still pending user action in GCP/Google consoles)
 
 These were handled in code (credentials removed from tracked files) but the credentials themselves must be revoked:
