@@ -171,8 +171,16 @@ export function AddTemplateDialog({
           },
           (error) => reject(error),
           async () => {
-            const url = await getDownloadURL(uploadTask.snapshot.ref);
-            setFileUrl(url);
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              setFileUrl(url);
+            } catch (err) {
+              // getDownloadURL can return storage/unauthorized even when the
+              // upload itself succeeded (stale auth token). storagePath is
+              // the authoritative pointer; don't block on the URL.
+              console.warn('[AddTemplate] getDownloadURL failed, continuing without fileUrl:', err);
+              setFileUrl('');
+            }
             setOriginalFileName(selectedFile.name);
             resolve();
           },

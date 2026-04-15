@@ -121,8 +121,18 @@ export function BulkTemplateUploadDialog({
 
         const fileUrl = await new Promise<string>((resolve, reject) => {
           uploadTask.on('state_changed', null, reject, async () => {
-            const url = await getDownloadURL(uploadTask.snapshot.ref);
-            resolve(url);
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            } catch (err) {
+              // getDownloadURL can fail with storage/unauthorized even when
+              // the upload itself succeeded — usually a stale auth token that
+              // predates the user's role claim. The storagePath is what we
+              // actually persist; the URL is only for the optional outbound
+              // link, so fall back to '' rather than blocking the batch.
+              console.warn('[BulkUpload] getDownloadURL failed, continuing without fileUrl:', err);
+              resolve('');
+            }
           });
         });
 

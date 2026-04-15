@@ -18,6 +18,8 @@ accounts.json
 secret.txt
 clientid.txt
 firebase-config.json
+auth.json
+estate-plan-generator-*.json
 
 # Firebase
 .firebase/
