@@ -425,6 +425,16 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
     }
   }, [allStepsDone]);
 
+  // In edit mode, a completed client's saved currentStepIndex sits at or past
+  // the end of visibleSteps, so currentStepDef resolves to null and the page
+  // would otherwise get stuck on the fallback spinner forever. Clamp back to
+  // step 0 so staff land on the first step and can navigate freely.
+  useEffect(() => {
+    if (isEditMode && !isLoading && !currentStepDef && totalSteps > 0) {
+      goToStep(0);
+    }
+  }, [isEditMode, isLoading, currentStepDef, totalSteps, goToStep]);
+
   // ── Keyboard navigation (only during questionnaire phase) ─────────────────
   useEffect(() => {
     if (phase !== 'questionnaire') return;
