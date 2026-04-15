@@ -28,7 +28,6 @@ Ranked by impact. Pick up in a future session.
 - **Document version diff** — version history and restore already exist, but no side-by-side compare between two versions.
 - **Time-to-completion metrics** — the data is already captured (timestamps on every event); no UI yet for intake → signed-plan duration by client or staff member.
 - **Template variable live preview** — template authoring is blind; add a split-pane showing a template rendered against sample client data.
-- **Smarter AI chat context** — chat-ai already pulls client data/notes/KB. Adding awareness of document status (e.g. "this client's will is in draft, their POA has not been generated") would make "what's left for this client?" a useful question.
 
 ---
 
@@ -78,6 +77,10 @@ These were handled in code (credentials removed from tracked files) but the cred
 
 ## Completed (April 2026 audit session + cleanup)
 
+- ✅ **Smarter AI chat context** — `chat-ai.ts` now injects a DOCUMENT STATUS block per client that rolls up vault documents by docType, compares against the expected docs for their package, and lists each required doc as done / in-progress / not-yet-generated. Chat prompt updated to answer "what's left for this client?" from that block only (no invented docs).
+- ✅ **Questionnaire edit-mode spinner** — staff opening a completed questionnaire for edit no longer hangs on an infinite spinner when the saved step index is past the end of visibleSteps (happens after step-definition amendments). `QuestionnaireShell` now clamps the out-of-range index back to step 0.
+- ✅ **Client dashboard spinner (documents.firmId collection-group)** — added the missing single-field exemption for `documents.firmId @ COLLECTION_GROUP` so the main dashboard's Ready-to-Draft / Awaiting-Review queues can subscribe without the query failing.
+- ✅ **Bulk template upload resilience** — `getDownloadURL` failures after a successful upload no longer abort the batch; `storagePath` is the authoritative pointer and `fileUrl` falls back to '' on permission errors (common when the user's ID token predates the admin claim).
 - ✅ **Dashboard action queues** — "Ready to Draft" (questionnaire-done, docs-pending) with compact one-click Generate buttons, and "Awaiting Review" (docs in draft/review/needs_review) listing clients with pending-doc counts. New firestore collection-group rule for `documents` scoped by `firmId`.
 - ✅ **Deadline tracking** — added `ClientDeadline` type, per-client `DeadlinesCard` on the Info tab for add/complete/delete, and an "Upcoming Deadlines" section on the main dashboard with overdue/today/this-week/future color coding.
 - ✅ **Hosting target lock** — `firebase.json` now targets `main` → `estate-plan-generator` site so deploys can't accidentally clobber `adamelias-ai.web.app` (or vice versa).
