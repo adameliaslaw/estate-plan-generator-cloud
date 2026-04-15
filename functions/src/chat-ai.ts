@@ -14,8 +14,9 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
-import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot } from './client-context-aggregator';
+import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot, DocSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
+import { getDocTypeDisplayName } from './unified-generator';
 import {
   saveConversation,
   loadConversation,
@@ -54,6 +55,98 @@ interface ChatAiResponse {
   conversationId?: string;
   /** Source citations from Perplexity (research mode) */
   citations?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Package → expected document types
+// Mirrors src/config/constants.ts PACKAGE_DOCUMENTS. Kept inline because
+// functions and frontend don't share a compile root.
+// ---------------------------------------------------------------------------
+
+const PACKAGE_DOCUMENTS: Record<string, readonly string[]> = {
+  foundation: ['will', 'poa', 'livingWill', 'estatePlanSummary'],
+  guardian: ['trust', 'pourOverWill', 'poa', 'livingWill', 'estatePlanSummary'],
+  fortress: [
+    'trust',
+    'pourOverWill',
+    'poa',
+    'livingWill',
+    'deed',
+    'affidavitOfConsideration',
+    'gitRep3',
+    'estatePlanSummary',
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Build a per-doc-type status summary so the assistant can answer questions
+// like "what's left for this client?" without the user having to read the
+// vault themselves. Groups the client's existing documents by docType, picks
+// the latest status for each, and surfaces which required docs for the
+// client's package are missing, in draft, or need review.
+// ---------------------------------------------------------------------------
+
+function buildDocumentStatusBlock(
+  packageType: string,
+  existingDocuments: DocSnapshot[],
+): string {
+  const expected = PACKAGE_DOCUMENTS[packageType] ?? PACKAGE_DOCUMENTS.foundation;
+
+  // Group by docType, keeping the most recent entry per type (existingDocuments
+  // is already ordered desc by createdAt in aggregateClientContext).
+  const latestByType = new Map<string, DocSnapshot>();
+  for (const d of existingDocuments) {
+    if (!d.docType) continue;
+    if (!latestByType.has(d.docType)) latestByType.set(d.docType, d);
+  }
+
+  // Status classification: done vs. outstanding
+  const DONE_STATUSES = new Set(['final', 'signed', 'filed', 'complete']);
+  const ATTENTION_STATUSES = new Set(['draft', 'review', 'needs_review']);
+
+  const lines: string[] = [];
+  const outstanding: string[] = [];
+
+  for (const docType of expected) {
+    const display = getDocTypeDisplayName(docType);
+    const doc = latestByType.get(docType);
+    if (!doc) {
+      lines.push(`  ✗ ${display} — NOT YET GENERATED`);
+      outstanding.push(`${display} (not generated)`);
+    } else {
+      const status = (doc.status ?? 'draft').toLowerCase();
+      const marker = DONE_STATUSES.has(status)
+        ? '✓'
+        : ATTENTION_STATUSES.has(status)
+          ? '⚠'
+          : '•';
+      lines.push(`  ${marker} ${display} — ${status}`);
+      if (!DONE_STATUSES.has(status)) {
+        outstanding.push(`${display} (${status})`);
+      }
+    }
+  }
+
+  // Also surface any ad-hoc docs in the vault that aren't in the expected set,
+  // so "what's in the vault" questions stay accurate.
+  const extras: string[] = [];
+  for (const [docType, doc] of latestByType) {
+    if (!expected.includes(docType)) {
+      const status = (doc.status ?? 'draft').toLowerCase();
+      extras.push(`  • ${getDocTypeDisplayName(docType)} — ${status} (extra, not in package)`);
+    }
+  }
+
+  let block = `\n\nDOCUMENT STATUS (package: ${packageType}):\n${lines.join('\n')}`;
+  if (extras.length > 0) {
+    block += `\n${extras.join('\n')}`;
+  }
+  if (outstanding.length > 0) {
+    block += `\nOUTSTANDING: ${outstanding.join(', ')}`;
+  } else {
+    block += `\nOUTSTANDING: none — all package documents are finalized`;
+  }
+  return block;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +250,7 @@ RULES:
 • If uncertain about a specific statute, state the general legal principle.
 • Be analytical, precise, and proactive in identifying potential legal issues.
 • Give substantive, thorough answers — you are a first-chair estate planning attorney, not a FAQ bot.
+• When the user asks "what's left", "what's outstanding", "what still needs to be done", or "status of this client", answer from the DOCUMENT STATUS block in context — list the specific outstanding items with their status and call out any documents in the package that have not yet been generated. Do NOT invent documents that aren't in that block.
 
 CONTEXT:
 ${contextStr}
@@ -222,6 +316,10 @@ async function buildContextString(
           contextStr += `\n  - ${d.displayName} (${d.status})`;
         }
       }
+
+      // Per-doc-type status roll-up so "what's left for this client?" works.
+      const packageType = (ctx.client.packageDetails?.packageType as string | undefined) ?? 'foundation';
+      contextStr += buildDocumentStatusBlock(packageType, ctx.existingDocuments);
 
       // Knowledge base
       if (ctx.knowledgeResources.length > 0) {
