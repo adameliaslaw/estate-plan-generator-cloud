@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useDocument } from '@/hooks/useFirestore';
+import { useAuth } from '@/hooks/useAuth';
 import { COLLECTIONS } from '@/config/constants';
 import PrintableQuestionnaire from '@/components/questionnaire/PrintableQuestionnaire';
 import type { Client } from '@/types';
@@ -9,8 +10,14 @@ import { Button } from '@/components/ui/button';
 export default function PrintableQuestionnairePage() {
     const { clientId, firmId } = useParams<{ clientId: string; firmId: string }>();
     const navigate = useNavigate();
+    const { loading: authLoading } = useAuth();
 
-    const docPath = clientId && firmId ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}` : null;
+    // Wait for Firebase Auth to restore the session before querying Firestore.
+    // Without this, opening in a new tab races the auth restore and hits
+    // "Missing or insufficient permissions".
+    const docPath = !authLoading && clientId && firmId
+        ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}`
+        : null;
     const { data: client, loading, error } = useDocument<Client>(docPath);
 
     if (!clientId || !firmId) {
@@ -24,7 +31,7 @@ export default function PrintableQuestionnairePage() {
         );
     }
 
-    if (loading) {
+    if (authLoading || loading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-gray-50">
                 <Loader2 className="h-8 w-8 animate-spin text-[#1a365d]" />
