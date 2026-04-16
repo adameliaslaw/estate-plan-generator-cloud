@@ -15,12 +15,24 @@
 
 import { Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { Client, FiduciaryPerson } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function BlankLine({ width = '100%', height = '1.25rem' }: { width?: string; height?: string }) {
+function BlankLine({ width = '100%', height = '1.25rem', value }: { width?: string; height?: string; value?: string }) {
+  if (value) {
+    return (
+      <div
+        className="border-b border-gray-400 text-[10pt] text-gray-900 font-medium pb-0.5 print:text-black truncate"
+        style={{ height, minWidth: width, maxWidth: width, lineHeight: height }}
+        title={value}
+      >
+        {value}
+      </div>
+    );
+  }
   return (
     <input
       type="text"
@@ -30,7 +42,14 @@ function BlankLine({ width = '100%', height = '1.25rem' }: { width?: string; hei
   );
 }
 
-function BlankLines({ count = 1 }: { count?: number }) {
+function BlankLines({ count = 1, value }: { count?: number; value?: string }) {
+  if (value) {
+    return (
+      <div className="w-full border-b border-gray-400 text-[10pt] text-gray-900 font-medium pb-0.5 print:text-black whitespace-pre-wrap" style={{ minHeight: `${count * 1.25}rem` }}>
+        {value}
+      </div>
+    );
+  }
   return (
     <div className="space-y-0.5 w-full">
       {Array.from({ length: count }).map((_, i) => (
@@ -40,11 +59,14 @@ function BlankLines({ count = 1 }: { count?: number }) {
   );
 }
 
-function CheckOption({ label }: { label: string }) {
+function CheckOption({ label, checked }: { label: string; checked?: boolean }) {
   return (
     <label className="flex items-center gap-1.5 cursor-pointer group hover:bg-blue-50/50 pr-1 rounded transition-colors print:hover:bg-transparent">
-      <input 
-        type="checkbox" 
+      <input
+        type="checkbox"
+        checked={checked ?? false}
+        readOnly={checked !== undefined}
+        onChange={checked === undefined ? undefined : () => {}}
         className="flex-shrink-0 border-gray-500 rounded-sm outline-none ring-0 accent-blue-600 cursor-pointer print:border-gray-500 print:bg-white print:accent-black"
       />
       <span className="text-[9pt] leading-none text-gray-800 group-hover:text-black">{label}</span>
@@ -56,23 +78,29 @@ function LabeledField({
   label,
   width = '100%',
   inline = false,
+  value,
 }: {
   label: string;
   width?: string;
   inline?: boolean;
+  value?: string;
 }) {
   if (inline) {
     return (
       <div className="flex items-end gap-1" style={{ width }}>
         <span className="text-[8pt] text-gray-500 whitespace-nowrap pb-0.5">{label}:</span>
-        <div className="flex-1 border-b border-gray-400" style={{ height: '1.15rem' }} />
+        {value ? (
+          <div className="flex-1 border-b border-gray-400 text-[10pt] text-gray-900 font-medium truncate" style={{ height: '1.15rem', lineHeight: '1.15rem' }}>{value}</div>
+        ) : (
+          <div className="flex-1 border-b border-gray-400" style={{ height: '1.15rem' }} />
+        )}
       </div>
     );
   }
   return (
     <div style={{ width }}>
       <p className="text-[8pt] font-medium text-gray-600 mb-0.5">{label}</p>
-      <BlankLine />
+      <BlankLine value={value} />
     </div>
   );
 }
@@ -122,7 +150,13 @@ function PrintPage({ children, isLast = false }: { children: React.ReactNode; is
 // Fiduciary block (stacked: name+relationship, then address+phone)
 // ---------------------------------------------------------------------------
 
-function FiduciaryBlock({ role, subtitle }: { role: string; subtitle?: string }) {
+function fiduciaryAddress(p?: FiduciaryPerson): string | undefined {
+  if (!p) return undefined;
+  const parts = [p.address, p.city, p.state, p.zip].filter(Boolean);
+  return parts.length ? parts.join(', ') : undefined;
+}
+
+function FiduciaryBlock({ role, subtitle, primary, alternate }: { role: string; subtitle?: string; primary?: FiduciaryPerson; alternate?: FiduciaryPerson }) {
   return (
     <div className="border-b border-gray-300 pb-3 mb-3">
       <p className="text-[9pt] font-bold text-gray-700 uppercase tracking-wide mb-1">
@@ -134,24 +168,24 @@ function FiduciaryBlock({ role, subtitle }: { role: string; subtitle?: string })
         <div>
           <p className="text-[7pt] text-gray-400 uppercase font-semibold mb-1">Primary</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            <LabeledField label="Full Name" />
-            <LabeledField label="Relationship" />
+            <LabeledField label="Full Name" value={primary?.name} />
+            <LabeledField label="Relationship" value={primary?.relationship} />
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2">
-            <LabeledField label="Address" />
-            <LabeledField label="Phone" />
+            <LabeledField label="Address" value={fiduciaryAddress(primary)} />
+            <LabeledField label="Phone" value={primary?.phone} />
           </div>
         </div>
         {/* Alternate */}
         <div>
           <p className="text-[7pt] text-gray-400 uppercase font-semibold mb-1">Alternate</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            <LabeledField label="Full Name" />
-            <LabeledField label="Relationship" />
+            <LabeledField label="Full Name" value={alternate?.name} />
+            <LabeledField label="Relationship" value={alternate?.relationship} />
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2">
-            <LabeledField label="Address" />
-            <LabeledField label="Phone" />
+            <LabeledField label="Address" value={fiduciaryAddress(alternate)} />
+            <LabeledField label="Phone" value={alternate?.phone} />
           </div>
         </div>
       </div>
@@ -177,23 +211,45 @@ function PageFooter({ pageNum, totalPages }: { pageNum: number; totalPages: numb
 
 interface PrintableQuestionnaireProps {
   clientName?: string;
+  client?: Client;
 }
 
 const TOTAL_PAGES = 5;
 
+function formatDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+}
+
+function currency(n?: number): string | undefined {
+  if (n === undefined || n === null) return undefined;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+}
+
 export default function PrintableQuestionnaire({
   clientName,
+  client,
 }: PrintableQuestionnaireProps) {
+  const pi = client?.personalInfo;
+  const si = client?.spouseInfo;
+  const children = client?.children ?? [];
+  const fid = client?.fiduciaries;
+  const hp = client?.healthcarePreferences;
+  const assets = client?.assets;
+  const liabilities = client?.liabilities;
+  const sc = client?.specialConsiderations;
   return (
     <div className="printable-questionnaire-wrapper" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
       {/* ── Screen-only toolbar ─────────────────────────────────────────── */}
       <div className="print:hidden mb-6 flex items-center justify-between rounded-lg border border-[#1a365d]/15 bg-[#ebf4ff] px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-[#1a365d]">
-            Printable Intake Form (Condensed)
+            {client ? 'Completed Questionnaire — Print View' : 'Printable Intake Form (Condensed)'}
           </p>
           <p className="text-xs text-[#1a365d]/60">
-            {TOTAL_PAGES}-page version for in-person interviews and paper intake.
+            {client ? `Pre-filled with data for ${clientName || 'client'}. Review before printing.` : `${TOTAL_PAGES}-page version for in-person interviews and paper intake.`}
           </p>
         </div>
         <Button
@@ -245,16 +301,16 @@ export default function PrintableQuestionnaire({
                 </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">Date</p>
-                  <BlankLine />
+                  <BlankLine value={client ? new Date().toLocaleDateString('en-US') : undefined} />
                 </div>
                 <div>
                   <p className="text-[7pt] font-semibold text-gray-500 uppercase">How did you hear about us?</p>
                   <div className="flex gap-2.5 flex-wrap mt-0.5">
-                    <CheckOption label="Referral" />
-                    <CheckOption label="Google" />
-                    <CheckOption label="Social Media" />
-                    <CheckOption label="Attorney" />
-                    <CheckOption label="Other" />
+                    <CheckOption label="Referral" checked={client?.referralSource === 'Referral' ? true : undefined} />
+                    <CheckOption label="Google" checked={client?.referralSource === 'Google' ? true : undefined} />
+                    <CheckOption label="Social Media" checked={client?.referralSource === 'Social Media' ? true : undefined} />
+                    <CheckOption label="Attorney" checked={client?.referralSource === 'Attorney' ? true : undefined} />
+                    <CheckOption label="Other" checked={client?.referralSource && !['Referral','Google','Social Media','Attorney'].includes(client.referralSource) ? true : undefined} />
                   </div>
                 </div>
               </div>
@@ -270,59 +326,59 @@ export default function PrintableQuestionnaire({
             <SectionHeader title="Section 1 — About You" />
 
             <div className="grid grid-cols-4 gap-x-3 gap-y-1">
-              <LabeledField label="First Name" />
-              <LabeledField label="Middle Name" />
-              <LabeledField label="Last Name" />
-              <LabeledField label="Suffix" />
+              <LabeledField label="First Name" value={pi?.firstName} />
+              <LabeledField label="Middle Name" value={pi?.middleName} />
+              <LabeledField label="Last Name" value={pi?.lastName} />
+              <LabeledField label="Suffix" value={pi?.suffix} />
             </div>
             <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
-              <LabeledField label="Date of Birth" />
-              <LabeledField label="Last 4 SSN" width="60%" />
+              <LabeledField label="Date of Birth" value={formatDate(pi?.dob)} />
+              <LabeledField label="Last 4 SSN" width="60%" value={pi?.ssnLast4} />
               <div className="col-span-2">
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Gender</p>
                 <div className="flex gap-4">
-                  <CheckOption label="Male" />
-                  <CheckOption label="Female" />
+                  <CheckOption label="Male" checked={pi?.gender ? pi.gender === 'male' : undefined} />
+                  <CheckOption label="Female" checked={pi?.gender ? pi.gender === 'female' : undefined} />
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-y-1 mt-1">
-              <LabeledField label="Street Address" />
+              <LabeledField label="Street Address" value={pi?.address} />
             </div>
             <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
-              <LabeledField label="City" />
-              <LabeledField label="State" />
-              <LabeledField label="ZIP Code" />
-              <LabeledField label="County" />
+              <LabeledField label="City" value={pi?.city} />
+              <LabeledField label="State" value={pi?.state} />
+              <LabeledField label="ZIP Code" value={pi?.zip} />
+              <LabeledField label="County" value={pi?.county} />
             </div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
-              <LabeledField label="Email" />
-              <LabeledField label="Phone" />
-              <LabeledField label="Alternate Phone" />
+              <LabeledField label="Email" value={pi?.email} />
+              <LabeledField label="Phone" value={pi?.phone} />
+              <LabeledField label="Alternate Phone" value={pi?.alternatePhone} />
             </div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
               <div>
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Marital Status</p>
                 <div className="space-y-0.5">
-                  <CheckOption label="Single" />
-                  <CheckOption label="Married" />
-                  <CheckOption label="Domestic Partnership" />
-                  <CheckOption label="Divorced" />
-                  <CheckOption label="Widowed" />
-                  <CheckOption label="Separated" />
+                  <CheckOption label="Single" checked={pi?.maritalStatus ? pi.maritalStatus === 'Single' : undefined} />
+                  <CheckOption label="Married" checked={pi?.maritalStatus ? pi.maritalStatus === 'Married' : undefined} />
+                  <CheckOption label="Domestic Partnership" checked={pi?.maritalStatus ? pi.maritalStatus === 'Domestic Partnership' : undefined} />
+                  <CheckOption label="Divorced" checked={pi?.maritalStatus ? pi.maritalStatus === 'Divorced' : undefined} />
+                  <CheckOption label="Widowed" checked={pi?.maritalStatus ? pi.maritalStatus === 'Widowed' : undefined} />
+                  <CheckOption label="Separated" checked={pi?.maritalStatus ? pi.maritalStatus === 'Separated' : undefined} />
                 </div>
               </div>
               <div>
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
                 <div className="space-y-0.5">
-                  <CheckOption label="U.S. Citizen" />
-                  <CheckOption label="Permanent Resident" />
-                  <CheckOption label="Non-Resident" />
+                  <CheckOption label="U.S. Citizen" checked={pi?.citizenship ? pi.citizenship === 'US Citizen' : undefined} />
+                  <CheckOption label="Permanent Resident" checked={pi?.citizenship ? pi.citizenship === 'Permanent Resident (Green Card)' : undefined} />
+                  <CheckOption label="Non-Resident" checked={pi?.citizenship ? pi.citizenship === 'Non-Resident Alien' : undefined} />
                 </div>
               </div>
               <div className="space-y-1">
-                <LabeledField label="Occupation" />
-                <LabeledField label="Employer" />
+                <LabeledField label="Occupation" value={pi?.occupation} />
+                <LabeledField label="Employer" value={pi?.employer} />
               </div>
             </div>
 
@@ -333,55 +389,55 @@ export default function PrintableQuestionnaire({
             </p>
 
             <div className="grid grid-cols-4 gap-x-3 gap-y-1">
-              <LabeledField label="First Name" />
-              <LabeledField label="Middle Name" />
-              <LabeledField label="Last Name" />
-              <LabeledField label="Suffix" />
+              <LabeledField label="First Name" value={si?.firstName} />
+              <LabeledField label="Middle Name" value={si?.middleName} />
+              <LabeledField label="Last Name" value={si?.lastName} />
+              <LabeledField label="Suffix" value={si?.suffix} />
             </div>
             <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
-              <LabeledField label="Date of Birth" />
-              <LabeledField label="Last 4 SSN" width="60%" />
+              <LabeledField label="Date of Birth" value={formatDate(si?.dob)} />
+              <LabeledField label="Last 4 SSN" width="60%" value={si?.ssnLast4} />
               <div className="col-span-2">
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Gender</p>
                 <div className="flex gap-4">
-                  <CheckOption label="Male" />
-                  <CheckOption label="Female" />
+                  <CheckOption label="Male" checked={si?.gender ? si.gender === 'male' : undefined} />
+                  <CheckOption label="Female" checked={si?.gender ? si.gender === 'female' : undefined} />
                 </div>
               </div>
             </div>
             <div className="mt-1">
               <div className="flex items-center gap-4 mb-0.5">
-                <CheckOption label="Same address as client above" />
+                <CheckOption label="Same address as client above" checked={si?.sameAddress ?? undefined} />
                 <span className="text-[8pt] text-gray-400 italic">If not, complete below:</span>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-y-1 mt-0.5">
-              <LabeledField label="Street Address" />
+              <LabeledField label="Street Address" value={si && !si.sameAddress ? si.address : undefined} />
             </div>
             <div className="grid grid-cols-4 gap-x-3 gap-y-1 mt-1">
-              <LabeledField label="City" />
-              <LabeledField label="State" />
-              <LabeledField label="ZIP Code" />
-              <LabeledField label="County" />
+              <LabeledField label="City" value={si && !si.sameAddress ? si.city : undefined} />
+              <LabeledField label="State" value={si && !si.sameAddress ? si.state : undefined} />
+              <LabeledField label="ZIP Code" value={si && !si.sameAddress ? si.zip : undefined} />
+              <LabeledField label="County" value={si && !si.sameAddress ? si.county : undefined} />
             </div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
-              <LabeledField label="Email" />
-              <LabeledField label="Phone" />
-              <LabeledField label="Alternate Phone" />
+              <LabeledField label="Email" value={si?.email} />
+              <LabeledField label="Phone" value={si?.phone} />
+              <LabeledField label="Alternate Phone" value={si?.alternatePhone} />
             </div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-1">
               <div>{/* Empty column to match alignment with Marital Status in Section 1 */}</div>
               <div>
                 <p className="text-[8pt] font-medium text-gray-600 mb-0.5">Citizenship</p>
                 <div className="space-y-0.5">
-                  <CheckOption label="U.S. Citizen" />
-                  <CheckOption label="Permanent Resident" />
-                  <CheckOption label="Non-Resident" />
+                  <CheckOption label="U.S. Citizen" checked={si?.citizenship ? si.citizenship === 'US Citizen' : undefined} />
+                  <CheckOption label="Permanent Resident" checked={si?.citizenship ? si.citizenship === 'Permanent Resident (Green Card)' : undefined} />
+                  <CheckOption label="Non-Resident" checked={si?.citizenship ? si.citizenship === 'Non-Resident Alien' : undefined} />
                 </div>
               </div>
               <div className="space-y-1">
-                <LabeledField label="Occupation" />
-                <LabeledField label="Employer" />
+                <LabeledField label="Occupation" value={si?.occupation} />
+                <LabeledField label="Employer" value={si?.employer} />
               </div>
             </div>
 
@@ -409,17 +465,20 @@ export default function PrintableQuestionnaire({
                 </tr>
               </thead>
               <tbody>
-                {[1, 2, 3, 4].flatMap((n) => [
+                {[1, 2, 3, 4].flatMap((n) => {
+                const child = children[n - 1];
+                const relAbbr = child?.relationship === 'biological' ? 'B' : child?.relationship === 'adopted' ? 'A' : child?.relationship === 'stepchild' ? 'S' : undefined;
+                return [
                   <tr key={`child-${n}`}>
                     <td className="py-1.5 pr-2 text-gray-500 font-medium align-middle">{n}.</td>
-                    <td className="py-1.5 pr-2"><BlankLine height="1.15rem" /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
-                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" /></td>
+                    <td className="py-1.5 pr-2"><BlankLine height="1.15rem" value={child?.name} /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" value={formatDate(child?.dob)} /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" value={child?.gender === 'male' ? 'M' : child?.gender === 'female' ? 'F' : undefined} /></td>
+                    <td className="py-1.5 pr-2"><BlankLine width="100%" height="1.15rem" value={relAbbr} /></td>
                     <td className="py-1.5">
                       <div className="flex gap-2">
-                        <CheckOption label="Y" />
-                        <CheckOption label="N" />
+                        <CheckOption label="Y" checked={child ? child.specialNeeds : undefined} />
+                        <CheckOption label="N" checked={child ? !child.specialNeeds : undefined} />
                       </div>
                     </td>
                   </tr>,
@@ -456,7 +515,8 @@ export default function PrintableQuestionnaire({
                       </td>
                     </tr>
                   ))
-                ])}
+                ];
+              })}
               </tbody>
             </table>
             <p className="text-[7pt] text-gray-400 italic mt-1 mb-2">
@@ -503,11 +563,11 @@ export default function PrintableQuestionnaire({
             </p>
 
             <div className="space-y-0">
-              <FiduciaryBlock role="Trustee" />
-              <FiduciaryBlock role="Executor" />
-              <FiduciaryBlock role="Power of Attorney (Agent)" />
-              <FiduciaryBlock role="Healthcare Representative" />
-              <FiduciaryBlock role="Guardian" subtitle="(If Children or grandchildren under 18)" />
+              <FiduciaryBlock role="Trustee" primary={fid?.trustee?.primary} alternate={fid?.trustee?.alternate} />
+              <FiduciaryBlock role="Executor" primary={fid?.executor?.primary} alternate={fid?.executor?.alternate} />
+              <FiduciaryBlock role="Power of Attorney (Agent)" primary={fid?.powerOfAttorney?.agent} alternate={fid?.powerOfAttorney?.alternateAgent} />
+              <FiduciaryBlock role="Healthcare Representative" primary={fid?.healthcareProxy?.agent} alternate={fid?.healthcareProxy?.alternateAgent} />
+              <FiduciaryBlock role="Guardian" subtitle="(If Children or grandchildren under 18)" primary={fid?.guardian?.primary} alternate={fid?.guardian?.alternate} />
             </div>
 
             <PageFooter pageNum={3} totalPages={TOTAL_PAGES} />
@@ -530,22 +590,34 @@ export default function PrintableQuestionnaire({
             <p className="text-[7pt] text-gray-400 mb-0.5">
               List each property: address, estimated value, how titled (joint, individual, trust)
             </p>
-            <BlankLines count={2} />
+            <BlankLines count={2} value={assets?.realEstate?.length ? assets.realEstate.map(r => `${r.address}, ${r.city}, ${r.state} ${r.zip} — ${currency(r.estimatedValue)} (${r.titling})`).join('\n') : undefined} />
 
             <SubHeader title="Financial Accounts" />
             <p className="text-[7pt] text-gray-400 mb-0.5">
               Bank accounts, investments, retirement (401k, IRA), life insurance
             </p>
-            <BlankLines count={2} />
+            <BlankLines count={2} value={(() => {
+              const lines: string[] = [];
+              assets?.bankAccounts?.forEach(a => lines.push(`${a.institution} ${a.accountType} — ${currency(a.estimatedBalance)}`));
+              assets?.investmentAccounts?.forEach(a => lines.push(`${a.institution} Investment — ${currency(a.estimatedValue)}`));
+              assets?.retirementAccounts?.forEach(a => lines.push(`${a.institution} ${a.accountType} — ${currency(a.estimatedValue)}`));
+              assets?.lifeInsurance?.forEach(a => lines.push(`${a.company} ${a.insuranceType} — Face: ${currency(a.faceValue)}`));
+              return lines.length ? lines.join('\n') : undefined;
+            })()} />
 
             <SubHeader title="Business Interests" />
-            <BlankLines count={2} />
+            <BlankLines count={2} value={assets?.businessInterests?.length ? assets.businessInterests.map(b => `${b.businessName} (${b.entityType}) — ${b.ownershipPercentage}% — ${currency(b.estimatedValue)}`).join('\n') : undefined} />
 
             <SubHeader title="Significant Debts" />
             <p className="text-[7pt] text-gray-400 mb-0.5">
               Mortgages, loans, credit card debt, other obligations
             </p>
-            <BlankLines count={2} />
+            <BlankLines count={2} value={(() => {
+              const lines: string[] = [];
+              liabilities?.mortgages?.forEach(m => lines.push(`${m.lender} — ${m.propertyAddress} — ${currency(m.balance)}`));
+              liabilities?.otherLiabilities?.forEach(l => lines.push(`${l.creditor} (${l.type}) — ${currency(l.balance)}`));
+              return lines.length ? lines.join('\n') : undefined;
+            })()} />
 
             <div className="mt-4">
               <SectionHeader title="Section 6 — Healthcare Preferences" />
@@ -554,34 +626,34 @@ export default function PrintableQuestionnaire({
                 <div>
                   <SubHeader title="Life-Sustaining Treatment" />
                   <div className="space-y-0.5">
-                    <CheckOption label="Provide all possible measures" />
-                    <CheckOption label="Withhold if terminally ill or permanently unconscious" />
+                    <CheckOption label="Provide all possible measures" checked={hp?.lifeSupport ? hp.lifeSupport === 'provide' : undefined} />
+                    <CheckOption label="Withhold if terminally ill or permanently unconscious" checked={hp?.lifeSupport ? hp.lifeSupport === 'withhold' : undefined} />
                     <CheckOption label="Trial period, then withdraw if no improvement" />
-                    <CheckOption label="My healthcare representative decides" />
+                    <CheckOption label="My healthcare representative decides" checked={hp?.lifeSupport ? hp.lifeSupport === 'undecided' : undefined} />
                   </div>
                 </div>
                 <div>
                   <SubHeader title="Artificial Nutrition & Hydration" />
                   <div className="space-y-0.5">
-                    <CheckOption label="Continue in all circumstances" />
-                    <CheckOption label="Withhold if terminally ill or permanently unconscious" />
-                    <CheckOption label="My healthcare representative decides" />
+                    <CheckOption label="Continue in all circumstances" checked={hp?.artificialNutrition ? hp.artificialNutrition === 'provide' : undefined} />
+                    <CheckOption label="Withhold if terminally ill or permanently unconscious" checked={hp?.artificialNutrition ? hp.artificialNutrition === 'withhold' : undefined} />
+                    <CheckOption label="My healthcare representative decides" checked={hp?.artificialNutrition ? hp.artificialNutrition === 'undecided' : undefined} />
                   </div>
                 </div>
                 <div>
                   <SubHeader title="Pain Management" />
                   <div className="space-y-0.5">
-                    <CheckOption label="Maximum relief, even if it may hasten death" />
-                    <CheckOption label="Relief that does not risk hastening death" />
-                    <CheckOption label="My healthcare representative decides" />
+                    <CheckOption label="Maximum relief, even if it may hasten death" checked={hp?.painManagement ? hp.painManagement === 'comfort_care' : undefined} />
+                    <CheckOption label="Relief that does not risk hastening death" checked={hp?.painManagement ? hp.painManagement === 'all_measures' : undefined} />
+                    <CheckOption label="My healthcare representative decides" checked={hp?.painManagement ? hp.painManagement === 'undecided' : undefined} />
                   </div>
                 </div>
                 <div>
                   <SubHeader title="Organ Donation" />
                   <div className="space-y-0.5">
-                    <CheckOption label="Yes — all organs and tissues" />
-                    <CheckOption label="Yes — specific organs only" />
-                    <CheckOption label="No" />
+                    <CheckOption label="Yes — all organs and tissues" checked={hp ? (hp.organDonation && !hp.organDonationDetails) : undefined} />
+                    <CheckOption label="Yes — specific organs only" checked={hp ? (hp.organDonation && !!hp.organDonationDetails) : undefined} />
+                    <CheckOption label="No" checked={hp ? !hp.organDonation : undefined} />
                     <CheckOption label="Already registered" />
                   </div>
                 </div>
@@ -608,7 +680,7 @@ export default function PrintableQuestionnaire({
 
               <div className="mt-2">
                 <SubHeader title="Additional Healthcare Instructions" />
-                <BlankLines count={2} />
+                <BlankLines count={2} value={hp?.personalStatement || hp?.notes || undefined} />
               </div>
             </div>
 
@@ -642,11 +714,11 @@ export default function PrintableQuestionnaire({
                   Any pending legal matters?
                 </p>
                 <div className="flex gap-4">
-                  <CheckOption label="Yes" />
-                  <CheckOption label="No" />
+                  <CheckOption label="Yes" checked={sc?.hasPendingLitigation != null ? sc.hasPendingLitigation : undefined} />
+                  <CheckOption label="No" checked={sc?.hasPendingLitigation != null ? !sc.hasPendingLitigation : undefined} />
                 </div>
                 <div className="mt-2">
-                  <LabeledField label="If yes, describe" />
+                  <LabeledField label="If yes, describe" value={sc?.pendingLitigationDetails} />
                 </div>
               </div>
             </div>

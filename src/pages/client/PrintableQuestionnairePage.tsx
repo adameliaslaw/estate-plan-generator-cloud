@@ -72,7 +72,7 @@ export default function PrintableQuestionnairePage() {
     if (spouseFullName) {
         return (
             <>
-                <PrintableQuestionnaire clientName={clientFullName || 'Client'} />
+                <PrintableQuestionnaire clientName={clientFullName || 'Client'} client={client} />
                 {/* Page-break separator between the two questionnaires */}
                 <div
                     className="print:hidden"
@@ -100,10 +100,10 @@ export default function PrintableQuestionnairePage() {
                         Spouse Questionnaire Below
                     </span>
                 </div>
-                <PrintableQuestionnaire clientName={spouseFullName} />
+                <PrintableQuestionnaire clientName={spouseFullName} client={client} />
             </>
         );
     }
 
-    return <PrintableQuestionnaire clientName={clientFullName || 'Client'} />;
+    return <PrintableQuestionnaire clientName={clientFullName || 'Client'} client={client} />;
 }
