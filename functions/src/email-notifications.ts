@@ -39,13 +39,19 @@ interface FirmBranding {
 }
 
 /** Minimal SendGrid mail payload (only fields we use). */
-interface SendGridPayload {
+export interface SendGridPayload {
   personalizations: Array<{
     to: Array<{ email: string; name?: string }>;
     subject: string;
   }>;
   from: { email: string; name: string };
   content: Array<{ type: string; value: string }>;
+  attachments?: Array<{
+    content: string; // base64-encoded
+    filename: string;
+    type: string; // MIME
+    disposition?: 'attachment' | 'inline';
+  }>;
 }
 
 // ---------------------------------------------------------------------------

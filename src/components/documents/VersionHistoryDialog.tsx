@@ -8,7 +8,14 @@
 
 import { useState, useEffect } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { History, RotateCcw, Eye, Loader2, ChevronRight } from 'lucide-react';
+import {
+  History,
+  RotateCcw,
+  Eye,
+  Loader2,
+  ChevronRight,
+  GitCompareArrows,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +27,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { documentService } from '@/services/document-service';
 import { cn } from '@/lib/utils';
+import DocumentDiffDialog from './DocumentDiffDialog';
 
 interface VersionSummary {
   versionNumber: number;
@@ -61,6 +69,8 @@ export default function VersionHistoryDialog({
 
   const [reverting, setReverting] = useState(false);
   const [revertSuccess, setRevertSuccess] = useState('');
+
+  const [compareOpen, setCompareOpen] = useState(false);
 
   // Fetch versions when dialog opens
   useEffect(() => {
@@ -133,13 +143,28 @@ export default function VersionHistoryDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[#1a365d]">
-            <History className="h-5 w-5 text-[#2b6cb0]" />
-            Version History
-          </DialogTitle>
-          <DialogDescription>
-            {documentName} — Current version: {currentVersion}
-          </DialogDescription>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <DialogTitle className="flex items-center gap-2 text-[#1a365d]">
+                <History className="h-5 w-5 text-[#2b6cb0]" />
+                Version History
+              </DialogTitle>
+              <DialogDescription>
+                {documentName} — Current version: {currentVersion}
+              </DialogDescription>
+            </div>
+            {versions.length >= 2 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs text-[#1a365d]"
+                onClick={() => setCompareOpen(true)}
+              >
+                <GitCompareArrows className="h-3.5 w-3.5" />
+                Compare versions
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         {loading && (
@@ -244,6 +269,21 @@ export default function VersionHistoryDialog({
           </div>
         )}
       </DialogContent>
+
+      {compareOpen && (
+        <DocumentDiffDialog
+          firmId={firmId}
+          clientId={clientId}
+          documentId={documentId}
+          documentName={documentName}
+          versions={versions.map((v) => ({
+            versionNumber: v.versionNumber,
+            createdAt: v.createdAt,
+            changeNotes: v.changeNotes,
+          }))}
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
     </Dialog>
   );
 }

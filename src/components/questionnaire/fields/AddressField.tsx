@@ -48,8 +48,16 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
   const { userProfile } = useAuth();
   const { data: firmBranding } = useFirmBranding(userProfile?.firmId);
 
+  // The state <select> visually defaults to 'NJ', but unless the user actively
+  // interacts with it, Firestore never sees the value. Any other address-field
+  // edit (street, city, zip) below is going to flush through `update()`, so we
+  // take that opportunity to bake the visible-default 'NJ' into the saved data.
   function update(field: string, val: unknown) {
-    onChange({ ...current, [field]: val });
+    onChange({
+      ...current,
+      state: (current['state'] as string) || 'NJ',
+      [field]: val,
+    });
   }
 
   const inputRef = useRef<HTMLInputElement>(null);

@@ -16,22 +16,68 @@ When InteractiveLegal (or another software source) provides templates for these 
 
 ---
 
-## 🔲 #2 — Future functionality recommendations (not yet scoped)
+## 🔲 #2 — Data & settings fixes from template-fidelity investigation
 
-Ranked by impact. Pick up in a future session.
+Four small data-side actions, all from the April 2026 POA + HC Directive test-generation
+that revealed substitution drift. Code-side fixes shipped in the same session; these are
+the remaining human-touch items.
 
-**Efficiency multipliers:**
-- **Multi-client batch generation** — staff currently runs one client at a time. A "generate for all pending" queue would cut time during busy weeks.
-- **Reporting exports** — analytics widgets exist but are dashboard-only. Add CSV export + weekly email digest for the firm partner.
+**A. Set gender on existing clients.** Generation now fails loud if `personalInfo.gender`
+is unset (no more silent male-default). Open Karen Elias (and any other pre-existing
+client) in Clients → Edit Questionnaire → About You → gender step, pick Male/Female, save.
+Newly-intaked clients are fine — the step is already in the questionnaire.
 
-**Polish:**
-- **Document version diff** — version history and restore already exist, but no side-by-side compare between two versions.
-- **Time-to-completion metrics** — the data is already captured (timestamps on every event); no UI yet for intake → signed-plan duration by client or staff member.
-- **Template variable live preview** — template authoring is blind; add a split-pane showing a template rendered against sample client data.
+**B. Fix missing state on existing clients.** AddressField now auto-persists `NJ` on any
+address edit, but existing records with empty `personalInfo.state` need the fix. Either:
+  - Open the client → Edit Questionnaire → re-save the address step (triggers the fix), or
+  - Edit Firestore directly: set `personalInfo.state: "NJ"` on any client whose address
+    lacks one.
+
+**C. Populate firm-doc fields that templates reference.** The HC Directive test rendered
+blank witness names, blank witness addresses, and a nameless attorney signature because
+these fields don't exist on the firm doc. Add them in Firestore:
+
+```
+// firms/elias-counsel
+attorneyName:    "Adam J. Elias, Esq."
+witness1Name:    "<witness #1 full name>"
+witness1Address: "<witness #1 full address>"
+witness2Name:    "<witness #2 full name>"
+witness2Address: "<witness #2 full address>"
+```
+
+**D. Audit template variable mappings.** The AI templatizer mapped the HC Directive's
+primary Health-Care Representative to `{{spouseTitle}} {{spouseFullName}}` (assumes HCR =
+spouse) and mapped the successor HCR's address to `{{fiduciaries.powerOfAttorney.agent.address}}`
+(wrong path). Use the Template Preview panel (built this session) against Karen's data to
+find all such mis-mappings across uploaded templates, then correct them via the KB edit UI.
+Expected variable names for HCR should be `{{fiduciaries.healthcareProxy.primary.name}}`,
+`.relationship`, `.address`, etc.
 
 ---
 
-## 🔲 #3 — Google OAuth client: fix origins + rotate credentials
+## 🔲 #3 — Enable Cloud Scheduler + Pub/Sub APIs for weekly digest
+
+The new `sendWeeklyDigest` function (Monday 8am ET) will deploy successfully
+but will not fire until both APIs are enabled in GCP.
+
+1. https://console.cloud.google.com/apis/library/cloudscheduler.googleapis.com?project=estate-plan-generator — click Enable
+2. https://console.cloud.google.com/apis/library/pubsub.googleapis.com?project=estate-plan-generator — click Enable
+3. Redeploy functions so Cloud Scheduler picks up the new schedule.
+
+Also seed at least one recipient so the digest actually sends:
+
+```
+// Edit firms/elias-counsel in Firestore console
+weeklyDigestRecipients: ['adam@adameliaslaw.com']
+```
+
+Firms with an empty or missing `weeklyDigestRecipients` array are silently
+skipped — that's the opt-out mechanism.
+
+---
+
+## 🔲 #4 — Google OAuth client: fix origins + rotate credentials
 
 Connecting Google Calendar from Settings → Integrations currently fails with
 `Error 400: redirect_uri_mismatch` for `adam@adameliaslaw.com`. Root cause:
@@ -74,6 +120,14 @@ These were handled in code (credentials removed from tracked files) but the cred
   ```
 
 ---
+
+## Completed (April 2026 build-out session — #2 future functionality)
+
+- ✅ **Multi-client batch generation** — dashboard "Batch generate…" button on the Ready-to-Draft card lets staff pick clients, set shared options once, and run sequentially (client-side loop, per-client success/error summary).
+- ✅ **Reporting exports** — Export PDF button on Analytics Overview (per-client roster) + weekly email digest (Mon 8am ET) with inline HTML summary + 2 PDF attachments. Per-firm opt-in via `weeklyDigestRecipients: string[]` on firm doc. *Requires Cloud Scheduler enablement — see open item #2 above.*
+- ✅ **Document version diff** — "Compare versions" button on the Version History dialog opens a diff view with From/To version pickers, side-by-side and unified view modes, and word-level highlighting. Text-only diff (formatting changes not shown).
+- ✅ **Time-to-completion metrics** — "Turnaround Times" card on the dashboard with five medians (questionnaire, draft, review, signing lag, full cycle) and a per-client "View breakdown" modal with stage chips, sortable columns, and stage filter. Derived from existing timestamps — no schema changes.
+- ✅ **Template variable live preview** — "Show preview" toggle on the Upload Document Template dialog opens a split-pane with the template on the left and a live-rendered preview on the right. Client picker defaults to Karen Elias; same Handlebars helpers as production (client-side render via handlebars).
 
 ## Completed (April 2026 audit session + cleanup)
 

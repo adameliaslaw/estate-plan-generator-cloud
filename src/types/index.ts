@@ -241,6 +241,9 @@ export interface Firm {
   barNumber: string;
   branding: FirmBranding;
   settings: FirmSettings;
+  /** Email addresses that receive the Monday 8am ET weekly analytics digest.
+   *  Leave empty to opt a firm out of the digest. */
+  weeklyDigestRecipients?: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

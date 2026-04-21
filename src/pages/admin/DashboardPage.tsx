@@ -26,10 +26,12 @@ import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { cn } from '@/lib/utils';
 import type { Client, ClientDeadline, Document } from '@/types';
 import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsButton';
+import BatchGenerateDialog from '@/components/documents/BatchGenerateDialog';
 import { TasksList } from '@/components/dashboard/TasksList';
 import { UpcomingAppointments } from '@/components/dashboard/UpcomingAppointments';
 import { DashboardPayments } from '@/components/dashboard/DashboardPayments';
 import { AnalyticsWidgets } from '@/components/dashboard/AnalyticsWidgets';
+import { TurnaroundTimesCard } from '@/components/dashboard/TurnaroundTimesCard';
 import { AudioRecorderModal, type AudioRecorderModalProps } from '@/components/ui/audio-recorder-modal';
 import { Mic } from 'lucide-react';
 import { collection, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -228,6 +230,7 @@ export default function DashboardPage() {
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [bottomTab, setBottomTab] = useState<'calendar' | 'payments'>('calendar');
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
 
   const toggleExpanded = async () => {
     const nextState = !isExpanded;
@@ -574,7 +577,14 @@ export default function DashboardPage() {
       </div>
 
       {/* Analytics widgets */}
-      <AnalyticsWidgets clients={allClients} loading={loading} />
+      <AnalyticsWidgets clients={allClients} documents={firmDocuments} loading={loading} />
+
+      {/* Turnaround times */}
+      <TurnaroundTimesCard
+        clients={allClients}
+        documents={firmDocuments}
+        loading={loading}
+      />
 
       {/* ── Action queues ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -590,7 +600,19 @@ export default function DashboardPage() {
                 {readyToDraft.length}
               </span>
             </div>
-            <span className="text-xs text-gray-400">Questionnaire complete · no documents yet</span>
+            <div className="flex items-center gap-3">
+              <span className="hidden text-xs text-gray-400 xl:inline">Questionnaire complete · no documents yet</span>
+              {readyToDraft.length > 1 && firmId && (
+                <button
+                  onClick={() => setBatchDialogOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                  title="Generate documents for multiple clients at once"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Batch generate…
+                </button>
+              )}
+            </div>
           </div>
           {readyToDraft.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
@@ -1068,6 +1090,15 @@ export default function DashboardPage() {
         }}
         clients={audioModalClients}
       />
+
+      {firmId && (
+        <BatchGenerateDialog
+          open={batchDialogOpen}
+          onClose={() => setBatchDialogOpen(false)}
+          firmId={firmId}
+          clients={readyToDraft}
+        />
+      )}
     </div>
   );
 }

@@ -624,7 +624,10 @@ export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
     distributionPlan: ctx.client.distributionPlan ?? '',
     burialPreference: ctx.client.burialPreference ?? '',
     burialDetails: ctx.client.burialDetails ?? '',
-    isFemale: ctx.client.isFemale,
+    // Prefer explicit personalInfo.gender (canonical); fall back to legacy top-level isFemale
+    isFemale:
+      ctx.client.personalInfo?.gender === 'female' ||
+      (ctx.client.personalInfo?.gender == null && ctx.client.isFemale === true),
 
     // Computed
     ...ctx.computed,
@@ -906,7 +909,23 @@ async function substituteTemplateValues(
   const healthPrefs = templateData.healthcarePreferences as Record<string, unknown> ?? {};
 
   const clientFullName = ctx.computed.clientFullName;
-  const isFemale = ctx.client.isFemale;
+
+  // Resolve gender with explicit fail-loud on unknown. Prefer the canonical
+  // personalInfo.gender; fall back to the legacy top-level isFemale. If both
+  // are unset, throw so the caller fixes the data rather than generating a
+  // document with silently-wrong pronouns.
+  const gender = ctx.client.personalInfo?.gender as 'male' | 'female' | undefined;
+  let isFemale: boolean;
+  if (gender === 'female') isFemale = true;
+  else if (gender === 'male') isFemale = false;
+  else if (ctx.client.isFemale === true) isFemale = true;
+  else if (ctx.client.isFemale === false) isFemale = false;
+  else {
+    throw new Error(
+      `Gender is required to generate this document but is not set on the client record. ` +
+      `Set personalInfo.gender ('male' or 'female') on the client's questionnaire, then retry.`,
+    );
+  }
 
   const clientDataBlock = `
 NEW CLIENT DATA (replace ALL sample/template client data with these values):

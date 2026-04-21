@@ -56,3 +56,4 @@ export { lookupPropertyData } from './property-data';
 export { groundedReviewDocument } from './grounded-review';
 export { estimateGenerationCost } from './cost-estimator';
 export { cleanupTemplates } from './cleanup-templates';
+export { sendWeeklyDigest } from './weekly-digest';

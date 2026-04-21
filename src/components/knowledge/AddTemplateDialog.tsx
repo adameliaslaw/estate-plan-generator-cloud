@@ -3,7 +3,7 @@
  */
 
 import { useState, useRef } from 'react';
-import { Upload, FileText, Sparkles } from 'lucide-react';
+import { Upload, FileText, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -14,6 +14,7 @@ import {
 } from '@/services/knowledge-base-service';
 import { DOC_TYPES } from '@/config/constants';
 import { SOFTWARE_SOURCES } from '@/config/software-sources';
+import TemplatePreviewPanel from './TemplatePreviewPanel';
 
 const DOC_TYPE_OPTIONS = Object.entries(DOC_TYPES).map(([, value]) => ({
   value,
@@ -116,6 +117,7 @@ export function AddTemplateDialog({
   const [originalFileName, setOriginalFileName] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [learningStats, setLearningStats] = useState<{ totalCorrections: number; totalTemplatesLearned: number; dictionarySize: number } | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (file: File) => {
@@ -307,7 +309,9 @@ export function AddTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className={`${showPreview ? 'max-w-7xl' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto`}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-[#2b6cb0]" />
@@ -609,21 +613,53 @@ export function AddTemplateDialog({
           {/* Template Content (manual mode or file-extracted preview) */}
           {(uploadMode === 'manual' || content) && (
             <div>
-              <label className="text-xs font-medium text-gray-700">
-                {uploadMode === 'file' ? 'Extracted Content (editable)' : 'Template Content (Handlebars HTML) *'}
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-700">
+                  {uploadMode === 'file' ? 'Extracted Content (editable)' : 'Template Content (Handlebars HTML) *'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1a365d] hover:bg-gray-50"
+                  title="Render the template against a real client's data"
+                >
+                  {showPreview ? (
+                    <>
+                      <EyeOff className="h-3 w-3" />
+                      Hide preview
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-3 w-3" />
+                      Show preview
+                    </>
+                  )}
+                </button>
+              </div>
               {uploadMode === 'manual' && (
                 <p className="mt-0.5 text-[10px] text-gray-400">
                   Use {'{{clientFullName}}'}, {'{{personalInfo.address}}'}, {'{{#if hasSpouse}}'} etc. for dynamic data.
                 </p>
               )}
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={uploadMode === 'file' ? 10 : 16}
-                placeholder={'<h1>DURABLE POWER OF ATTORNEY</h1>\n<p>I, {{clientFullName}}, residing at {{personalInfo.address}}...'}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2b6cb0] focus:outline-none resize-y"
-              />
+              {showPreview ? (
+                <div className="mt-1 grid grid-cols-2 gap-3" style={{ minHeight: '24rem' }}>
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={'<h1>DURABLE POWER OF ATTORNEY</h1>\n<p>I, {{clientFullName}}, residing at {{personalInfo.address}}...'}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2b6cb0] focus:outline-none resize-y"
+                  />
+                  <TemplatePreviewPanel firmId={firmId} template={content} />
+                </div>
+              ) : (
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={uploadMode === 'file' ? 10 : 16}
+                  placeholder={'<h1>DURABLE POWER OF ATTORNEY</h1>\n<p>I, {{clientFullName}}, residing at {{personalInfo.address}}...'}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2b6cb0] focus:outline-none resize-y"
+                />
+              )}
             </div>
           )}
         </div>

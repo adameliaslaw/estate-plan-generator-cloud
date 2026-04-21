@@ -7,7 +7,7 @@
  * fetched by DashboardPage (no additional Firestore queries).
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   DollarSign,
   PieChart,
@@ -16,9 +16,17 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Client } from '@/types';
+import type { Client, Document } from '@/types';
+import { useFirmBranding } from '@/hooks/useFirmBranding';
+import {
+  generateClientRosterPdf,
+  rosterFilename,
+  triggerDownload,
+} from '@/utils/pdf-reports';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +43,9 @@ function formatCurrency(cents: number): string {
 
 interface Props {
   clients: (Client & { id: string })[];
+  /** Optional — when provided, enables the Export PDF button and lets the
+   *  generated roster include a per-client document count. */
+  documents?: Document[];
   loading?: boolean;
 }
 
@@ -75,7 +86,25 @@ function HorizontalBar({
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function AnalyticsWidgets({ clients, loading }: Props) {
+export function AnalyticsWidgets({ clients, documents, loading }: Props) {
+  const { data: branding } = useFirmBranding();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = generateClientRosterPdf({
+        clients,
+        documents: documents ?? [],
+        firmName: branding?.firmName ?? 'Estate Plan Generator',
+      });
+      triggerDownload(blob, rosterFilename());
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const stats = useMemo(() => {
     const active = clients.filter((c) => !c.isArchived);
 
@@ -171,10 +200,28 @@ export function AnalyticsWidgets({ clients, loading }: Props) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold text-[#1a365d] flex items-center gap-2">
-        <BarChart3 className="h-4.5 w-4.5" />
-        Analytics Overview
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-[#1a365d] flex items-center gap-2">
+          <BarChart3 className="h-4.5 w-4.5" />
+          Analytics Overview
+        </h3>
+        <button
+          onClick={handleExportPdf}
+          disabled={exporting || clients.length === 0}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-[#1a365d] shadow-sm hover:bg-gray-50',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+          )}
+          title="Download a PDF roster of all active clients"
+        >
+          {exporting ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          Export PDF
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {/* Revenue Card */}
