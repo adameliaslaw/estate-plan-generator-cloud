@@ -130,11 +130,13 @@ export const retemplatizeTemplates = onCall(
       throw new HttpsError('permission-denied', 'Only admin or attorney can retemplatize.');
     }
 
-    const { firmId, dryRun = false, force = false, limit = 3 } = request.data as {
+    const { firmId, dryRun = false, force = false, limit = 3, templateId } = request.data as {
       firmId: string;
       dryRun?: boolean;
       force?: boolean;
       limit?: number;
+      /** If set, process only this one template regardless of batch filtering. */
+      templateId?: string;
     };
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
@@ -142,18 +144,35 @@ export const retemplatizeTemplates = onCall(
     const db = admin.firestore();
     const col = db.collection(`firms/${firmId}/documentTemplates`);
 
-    // Find all templates that have a softwareSource
-    const snapshot = await col.where('softwareSource', '!=', '').get();
+    // Single-template mode (from the per-template "Retemplatize" button) — skip
+    // the batch filter entirely and process exactly the one requested template.
+    let rawTemplates: FirebaseFirestore.QueryDocumentSnapshot[];
+    if (templateId) {
+      const singleSnap = await col.doc(templateId).get();
+      if (!singleSnap.exists) {
+        throw new HttpsError('not-found', `Template ${templateId} not found.`);
+      }
+      const data = singleSnap.data() ?? {};
+      if (!data.content || data.content.length < 100) {
+        throw new HttpsError('failed-precondition', 'Template has no content to retemplatize.');
+      }
+      // Cast to QueryDocumentSnapshot — same shape, and the loop below only
+      // reads `.data()` / `.id` / `.ref` which DocumentSnapshot also has.
+      rawTemplates = [singleSnap as FirebaseFirestore.QueryDocumentSnapshot];
+    } else {
+      // Find all templates that have a softwareSource
+      const snapshot = await col.where('softwareSource', '!=', '').get();
 
-    const rawTemplates = snapshot.docs.filter((doc) => {
-      const data = doc.data();
-      const vars = data.variables ?? [];
-      const hasContent = data.content && data.content.length > 100;
-      if (!hasContent) return false;
-      // In force mode, process ALL templates (even ones with variables)
-      // In normal mode, only process templates without variables
-      return force || vars.length === 0;
-    });
+      rawTemplates = snapshot.docs.filter((doc) => {
+        const data = doc.data();
+        const vars = data.variables ?? [];
+        const hasContent = data.content && data.content.length > 100;
+        if (!hasContent) return false;
+        // In force mode, process ALL templates (even ones with variables)
+        // In normal mode, only process templates without variables
+        return force || vars.length === 0;
+      });
+    }
 
     // Apply limit to avoid timeout — process a batch at a time
     const batch = rawTemplates.slice(0, limit);

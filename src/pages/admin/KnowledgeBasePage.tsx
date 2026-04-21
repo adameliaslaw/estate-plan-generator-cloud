@@ -26,6 +26,8 @@ import {
   FileJson,
   RotateCcw,
   Zap,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -43,6 +45,7 @@ import { BulkTemplateUploadDialog } from '@/components/knowledge/BulkTemplateUpl
 import { BulkImportDialog } from '@/components/knowledge/KBBulkImportDialog';
 import { TemplatePreviewDialog } from '@/components/knowledge/TemplatePreviewDialog';
 import { EditTemplateTagsDialog } from '@/components/knowledge/EditTemplateTagsDialog';
+import EditTemplateContentDialog from '@/components/knowledge/EditTemplateContentDialog';
 import { SOFTWARE_SOURCES, getSoftwareSourceLabel } from '@/config/software-sources';
 
 // ---------------------------------------------------------------------------
@@ -147,6 +150,7 @@ export default function KnowledgeBasePage() {
   const [seeding, setSeeding] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ id: string; name: string } | null>(null);
   const [editingTemplateTags, setEditingTemplateTags] = useState<TemplateVariant | null>(null);
+  const [editingTemplateContent, setEditingTemplateContent] = useState<TemplateVariant | null>(null);
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
   const [templateEmbeddingState, setTemplateEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
 
@@ -240,6 +244,42 @@ export default function KnowledgeBasePage() {
 
   const handlePreviewTemplate = (templateId: string, name: string) => {
     setPreviewTemplate({ id: templateId, name });
+  };
+
+  const [retemplatizingId, setRetemplatizingId] = useState<string | null>(null);
+  const handleRetemplatize = async (template: TemplateVariant) => {
+    if (!firmId) return;
+    const ok = window.confirm(
+      `Retemplatize "${template.name}"?\n\n` +
+      `This sends the template through AI templatization to convert literal sample-client ` +
+      `data into Handlebars {{variables}}. Existing content is overwritten and a new version ` +
+      `is created. Use the Edit Content dialog afterward to review the variable mappings.`,
+    );
+    if (!ok) return;
+    setRetemplatizingId(template.id);
+    try {
+      const res = await templateService.retemplatizeTemplates(firmId, {
+        templateId: template.id,
+      });
+      const result = res.results[0];
+      if (!result || result.status === 'error') {
+        toast.error(`Retemplatize failed: ${result?.error ?? 'unknown error'}`);
+      } else if (result.status === 'skipped') {
+        toast.warning(`Skipped: ${result.error ?? 'AI output invalid'}`);
+      } else {
+        const fid = result.fidelityScore != null
+          ? ` (fidelity ${(result.fidelityScore * 100).toFixed(0)}%)`
+          : '';
+        toast.success(
+          `Templatized — ${result.variablesFound} variables found${fid}. Review with Edit Content.`,
+        );
+        fetchTemplates();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retemplatize failed.');
+    } finally {
+      setRetemplatizingId(null);
+    }
   };
 
   const [convertingId, setConvertingId] = useState<string | null>(null);
@@ -767,6 +807,26 @@ export default function KnowledgeBasePage() {
                       <Eye className="h-3 w-3" /> Preview
                     </button>
                     <button
+                      onClick={() => setEditingTemplateContent(t)}
+                      className="flex items-center gap-1 rounded-md border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
+                      title="Edit the Handlebars HTML content with live preview"
+                    >
+                      <FileText className="h-3 w-3" /> Edit Content
+                    </button>
+                    <button
+                      onClick={() => handleRetemplatize(t)}
+                      disabled={retemplatizingId === t.id}
+                      className="flex items-center gap-1 rounded-md border border-purple-200 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Run AI templatization to convert sample-client data into Handlebars variables"
+                    >
+                      {retemplatizingId === t.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      {retemplatizingId === t.id ? 'Templatizing…' : 'Retemplatize'}
+                    </button>
+                    <button
                       onClick={() => setEditingTemplateTags(t)}
                       className="flex items-center gap-1 rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
                     >
@@ -837,6 +897,17 @@ export default function KnowledgeBasePage() {
         template={editingTemplateTags}
         onSaved={() => { setEditingTemplateTags(null); fetchTemplates(); }}
       />
+
+      {/* Edit Template Content Dialog */}
+      {editingTemplateContent && (
+        <EditTemplateContentDialog
+          open
+          onClose={() => setEditingTemplateContent(null)}
+          firmId={firmId ?? ''}
+          template={editingTemplateContent}
+          onSaved={() => fetchTemplates()}
+        />
+      )}
     </div>
   );
 }

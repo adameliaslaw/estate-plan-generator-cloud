@@ -434,13 +434,44 @@ export const templateService = {
     });
     return res.data as { templateId: string; version: number };
   },
+
+  /**
+   * Update the Handlebars content of an existing template.
+   * Re-uses `uploadTemplate` with a templateId; the Cloud Function auto-extracts
+   * the variables list from the new content.
+   */
+  async updateTemplateContent(
+    firmId: string,
+    template: TemplateVariant,
+    content: string,
+  ): Promise<{ templateId: string; version: number }> {
+    const fn = httpsCallable(functions, 'uploadTemplate');
+    const res = await fn({
+      firmId,
+      templateId: template.id,
+      docType: template.docType,
+      name: template.name,
+      description: template.description,
+      variant: template.variant,
+      complexity: template.complexity,
+      isDefault: template.isDefault,
+      tags: template.tags,
+      softwareSource: template.softwareSource ?? '',
+      content,
+    });
+    return res.data as { templateId: string; version: number };
+  },
   /**
    * Re-templatize raw uploaded templates that have no Handlebars variables.
    * Runs AI templatization to replace literal sample client data with {{variables}}.
+   *
+   * Pass `templateId` to process a single template (used by the per-template
+   * "Retemplatize" button in the KB). Otherwise the Cloud Function processes
+   * up to `limit` raw templates from the firm's library.
    */
   async retemplatizeTemplates(
     firmId: string,
-    dryRun = false,
+    opts: { dryRun?: boolean; force?: boolean; templateId?: string } = {},
   ): Promise<{
     processed: number;
     total: number;
@@ -452,10 +483,11 @@ export const templateService = {
       variablesFound: number;
       status: 'success' | 'skipped' | 'error';
       error?: string;
+      fidelityScore?: number;
     }[];
   }> {
     const fn = httpsCallable(functions, 'retemplatizeTemplates', { timeout: 540000 });
-    const res = await fn({ firmId, dryRun });
+    const res = await fn({ firmId, ...opts });
     return res.data as {
       processed: number;
       total: number;
@@ -467,6 +499,7 @@ export const templateService = {
         variablesFound: number;
         status: 'success' | 'skipped' | 'error';
         error?: string;
+        fidelityScore?: number;
       }[];
     };
   },
