@@ -139,7 +139,12 @@ export function serializeClientData(
   const packageType = packageDetails.packageType ?? 'foundation';
 
   // ── Gender / pronouns ───────────────────────────────────────────────────
-  const isFemale = pi.gender === 'female' || (pi.gender == null && safe.isFemale === true);
+  // Normalize case + whitespace ("Female"/"FEMALE"/" female " all match).
+  const normalizedGender =
+    typeof pi.gender === 'string' ? pi.gender.trim().toLowerCase() : undefined;
+  const isFemale =
+    normalizedGender === 'female' ||
+    (normalizedGender == null && safe.isFemale === true);
   const pronouns = isFemale ? 'she/her/her' : 'he/him/his';
 
   // ── Build text sections ─────────────────────────────────────────────────

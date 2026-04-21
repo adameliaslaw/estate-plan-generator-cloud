@@ -624,10 +624,13 @@ export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
     distributionPlan: ctx.client.distributionPlan ?? '',
     burialPreference: ctx.client.burialPreference ?? '',
     burialDetails: ctx.client.burialDetails ?? '',
-    // Prefer explicit personalInfo.gender (canonical); fall back to legacy top-level isFemale
-    isFemale:
-      ctx.client.personalInfo?.gender === 'female' ||
-      (ctx.client.personalInfo?.gender == null && ctx.client.isFemale === true),
+    // Prefer explicit personalInfo.gender (canonical); fall back to legacy top-level isFemale.
+    // Case+whitespace-tolerant match.
+    isFemale: (() => {
+      const g = ctx.client.personalInfo?.gender;
+      const n = typeof g === 'string' ? g.trim().toLowerCase() : undefined;
+      return n === 'female' || (n == null && ctx.client.isFemale === true);
+    })(),
 
     // Computed
     ...ctx.computed,
@@ -914,7 +917,10 @@ async function substituteTemplateValues(
   // personalInfo.gender; fall back to the legacy top-level isFemale. If both
   // are unset, throw so the caller fixes the data rather than generating a
   // document with silently-wrong pronouns.
-  const gender = ctx.client.personalInfo?.gender as 'male' | 'female' | undefined;
+  // Normalize case + whitespace — "Female", " female ", "FEMALE" all match.
+  const rawGender = ctx.client.personalInfo?.gender;
+  const gender =
+    typeof rawGender === 'string' ? rawGender.trim().toLowerCase() : undefined;
   let isFemale: boolean;
   if (gender === 'female') isFemale = true;
   else if (gender === 'male') isFemale = false;

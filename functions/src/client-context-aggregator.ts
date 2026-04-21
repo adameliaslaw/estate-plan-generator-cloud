@@ -281,8 +281,14 @@ function computeFields(
 
   // -- Relationship titles --------------------------------------------------
   const isDomesticPartnership = pi.maritalStatus === 'Domestic Partnership';
-  // Prefer new explicit gender field; fall back to legacy isFemale boolean
-  const clientIsFemale = pi.gender === 'female' || (pi.gender == null && client.isFemale === true);
+  // Prefer new explicit gender field; fall back to legacy isFemale boolean.
+  // Normalize case + whitespace so "Female", " female ", "FEMALE" all match —
+  // the Firestore admin console is a common source of mis-cased string values.
+  const normalizedGender =
+    typeof pi.gender === 'string' ? pi.gender.trim().toLowerCase() : undefined;
+  const clientIsFemale =
+    normalizedGender === 'female' ||
+    (normalizedGender == null && client.isFemale === true);
 
   let spouseTitle: string;
   let clientTitle: string;
