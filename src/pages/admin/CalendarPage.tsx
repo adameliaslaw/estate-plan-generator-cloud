@@ -25,7 +25,7 @@ export default function CalendarPage() {
     const toastId = toast.loading('Syncing with Google Calendar...');
     try {
       const fns = getFunctions(app, 'us-east1');
-      const triggerFirmCalendarSync = httpsCallable(fns, 'triggerFirmCalendarSync');
+      const triggerFirmCalendarSync = httpsCallable(fns, 'triggerFirmCalendarSync', { timeout: 540_000 });
       const result = await triggerFirmCalendarSync();
       const updatedCount = (result.data as { eventsUpdated?: number })?.eventsUpdated || 0;
 

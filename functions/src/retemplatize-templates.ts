@@ -121,7 +121,7 @@ function stripFences(text: string): string {
 // ---------------------------------------------------------------------------
 
 export const retemplatizeTemplates = onCall(
-  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 540 },
+  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 1800 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -331,7 +331,11 @@ export const retemplatizeTemplates = onCall(
         });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[retemplatize] ${name}: Error — ${errMsg}`);
+        const cause = err instanceof Error && 'cause' in err ? (err as Error & { cause?: unknown }).cause : undefined;
+        const causeMsg = cause instanceof Error ? `${cause.name}: ${cause.message}` : cause ? String(cause) : 'none';
+        const stack = err instanceof Error ? err.stack : undefined;
+        console.error(`[retemplatize] ${name}: Error — ${errMsg} | cause: ${causeMsg}`);
+        if (stack) console.error(`[retemplatize] ${name}: Stack: ${stack}`);
         results.push({ templateId, docType, name, variablesFound: 0, status: 'error', error: errMsg });
       }
     }

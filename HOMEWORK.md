@@ -46,13 +46,12 @@ witness2Name:    "<witness #2 full name>"
 witness2Address: "<witness #2 full address>"
 ```
 
-**D. Audit template variable mappings.** The AI templatizer mapped the HC Directive's
-primary Health-Care Representative to `{{spouseTitle}} {{spouseFullName}}` (assumes HCR =
-spouse) and mapped the successor HCR's address to `{{fiduciaries.powerOfAttorney.agent.address}}`
-(wrong path). Use the Template Preview panel (built this session) against Karen's data to
-find all such mis-mappings across uploaded templates, then correct them via the KB edit UI.
-Expected variable names for HCR should be `{{fiduciaries.healthcareProxy.primary.name}}`,
-`.relationship`, `.address`, etc.
+**D. Audit template variable mappings.** Mostly resolved on 2026-04-23 — see the
+Completed block below for the POA/HC/pour-over/Will consolidation and fixes.
+Remaining: **Rizzo Living Trust** retemplatization produced poor output (0
+fiduciary paths, 80.5% structural fidelity, 81 HTML tags lost). Path forward is
+re-uploading the source DOCX and/or improving the templatize prompt for trust
+documents. Tracked in user's re-upload queue.
 
 ---
 
@@ -77,47 +76,46 @@ skipped — that's the opt-out mechanism.
 
 ---
 
-## 🔲 #4 — Google OAuth client: fix origins + rotate credentials
+## 🔲 #4 — Google Service-Account Key Rotation (still pending)
 
-Connecting Google Calendar from Settings → Integrations currently fails with
-`Error 400: redirect_uri_mismatch` for `adam@adameliaslaw.com`. Root cause:
-the OAuth client `749324460027-7f9s3sk22ckmp2r6u2v5u1o51nduck1v.apps.googleusercontent.com`
-(the same one flagged for rotation below) is missing the current app origin
-in its **Authorized JavaScript origins** list.
+The OAuth portion of #4 is done (see Completed 2026-04-23 session below). What
+remains is the GCP service-account key rotation:
 
-**Immediate unblock (add missing origins):**
-1. https://console.cloud.google.com/apis/credentials?project=estate-plan-generator
-2. Open the OAuth 2.0 Client ending in `…nduck1v`
-3. Under *Authorized JavaScript origins*, ensure all of these are present:
-   - `https://estate-plan-generator.web.app`
-   - `https://estate-plan-generator.firebaseapp.com`
-   - `http://localhost:5173` (only if running the dev server)
-4. Save and retry the Connect button (~1 min propagation).
-
-**Then rotate (ties into the credential rotation item below):**
-1. Create a **new** OAuth 2.0 Client ID (Web application) with the origins above set from the start.
-2. Update `.env` → `VITE_GOOGLE_CLIENT_ID=<new id>` and rebuild/redeploy hosting.
-3. Store the new secret in Functions secrets:
-   ```bash
-   firebase functions:secrets:set GOOGLE_CLIENT_ID
-   firebase functions:secrets:set GOOGLE_CLIENT_SECRET
-   ```
-4. Redeploy functions, verify Calendar + Drive connect flows, then delete the old client ID in GCP.
-
-Also note: `syncGoogleCalendar` scheduled function is logging `invalid_grant` every 5 minutes — the stored refresh token is revoked. Reconnecting once the origins are fixed will clear it.
+- **GCP service-account key** `c059f6a569611c0aa9f74fa93fe1d45707f36d21` for
+  `estate-plan-generator@appspot.gserviceaccount.com` — delete in GCP Console →
+  IAM & Admin → Service Accounts → Keys, then create a new key and store it
+  securely (not in git).
 
 ---
 
-## ✅ Credential rotation (still pending user action in GCP/Google consoles)
+## Completed (2026-04-23 session — OAuth rotation, template consolidation, calendar sync)
 
-These were handled in code (credentials removed from tracked files) but the credentials themselves must be revoked:
+**OAuth rotation (#4 closed):**
+- ✅ Created new Google OAuth 2.0 client (`…donln8vkprbol5uk7hhui19fbnc7ff7j`) with correct Authorized JavaScript origins from the start.
+- ✅ Updated `.env` → `VITE_GOOGLE_CLIENT_ID`; rotated Firebase `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` secrets (destroyed stale versions 1-4, kept v5).
+- ✅ Redeployed all 7 OAuth-dependent functions + hosting.
+- ✅ Deleted old `…nduck1v` OAuth client in GCP Console (leaked secret now dead).
+- ✅ Added `Cross-Origin-Opener-Policy: same-origin-allow-popups` to hosting headers in `firebase.json` so Google's OAuth popup can post back to the parent window.
+- ✅ Verified Calendar reconnection; `syncGoogleCalendar` no longer logs `invalid_grant`.
 
-- **GCP service-account key** `c059f6a569611c0aa9f74fa93fe1d45707f36d21` for `estate-plan-generator@appspot.gserviceaccount.com` — delete in GCP Console → IAM & Admin → Service Accounts → Keys, then create a new key and store it securely (not in git)
-- **Google OAuth credentials** — the `GOOGLE_CLIENT_ID` (`749324460027-7f9s3sk22ckmp2r6u2v5u1o51nduck1v.apps.googleusercontent.com`) and `GOOGLE_CLIENT_SECRET` (`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`) that were in `injectSecrets.cjs` — rotate both in Google Cloud Console → APIs & Services → Credentials, then run:
-  ```bash
-  firebase functions:secrets:set GOOGLE_CLIENT_ID
-  firebase functions:secrets:set GOOGLE_CLIENT_SECRET
-  ```
+**Template consolidation (#2D largely closed):**
+- ✅ **POA** — deleted redundant Sean Byrnes POA template (gender-twin of Jess's); kept Jessica Byrnes POA with `{{clientPronouns.*}}` helpers driving gender-neutrality. Fixed one hardcoded `his/her` → `{{clientPronouns.possessive}}`.
+- ✅ **HC Directive** — deleted Sean Byrnes HC template; fixed Jessica Byrnes HC Primary HCR paragraph (`{{spouseTitle}} {{spouseFullName}}` → `healthcareProxy.primary.*`) and First Level Successor paragraph (wrong POA path + shifted-up tier → `healthcareProxy.alternate.*`).
+- ✅ **Pour-Over Will** — deleted Vita Maria Rizzo template; fixed Vito Rizzo Initial Executor relationship (`{{spouseTitle}}` → `executor.primary.relationship`) and renamed Funeral Representative paragraph's duplicate "Appointment of Initial Executor" heading to "Appointment of Funeral Representative".
+- ✅ **Will (LW&T)** — deleted Sean Byrnes Will; rewrote Jessica Byrnes Will executor chain. IL's four-tier chain (Initial / 1st / 2nd / 3rd Successor) was mapped off-by-one to the app's three-tier data model (`primary` / `alternate` / `successor`) — every tier was one slot up, with Initial Executor hardcoded to spouse. Dropped the 4th-tier paragraph, shifted the rest down to their correct fiduciary paths.
+
+**Rizzo Living Trust (deferred):**
+- 🔲 Retemplatization attempted via the per-template button (shipped in `0ab7fa2`). Output quality low: 0 fiduciary paths (worse than before), 80.5% structural fidelity. Queued for user to re-upload the DOCX via KB admin UI.
+
+**Infra fixes shipped during the session:**
+- ✅ `functions/src/ai-client.ts` — added custom undici `Agent` (10-min headers+body timeouts) on top of Node's `fetch` so large AI prompts don't get killed by undici's default 300s headersTimeout. Installed `undici@6` as a direct dep to match Node 22's bundled major version. Was causing Rizzo trust retemplatize to fail at exactly 301s.
+- ✅ `functions/src/retemplatize-templates.ts` — bumped `timeoutSeconds` from 540 → 1800 so a 10-minute AI call doesn't surface as `deadline-exceeded` client-side; added `.cause` and stack-trace logging on caught errors.
+
+**Calendar sync bonus work (follow-on from OAuth verification):**
+- ✅ **Multi-calendar sync** — both `syncGoogleCalendar` (scheduled, every 5 min) and `triggerFirmCalendarSync` (Sync Now button) now enumerate all calendars via `calendarList.list?minAccessRole=reader` and sync every calendar the user has toggled on (`selected: true`) in Google Calendar's sidebar. Previously hardcoded to `primary`. No app-side UI needed — Google's own selection flag is the source of truth. Each Firestore event now carries `calendarId` + `calendarSummary` tags.
+- ✅ **All-day event timezone fix** — Google returns all-day events as a bare date string (`2026-04-27`); `new Date()` parses these as UTC midnight, which shifts them to 8pm Eastern the previous day. Added `parseGoogleCalendarDate()` helper that anchors all-day events at noon UTC, putting them on the correct calendar date in every US timezone.
+- ✅ **Orphan cleanup** — one-off script deleted 78 stale Firestore events that pre-dated the 2-year force-sync window and no longer exist in Google Calendar.
+- ✅ **Client-side sync timeout** — `httpsCallable` has a 70-second client default that doesn't scale with the function's own timeout; bumped to 540s on the Sync Now button. Fix shipped after users saw `deadline-exceeded` on multi-calendar pulls that actually completed server-side in ~80s.
 
 ---
 

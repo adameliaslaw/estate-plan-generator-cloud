@@ -10,6 +10,17 @@
  */
 
 import OpenAI from 'openai';
+import { Agent } from 'undici';
+
+// Custom dispatcher with extended timeouts for long-running AI calls.
+// Node's default fetch (undici) has a 300s headersTimeout, which kills large
+// requests like 70k+ char templatizations before Anthropic finishes streaming
+// the response. 10 minutes gives plenty of headroom while still protecting
+// against truly hung requests.
+const LONG_REQUEST_AGENT = new Agent({
+  headersTimeout: 10 * 60 * 1000,
+  bodyTimeout: 10 * 60 * 1000,
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -209,7 +220,7 @@ export async function callAI(
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   let attempt = 0;
   while (true) {
-    const response = await fetch(url, options);
+    const response = await fetch(url, { ...options, dispatcher: LONG_REQUEST_AGENT } as unknown as RequestInit);
     if (!response.ok && response.status === 429 && attempt < maxRetries) {
       const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
       console.warn(`[callAI] Rate limited (429). Retrying in ${Math.round(waitTime)}ms...`);

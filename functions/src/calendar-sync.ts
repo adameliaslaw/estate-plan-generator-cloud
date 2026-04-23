@@ -112,6 +112,63 @@ interface GoogleCalendarEventsListResponse {
   items?: GoogleCalendarEvent[];
 }
 
+/**
+ * Parse a Google Calendar start/end value into a Date.
+ * - Timed events come as `dateTime` ISO strings with offset — parse directly.
+ * - All-day events come as `date` strings like "2026-04-27" with no time. If we
+ *   parse those with `new Date()`, JS treats them as UTC midnight, which shifts
+ *   to 8pm the previous day in US Eastern, causing every all-day event to
+ *   appear one day early on the Firm Calendar view. Anchoring all-day events
+ *   at noon UTC puts them on the correct calendar date in every US timezone.
+ */
+function parseGoogleCalendarDate(
+  dateTime: string | undefined,
+  dateOnly: string | undefined,
+): Date | null {
+  if (dateTime) return new Date(dateTime);
+  if (dateOnly) return new Date(`${dateOnly}T12:00:00Z`);
+  return null;
+}
+
+/** Shape of one entry in the Google Calendar CalendarList.list response. */
+interface GoogleCalendarListEntry {
+  id: string;
+  summary?: string;
+  primary?: boolean;
+  selected?: boolean;
+  accessRole?: string;
+  backgroundColor?: string;
+}
+
+interface GoogleCalendarListResponse {
+  items?: GoogleCalendarListEntry[];
+}
+
+/**
+ * Enumerate every calendar the authenticated user can see and return the ones
+ * they have toggled on (`selected: true`) in Google's own Calendar UI. Primary
+ * calendar is always included as a safety net even if Google omits the
+ * `selected` flag on it. Read-only staff/shared calendars count as long as the
+ * user has turned them on in Google.
+ */
+async function listSyncableCalendars(accessToken: string): Promise<GoogleCalendarListEntry[]> {
+  const response = await fetch(
+    'https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=250',
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!response.ok) {
+    console.error(`[listSyncableCalendars] API error: ${response.status} ${await response.text()}`);
+    return [{ id: 'primary', summary: 'Primary (fallback — calendarList fetch failed)' }];
+  }
+  const data = await response.json() as GoogleCalendarListResponse;
+  const all = data.items ?? [];
+  const chosen = all.filter(c => c.selected || c.primary);
+  if (chosen.length === 0) {
+    return [{ id: 'primary', summary: 'Primary (fallback — none selected)' }];
+  }
+  return chosen;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -628,13 +685,8 @@ export const pullGoogleCalendarEvents = functions
         .collection('calendarEvents')
         .doc(); // auto-ID
 
-      const startDateTime =
-        gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
-      const endDateTime =
-        gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
-
-      const startDate = startDateTime ? new Date(startDateTime) : new Date();
-      const endDate = endDateTime ? new Date(endDateTime) : new Date();
+      const startDate = parseGoogleCalendarDate(gcalEvent.start?.dateTime, gcalEvent.start?.date) ?? new Date();
+      const endDate = parseGoogleCalendarDate(gcalEvent.end?.dateTime, gcalEvent.end?.date) ?? new Date();
 
       const newEventDoc: Record<string, unknown> = {
         id: newRef.id,
@@ -719,6 +771,13 @@ export const syncGoogleCalendar = onSchedule(
         const lastSync = (data.googleCalendarLastSyncAt as admin.firestore.Timestamp)?.toDate?.()?.toISOString()
           ?? new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
+        const calendars = await listSyncableCalendars(accessToken);
+        console.log(`[syncGoogleCalendar] firm=${firmId} syncing ${calendars.length} calendar(s): ${calendars.map(c => c.summary ?? c.id).join(', ')}`);
+
+        for (const cal of calendars) {
+        const calendarId = cal.id;
+        const calendarSummary = cal.summary ?? cal.id;
+
         // Fetch events updated since last sync (with pagination support)
         let pageToken: string | undefined = undefined;
         let totalItemsProcessed = 0;
@@ -735,7 +794,7 @@ export const syncGoogleCalendar = onSchedule(
           }
 
           const response = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
             { headers: { Authorization: `Bearer ${accessToken}` } },
           );
 
@@ -766,14 +825,16 @@ export const syncGoogleCalendar = onSchedule(
                 if (gcalEvent.status === 'cancelled') {
                   batch.delete(docRef);
                 } else {
-                  const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
-                  const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
+                  const startDate = parseGoogleCalendarDate(gcalEvent.start?.dateTime, gcalEvent.start?.date);
+                  const endDate = parseGoogleCalendarDate(gcalEvent.end?.dateTime, gcalEvent.end?.date);
                   batch.update(docRef, {
                     title: gcalEvent.summary ?? '(No Title)',
                     description: gcalEvent.description ?? '',
                     location: gcalEvent.location ?? '',
-                    startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
-                    endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
+                    startAt: startDate ? admin.firestore.Timestamp.fromDate(startDate) : now,
+                    endAt: endDate ? admin.firestore.Timestamp.fromDate(endDate) : now,
+                    calendarId,
+                    calendarSummary,
                     updatedAt: now,
                     googleCalendarSyncedAt: now,
                   });
@@ -781,16 +842,18 @@ export const syncGoogleCalendar = onSchedule(
               } else if (gcalEvent.status !== 'cancelled') {
                 // INSERT new
                 const newRef = db.collection('firms').doc(firmId).collection('calendarEvents').doc();
-                const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
-                const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
+                const startDate = parseGoogleCalendarDate(gcalEvent.start?.dateTime, gcalEvent.start?.date);
+                const endDate = parseGoogleCalendarDate(gcalEvent.end?.dateTime, gcalEvent.end?.date);
                 batch.set(newRef, {
                   id: newRef.id,
                   firmId,
                   title: gcalEvent.summary ?? '(No Title)',
                   description: gcalEvent.description ?? '',
                   location: gcalEvent.location ?? '',
-                  startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
-                  endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
+                  startAt: startDate ? admin.firestore.Timestamp.fromDate(startDate) : now,
+                  endAt: endDate ? admin.firestore.Timestamp.fromDate(endDate) : now,
+                  calendarId,
+                  calendarSummary,
                   googleCalendarEventId: gcalEvent.id,
                   googleCalendarHtmlLink: gcalEvent.htmlLink ?? '',
                   googleCalendarSyncedAt: now,
@@ -820,8 +883,10 @@ export const syncGoogleCalendar = onSchedule(
         } while (pageToken);
 
         eventsUpdated += totalItemsProcessed;
+        console.log(`[syncGoogleCalendar] firm=${firmId} calendar="${calendarSummary}" processed=${totalItemsProcessed}`);
+        }  // end for (cal of calendars)
 
-        // Update last sync watermark
+        // Update last sync watermark (shared across all calendars for this firm)
         await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
         firmsProcessed++;
       } catch (err) {
@@ -893,101 +958,117 @@ export const triggerFirmCalendarSync = functions
       futureSyncDate.setFullYear(futureSyncDate.getFullYear() + 1);
       const futureSyncIso = futureSyncDate.toISOString();
 
-      let pageToken: string | undefined = undefined;
-      let totalItemsProcessed = 0;
+      const calendars = await listSyncableCalendars(accessToken);
+      console.log(`[triggerFirmCalendarSync] firm=${firmId} syncing ${calendars.length} calendar(s): ${calendars.map(c => c.summary ?? c.id).join(', ')}`);
 
-      do {
-        const params = new URLSearchParams({
-          timeMin: forceSyncIso,
-          timeMax: futureSyncIso,
-          showDeleted: 'true',
-          singleEvents: 'true',
-          maxResults: '250',
-        });
-        if (pageToken) {
-          params.append('pageToken', pageToken);
-        }
+      for (const cal of calendars) {
+        const calendarId = cal.id;
+        const calendarSummary = cal.summary ?? cal.id;
+        let pageToken: string | undefined = undefined;
+        let totalItemsProcessed = 0;
 
-        const response = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
+        do {
+          const params = new URLSearchParams({
+            timeMin: forceSyncIso,
+            timeMax: futureSyncIso,
+            showDeleted: 'true',
+            singleEvents: 'true',
+            maxResults: '250',
+          });
+          if (pageToken) {
+            params.append('pageToken', pageToken);
+          }
 
-        if (!response.ok) {
-          throw new functions.https.HttpsError('internal', `Google API error: ${response.status} ${await response.text()}`);
-        }
+          const response = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          );
 
-        const listData = await response.json() as GoogleCalendarEventsListResponse;
-        const items = listData.items ?? [];
-        pageToken = listData.nextPageToken;
+          if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[triggerFirmCalendarSync] calendar=${calendarSummary} API error: ${response.status} ${errText}`);
+            // Skip this calendar and continue with the rest rather than failing the whole sync
+            break;
+          }
 
-        if (items.length > 0) {
-          let batch = db.batch();
-          let operationsCount = 0;
+          const listData = await response.json() as GoogleCalendarEventsListResponse;
+          const items = listData.items ?? [];
+          pageToken = listData.nextPageToken;
 
-          for (const gcalEvent of items) {
-            if (!gcalEvent.id) continue;
+          if (items.length > 0) {
+            let batch = db.batch();
+            let operationsCount = 0;
 
-            const eventQuery = await db.collection('firms').doc(firmId).collection('calendarEvents')
-              .where('googleCalendarEventId', '==', gcalEvent.id).limit(1).get();
+            for (const gcalEvent of items) {
+              if (!gcalEvent.id) continue;
 
-            if (!eventQuery.empty) {
-              const docRef = eventQuery.docs[0].ref;
-              if (gcalEvent.status === 'cancelled') {
-                batch.delete(docRef);
-              } else {
-                const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
-                const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
-                batch.update(docRef, {
+              const eventQuery = await db.collection('firms').doc(firmId).collection('calendarEvents')
+                .where('googleCalendarEventId', '==', gcalEvent.id).limit(1).get();
+
+              if (!eventQuery.empty) {
+                const docRef = eventQuery.docs[0].ref;
+                if (gcalEvent.status === 'cancelled') {
+                  batch.delete(docRef);
+                } else {
+                  const startDate = parseGoogleCalendarDate(gcalEvent.start?.dateTime, gcalEvent.start?.date);
+                  const endDate = parseGoogleCalendarDate(gcalEvent.end?.dateTime, gcalEvent.end?.date);
+                  batch.update(docRef, {
+                    title: gcalEvent.summary ?? '(No Title)',
+                    description: gcalEvent.description ?? '',
+                    location: gcalEvent.location ?? '',
+                    startAt: startDate ? admin.firestore.Timestamp.fromDate(startDate) : now,
+                    endAt: endDate ? admin.firestore.Timestamp.fromDate(endDate) : now,
+                    calendarId,
+                    calendarSummary,
+                    updatedAt: now,
+                    googleCalendarSyncedAt: now,
+                  });
+                }
+              } else if (gcalEvent.status !== 'cancelled') {
+                const newRef = db.collection('firms').doc(firmId).collection('calendarEvents').doc();
+                const startDate = parseGoogleCalendarDate(gcalEvent.start?.dateTime, gcalEvent.start?.date);
+                const endDate = parseGoogleCalendarDate(gcalEvent.end?.dateTime, gcalEvent.end?.date);
+                batch.set(newRef, {
+                  id: newRef.id,
+                  firmId,
                   title: gcalEvent.summary ?? '(No Title)',
                   description: gcalEvent.description ?? '',
                   location: gcalEvent.location ?? '',
-                  startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
-                  endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
-                  updatedAt: now,
+                  startAt: startDate ? admin.firestore.Timestamp.fromDate(startDate) : now,
+                  endAt: endDate ? admin.firestore.Timestamp.fromDate(endDate) : now,
+                  calendarId,
+                  calendarSummary,
+                  googleCalendarEventId: gcalEvent.id,
+                  googleCalendarHtmlLink: gcalEvent.htmlLink ?? '',
                   googleCalendarSyncedAt: now,
+                  createdAt: now,
+                  updatedAt: now,
+                  source: 'google_calendar_auto_sync'
                 });
               }
-            } else if (gcalEvent.status !== 'cancelled') {
-              const newRef = db.collection('firms').doc(firmId).collection('calendarEvents').doc();
-              const startDateTime = gcalEvent.start?.dateTime ?? gcalEvent.start?.date;
-              const endDateTime = gcalEvent.end?.dateTime ?? gcalEvent.end?.date;
-              batch.set(newRef, {
-                id: newRef.id,
-                firmId,
-                title: gcalEvent.summary ?? '(No Title)',
-                description: gcalEvent.description ?? '',
-                location: gcalEvent.location ?? '',
-                startAt: startDateTime ? admin.firestore.Timestamp.fromDate(new Date(startDateTime)) : now,
-                endAt: endDateTime ? admin.firestore.Timestamp.fromDate(new Date(endDateTime)) : now,
-                googleCalendarEventId: gcalEvent.id,
-                googleCalendarHtmlLink: gcalEvent.htmlLink ?? '',
-                googleCalendarSyncedAt: now,
-                createdAt: now,
-                updatedAt: now,
-                source: 'google_calendar_auto_sync'
-              });
+
+              operationsCount++;
+
+              if (operationsCount === 450) {
+                await batch.commit();
+                batch = db.batch();
+                operationsCount = 0;
+              }
             }
 
-            operationsCount++;
-
-            if (operationsCount === 450) {
+            if (operationsCount > 0) {
               await batch.commit();
-              batch = db.batch();
-              operationsCount = 0;
             }
           }
 
-          if (operationsCount > 0) {
-            await batch.commit();
-          }
-        }
+          totalItemsProcessed += items.length;
 
-        totalItemsProcessed += items.length;
+        } while (pageToken);
 
-      } while (pageToken);
+        eventsUpdated += totalItemsProcessed;
+        console.log(`[triggerFirmCalendarSync] firm=${firmId} calendar="${calendarSummary}" processed=${totalItemsProcessed}`);
+      }
 
-      eventsUpdated += totalItemsProcessed;
       await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
 
     } catch (err) {
