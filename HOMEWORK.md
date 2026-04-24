@@ -47,6 +47,46 @@ skipped — that's the opt-out mechanism.
 
 ---
 
+## 🔲 #5 — Questionnaire: collect fiduciary addresses
+
+Surfaced 2026-04-24 during the LawPay investigation. The print-view
+fiduciary blocks already have address fields, but the questionnaire itself
+does not capture them on intake. Add address (line / city / state / zip)
+to the fiduciary steps so the data flows into trustee / executor / POA /
+healthcare proxy / guardian blocks without manual Firestore editing.
+
+---
+
+## ✅ LawPay / Charge-dialog fixes (closed 2026-04-24)
+
+Full chain of fixes shipped while debugging Diana Doran's failed
+2026-04-16 $750 charge and Karen Elias's $1 test charge.
+
+- ✅ **Server-side** (`processDirectCharge`): pulls `personalInfo.{zip,
+  address, city, state}` from the client doc and includes them in the
+  `POST /v1/charges` body. Fails loud with a clear error if zip is
+  missing on the client record.
+- ✅ **CSP**: added `https://*.8am.com` to `script-src` and `frame-src`
+  in `firebase.json`. AffiniPay rebranded to 8am.com and the new iframe
+  domains were being silently blocked.
+- ✅ **Dialog scroll containment**: added `max-h-[90vh] overflow-y-auto`
+  to `DialogContent` so the dialog owns its scrollbar — Hosted-Field
+  iframes can no longer scroll the page away from the Charge/Cancel
+  buttons.
+- ✅ **Hosted Fields readiness**: AffiniPay SDK wasn't flipping the
+  aggregate `state.isReady` flag; the "Loading secure payment form…"
+  spinner would hang forever. Readiness now falls back to per-field
+  mount state (any field present with no error → ready).
+- ✅ **Billing ZIP input**: AffiniPay requires `postal_code` at
+  *tokenization* time, not just on the charge request. Added a Billing
+  ZIP input below CVV in the Charge dialog, pre-filled from
+  `personalInfo.zip`, passed as `postal_code` in the `getPaymentToken`
+  formData. AVS now passes.
+
+Verified end-to-end with a $1 charge on Karen Elias.
+
+---
+
 ## ✅ #4 — Google Service-Account Key Rotation (closed 2026-04-24)
 
 - Original flagged key `c059f6a5…` on `estate-plan-generator@appspot…` was
