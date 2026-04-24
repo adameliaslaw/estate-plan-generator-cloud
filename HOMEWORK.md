@@ -18,40 +18,19 @@ When InteractiveLegal (or another software source) provides templates for these 
 
 ## 🔲 #2 — Data & settings fixes from template-fidelity investigation
 
-Four small data-side actions, all from the April 2026 POA + HC Directive test-generation
-that revealed substitution drift. Code-side fixes shipped in the same session; these are
-the remaining human-touch items.
+Original four sub-items (A gender, B state, C firm fields, D Rizzo). A/B/C closed
+2026-04-24; only D remains.
 
-**A. Set gender on existing clients.** Generation now fails loud if `personalInfo.gender`
-is unset (no more silent male-default). Open Karen Elias (and any other pre-existing
-client) in Clients → Edit Questionnaire → About You → gender step, pick Male/Female, save.
-Newly-intaked clients are fine — the step is already in the questionnaire.
-
-**B. Fix missing state on existing clients.** AddressField now auto-persists `NJ` on any
-address edit, but existing records with empty `personalInfo.state` need the fix. Either:
-  - Open the client → Edit Questionnaire → re-save the address step (triggers the fix), or
-  - Edit Firestore directly: set `personalInfo.state: "NJ"` on any client whose address
-    lacks one.
-
-**C. Populate firm-doc fields that templates reference.** The HC Directive test rendered
-blank witness names, blank witness addresses, and a nameless attorney signature because
-these fields don't exist on the firm doc. Add them in Firestore:
-
-```
-// firms/elias-counsel
-attorneyName:    "Adam J. Elias, Esq."
-witness1Name:    "<witness #1 full name>"
-witness1Address: "<witness #1 full address>"
-witness2Name:    "<witness #2 full name>"
-witness2Address: "<witness #2 full address>"
-```
-
-**D. Audit template variable mappings.** Mostly resolved on 2026-04-23 — see the
-Completed block below for the POA/HC/pour-over/Will consolidation and fixes.
-Remaining: **Rizzo Living Trust** retemplatization produced poor output (0
-fiduciary paths, 80.5% structural fidelity, 81 HTML tags lost). Path forward is
-re-uploading the source DOCX and/or improving the templatize prompt for trust
-documents. Tracked in user's re-upload queue.
+- ✅ **A — gender:** set on 22 real clients. 3 junk/test accounts
+  (`Xidm…`, `CRMelendez`, `AdminAdmin UserUser`) left unset intentionally.
+- ✅ **B — state:** batch-set `personalInfo.state = "NJ"` on 18 clients that
+  were missing it.
+- ✅ **C — firm fields:** verified populated on `firms/elias-counsel`
+  (`attorneyName`, `witness1Name`/`Address`, `witness2Name`/`Address`).
+- 🔲 **D — Rizzo Living Trust re-upload.** Retemplatization produced poor
+  output (0 fiduciary paths, 80.5% structural fidelity, 81 HTML tags lost).
+  Re-upload the source DOCX via KB admin UI and/or improve the templatize
+  prompt for trust documents. Tracked in user's re-upload queue.
 
 ---
 
