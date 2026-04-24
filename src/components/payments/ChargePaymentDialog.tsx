@@ -219,6 +219,9 @@ export function ChargePaymentDialog({
   const [accountType, setAccountType] = useState<'checking' | 'savings'>('checking');
   const [accountHolderType, setAccountHolderType] = useState<'individual' | 'business'>('individual');
   const [accountHolderName, setAccountHolderName] = useState('');
+  // Billing ZIP — required by LawPay AVS on card charges. Pre-fills from the
+  // client's personalInfo.zip but the user can override to match the card.
+  const [billingZip, setBillingZip] = useState('');
 
   // SDK / processing state
   const [sdkReady, setSdkReady] = useState(false);
@@ -240,6 +243,14 @@ export function ChargePaymentDialog({
     (selectedClient
       ? `${selectedClient.personalInfo?.firstName ?? ''} ${selectedClient.personalInfo?.lastName ?? ''}`.trim()
       : '');
+  const defaultZip = selectedClient?.personalInfo?.zip ?? '';
+
+  // Pre-fill the billing ZIP whenever the selected client changes (and the
+  // user hasn't manually edited it yet).
+  useEffect(() => {
+    if (defaultZip && !billingZip) setBillingZip(defaultZip);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultZip]);
 
   // ── Initialize Hosted Fields SDK ──────────────────────────────────────
 
@@ -352,6 +363,7 @@ export function ChargePaymentDialog({
     setAccountType('checking');
     setAccountHolderType('individual');
     setAccountHolderName('');
+    setBillingZip('');
     initAttempted.current = false;
     hostedFieldsRef.current = null;
     onClose();
@@ -394,8 +406,14 @@ export function ChargePaymentDialog({
           setProcessing(false);
           return;
         }
+        if (!billingZip.trim()) {
+          toast.error('Please enter the billing ZIP code for the card.');
+          setProcessing(false);
+          return;
+        }
         formData.exp_month = expMonth;
         formData.exp_year = expYear;
+        formData.postal_code = billingZip.trim();
       } else {
         // eCheck requires account_type and account_holder_type
         formData.account_type = accountType;
@@ -467,6 +485,7 @@ export function ChargePaymentDialog({
     accountType,
     accountHolderType,
     accountHolderName,
+    billingZip,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -683,6 +702,18 @@ export function ChargePaymentDialog({
                       className="hosted-field-container h-10 relative overflow-hidden rounded-md border border-gray-300 bg-white"
                     />
                   </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Billing ZIP</Label>
+                  <Input
+                    id="af-billing-zip"
+                    type="text"
+                    maxLength={10}
+                    placeholder="e.g. 08831"
+                    value={billingZip}
+                    onChange={(e) => setBillingZip(e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                    className="h-10"
+                  />
                 </div>
               </>
             ) : (
