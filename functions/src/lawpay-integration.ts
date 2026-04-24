@@ -773,15 +773,32 @@ export const processDirectCharge = functions
     const reference = `${firmId}::${clientId}::${paymentDocRef.id}`;
     const now = admin.firestore.FieldValue.serverTimestamp();
 
+    // Pull client address for AVS — LawPay rejects card charges without postal_code.
+    const clientSnap = await db.doc(`firms/${firmId}/clients/${clientId}`).get();
+    const pi = ((clientSnap.data() || {}).personalInfo || {}) as {
+      zip?: string; address?: string; city?: string; state?: string;
+    };
+    const postalCode = (pi.zip || '').trim();
+    if (!postalCode) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Client has no zip code on file. Open their questionnaire → About You → Address and save before charging.',
+      );
+    }
+
     try {
-      const chargeBody = {
+      const chargeBody: Record<string, unknown> = {
         amount,
         method: paymentToken.trim(),
         account_id: accountId,
         reference,
         description: description.trim(),
         auto_capture: true,
+        postal_code: postalCode,
       };
+      if (pi.address) chargeBody.address1 = pi.address.trim();
+      if (pi.city)    chargeBody.city = pi.city.trim();
+      if (pi.state)   chargeBody.state = pi.state.trim();
 
       console.log(`[processDirectCharge] Calling POST /v1/charges — account_id=${accountId}`);
 
