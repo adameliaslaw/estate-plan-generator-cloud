@@ -76,15 +76,16 @@ skipped — that's the opt-out mechanism.
 
 ---
 
-## 🔲 #4 — Google Service-Account Key Rotation (still pending)
+## ✅ #4 — Google Service-Account Key Rotation (closed 2026-04-24)
 
-The OAuth portion of #4 is done (see Completed 2026-04-23 session below). What
-remains is the GCP service-account key rotation:
-
-- **GCP service-account key** `c059f6a569611c0aa9f74fa93fe1d45707f36d21` for
-  `estate-plan-generator@appspot.gserviceaccount.com` — delete in GCP Console →
-  IAM & Admin → Service Accounts → Keys, then create a new key and store it
-  securely (not in git).
+- Original flagged key `c059f6a5…` on `estate-plan-generator@appspot…` was
+  already deleted by the time we checked.
+- Audited both service accounts and deleted 4 stale user-managed keys on
+  `firebase-adminsdk-fbsvc@…` (`6d07c0b6…`, `a185883e…`, `4cfe1976…`) and
+  1 on `appspot` (`dc05f6c6…`). The in-use key `bdb5f41…` (local
+  `service-account.json`) was left in place.
+- Remaining user-managed key on `firebase-adminsdk-fbsvc@…`: `bdb5f41…`
+  (working key). Remaining auto-rotating Google-managed keys untouched.
 
 ---
 
