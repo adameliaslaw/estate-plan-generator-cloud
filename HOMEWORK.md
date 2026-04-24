@@ -55,21 +55,13 @@ documents. Tracked in user's re-upload queue.
 
 ---
 
-## 🔲 #3 — Enable Cloud Scheduler + Pub/Sub APIs for weekly digest
+## ✅ #3 — Weekly digest infrastructure (closed 2026-04-24)
 
-The new `sendWeeklyDigest` function (Monday 8am ET) will deploy successfully
-but will not fire until both APIs are enabled in GCP.
-
-1. https://console.cloud.google.com/apis/library/cloudscheduler.googleapis.com?project=estate-plan-generator — click Enable
-2. https://console.cloud.google.com/apis/library/pubsub.googleapis.com?project=estate-plan-generator — click Enable
-3. Redeploy functions so Cloud Scheduler picks up the new schedule.
-
-Also seed at least one recipient so the digest actually sends:
-
-```
-// Edit firms/elias-counsel in Firestore console
-weeklyDigestRecipients: ['adam@adameliaslaw.com']
-```
+- Cloud Scheduler + Pub/Sub APIs verified enabled.
+- Scheduler job `firebase-schedule-sendWeeklyDigest-us-east1` is ENABLED
+  (`0 8 * * 1` America/New_York). First fire: Mon 2026-04-27 at 8am ET.
+- Seeded `firms/elias-counsel.weeklyDigestRecipients` with
+  `['adam@adameliaslaw.com', 'lori@adameliaslaw.com']`.
 
 Firms with an empty or missing `weeklyDigestRecipients` array are silently
 skipped — that's the opt-out mechanism.
