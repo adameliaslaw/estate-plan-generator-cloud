@@ -521,7 +521,7 @@ export function ChargePaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-[#1a365d]">Charge Payment</DialogTitle>
           <DialogDescription>
