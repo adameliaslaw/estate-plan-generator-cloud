@@ -290,10 +290,18 @@ export function ChargePaymentDialog({
         throw new Error('AffiniPay SDK loaded but HostedFields not available');
       }
 
+      const expectedFieldCount = paymentType === 'card' ? 2 : 2;
       hostedFieldsRef.current =
         af.HostedFields.initializeFields(config, (state) => {
           console.log('[ChargePaymentDialog] Hosted Fields state:', state);
-          if (state.isReady) {
+          // Some SDK builds never flip the top-level `isReady` flag — trust the
+          // per-field state as a fallback: if every expected iframe has mounted
+          // (present in state.fields with no error), the form is usable.
+          const allFieldsMounted =
+            Array.isArray(state.fields) &&
+            state.fields.length >= expectedFieldCount &&
+            state.fields.every((f) => !f.error);
+          if (state.isReady || allFieldsMounted) {
             setSdkReady(true);
           }
         });
