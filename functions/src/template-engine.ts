@@ -69,6 +69,12 @@ export interface DocumentTemplate {
 
 export type GenerationMode = 'template' | 'ai' | 'hybrid' | 'high-fidelity';
 
+type TemplateCandidate = {
+  id: string;
+  data: FirebaseFirestore.DocumentData;
+  source: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates';
+};
+
 export interface ValidationResult {
   valid: boolean;
   missing: Array<{ variable: string; label: string; section: string }>;
@@ -389,6 +395,154 @@ function ensureHelpers() {
 // Template fetching
 // ---------------------------------------------------------------------------
 
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string')
+    : [];
+}
+
+function hasHandlebarsSyntax(content: string): boolean {
+  return /\{\{[#/]?[^}]+\}\}/.test(content);
+}
+
+function isRawTemplateContent(template: DocumentTemplate): boolean {
+  return normalizeStringArray(template.variables).length === 0
+    && !hasHandlebarsSyntax(template.content);
+}
+
+function getTemplateContentField(data: FirebaseFirestore.DocumentData): string {
+  const candidates = [
+    data.content,
+    data.editorContent,
+    data.htmlContent,
+    data.rawContent,
+    data.extractedHtml,
+  ];
+  const content = candidates.find((candidate) =>
+    typeof candidate === 'string' && candidate.trim(),
+  );
+  return typeof content === 'string' ? content : '';
+}
+
+function adaptCandidateToTemplate(
+  candidate: TemplateCandidate,
+  firmId: string,
+  docType: string,
+): FirebaseFirestore.DocumentData | undefined {
+  const content = getTemplateContentField(candidate.data);
+  if (!content.trim()) return undefined;
+
+  if (candidate.source === 'documentTemplates') {
+    return {
+      ...candidate.data,
+      id: candidate.data.id ?? candidate.id,
+      firmId: candidate.data.firmId ?? firmId,
+      content,
+    };
+  }
+
+  const tags = normalizeStringArray(candidate.data.tags);
+  const docTypes = normalizeStringArray(candidate.data.docTypes);
+  const name = candidate.data.name ?? candidate.data.title ?? candidate.id;
+
+  return {
+    id: candidate.data.id ?? candidate.id,
+    firmId,
+    docType: candidate.data.docType ?? docTypes[0] ?? docType,
+    name,
+    description: candidate.data.description ?? candidate.data.summary ?? '',
+    variant: candidate.data.variant ?? 'knowledge-base',
+    complexity: candidate.data.complexity ?? 2,
+    version: candidate.data.version ?? 1,
+    content,
+    isDefault: candidate.data.isDefault ?? false,
+    isActive: candidate.data.isActive ?? true,
+    variables: normalizeStringArray(candidate.data.variables),
+    tags,
+    softwareSource: candidate.data.softwareSource ?? candidate.data.source ?? '',
+    folder: candidate.source === 'knowledgeBase' ? 'Knowledge Base' : candidate.data.folder ?? '',
+    createdAt: candidate.data.createdAt ?? admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: candidate.data.updatedAt ?? admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: candidate.data.createdBy ?? 'system',
+    updatedBy: candidate.data.updatedBy ?? 'system',
+    _sourceCollection: candidate.source,
+  };
+}
+
+function scoreTemplateCandidate(
+  candidate: TemplateCandidate,
+  opts: { softwareSource?: string; variant?: string; preferDefault?: boolean },
+): number {
+  const data = candidate.data;
+  let score = 0;
+
+  if (candidate.source === 'documentTemplates') score += 30;
+  if (candidate.source === 'knowledgeBase') score += 20;
+  if (candidate.source === 'legacyTemplates') score += 10;
+
+  if (data.isDefault === true) score += opts.preferDefault ? 100 : 25;
+  if (opts.softwareSource && (data.softwareSource === opts.softwareSource || data.source === opts.softwareSource)) score += 80;
+  if (opts.variant && data.variant === opts.variant) score += 60;
+
+  const content = getTemplateContentField(data);
+  if (hasHandlebarsSyntax(content)) score += 15;
+  if (normalizeStringArray(data.variables).length > 0) score += 10;
+  if (content.length > 1000) score += 5;
+
+  return score;
+}
+
+function pickBestTemplateCandidate(
+  candidates: TemplateCandidate[],
+  opts: { softwareSource?: string; variant?: string; preferDefault?: boolean } = {},
+): TemplateCandidate | undefined {
+  return candidates
+    .map((candidate) => ({
+      candidate,
+      score: scoreTemplateCandidate(candidate, opts),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.candidate;
+}
+
+async function fetchKnowledgeBaseTemplateCandidates(
+  firmId: string,
+  docType: string,
+): Promise<TemplateCandidate[]> {
+  const db = admin.firestore();
+  const snap = await db
+    .collection('firms').doc(firmId).collection('knowledgeBase')
+    .where('category', '==', 'form_template')
+    .limit(100)
+    .get();
+
+  return snap.docs
+    .map((doc) => ({ id: doc.id, data: doc.data(), source: 'knowledgeBase' as const }))
+    .filter((candidate) => {
+      const data = candidate.data;
+      const docTypes = normalizeStringArray(data.docTypes);
+      return data.isActive !== false && (docTypes.length === 0 || docTypes.includes(docType));
+    });
+}
+
+async function fetchLegacyTemplateCandidates(
+  firmId: string,
+  docType: string,
+): Promise<TemplateCandidate[]> {
+  const db = admin.firestore();
+  const snap = await db
+    .collection('firms').doc(firmId).collection('templates')
+    .limit(100)
+    .get();
+
+  return snap.docs
+    .map((doc) => ({ id: doc.id, data: doc.data(), source: 'legacyTemplates' as const }))
+    .filter((candidate) => {
+      const data = candidate.data;
+      const docTypes = normalizeStringArray(data.docTypes);
+      return data.isActive !== false && (data.docType === docType || docTypes.includes(docType));
+    });
+}
+
 /**
  * Fetch a template from Firestore by docType, optionally by specific templateId, variant,
  * or softwareSource. When softwareSource is provided but no match is found, falls back
@@ -405,12 +559,14 @@ export async function getTemplate(
   const col = db.collection('firms').doc(firmId).collection('documentTemplates');
 
   let rawData: FirebaseFirestore.DocumentData | undefined;
+  let rawCandidate: TemplateCandidate | undefined;
 
   // If specific template ID provided, fetch directly
   if (templateId) {
     const snap = await col.doc(templateId).get();
     if (!snap.exists) return null;
-    rawData = snap.data();
+    rawCandidate = { id: snap.id, data: snap.data()!, source: 'documentTemplates' };
+    rawData = rawCandidate.data;
   } else {
     // Build a base query for docType + isActive
     const buildBaseQuery = () =>
@@ -422,11 +578,17 @@ export async function getTemplate(
       // often not marked as default).
       const sourceSnap = await buildBaseQuery()
         .where('softwareSource', '==', softwareSource)
-        .limit(1)
+        .limit(25)
         .get();
 
       if (!sourceSnap.empty) {
-        rawData = sourceSnap.docs[0].data();
+        const candidates = sourceSnap.docs.map((doc) => ({
+          id: doc.id,
+          data: doc.data(),
+          source: 'documentTemplates' as const,
+        }));
+        rawCandidate = pickBestTemplateCandidate(candidates, { softwareSource });
+        rawData = rawCandidate?.data;
       } else {
         // No template for this software source — fall back to isDefault=true
         // without the software filter.
@@ -435,26 +597,59 @@ export async function getTemplate(
         );
         const fallbackSnap = await buildBaseQuery()
           .where('isDefault', '==', true)
-          .limit(1)
+          .limit(25)
           .get();
         if (!fallbackSnap.empty) {
-          rawData = fallbackSnap.docs[0].data();
+          const candidates = fallbackSnap.docs.map((doc) => ({
+            id: doc.id,
+            data: doc.data(),
+            source: 'documentTemplates' as const,
+          }));
+          rawCandidate = pickBestTemplateCandidate(candidates, { preferDefault: true });
+          rawData = rawCandidate?.data;
         }
       }
     } else if (variant) {
       // Specific variant requested
       const snap = await buildBaseQuery()
         .where('variant', '==', variant)
-        .limit(1)
+        .limit(25)
         .get();
-      if (!snap.empty) rawData = snap.docs[0].data();
+      if (!snap.empty) {
+        const candidates = snap.docs.map((doc) => ({
+          id: doc.id,
+          data: doc.data(),
+          source: 'documentTemplates' as const,
+        }));
+        rawCandidate = pickBestTemplateCandidate(candidates, { variant });
+        rawData = rawCandidate?.data;
+      }
     } else {
       // No software source or variant — use the default template
       const snap = await buildBaseQuery()
         .where('isDefault', '==', true)
-        .limit(1)
+        .limit(25)
         .get();
-      if (!snap.empty) rawData = snap.docs[0].data();
+      if (!snap.empty) {
+        const candidates = snap.docs.map((doc) => ({
+          id: doc.id,
+          data: doc.data(),
+          source: 'documentTemplates' as const,
+        }));
+        rawCandidate = pickBestTemplateCandidate(candidates, { preferDefault: true });
+        rawData = rawCandidate?.data;
+      } else {
+        const anySnap = await buildBaseQuery().limit(50).get();
+        if (!anySnap.empty) {
+          const candidates = anySnap.docs.map((doc) => ({
+            id: doc.id,
+            data: doc.data(),
+            source: 'documentTemplates' as const,
+          }));
+          rawCandidate = pickBestTemplateCandidate(candidates);
+          rawData = rawCandidate?.data;
+        }
+      }
     }
   }
 
@@ -471,15 +666,52 @@ export async function getTemplate(
       );
       const vectorSnap = await col.doc(vectorMatch.id).get();
       if (vectorSnap.exists) {
-        rawData = vectorSnap.data();
+        rawCandidate = { id: vectorSnap.id, data: vectorSnap.data()!, source: 'documentTemplates' };
+        rawData = rawCandidate.data;
       }
+    }
+  }
+
+  // Knowledge Base fallback: older imports and manually added "Document
+  // Template" resources live under knowledgeBase/category=form_template rather
+  // than documentTemplates. Use them as templates before falling back to AI.
+  if (!rawData && !templateId) {
+    const kbCandidates = await fetchKnowledgeBaseTemplateCandidates(firmId, docType);
+    const best = pickBestTemplateCandidate(kbCandidates, { softwareSource, variant });
+    const adapted = best ? adaptCandidateToTemplate(best, firmId, docType) : undefined;
+    if (best && adapted) {
+      console.info(
+        `[getTemplate] Knowledge Base form_template fallback found "${best.data.title ?? best.data.name ?? best.id}" ` +
+        `for docType="${docType}"`,
+      );
+      rawCandidate = { id: best.id, data: adapted, source: 'knowledgeBase' };
+      rawData = rawCandidate.data;
+    }
+  }
+
+  // Legacy fallback for the old firms/{firmId}/templates collection referenced
+  // by earlier migration utilities.
+  if (!rawData && !templateId) {
+    const legacyCandidates = await fetchLegacyTemplateCandidates(firmId, docType);
+    const best = pickBestTemplateCandidate(legacyCandidates, { softwareSource, variant });
+    const adapted = best ? adaptCandidateToTemplate(best, firmId, docType) : undefined;
+    if (best && adapted) {
+      console.info(
+        `[getTemplate] Legacy templates fallback found "${best.data.name ?? best.id}" ` +
+        `for docType="${docType}"`,
+      );
+      rawCandidate = { id: best.id, data: adapted, source: 'legacyTemplates' };
+      rawData = rawCandidate.data;
     }
   }
 
   // Runtime validation: ensure required fields exist.
   // Support both 'content' (canonical) and 'editorContent' (editor-saved) field names.
-  if (rawData && !rawData.content?.trim() && rawData.editorContent?.trim()) {
-    rawData = { ...rawData, content: rawData.editorContent };
+  if (rawData && !rawData.content?.trim()) {
+    const content = getTemplateContentField(rawData);
+    if (content.trim()) {
+      rawData = { ...rawData, content };
+    }
   }
   if (!rawData || typeof rawData.content !== 'string' || !rawData.content.trim()) {
     console.error(
@@ -494,6 +726,10 @@ export async function getTemplate(
       `firmId=${firmId}, templateId=${templateId ?? '(query)'}`,
     );
     return null;
+  }
+
+  if (!rawData.id && rawCandidate) {
+    rawData = { ...rawData, id: rawCandidate.id };
   }
 
   return rawData as DocumentTemplate;
@@ -738,20 +974,17 @@ export async function generateFromTemplate(
   const promptVersion = computePromptHash(template.content);
 
   // ── Smart routing ──────────────────────────────────────────────────────────
-  // Uploaded DOCX templates (softwareSource set, no Handlebars variables)
-  // should skip Handlebars entirely — the template is a complete document for
-  // a sample client with no {{variables}} to substitute. Route directly to
-  // template-referenced AI which uses the template as a formatting guide.
-  const isRawUploadedTemplate =
-    !!template.softwareSource &&
-    (!template.variables || template.variables.length === 0);
+  // Variable-free templates are complete documents, often imported from DOCX or
+  // PDF files. Skip Handlebars and do focused text substitution so the output
+  // keeps the existing template structure instead of serving sample data.
+  const isRawUploadedTemplate = isRawTemplateContent(template);
 
   if (isRawUploadedTemplate) {
     const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
     console.info(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
-      `(source=${template.softwareSource}) → focused substitution (${mode})`,
+      `(source=${template.softwareSource || template.folder || 'knowledge-base'}) → focused substitution (${mode})`,
     );
     const content = await substituteTemplateValues(template.content, ctx, docType, formattingPreset);
     
