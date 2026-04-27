@@ -17,7 +17,7 @@ if (typeof global !== 'undefined' && !(global as any).DOMMatrix) {
 const { PDFParse } = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
-import { extractTemplateVariables } from './template-engine';
+import { applyTemplateFormattingStyles, extractTemplateVariables } from './template-engine';
 import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
 
 // ---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ export const processTemplateFile = onCall(
           "r[style-name='Object'] => ",
         ];
         const result = await mammoth.convertToHtml({ buffer }, { styleMap });
-        extractedHtml = postProcessTemplateHtml(result.value);
+        extractedHtml = applyTemplateFormattingStyles(postProcessTemplateHtml(result.value));
         // Log any mammoth conversion warnings (e.g., unmapped styles)
         if (result.messages.length > 0) {
           const styleWarnings = result.messages
@@ -481,7 +481,7 @@ Respond with a valid JSON object (no markdown fences):
       const looksLikeHtml = /<[a-z][\s\S]*>/i.test(templatizeResult);
 
       if (hasVariables && looksLikeHtml) {
-        templatizedHtml = templatizeResult;
+        templatizedHtml = applyTemplateFormattingStyles(templatizeResult);
         console.log(`[processTemplateFile] Phase 1: AI templatization successful (${templatizedHtml.length} chars output)`);
 
         // Strip legacy [OBJ:...] / [OBJ ...] object codes from source drafting software
@@ -535,7 +535,7 @@ Respond with a valid JSON object (no markdown fences):
               `(was ${(fidelity.score * 100).toFixed(1)}%)`,
             );
             if (retryFidelity.score > fidelity.score) {
-              templatizedHtml = retryResult;
+              templatizedHtml = applyTemplateFormattingStyles(retryResult);
               console.info('[processTemplateFile] Retry improved fidelity, using retry output.');
             } else {
               console.info('[processTemplateFile] Retry did not improve, keeping original output.');
@@ -613,7 +613,7 @@ Respond with a valid JSON object (no markdown fences):
         });
 
         if (fixCount > 0) {
-          templatizedHtml = correctedParagraphs.join('');
+          templatizedHtml = applyTemplateFormattingStyles(correctedParagraphs.join(''));
           console.log(`[processTemplateFile] Fiduciary path enforcement: ${fixCount} corrections applied`);
         }
       } else {
@@ -713,7 +713,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
             // Splice the processed section back into the full document
             const before = templatizedHtml.slice(0, sectionStart);
             const after = templatizedHtml.slice(sectionEnd);
-            templatizedHtml = before + loopResult.trim() + after;
+            templatizedHtml = applyTemplateFormattingStyles(before + loopResult.trim() + after);
             console.log('[processTemplateFile] AI loop detection: converted indexed children to {{#each}} block');
           } else {
             console.log('[processTemplateFile] AI loop detection: no {{#each}} in response, keeping original');
@@ -730,7 +730,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
 
     return {
       success: true,
-      extractedHtml: templatizedHtml,
+      extractedHtml: applyTemplateFormattingStyles(templatizedHtml),
       rawContent: extractedHtml, // Original pre-templatization HTML for future re-runs
       extractedText: truncateAtWordBoundary(extractedText, 5000),
       rawExtractedText: truncateAtWordBoundary(extractedText, 20000),

@@ -392,6 +392,71 @@ function ensureHelpers() {
 }
 
 // ---------------------------------------------------------------------------
+// Template formatting preservation
+// ---------------------------------------------------------------------------
+
+/**
+ * Inline CSS equivalents for imported Word paragraph classes.
+ *
+ * Mammoth maps InteractiveLegal / drafting-software paragraph styles such as
+ * TR_Title and TR_Body1 into HTML classes like tr-title and tr-body1. Some app
+ * views and exported HTML fragments do not carry a separate stylesheet, so we
+ * also write these styles inline before generation/saving. Existing inline
+ * styles are appended after these defaults so template-specific styling wins.
+ */
+const TEMPLATE_CLASS_INLINE_STYLES: Record<string, string> = {
+  'tr-title': 'text-align:center;text-decoration:underline;text-transform:uppercase;font-size:14pt;font-weight:bold;margin:0 0 18pt;page-break-after:avoid;',
+  'tr-cover-title': 'text-align:center;font-size:14pt;margin:36pt 0 18pt;',
+  'tr-cover': 'text-align:center;margin:0 0 6pt;',
+  'tr-mem-header1': 'text-align:center;text-decoration:underline;margin:24pt 0 14pt;page-break-after:avoid;',
+  'tr-body1': 'text-align:justify;margin:0 0 10pt;',
+  'tr-body3': 'text-align:justify;margin:10pt 0;',
+  'tr-art1': 'text-align:center;font-weight:bold;margin:24pt 0 14pt;page-break-after:avoid;',
+  'tr-art2': 'text-align:justify;margin:0 0 10pt;',
+  'tr-art3b': 'text-align:justify;text-indent:1in;margin:0 0 8pt;',
+  'tr-art4b': 'text-align:justify;text-indent:1.5in;margin:0 0 8pt;',
+  'tr-sig-line': 'margin-left:3.5in;margin-bottom:4pt;',
+  'tr-sig-name': 'margin-left:3.5in;font-weight:bold;margin-bottom:10pt;',
+  'tr-affid': 'margin:0 0 6pt;font-size:11pt;',
+  'tr-base': 'margin:0 0 6pt;min-height:1em;',
+};
+
+function styleForTemplateClasses(classValue: string): string {
+  return classValue
+    .split(/\s+/)
+    .map((cls) => TEMPLATE_CLASS_INLINE_STYLES[cls])
+    .filter((style): style is string => !!style)
+    .join('');
+}
+
+/**
+ * Add inline styles for known template classes so formatting survives outside
+ * the original upload preview CSS. Safe to call repeatedly; it leaves tags that
+ * already have these defaults in place alone.
+ */
+export function applyTemplateFormattingStyles(html: string): string {
+  if (!html || !/\btr-[a-z0-9-]+\b/i.test(html)) return html;
+
+  return html.replace(/<([a-z][\w:-]*)([^>]*\bclass=(["'])([^"']*\btr-[^"']*)\3[^>]*)>/gi,
+    (fullTag: string, tagName: string, attrs: string, quote: string, classValue: string) => {
+      const classStyle = styleForTemplateClasses(classValue);
+      if (!classStyle) return fullTag;
+
+      const styleAttr = attrs.match(/\bstyle=(["'])(.*?)\1/i);
+      let nextAttrs: string;
+      if (styleAttr) {
+        if (styleAttr[2].includes(classStyle)) return fullTag;
+        const mergedStyle = `${classStyle}${styleAttr[2]}`;
+        nextAttrs = attrs.replace(styleAttr[0], `style=${styleAttr[1]}${mergedStyle}${styleAttr[1]}`);
+      } else {
+        nextAttrs = `${attrs} style=${quote}${classStyle}${quote}`;
+      }
+
+      return `<${tagName}${nextAttrs}>`;
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Template fetching
 // ---------------------------------------------------------------------------
 
@@ -986,7 +1051,14 @@ export async function generateFromTemplate(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
       `(source=${template.softwareSource || template.folder || 'knowledge-base'}) → focused substitution (${mode})`,
     );
-    const content = await substituteTemplateValues(template.content, ctx, docType, formattingPreset);
+    const content = applyTemplateFormattingStyles(
+      await substituteTemplateValues(
+        applyTemplateFormattingStyles(template.content),
+        ctx,
+        docType,
+        formattingPreset,
+      ),
+    );
     
     // For hybrid mode, we might optionally want to do an enhancement pass later, but right now
     // substituteTemplateValues focuses purely on client data injection.
@@ -1008,12 +1080,12 @@ export async function generateFromTemplate(
       // Template has invalid HBS syntax — use focused text substitution
       // to preserve the template's formatting while swapping client data
       console.info(`[template-engine] Using focused substitution for ${docType} (HBS failed)`);
-      const substituted = await substituteTemplateValues(
-        template.content,
+      const substituted = applyTemplateFormattingStyles(await substituteTemplateValues(
+        applyTemplateFormattingStyles(template.content),
         ctx,
         docType,
         formattingPreset,
-      );
+      ));
       return {
         docType,
         title: buildStandardTitle(docType, ctx.computed.clientFullName),
@@ -1026,12 +1098,12 @@ export async function generateFromTemplate(
     // In template mode, fall back to focused text substitution (same as hybrid)
     // rather than serving raw unrendered HTML with {{variables}} visible
     console.info(`[template-engine] Using focused substitution for ${docType} (HBS failed, template mode)`);
-    const substituted = await substituteTemplateValues(
-      template.content,
+    const substituted = applyTemplateFormattingStyles(await substituteTemplateValues(
+      applyTemplateFormattingStyles(template.content),
       ctx,
       docType,
       formattingPreset,
-    );
+    ));
     return {
       docType,
       title: buildStandardTitle(docType, ctx.computed.clientFullName),
@@ -1067,7 +1139,7 @@ export async function generateFromTemplate(
     return {
       docType,
       title,
-      content: renderedHtml,
+      content: applyTemplateFormattingStyles(renderedHtml),
       status: 'draft',
       promptVersion,
     };
@@ -1086,23 +1158,23 @@ export async function generateFromTemplate(
       return {
         docType,
         title,
-        content: renderedHtml,
+        content: applyTemplateFormattingStyles(renderedHtml),
         status: 'draft',
         promptVersion,
       };
     }
-    const enhanced = await enhanceWithAI(renderedHtml, ctx, docType);
+    const enhanced = await enhanceWithAI(applyTemplateFormattingStyles(renderedHtml), ctx, docType);
     return {
       docType,
       title,
-      content: enhanced,
+      content: applyTemplateFormattingStyles(enhanced),
       status: 'draft',
       promptVersion,
       templateBaseline: renderedHtml,
     };
   }
 
-  return { docType, title, content: renderedHtml, status: 'draft', promptVersion };
+  return { docType, title, content: applyTemplateFormattingStyles(renderedHtml), status: 'draft', promptVersion };
 }
 
 // ---------------------------------------------------------------------------
