@@ -1559,7 +1559,15 @@ function markMissingFiduciaries(
     const isPrimary = level === 'primary' || level === 'agent';
     if (!isPrimary && !fiduciaries[role]) continue;
 
-    const roleObj = (fiduciaries[role] ?? {}) as Record<string, unknown>;
+    // Read from `result` (the accumulator) so successive iterations on the
+    // same slot accumulate markers instead of clobbering each other. The
+    // previous version spread from `fiduciaries[role]` (the original input)
+    // every iteration, so when both .name and .address were missing on the
+    // same slot, the later marker wiped the earlier one — producing e.g.
+    // trustee.primary = { address: '[MISSING: trustee address]' } with the
+    // name marker silently lost. Visible bug: empty <strong></strong> in
+    // the rendered Will trustee paragraph instead of "[MISSING: trustee name]".
+    const roleObj = (result[role] ?? fiduciaries[role] ?? {}) as Record<string, unknown>;
     const levelObj = (roleObj[level] ?? {}) as Record<string, unknown>;
     const value = levelObj[field];
 
@@ -1576,9 +1584,8 @@ function markMissingFiduciaries(
       // when a name has been set (i.e. the lawyer started filling in this tier).
       if (!isPrimary && !slotHasName) continue;
 
-      // Clone the chain down to avoid mutating shared references
       result[role] = {
-        ...(fiduciaries[role] as Record<string, unknown>),
+        ...roleObj,
         [level]: {
           ...levelObj,
           [field]: `[MISSING: ${label}]`,
