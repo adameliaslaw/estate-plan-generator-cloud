@@ -645,6 +645,10 @@ export function cleanEmptyListSlots(html: string): string {
       segment = segment.replace(/[ \t]{2,}/g, ' ');
       segment = segment.replace(/\s+,/g, ',');
       segment = segment.replace(/\s+\./g, '.');
+      // Trailing "and " or "and." at the end of a text segment (right
+      // before the closing tag of an enclosing <strong> / <p>) — surfaces
+      // when the template rendered "X, Y and {{empty}}".
+      segment = segment.replace(/[,]?\s+and\s*$/i, '');
     } while (segment !== prev);
 
     out += segment;
@@ -700,6 +704,44 @@ function collectKnownNames(ctx: ClientContext): string[] {
 }
 
 /**
+ * Insert "and " before the last item in a run of 3+ comma-separated
+ * <strong>...</strong> tags. The cleanup pass strips trailing "and ."
+ * fragments from over-allocated template lists, but in doing so removes
+ * the legitimate "and " before the actual final item too. Re-inserts it
+ * so "ADDISON ELIAS, ALINA J. ELIAS, ADAM J. ELIAS, JR." renders as
+ * "ADDISON ELIAS, ALINA J. ELIAS, and ADAM J. ELIAS, JR." (Oxford
+ * comma + "and"). Runs after bold-wrapping so it can target the
+ * <strong> boundaries rather than the bare names.
+ *
+ * Conservative match: only fires when there are 3+ <strong> elements
+ * separated by ", " (three strongs minimum is the threshold for "and"
+ * insertion in standard English). Two-item lists like "X and Y" are
+ * left alone — this regex requires the comma separator pattern.
+ */
+export function insertOxfordAnd(html: string): string {
+  if (!html) return html;
+  // First: handle 3+ <strong> entries separated by ", " (Oxford comma).
+  // "X, Y, Z" → "X, Y, and Z".
+  let out = html.replace(
+    /((?:<strong>[^<]+<\/strong>,\s+){2,})(<strong>[^<]+<\/strong>)/g,
+    (_match, lead: string, last: string) => {
+      if (/\band\s*$/i.test(lead)) return lead + last;
+      const trimmed = lead.replace(/,\s+$/, '');
+      return `${trimmed}, and ${last}`;
+    },
+  );
+  // Then: handle exactly 2 <strong> entries separated by ", ".
+  // "X, Y" → "X and Y" (no Oxford comma for two items).
+  // The negative lookbehind ensures we don't re-match the trailing pair
+  // of a list we just rewrote (e.g. "X, Y, and Z" — Y/Z stay intact).
+  out = out.replace(
+    /(?<!,\s)(<strong>[^<]+<\/strong>),\s+(<strong>[^<]+<\/strong>)(?!\s*,\s*(?:and\s+)?<strong>)/g,
+    '$1 and $2',
+  );
+  return out;
+}
+
+/**
  * Apply user-requested document-wide formatting passes:
  *   1. Strip em-dashes from article headers
  *   2. Clean up empty list slots from fixed-arity template enumerations
@@ -707,9 +749,12 @@ function collectKnownNames(ctx: ClientContext): string[] {
  *      the client has 3)
  *   3. Uppercase every known person name and bold-wrap each occurrence for
  *      visual consistency throughout the document
+ *   4. Insert "and " before the last item in 3+ <strong> name lists so
+ *      "X, Y, Z" reads as "X, Y, and Z" (Oxford-comma + "and")
  *
  * Runs at the very end of generation, on every return path. List cleanup
  * happens BEFORE name-bolding so we don't bold trailing-empty fragments.
+ * Oxford-and runs LAST so the <strong> boundaries are stable.
  */
 function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   if (!html) return html;
@@ -717,6 +762,7 @@ function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   out = stripEmptyInlineTags(out);
   out = cleanEmptyListSlots(out);
   out = uppercaseKnownNames(out, collectKnownNames(ctx));
+  out = insertOxfordAnd(out);
   return out;
 }
 
