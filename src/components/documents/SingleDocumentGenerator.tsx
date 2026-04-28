@@ -29,7 +29,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { documentService } from '@/services/document-service';
 import { useDocument } from '@/hooks/useFirestore';
 import { COLLECTIONS } from '@/config/constants';
+import { SOFTWARE_SOURCES } from '@/config/software-sources';
+import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 import type { Client } from '@/types';
+
+type GenerationMode = 'template' | 'ai' | 'hybrid';
 
 // ── Standard document types available for individual generation ───────────────
 
@@ -60,6 +64,12 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   const [selectedDocType, setSelectedDocType] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
   const [spouseRole, setSpouseRole] = useState<'client' | 'spouse'>('client');
+  // Match the batch dialog's defaults: hybrid mode + IL formatting. Hybrid
+  // is the only mode that pulls Knowledge Base context into the prompt
+  // (template-only skips KB; ai-only skips templates).
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('hybrid');
+  const [softwareSource, setSoftwareSource] = useState('interactivelegal');
+  const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -95,6 +105,9 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         docType: selectedDocType,
         customInstructions: customInstructions.trim() || undefined,
         spouseRole: showSpouseRole ? spouseRole : undefined,
+        generationMode,
+        softwareSource: softwareSource === 'none' ? '' : softwareSource,
+        formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
 
       setSuccessMessage(`${result.title} has been saved to the Document Vault.`);
@@ -119,6 +132,9 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     setSelectedDocType('');
     setCustomInstructions('');
     setSpouseRole('client');
+    setGenerationMode('hybrid');
+    setSoftwareSource('interactivelegal');
+    setFormattingPreset('interactivelegal');
     setError('');
     onClose();
   };
@@ -127,7 +143,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#1a365d]">
             <Wand2 className="h-5 w-5 text-[#2b6cb0]" />
@@ -198,6 +214,69 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
               </p>
             </div>
           )}
+
+          {/* Generation options — match the batch dialog so single-doc
+              regenerations can pick mode/source/preset explicitly. */}
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+            <div className="col-span-2 space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Generation Mode
+              </label>
+              <Select value={generationMode} onValueChange={(v) => setGenerationMode(v as GenerationMode)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">
+                    Template: Enhanced (Hybrid) — Recommended
+                  </SelectItem>
+                  <SelectItem value="template" className="text-xs">
+                    Template: Exact Fidelity
+                  </SelectItem>
+                  <SelectItem value="ai" className="text-xs">
+                    AI Drafting (From Scratch)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-gray-500">
+                Hybrid + AI use Knowledge Base context; Template skips it.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Template Source
+              </label>
+              <Select value={softwareSource} onValueChange={setSoftwareSource}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOFTWARE_SOURCES.map((s) => (
+                    <SelectItem key={s.value} value={s.value || 'none'} className="text-xs">
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Formatting Style
+              </label>
+              <Select value={formattingPreset} onValueChange={setFormattingPreset}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select format" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FORMATTING_PRESET_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value || 'none'} className="text-xs">
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           {/* Custom instructions (optional) */}
           <div className="space-y-1.5">
