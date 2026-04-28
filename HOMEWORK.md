@@ -4,7 +4,199 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## Completed (2026-04-27 evening session — Phase 0–4 pipeline hardening)
+## ⏭ Next session — open with this verification
+
+Tonight's session ended after a long sequence of generation-pipeline fixes
+landed but were not all hand-verified by the user. **First action next session:
+regenerate the wills/POAs/ADs for both Karen and Adam and confirm each item
+below renders correctly.** If anything looks off, the relevant fix is listed
+in the "Tonight's session 2" block further down — point at the symptom and
+we'll diagnose from there.
+
+Manual verification checklist:
+1. **Karen — full package** (her vault, generationMode=Template):
+   - Will: name `<strong>KAREN K. ELIAS</strong>` bold + uppercase throughout
+     (title, body, executor block, witness, notary)
+   - Will: children list reads `ADDISON, ALINA, and ADAM JR.` (Oxford comma + "and")
+   - Will: no trailing blank fourth child
+   - Will: no `ARTICLE I —` em-dash; just `ARTICLE I `
+   - Will: Article X heading is centered (was misclassed as `tr-art2`)
+   - Will: Article III subheaders title-cased: `If My Husband Survives.` not
+     `If my husband Survives.`
+   - POA: primary agent (Adam, Husband) renders address `93 Old Church Road,
+     Monroe Township, NJ` (auto-fill from spouse-shared household)
+   - POA: alternate (Roger, Brother) renders `[MISSING: alternate POA agent
+     address]` (correct — Roger isn't household)
+   - AD (livingWill): generates without hanging or gender errors (the stored
+     template's pipe-syntax bug was hand-fixed in Firestore tonight; upload
+     prompt now forbids it for future re-uploads)
+   - All saved docs have `templateBaseline` populated → editor's Compare
+     mode is available on every doc, not just AI-enhanced hybrid ones
+2. **Adam — full package via `spouseRole='spouse'` from Karen's vault** (his
+   own client doc has empty `fiduciaries: {}`, so spouse-swap is the working
+   path):
+   - Will: title and body show `<strong>ADAM J. ELIAS</strong>` bold + uppercase
+   - Will: spouse references read `my wife, KAREN K. ELIAS` (gender title
+     correctly inverted from Karen's view of `husband`)
+   - Will: "if my wife survives" / "if my wife does not survive" — not "my husband"
+   - Will: no `Gender is required` error (swap-time gender backfill inverts
+     Karen's `female` → `male` for Adam's testator slot)
+   - Will: no blank address `, , ,` — swap-time address backfill copies the
+     household address into Adam's swapped `personalInfo`
+   - POA: agent is Karen (Wife) with full address — spouse-fiduciary remap
+     swaps Karen's "Adam (Husband)" entry to "Karen (Wife)" on Adam's swap
+   - AD: same — Karen as healthcare rep, full address
+3. **Editor toolbar Regenerate button** — verify it appears on each doc, picks
+   up the doc's spouseRole from `_spouse` suffix, and produces matching output.
+4. **Vault top toolbar** — `Generate Individual Document` is a top-level button
+   (not buried in a dropdown), and clicking it opens the dialog with the
+   `Whose document?` Karen / Adam-spouse toggle when applicable.
+
+If all of the above passes, mark this section complete and move to the open
+items below.
+
+---
+
+## Completed (2026-04-27 evening, session 2 — generation-pipeline polish)
+
+Continuation of session 1's work after the user re-uploaded 11 IL templates
+fresh and began rapid-fire visual testing. Caught and fixed a long string of
+mostly template-side and post-render issues. **All commits between `5a6377d`
+and `4d74d45`** belong to this session. Tests still 589 passing.
+
+### Verification harness — `functions/scripts/`
+- `audit-il-templates.cjs` — per-template audit on 6 criteria. 11 active IL
+  templates passed; 5 vestigial inactive duplicates flagged.
+- `test-generate-one.cjs` — end-to-end generation against Karen + IL Will
+  template, dumps content checks (inline styles, unresolved Handlebars,
+  sample-name leakage, provenance fields).
+- `test-export-parity.cjs` — feeds generated HTML through PDF + DOCX
+  builders, audits the resulting DOCX XML for paragraph count, alignment,
+  indents, fonts. Used to verify the `<TAGattribute=` malformed-tag fix.
+- `test-save-and-provenance.cjs` — full vault round-trip: invokes
+  `generateDocument`, reads saved Firestore doc, asserts all 8 provenance
+  fields persist (generationMode, triggerSource, templateId,
+  templateSourceCollection, softwareSource, promptVersion, currentVersion,
+  content non-empty).
+- `test-poa.cjs` — POA-specific verification of the spouse-as-fiduciary
+  auto-fill (Karen's POA agent address rendering).
+- `inspect-and-backfill-adam.cjs` — backfills missing personalInfo fields
+  on a client doc from a paired client.
+- `inspect-karen-fiduciaries.cjs` — dumps Karen + Adam fiduciary data
+  shapes; surfaced the `relationship: "Husband"` (not "Spouse") that
+  initially blocked the auto-fill.
+- `sanitize-malformed-tags.cjs` — one-off Firestore cleanup for the
+  `<pclass="...">` no-space malformed-tag bug (3 templates fixed).
+- `fix-pipe-syntax.cjs` — one-off cleanup for the `{{path | helper}}`
+  Liquid-pipe bug introduced by AI templatization (1 template fixed).
+
+### Bug fixes — backend (`functions/src/template-engine.ts` + others)
+- **Malformed `<pclass=` tags from AI templatization** (`5a6377d`):
+  defensive sanitizer in `parseHtml` (DOCX export) + preventive sanitizer
+  in `applyTemplateFormattingStyles` so future content can't ship with
+  the bug. Three stored templates were fixed in Firestore. Pre-fix DOCX
+  was rendering 7 paragraphs of a 91-paragraph will because the parser
+  bailed on the first malformed tag.
+- **Trailing empty children leaking into renders** (`c54d72b`):
+  `buildTemplateData` filters child entries with no `name`. `hasChildren`
+  derives from filtered list. Fixed `Addison, Alina, Adam Jr. and .`.
+- **`templateBaseline` missing on most generation paths** (`c54d72b`): now
+  saved on every return path of `generateFromTemplate` so the editor's
+  Compare mode is always available, not just on AI-enhanced hybrid runs.
+- **Alternate fiduciary addresses silently empty** (`c54d72b`):
+  `markMissingFiduciaries` now flags missing addresses on
+  alternate/successor/alternateAgent slots when the slot has a name set.
+  `Roger Kondos, of , to serve` now surfaces as `[MISSING: alternate
+  executor address]`.
+- **Spouse-as-fiduciary address auto-fill** (`c54d72b` + `1bc0666`):
+  `autoFillSpouseFiduciaryAddresses` copies testator's `personalInfo`
+  household address into any fiduciary slot whose `relationship` is in
+  `{Spouse, Husband, Wife, Partner, Domestic Partner}`. Initial release
+  only matched literal `'Spouse'`; expanded after Karen's POA agent was
+  found stored as `relationship: "Husband"`. Surname-share inference was
+  briefly added then reverted as reckless (parents/adult children may
+  share a surname without a household).
+- **Article header em-dashes** (`a472802`): `stripArticleHeaderDashes`
+  strips em/en/hyphen dashes after `ARTICLE [ROMAN]`.
+- **Names not uppercase / not bold throughout document** (`a472802` +
+  `bff42ab`): `uppercaseKnownNames` collects every person-name from the
+  context (client, spouse, children, all fiduciary tiers, firm attorney,
+  witnesses) and uppercases each occurrence in the body. Walks HTML in
+  tag/text segments tracking `<strong>` depth — bare-text names get a
+  fresh `<strong>` wrap, names already inside emphasis get just the
+  uppercase. 11/11 KAREN, 8/8 ADAM occurrences bold + uppercase on
+  Karen's regenerated will.
+- **Empty `<strong></strong>` shells from missing fiduciary data**
+  (`bff42ab`): `stripEmptyInlineTags` runs before the text cleanup so
+  surrounding `, ,` patterns are visible to the regex passes.
+- **Empty fiduciary tier paragraphs** (`bff42ab`): `cleanEmptyListSlots`
+  text-segment regexes catch consecutive commas, "and ." trailing
+  fragments, "appoint my ," / "appoint my and my [empty]" / "(my )"
+  patterns. `I appoint my , [empty], to serve as Executor` collapses to
+  `I appoint to serve as Executor`.
+- **Missing "and" before last name in lists** (`a03b9ff`): `insertOxfordAnd`
+  rewrites 3+ comma-separated `<strong>` lists with Oxford comma + "and",
+  and 2-name pairs with just "and" (no Oxford comma). Trailing "and "
+  fragments at segment end stripped by cleanup.
+- **Adam's will/POA gender title hardcoded** (`1bc0666`):
+  `normalizeSpouseTitles` rewrites `my husband / wife / spouse / partner`
+  (any case) to the testator-correct title from `ctx.computed.spouseTitle`.
+  Catches IL-template hardcodings the AI templatization missed.
+- **Article III subheader `If my husband Survives.` lowercase**
+  (`0a70566`): same pass tracks `<strong>/<em>/<b>` depth; inside
+  emphasis, full title-cases `If My Husband Survives.`. Generic
+  mid-sentence `my husband` outside emphasis stays lowercase.
+- **Articles IX/X lose centering** (`1bc0666`):
+  `normalizeArticleHeaderClasses` detects `<p class=tr-art2>` paragraphs
+  whose text starts with `ARTICLE [ROMAN]` and rewrites to `tr-art1`
+  (centered). IL template misclassed Article X as tr-art2 (justified).
+- **Spouse-swap missing fields → "Gender is required" + blank addresses**
+  (`1bc0666`): when generating spouse's docs from primary's vault via
+  `spouseRole='spouse'`, the swap copies `spouseInfo` (which lacks
+  address+gender) into the testator slot. New backfill: missing
+  address/city/state/zip/county/lastName copied from original primary;
+  missing gender inverted (heteronormative default; left undefined for
+  domestic-partnership where it can't be inferred).
+- **Spouse-swap title/pronoun reflip** (`1bc0666`): `computed.spouseTitle
+  / clientTitle / clientPronouns / spousePronouns` re-derived from new
+  testator's gender so Adam's will doesn't say "my husband" referring to
+  Karen.
+- **Spouse-fiduciary remap on swap** (`0a70566`): when a fiduciary tier's
+  relationship is in the household set, swap retargets the slot to the
+  now-spouse — name replaced with original primary's full name,
+  relationship inverted, address fields cleared so auto-fill repopulates
+  with the new household. Without this, Adam's AD via spouse-swap
+  appointed Adam as his own healthcare representative.
+- **Stored AD template Liquid-pipe syntax** (`4d74d45`): function logs
+  surfaced `Handlebars Parse error: ...alternate.name | childTitle`. AI
+  templatization had emitted Vue/Liquid pipe syntax. `fix-pipe-syntax.cjs`
+  scanned all 16 templates, fixed the 1 affected by dropping the pipe
+  segment (childTitle is a field, not a helper). Upload prompt rule #15
+  added to forbid pipes for future re-uploads.
+
+### UX — frontend
+- **Same as my address button** (`c54d72b`): on every `AddressField` that
+  isn't the client's own personalInfo step, when the client has an address
+  to copy. One click fills street/city/state/zip/county.
+- **Spouse + children get address fields with the new button**
+  (`c54d72b`): added `type: 'address'` composite to spouse step + children
+  repeater (with new address-case in `RepeaterField.InnerField`).
+- **Editor toolbar Regenerate button** (`3d15ff2`): one-click re-run of
+  unified generator on the current doc. Snapshots edits as a version,
+  infers spouseRole from the doc id's `_spouse` suffix.
+- **Vault: Generate Individual Document surfaced as a top-level button**
+  (`846af38` + `46baf63`): was buried in an "Additional Document"
+  dropdown that users missed. The required `<SingleDocumentGenerator>`
+  dialog mount in the populated-vault branch was added (it had only been
+  rendered on the empty-vault branch — explaining "buttons dead").
+- **Spouse-role selector on single-doc generation** (`14226f4` +
+  `1418265`): married couples need separate wills/POAs. Dialog now shows
+  Karen/Adam-spouse toggle when client is married AND docType supports
+  per-spouse variants.
+
+---
+
+## Completed (2026-04-27 evening, session 1 — Phase 0–4 pipeline hardening)
 
 Five-pass audit (Claude → Codex → cross-cutting synthesis → three verification probes)
 produced a 17-item plan saved at
