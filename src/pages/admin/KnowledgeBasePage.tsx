@@ -341,11 +341,18 @@ export default function KnowledgeBasePage() {
     let batchNum = 0;
 
     try {
-      // Process in batches until all resources are embedded
+      // Process in batches until all resources are embedded.
+      // forceAll=true ONLY on the first iteration — re-embeds everything
+      // including already-processed items at the current chunk constants.
+      // Subsequent iterations pass forceAll=false so the backend's
+      // !embeddedAt filter advances through the un-processed remainder.
+      // Without this, the BACKFILL_BATCH_SIZE=2 + slice(0, BATCH_SIZE) +
+      // forceAll=true combo loops forever on the same first 2 documents.
       while (batchNum < 500) { // Safety cap
         batchNum++;
         toast.info(`Processing batch ${batchNum}...`, { id: 'embed-progress' });
-        const result = await knowledgeBaseService.backfillEmbeddings(firmId, true);
+        const force = batchNum === 1;
+        const result = await knowledgeBaseService.backfillEmbeddings(firmId, force);
         totalProcessed += result.processed;
         totalErrors += result.errors;
         if (result.total) totalResources = result.total;
@@ -375,10 +382,13 @@ export default function KnowledgeBasePage() {
     let batchNum = 0;
 
     try {
+      // Same forceAll-only-on-iter-1 pattern as handleBackfillEmbeddings —
+      // see comment there for the loop-bug rationale.
       while (batchNum < 500) { // Safety cap
         batchNum++;
         toast.info(`Processing template batch ${batchNum}...`, { id: 'template-embed-progress' });
-        const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId, true);
+        const force = batchNum === 1;
+        const result = await knowledgeBaseService.backfillTemplateEmbeddings(firmId, force);
         totalProcessed += result.processed;
         totalErrors += result.errors;
         if (result.total) totalTemplates = result.total;
