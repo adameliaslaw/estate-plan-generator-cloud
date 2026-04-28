@@ -512,11 +512,35 @@ export async function generateDocument(
     const originalPersonal = { ...clientData.personalInfo };
     const originalSpouse = { ...clientData.spouseInfo };
     console.log(`[unifiedGenerator] Spouse swap for ${docType}: ${originalSpouse.firstName ?? 'unknown'} ↔ ${originalPersonal.firstName ?? 'unknown'}`);
-    
+
+    // The questionnaire's spouseInfo block typically captures name + dob +
+    // citizenship but NOT address or gender (those are derived for the
+    // primary client). When we swap to make the spouse the testator, the
+    // resulting personalInfo can be missing those fields — which causes
+    // downstream errors like "Gender is required" and blank address
+    // renders on AD/POA templates. Backfill missing fields from the
+    // original primary's data: spouses share a household address; gender
+    // inverts under heteronormative marriage (skipped silently for
+    // domestic-partnership where we can't infer).
+    const backfillFields = ['address', 'city', 'state', 'zip', 'county', 'lastName'] as const;
+    const swappedPersonal: Record<string, unknown> = { ...originalSpouse };
+    for (const field of backfillFields) {
+      const val = swappedPersonal[field];
+      if ((val === undefined || val === null || val === '') && originalPersonal[field] !== undefined) {
+        swappedPersonal[field] = originalPersonal[field];
+      }
+    }
+    if (!swappedPersonal.gender && typeof originalPersonal.gender === 'string') {
+      const og = (originalPersonal.gender as string).trim().toLowerCase();
+      if (og === 'female') swappedPersonal.gender = 'male';
+      else if (og === 'male') swappedPersonal.gender = 'female';
+      // domestic-partnership / other: leave undefined; user must set explicitly.
+    }
+
     // Swap clientData for generators
     clientData = {
       ...clientData,
-      personalInfo: originalSpouse,
+      personalInfo: swappedPersonal,
       spouseInfo: originalPersonal,
     };
 
@@ -524,7 +548,21 @@ export async function generateDocument(
     if (clientContext?.client?.spouseInfo) {
       const ctxOriginalPersonal = { ...clientContext.client.personalInfo };
       const ctxOriginalSpouse = { ...clientContext.client.spouseInfo };
-      clientContext.client.personalInfo = ctxOriginalSpouse;
+      // Apply the same backfills to the context-side copy so the template
+      // engine sees the merged data on its render path.
+      const ctxSwappedPersonal: Record<string, unknown> = { ...ctxOriginalSpouse };
+      for (const field of backfillFields) {
+        const val = ctxSwappedPersonal[field];
+        if ((val === undefined || val === null || val === '') && ctxOriginalPersonal[field] !== undefined) {
+          ctxSwappedPersonal[field] = ctxOriginalPersonal[field];
+        }
+      }
+      if (!ctxSwappedPersonal.gender && typeof ctxOriginalPersonal.gender === 'string') {
+        const og = (ctxOriginalPersonal.gender as string).trim().toLowerCase();
+        if (og === 'female') ctxSwappedPersonal.gender = 'male';
+        else if (og === 'male') ctxSwappedPersonal.gender = 'female';
+      }
+      clientContext.client.personalInfo = ctxSwappedPersonal;
       clientContext.client.spouseInfo = ctxOriginalPersonal;
 
       // Swap computed names
@@ -532,6 +570,29 @@ export async function generateDocument(
       const originalSpouseFullName = clientContext.computed.spouseFullName;
       clientContext.computed.clientFullName = originalSpouseFullName;
       clientContext.computed.spouseFullName = originalClientFullName;
+
+      // Swap derived spouse-title / client-title / pronouns. Without this,
+      // generating Adam's will from Karen's vault would still report
+      // spouseTitle='husband' (Karen's view) and Adam's will would say "my
+      // husband" referring to Karen — wrong. Reflip from the now-current
+      // testator's gender.
+      const newGender = (ctxSwappedPersonal.gender as string | undefined)?.trim().toLowerCase();
+      const newClientIsFemale = newGender === 'female';
+      const newMaritalStatus = (ctxSwappedPersonal.maritalStatus as string | undefined) ?? '';
+      const isDP = newMaritalStatus === 'Domestic Partnership';
+      if (isDP) {
+        clientContext.computed.spouseTitle = 'partner';
+        clientContext.computed.clientTitle = 'partner';
+      } else if (newGender) {
+        clientContext.computed.spouseTitle = newClientIsFemale ? 'husband' : 'wife';
+        clientContext.computed.clientTitle = newClientIsFemale ? 'wife' : 'husband';
+      }
+      if (newGender) {
+        const malePronouns = { subject: 'he', object: 'him', possessive: 'his' };
+        const femalePronouns = { subject: 'she', object: 'her', possessive: 'her' };
+        clientContext.computed.clientPronouns = newClientIsFemale ? femalePronouns : malePronouns;
+        clientContext.computed.spousePronouns = newClientIsFemale ? malePronouns : femalePronouns;
+      }
     }
   }
 

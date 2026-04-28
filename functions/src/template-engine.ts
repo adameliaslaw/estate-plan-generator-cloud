@@ -742,6 +742,76 @@ export function insertOxfordAnd(html: string): string {
 }
 
 /**
+ * Replace "my husband" / "my wife" / "my Husband" / "my Wife" with the
+ * testator-correct spouse title. Catches IL-template hardcodings like
+ * "if my husband survives" or "I appoint my Husband" that the AI
+ * templatization missed converting to {{spouseTitle}}. Preserves the
+ * original capitalization style of the matched word.
+ *
+ * Same treatment for "my Brother"/"my Sister" → use the actual fiduciary
+ * relationship when known. Less aggressive: only substitute when we have
+ * a fiduciary with a known relationship near the rendered text. (For now,
+ * just handle husband/wife — sibling relationships are template-side.)
+ */
+export function normalizeSpouseTitles(html: string, spouseTitle: string): string {
+  if (!html || !spouseTitle) return html;
+  const lower = spouseTitle.toLowerCase();
+  // Only spouse / husband / wife / partner are valid replacement targets.
+  if (!['spouse', 'husband', 'wife', 'partner'].includes(lower)) return html;
+
+  // Walk in tag/text segments so attribute values aren't touched.
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') {
+      const close = html.indexOf('>', i);
+      if (close === -1) { out += html.slice(i); break; }
+      out += html.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    const next = html.indexOf('<', i);
+    const segEnd = next === -1 ? html.length : next;
+    let segment = html.slice(i, segEnd);
+    // Match "my (husband|wife)" with case-insensitive flag, preserving
+    // the matched word's first-letter casing on the replacement.
+    segment = segment.replace(/\b(my)\s+(husband|wife|spouse|partner)\b/gi, (_match, my: string, word: string) => {
+      const isCapital = word[0] === word[0].toUpperCase();
+      const replacement = isCapital
+        ? lower.charAt(0).toUpperCase() + lower.slice(1)
+        : lower;
+      return `${my} ${replacement}`;
+    });
+    out += segment;
+    i = segEnd;
+  }
+  return out;
+}
+
+/**
+ * Ensure every "ARTICLE [ROMAN]" header paragraph uses the tr-art1 class
+ * (centered, bold, page-break-after-avoid). Some IL template paragraphs
+ * mis-class an article header as tr-art2 (justified) — visible as a
+ * left-aligned article heading among centered ones. Detects `<p class=
+ * "tr-art2 ...">` whose only meaningful inner text starts with "ARTICLE"
+ * and rewrites to tr-art1.
+ */
+export function normalizeArticleHeaderClasses(html: string): string {
+  if (!html) return html;
+  return html.replace(
+    /<p\s+class=(["'])([^"']*\btr-art2\b[^"']*)\1([^>]*)>(\s*(?:<[^>]+>\s*)*)\s*(?:<strong>\s*)?ARTICLE\s+[IVXLCDM]+/gi,
+    (match) => {
+      // Replace "tr-art2" with "tr-art1" within the matched string.
+      // Also swap the inline style block (tr-art2 = justify, tr-art1 = center).
+      let updated = match.replace(/\btr-art2\b/, 'tr-art1');
+      // If the inline style still says text-align:justify, flip to center.
+      updated = updated.replace(/text-align\s*:\s*justify/, 'text-align:center');
+      return updated;
+    },
+  );
+}
+
+/**
  * Apply user-requested document-wide formatting passes:
  *   1. Strip em-dashes from article headers
  *   2. Clean up empty list slots from fixed-arity template enumerations
@@ -759,6 +829,8 @@ export function insertOxfordAnd(html: string): string {
 function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   if (!html) return html;
   let out = stripArticleHeaderDashes(html);
+  out = normalizeArticleHeaderClasses(out);
+  out = normalizeSpouseTitles(out, ctx.computed?.spouseTitle ?? '');
   out = stripEmptyInlineTags(out);
   out = cleanEmptyListSlots(out);
   out = uppercaseKnownNames(out, collectKnownNames(ctx));
@@ -1276,9 +1348,14 @@ function autoFillSpouseFiduciaryAddresses(
     if (!levelObj) continue;
 
     const relationship = typeof levelObj.relationship === 'string'
-      ? (levelObj.relationship as string).toLowerCase()
+      ? (levelObj.relationship as string).toLowerCase().trim()
       : '';
-    if (relationship !== 'spouse') continue;
+    // Household members share an address. Recognize the common forms users
+    // pick from the questionnaire combobox (Spouse, Husband, Wife) and the
+    // domestic-partner variants. Without this, the auto-fill missed Karen's
+    // POA agent (relationship='Husband' not 'Spouse').
+    const HOUSEHOLD = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+    if (!HOUSEHOLD.has(relationship)) continue;
 
     const hasFiduciaryAddress = typeof levelObj.address === 'string'
       && (levelObj.address as string).trim().length > 0;
