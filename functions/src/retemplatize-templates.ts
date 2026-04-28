@@ -313,18 +313,48 @@ export const retemplatizeTemplates = onCall(
         console.log(`[retemplatize] ${name}: ${variables.length} variables found, fidelity=${(finalFidelity.score * 100).toFixed(1)}%`);
 
         if (!dryRun) {
-          // Update template in Firestore
-          // Preserve rawContent (original untouched HTML) if not already saved
+          // Phase 4.3: preserve all metadata fields and emit an audit trail.
+          // Prior to this commit the update only wrote {content, variables,
+          // updatedAt} — every other field (_sourceCollection, softwareSource,
+          // variant, isDefault, isActive, docTypes, tags, folder, etc.) was
+          // dropped on the round-trip, breaking provenance and version tracking
+          // when re-running retemplatize on a template more than once.
           const updateData: Record<string, unknown> = {
             content: templatized,
             variables,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            // Bump version so change-detection downstream sees the rewrite.
+            version: admin.firestore.FieldValue.increment(1),
+            // Audit trail for "when / by whom / with what model" — replaces
+            // log-only history that disappears when Cloud Logs are pruned.
+            retemplatizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            retemplatizedBy: request.auth?.uid ?? 'system',
+            retemplatizeFidelityScore: finalFidelity.score,
           };
           if (!data.rawContent) {
             updateData.rawContent = originalContentForRawStorage; // Save the original before overwriting
           }
+          // Re-affirm preserved metadata so a partial-write or schema migration
+          // can't silently drop these. Falls back to existing values when fields
+          // are present; only writes a value if the source had one.
+          for (const field of [
+            '_sourceCollection',
+            'softwareSource',
+            'variant',
+            'isDefault',
+            'isActive',
+            'docTypes',
+            'tags',
+            'folder',
+            'complexity',
+            'learnedVariables',
+            'promptVersion',
+            'createdBy',
+          ]) {
+            if (data[field] !== undefined) updateData[field] = data[field];
+          }
           await col.doc(templateId).update(updateData);
-          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'})`);
+          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'}, +metadata)`);
         }
 
         results.push({

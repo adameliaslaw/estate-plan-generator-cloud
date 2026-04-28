@@ -4,6 +4,88 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## Completed (2026-04-27 evening session — Phase 0–4 pipeline hardening)
+
+Five-pass audit (Claude → Codex → cross-cutting synthesis → three verification probes)
+produced a 17-item plan saved at
+`C:\Users\adame\.claude\plans\propose-the-game-plan-polished-raven.md`.
+All five phases shipped tonight. Tests: 589 passed (was 578).
+
+### Phase 0 — Pre-reset gates (`e937599`)
+Block-level fixes that had to land before re-uploading any template:
+- **0.1 Handlebars array syntax**: process-template-file.ts:368 + :690 now teach
+  the AI to emit `{{children.[0].name}}` (valid) instead of `{{children[0].name}}`
+  (silently empty); loop-detection regex matches both forms for backwards-compat.
+- **0.2 Style-map audit**: TEMPLATE_CLASS_INLINE_STYLES is now exported and adds
+  `font-family:'Times New Roman'` to every class so DOCX export sees it without
+  a body parent. tr-base min-height drift fixed (1em → 1.5em).
+- **0.3 DOCX export honors inlined styles**: new inlineStyleToTrConfig() parses
+  font-size/weight/decoration/transform/margin/text-indent/line-height from inline
+  style attributes; wired into both classed-paragraph (override layer) and no-class
+  fallback. Closes the PDF↔DOCX divergence — same source HTML now matches across
+  both export pipelines.
+- **0.4 True idempotency for applyTemplateFormattingStyles**: parseStyleString /
+  serializeStyleMap / mergeClassStyleIntoExisting collapse multi-class duplicates
+  on the first pass. New 11-test suite in
+  `tests/unit/template-formatting-styles.test.ts` covers idempotency across
+  multiple passes and AI mutations.
+- **0.5 Composite index**: confirmed unnecessary — single equality on
+  knowledgeBase.category is served by Firestore's auto-created single-field
+  index. No change shipped.
+
+### Phase 1 — Reach more documents
+- **1.1 Per-property docs route through templates**: deed/affidavit/gitRep3 now
+  attempt template resolution before falling back to AI. Per-property template
+  Handlebars can read `{{property.address}}` etc. via additionalData.
+- **1.2 Flex documents support templates**: callers can pass
+  `generationMode: 'template'` / `'hybrid'` plus `templateId`/`softwareSource`/
+  `formattingPreset` from generate-flex-document.ts. Falls back to AI when no
+  flex template exists.
+- **1.3 Dispatch logging**: `[unifiedGenerator] dispatch:` lines record
+  template-vs-AI path per docType so we can audit template hit-rate after
+  re-upload.
+- **1.4 softwareSource is a hard requirement**: getTemplate returns null when
+  softwareSource is set but no matching template exists — no silent
+  cross-software fallback. Caller surfaces a structured error.
+
+### Phase 2 — Provenance & metadata
+- **2.1 Real generation provenance at save**: GeneratedDoc carries
+  resolvedMode/resolvedTemplateId/resolvedTemplateSource/resolvedSoftwareSource;
+  document-save-helper persists them plus triggerSource. Future fidelity
+  reports answer "what produced this doc?" without replaying.
+- **2.2 Fiduciary addresses are critical fields**: CRITICAL_LEGAL_FIELDS now
+  flags missing executor/trustee/POA/proxy/guardian addresses. Generated docs
+  show `[MISSING: executor address]` instead of silent blanks. Coordinate with
+  open item #5 (questionnaire capture).
+
+### Phase 3 — Robustness & cost
+- **3.1 Bounded concurrency**: batch generation uses a 3-worker queue; replaces
+  unbounded `Promise.allSettled` to prevent 20+ simultaneous AI calls on
+  Fortress packages with spouse expansion + per-property docs.
+- **3.2 KB context truncation in hybrid prompt**: 4K chars/resource and 24K
+  total budget; logs when truncation fires.
+- **3.3 Timestamp-aware deep clone**: replaces JSON.parse(JSON.stringify(...))
+  in batch preload with cloneTimestampAware() that preserves Firestore
+  Timestamp and Date instances. Closes silent date drift between single and
+  batch generation.
+
+### Phase 4 — Cleanup
+- **4.1 Carbone deleted**: 315 lines of orphaned dead code removed; carbone
+  package dependency dropped.
+- **4.2 high-fidelity mode removed**: pruned from GenerationMode union, request
+  types, UI dropdown, and the unimplemented HttpsError throw site.
+- **4.3 retemplatize metadata preservation**: retemplatize-templates.ts now
+  preserves _sourceCollection / softwareSource / variant / isDefault / isActive
+  / docTypes / tags / folder / complexity / learnedVariables / promptVersion /
+  createdBy on update. Adds version increment + retemplatizedAt /
+  retemplatizedBy / retemplatizeFidelityScore audit fields.
+
+**Verification next**: see plan file's verification section. Upload one fresh
+DOCX template, generate against Karen Elias, compare HTML preview / PDF export /
+DOCX export for visual parity.
+
+---
+
 ## Completed / Follow-up (2026-04-27 session — template fidelity)
 
 **Problem investigated:** generated documents were not reliably replicating the

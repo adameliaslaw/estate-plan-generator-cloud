@@ -40,7 +40,7 @@ export const generateEstateDocument = functions
         firmId,
         clientId,
         docType,
-        generationMode: 'template', // Default to high-fidelity template mode
+        generationMode: 'template', // Default to template mode for fidelity
         createdBy: context.auth.uid,
         triggerSource: 'single',
       });

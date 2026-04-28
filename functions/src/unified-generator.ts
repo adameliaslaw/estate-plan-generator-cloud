@@ -373,6 +373,42 @@ export function buildStandardTitle(
 // ---------------------------------------------------------------------------
 // Core unified generation function
 // ---------------------------------------------------------------------------
+// Context cloning — Timestamp-aware deep clone for batch preload (Phase 3.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Recursive deep-clone that preserves Firestore Timestamp instances and Date
+ * objects. JSON.parse(JSON.stringify(...)) would coerce both to strings,
+ * breaking any helper that calls .toDate() / .toMillis() and producing date
+ * drift between single and batch generation paths.
+ */
+function cloneTimestampAware<T>(value: T, seen: WeakMap<object, unknown> = new WeakMap()): T {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  if (value instanceof Date) return new Date(value.getTime()) as unknown as T;
+  // Firestore Timestamp has toMillis/toDate but not isFrozen — duck-type detect.
+  if (value instanceof admin.firestore.Timestamp) {
+    return admin.firestore.Timestamp.fromMillis(value.toMillis()) as unknown as T;
+  }
+  if (seen.has(value as object)) return seen.get(value as object) as T;
+
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    seen.set(value as object, out);
+    for (const item of value as unknown[]) out.push(cloneTimestampAware(item, seen));
+    return out as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  seen.set(value as object, out);
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = cloneTimestampAware(v, seen);
+  }
+  return out as unknown as T;
+}
+
+function cloneClientContext(ctx: ClientContext): ClientContext {
+  return cloneTimestampAware(ctx);
+}
 
 /**
  * Generate a single document for a client. This is THE function that every
@@ -401,14 +437,6 @@ export async function generateDocument(
     additionalData,
     modelOverride,
   } = params;
-
-  if (generationMode === 'high-fidelity') {
-    throw new HttpsError(
-      'unimplemented',
-      'high-fidelity binary DOCX generation is not yet available. ' +
-      'Select template, hybrid, or ai mode instead.',
-    );
-  }
 
   const db = admin.firestore();
 
@@ -464,8 +492,13 @@ export async function generateDocument(
   let contextFailed = false;
 
   if (params.preloadedContext) {
-    // Deep clone preloaded context so we don't mutate the shared batch instance
-    clientContext = JSON.parse(JSON.stringify(params.preloadedContext));
+    // Deep clone preloaded context so we don't mutate the shared batch instance.
+    // Use structuredClone so Firestore Timestamp / Date objects survive (a plain
+    // JSON.stringify round-trip would coerce them to ISO strings, breaking any
+    // template helper that calls .toDate() — silent date drift between batch
+    // and single generation paths). Timestamp instances aren't structured-
+    // cloneable directly; fall back to a Timestamp-aware recursive clone.
+    clientContext = cloneClientContext(params.preloadedContext);
   } else {
     try {
       clientContext = await aggregateClientContext(firmId, clientId, docType);
@@ -548,7 +581,32 @@ export async function generateDocument(
     if (isFlexDocType(docType)) {
       (clientData as Record<string, unknown>)._customPrompt = customPrompt;
       (clientData as Record<string, unknown>)._additionalData = additionalData;
-      generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+      // Phase 1.2: flex docs can opt into template/hybrid rendering by passing
+      // a generationMode other than 'ai'. When a clientContext exists and a
+      // matching flex template is uploaded, route through the template engine;
+      // otherwise fall back to the AI flex generator (closure preserves the
+      // injected customPrompt/additionalData).
+      if (generationMode !== 'ai' && clientContext) {
+        console.info(`[unifiedGenerator] dispatch: docType=${docType} path=template-flex generationMode=${generationMode}`);
+        const aiGenFn = () => {
+          console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-fallback-from-template (flex)`);
+          return generatorFn(clientData, firmData, packageType, trustTypes);
+        };
+        generatedDoc = await generateFromTemplate(
+          clientContext,
+          docType,
+          generationMode,
+          templateId,
+          undefined,
+          aiGenFn,
+          softwareSource,
+          formattingPreset,
+          additionalData,
+        );
+      } else {
+        console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-only-direct (flex) reason=${generationMode === 'ai' ? 'mode' : 'no-context'}`);
+        generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+      }
     } else {
       // Resolve property for per-property docs
       let property: admin.firestore.DocumentData | undefined;
@@ -576,8 +634,34 @@ export async function generateDocument(
             );
           }
           property = properties[idx] ?? properties[0];
-          // Per-property docs always use AI (complex property-specific logic)
-          generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
+          // Try templates first when a clientContext is available; per-property
+          // generators are then used as the AI fallback (closure carries the
+          // resolved property forward). When no template exists for this
+          // doc type, generateFromTemplate falls through to aiGenFn — yielding
+          // identical behaviour to the legacy direct-AI path. Per-property
+          // Handlebars templates can read {{property.address}} etc. via the
+          // additionalData payload.
+          if (generationMode !== 'ai' && clientContext) {
+            console.info(`[unifiedGenerator] dispatch: docType=${docType} path=template-with-property generationMode=${generationMode}`);
+            const aiGenFn = () => {
+              console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-fallback-from-template (per-property)`);
+              return generatorFn(clientData, firmData, packageType, trustTypes, property);
+            };
+            generatedDoc = await generateFromTemplate(
+              clientContext,
+              docType,
+              generationMode,
+              templateId,
+              undefined,
+              aiGenFn,
+              softwareSource,
+              formattingPreset,
+              { property },
+            );
+          } else {
+            console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-only-direct (per-property) reason=${generationMode === 'ai' ? 'mode' : 'no-context'}`);
+            generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
+          }
           generatedDoc.propertyAddress = property.address;
         }
       }
@@ -586,7 +670,11 @@ export async function generateDocument(
       if (!generatedDoc!) {
         if (generationMode !== 'ai' && clientContext) {
           // Legacy Template or hybrid mode (HTML based)
-          const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
+          console.info(`[unifiedGenerator] dispatch: docType=${docType} path=template generationMode=${generationMode}`);
+          const aiGenFn = () => {
+            console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-fallback-from-template`);
+            return generatorFn(clientData, firmData, packageType, trustTypes);
+          };
 
           // Special case: Estate Plan Summary needs its own complex data mapper 
           // (it's not just a simple questionnaire field lookup)
@@ -608,6 +696,7 @@ export async function generateDocument(
           );
         } else {
           // AI-only mode or context aggregation failed — direct AI generation
+          console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-only-direct reason=${generationMode === 'ai' ? 'mode' : 'no-context'}`);
           generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
         }
       }
@@ -762,6 +851,14 @@ export async function generateDocument(
     if (contextFailed) {
       console.warn(`[unifiedGenerator] Saving ${docType} with _contextFailed=true (degraded AI-only output)`);
     }
+    // Resolved generation mode — what actually ran. When generateFromTemplate
+    // matched a template, generatedDoc.resolvedMode is set; otherwise we ran
+    // the AI fallback directly so resolvedMode is 'ai'. Flex docs report
+    // 'flex' to distinguish them from standard AI generation.
+    const resolvedMode: 'template' | 'hybrid' | 'ai' | 'flex' =
+      generatedDoc.resolvedMode
+        ?? (isFlexType ? 'flex' : 'ai');
+
     saveResult = await saveDocumentToVault({
       firmId,
       clientId,
@@ -773,7 +870,11 @@ export async function generateDocument(
       status: finalStatus === 'error' ? 'error' : finalStatus,
       createdBy,
       documentId,
-      generationMode: triggerSource === 'chat-draft' ? 'chat-draft' : 'batch',
+      generationMode: resolvedMode,
+      triggerSource,
+      templateId: generatedDoc.resolvedTemplateId ?? null,
+      templateSourceCollection: generatedDoc.resolvedTemplateSource ?? null,
+      softwareSource: generatedDoc.resolvedSoftwareSource ?? softwareSource ?? null,
       propertyAddress: generatedDoc.propertyAddress,
       changeNotes,
       tags,

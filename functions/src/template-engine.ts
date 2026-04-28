@@ -65,9 +65,13 @@ export interface DocumentTemplate {
   updatedAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
   createdBy: string;
   updatedBy: string;
+  /** Which Firestore collection the template was resolved from. Populated by
+   *  getTemplate() so downstream callers (provenance, audit) don't have to
+   *  re-derive the source. */
+  _sourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates';
 }
 
-export type GenerationMode = 'template' | 'ai' | 'hybrid' | 'high-fidelity';
+export type GenerationMode = 'template' | 'ai' | 'hybrid';
 
 type TemplateCandidate = {
   id: string;
@@ -551,6 +555,7 @@ function adaptCandidateToTemplate(
       id: candidate.data.id ?? candidate.id,
       firmId: candidate.data.firmId ?? firmId,
       content,
+      _sourceCollection: candidate.source,
     };
   }
 
@@ -686,9 +691,13 @@ export async function getTemplate(
       col.where('docType', '==', docType).where('isActive', '==', true);
 
     if (softwareSource) {
-      // When a specific software source is requested, find ANY active template
-      // for that source (no isDefault requirement — bulk-uploaded templates are
-      // often not marked as default).
+      // softwareSource is a HARD REQUIREMENT (Phase 1.4 decision). When the
+      // caller specifies a software source, only return a template that
+      // actually matches it. No fallback to isDefault, no vector search, no
+      // knowledgeBase, no legacy collection — those would silently substitute
+      // a different software's template, producing plausible but wrong output.
+      // Callers see null and surface a structured error so the firm can
+      // upload the missing template before retrying.
       const sourceSnap = await buildBaseQuery()
         .where('softwareSource', '==', softwareSource)
         .limit(25)
@@ -703,24 +712,12 @@ export async function getTemplate(
         rawCandidate = pickBestTemplateCandidate(candidates, { softwareSource });
         rawData = rawCandidate?.data;
       } else {
-        // No template for this software source — fall back to isDefault=true
-        // without the software filter.
-        console.info(
-          `[getTemplate] No template found for docType="${docType}" softwareSource="${softwareSource}", falling back.`,
+        console.warn(
+          `[getTemplate] No template for docType="${docType}" softwareSource="${softwareSource}". ` +
+          `softwareSource is a hard requirement — refusing to fall back to other sources. ` +
+          `Caller should upload a matching template or omit softwareSource to allow fallbacks.`,
         );
-        const fallbackSnap = await buildBaseQuery()
-          .where('isDefault', '==', true)
-          .limit(25)
-          .get();
-        if (!fallbackSnap.empty) {
-          const candidates = fallbackSnap.docs.map((doc) => ({
-            id: doc.id,
-            data: doc.data(),
-            source: 'documentTemplates' as const,
-          }));
-          rawCandidate = pickBestTemplateCandidate(candidates, { preferDefault: true });
-          rawData = rawCandidate?.data;
-        }
+        return null;
       }
     } else if (variant) {
       // Specific variant requested
@@ -844,6 +841,12 @@ export async function getTemplate(
   if (!rawData.id && rawCandidate) {
     rawData = { ...rawData, id: rawCandidate.id };
   }
+  // Ensure _sourceCollection is always populated for downstream provenance
+  // (Phase 2.1). adaptCandidateToTemplate sets it for KB / legacy paths;
+  // direct documentTemplates fetches without adaptation might miss it.
+  if (rawCandidate && !rawData._sourceCollection) {
+    rawData = { ...rawData, _sourceCollection: rawCandidate.source };
+  }
 
   return rawData as DocumentTemplate;
 }
@@ -887,13 +890,25 @@ export async function listTemplateVariants(
  * the attorney sees a visible placeholder rather than a silent blank.
  */
 const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
-  { path: ['executor', 'primary', 'name'],        label: 'executor name' },
+  // Names — primary slots are mandatory; alternates skipped silently if absent.
+  { path: ['executor', 'primary', 'name'],         label: 'executor name' },
   { path: ['executor', 'alternate', 'name'],       label: 'alternate executor name' },
   { path: ['trustee', 'primary', 'name'],          label: 'trustee name' },
   { path: ['trustee', 'alternate', 'name'],        label: 'alternate trustee name' },
   { path: ['powerOfAttorney', 'agent', 'name'],    label: 'POA agent name' },
   { path: ['healthcareProxy', 'primary', 'name'],  label: 'healthcare proxy name' },
   { path: ['guardian', 'primary', 'name'],         label: 'guardian name' },
+  // Addresses — primary fiduciary addresses are required for legal validity in
+  // most templates (executor/trustee blocks include "[Name], [Address]"). When
+  // the questionnaire doesn't capture an address (HOMEWORK #5), this surfaces
+  // a [MISSING: ...] marker instead of a silent blank line in the wet-sign doc.
+  { path: ['executor', 'primary', 'address'],         label: 'executor address' },
+  { path: ['executor', 'alternate', 'address'],       label: 'alternate executor address' },
+  { path: ['trustee', 'primary', 'address'],          label: 'trustee address' },
+  { path: ['trustee', 'alternate', 'address'],        label: 'alternate trustee address' },
+  { path: ['powerOfAttorney', 'agent', 'address'],    label: 'POA agent address' },
+  { path: ['healthcareProxy', 'primary', 'address'],  label: 'healthcare proxy address' },
+  { path: ['guardian', 'primary', 'address'],         label: 'guardian address' },
 ];
 
 /**
@@ -1086,6 +1101,17 @@ export async function generateFromTemplate(
   // Compute prompt version hash from the template content
   const promptVersion = computePromptHash(template.content);
 
+  // Provenance — emitted on every return so the save layer can persist
+  // (Phase 2.1). resolvedMode reflects the actual mode used; resolvedTemplateId
+  // names the matched template; resolvedTemplateSource indicates which
+  // collection it came from.
+  const provenance = {
+    resolvedMode: mode,
+    resolvedTemplateId: template.id,
+    resolvedTemplateSource: template._sourceCollection ?? 'documentTemplates',
+    resolvedSoftwareSource: softwareSource ?? template.softwareSource ?? null,
+  } as const;
+
   // ── Smart routing ──────────────────────────────────────────────────────────
   // Variable-free templates are complete documents, often imported from DOCX or
   // PDF files. Skip Handlebars and do focused text substitution so the output
@@ -1107,10 +1133,10 @@ export async function generateFromTemplate(
         formattingPreset,
       ),
     );
-    
+
     // For hybrid mode, we might optionally want to do an enhancement pass later, but right now
     // substituteTemplateValues focuses purely on client data injection.
-    return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content };
+    return { docType, title, content, status: 'draft', promptVersion, templateBaseline: template.content, ...provenance };
   }
 
   // ── Handlebars rendering (for templates WITH variables) ─────────────────
@@ -1141,6 +1167,7 @@ export async function generateFromTemplate(
         status: 'draft',
         promptVersion,
         templateBaseline: template.content,
+        ...provenance,
       };
     }
     // In template mode, fall back to focused text substitution (same as hybrid)
@@ -1159,6 +1186,7 @@ export async function generateFromTemplate(
       status: 'draft',
       promptVersion,
       templateBaseline: template.content,
+      ...provenance,
     };
   }
 
@@ -1190,6 +1218,7 @@ export async function generateFromTemplate(
       content: applyTemplateFormattingStyles(renderedHtml),
       status: 'draft',
       promptVersion,
+      ...provenance,
     };
   }
 
@@ -1209,6 +1238,7 @@ export async function generateFromTemplate(
         content: applyTemplateFormattingStyles(renderedHtml),
         status: 'draft',
         promptVersion,
+        ...provenance,
       };
     }
     const enhanced = await enhanceWithAI(applyTemplateFormattingStyles(renderedHtml), ctx, docType);
@@ -1219,10 +1249,11 @@ export async function generateFromTemplate(
       status: 'draft',
       promptVersion,
       templateBaseline: renderedHtml,
+      ...provenance,
     };
   }
 
-  return { docType, title, content: applyTemplateFormattingStyles(renderedHtml), status: 'draft', promptVersion };
+  return { docType, title, content: applyTemplateFormattingStyles(renderedHtml), status: 'draft', promptVersion, ...provenance };
 }
 
 // ---------------------------------------------------------------------------
@@ -1411,10 +1442,47 @@ async function enhanceWithAI(
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
 
-  // Build knowledge base context (full content — no truncation)
-  const kbContext = ctx.knowledgeResources
-    .map((r) => `[${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}:\n${r.content}`)
-    .join('\n\n');
+  // Build knowledge base context with token-cost guardrails. Hybrid prompts
+  // had been shipping every KB resource at full length (Codex P2: a probable
+  // cost driver). Each resource is capped at 4K chars; the aggregate is
+  // capped at 24K chars (~6K tokens). Truncation is logged so we can spot
+  // when firms grow KB content past these bounds.
+  const PER_RESOURCE_CAP = 4000;
+  const TOTAL_KB_CAP = 24000;
+  let kbBudget = TOTAL_KB_CAP;
+  let perResourceTruncations = 0;
+  let totalTruncated = false;
+  const kbParts: string[] = [];
+  for (const r of ctx.knowledgeResources) {
+    if (kbBudget <= 0) {
+      totalTruncated = true;
+      break;
+    }
+    const header = `[${r.category}] ${r.title}${r.citation ? ` (${r.citation})` : ''}:\n`;
+    const remaining = kbBudget - header.length;
+    if (remaining <= 0) {
+      totalTruncated = true;
+      break;
+    }
+    const cap = Math.min(PER_RESOURCE_CAP, remaining);
+    let body = r.content ?? '';
+    if (body.length > cap) {
+      body = body.slice(0, cap) + '… [truncated]';
+      perResourceTruncations++;
+    }
+    const part = header + body;
+    kbParts.push(part);
+    kbBudget -= part.length;
+  }
+  if (totalTruncated || perResourceTruncations > 0) {
+    console.info(
+      `[template-engine] hybrid KB context truncated for ${docType}: ` +
+      `included ${kbParts.length}/${ctx.knowledgeResources.length} resources, ` +
+      `per-resource truncations=${perResourceTruncations}, ` +
+      `total cap hit=${totalTruncated}`,
+    );
+  }
+  const kbContext = kbParts.join('\n\n');
 
   // Notes context (full AI summaries)
   const notesContext = ctx.notes

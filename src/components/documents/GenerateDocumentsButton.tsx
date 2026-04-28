@@ -188,7 +188,7 @@ export default function GenerateDocumentsButton({
         clientId,
         packageType,
         trustTypes,
-        generationMode: generationMode as 'template' | 'ai' | 'hybrid' | 'high-fidelity',
+        generationMode: generationMode as 'template' | 'ai' | 'hybrid',
         softwareSource: softwareSource === 'none' ? '' : softwareSource,
         formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
@@ -368,7 +368,6 @@ export default function GenerateDocumentsButton({
                     <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">Template: Enhanced (Hybrid) — Recommended</SelectItem>
                     <SelectItem value="template" className="text-xs">Template: Exact Fidelity</SelectItem>
                     <SelectItem value="ai" className="text-xs">AI Drafting (From Scratch)</SelectItem>
-                    <SelectItem value="high-fidelity" disabled className="text-xs text-gray-400">Binary DOCX — Coming Soon</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[10px] text-gray-400">
