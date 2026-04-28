@@ -967,6 +967,14 @@ export default function DocumentVault({
         onClose={() => setShowFlexGen(false)}
       />
 
+      {/* ── Single Document Generator ────────────────────────────────────────── */}
+      <SingleDocumentGenerator
+        firmId={firmId}
+        clientId={clientId}
+        open={showSingleGen}
+        onClose={() => setShowSingleGen(false)}
+      />
+
       {/* ── E-Signature Dialog ──────────────────────────────────────────────── */}
       {signDoc && (
         <ESignatureDialog
