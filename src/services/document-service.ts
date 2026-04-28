@@ -38,6 +38,11 @@ export interface GenerateSingleDocumentRequest {
   templateId?: string;
   softwareSource?: string;
   formattingPreset?: string;
+  /** 'client' (default) generates the doc for the client themselves.
+   *  'spouse' swaps testator/spouse data so the doc is generated for the
+   *  spouse using the same client record as the data source — produces
+   *  e.g. a separate spouse-owned will saved with a `_spouse` suffix. */
+  spouseRole?: 'client' | 'spouse';
 }
 
 export interface GenerateSingleDocumentResponse {

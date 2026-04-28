@@ -27,6 +27,9 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { documentService } from '@/services/document-service';
+import { useDocument } from '@/hooks/useFirestore';
+import { COLLECTIONS } from '@/config/constants';
+import type { Client } from '@/types';
 
 // ── Standard document types available for individual generation ───────────────
 
@@ -56,9 +59,27 @@ interface Props {
 export default function SingleDocumentGenerator({ firmId, clientId, open, onClose }: Props) {
   const [selectedDocType, setSelectedDocType] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
+  const [spouseRole, setSpouseRole] = useState<'client' | 'spouse'>('client');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Pull client + spouse so the spouse-role selector shows real names.
+  const clientPath = firmId && clientId ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}` : null;
+  const { data: client } = useDocument<Client>(clientPath);
+  const clientFullName = client
+    ? [client.personalInfo?.firstName, client.personalInfo?.lastName].filter(Boolean).join(' ').trim()
+    : '';
+  const spouseFullName = client?.spouseInfo
+    ? [client.spouseInfo.firstName, client.spouseInfo.lastName].filter(Boolean).join(' ').trim()
+    : '';
+  const isMarried = client?.personalInfo?.maritalStatus === 'married'
+    || client?.personalInfo?.maritalStatus === 'domesticPartnership'
+    || (!!spouseFullName && spouseFullName.length > 0);
+  // Per-spouse docs only make sense for personal docs (will/POA/HC/trust);
+  // skip for joint/property docs that don't have a per-testator variant.
+  const docTypeSupportsSpouseRole = ['will', 'pourOverWill', 'poa', 'livingWill', 'trust'].includes(selectedDocType);
+  const showSpouseRole = isMarried && docTypeSupportsSpouseRole && !!spouseFullName;
 
   const handleGenerate = async () => {
     if (!selectedDocType) return;
@@ -73,6 +94,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         clientId,
         docType: selectedDocType,
         customInstructions: customInstructions.trim() || undefined,
+        spouseRole: showSpouseRole ? spouseRole : undefined,
       });
 
       setSuccessMessage(`${result.title} has been saved to the Document Vault.`);
@@ -81,6 +103,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
       setTimeout(() => {
         setSelectedDocType('');
         setCustomInstructions('');
+        setSpouseRole('client');
         setSuccessMessage('');
         onClose();
       }, 1500);
@@ -95,6 +118,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     if (generating) return; // Don't close while generating
     setSelectedDocType('');
     setCustomInstructions('');
+    setSpouseRole('client');
     setError('');
     onClose();
   };
@@ -138,6 +162,42 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
               <p className="text-xs text-gray-500">{selectedDoc.description}</p>
             )}
           </div>
+
+          {/* Spouse-role selector — only for personal docs when client is married */}
+          {showSpouseRole && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Whose document?</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSpouseRole('client')}
+                  className={
+                    'flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ' +
+                    (spouseRole === 'client'
+                      ? 'border-[#2b6cb0] bg-[#ebf4ff] text-[#1a365d] font-medium'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#2b6cb0]/50')
+                  }
+                >
+                  {clientFullName || 'Client'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpouseRole('spouse')}
+                  className={
+                    'flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ' +
+                    (spouseRole === 'spouse'
+                      ? 'border-[#2b6cb0] bg-[#ebf4ff] text-[#1a365d] font-medium'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#2b6cb0]/50')
+                  }
+                >
+                  {spouseFullName} (spouse)
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Each spouse needs their own will/POA/etc. The spouse version saves with a "_spouse" suffix.
+              </p>
+            </div>
+          )}
 
           {/* Custom instructions (optional) */}
           <div className="space-y-1.5">

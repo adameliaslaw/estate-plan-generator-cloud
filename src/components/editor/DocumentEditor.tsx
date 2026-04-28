@@ -370,10 +370,16 @@ export default function DocumentEditor({
   );
 
   // ── Regenerate this document from the underlying template + client data ──
+  // Preserves the doc's spouseRole if it's the spouse's copy (deterministic
+  // from the doc id suffix `_spouse` since that's how saveDocumentToVault
+  // builds it). Without this, regenerating Adam's spouse-version of a will
+  // would overwrite the client (Karen's) doc instead.
   const handleRegenerate = useCallback(async () => {
     if (!document || !document.docType) return;
+    const inferredSpouseRole: 'client' | 'spouse' = documentId.endsWith('_spouse') ? 'spouse' : 'client';
+    const whoseLabel = inferredSpouseRole === 'spouse' ? ' (spouse)' : '';
     const confirmMsg =
-      `Regenerate "${document.displayName ?? document.docType}" from the current ` +
+      `Regenerate "${document.displayName ?? document.docType}"${whoseLabel} from the current ` +
       `template and client data?\n\nYour current edits will be saved as version ${document.currentVersion ?? '?'} ` +
       `before the new draft replaces the working copy.`;
     if (!window.confirm(confirmMsg)) return;
@@ -393,6 +399,7 @@ export default function DocumentEditor({
         firmId,
         clientId,
         docType: document.docType,
+        spouseRole: inferredSpouseRole,
       });
       // Document data auto-refreshes via the useDocument subscription.
     } catch (err) {
@@ -402,7 +409,7 @@ export default function DocumentEditor({
     } finally {
       setRegenerating(false);
     }
-  }, [document, docPath, editor, firmId, clientId, hasUnsavedChanges, userProfile]);
+  }, [document, documentId, docPath, editor, firmId, clientId, hasUnsavedChanges, userProfile]);
 
   // ── Restore a version ──
   const handleRestoreVersion = useCallback(
