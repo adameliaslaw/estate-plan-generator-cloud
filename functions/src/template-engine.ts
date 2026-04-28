@@ -613,6 +613,45 @@ export function cleanEmptyListSlots(html: string): string {
     const segEnd = next === -1 ? html.length : next;
     let segment = html.slice(i, segEnd);
 
+    // BEFORE the generic cleanup runs, detect dangling-appointment patterns
+    // produced when an IL template enumerates more fiduciary tiers than the
+    // data model carries (e.g. 4 executor levels, only primary+alternate
+    // populated) and inject [MISSING: ...] markers so the gap is visible to
+    // the lawyer on the wet-sign doc instead of leaving "I appoint , of, to
+    // serve as Executor". Runs once per segment, before the comma/space
+    // collapses below would mangle the patterns past recognition.
+    // Order matters within this block: more specific patterns first.
+    // Executor — 2nd-level successor (name + address both empty).
+    segment = segment.replace(
+      /\bappoint\s*,\s*of\s*,\s*to serve as Executor\b/gi,
+      'appoint [MISSING: successor executor name], of [MISSING: successor executor address], to serve as Executor',
+    );
+    // Executor — 3rd-level successor (name only, no address slot in template).
+    segment = segment.replace(
+      /\bappoint\s*,\s+to serve as Executor\b/gi,
+      'appoint [MISSING: successor executor name], to serve as Executor',
+    );
+    // Trustee — primary slot blank, children list still meaningful.
+    segment = segment.replace(
+      /\bappoint\s+to serve as Trustee\b/gi,
+      'appoint [MISSING: trustee name] to serve as Trustee',
+    );
+    // Guardian — primary "I appoint as guardian of the person".
+    segment = segment.replace(
+      /\bappoint\s+as guardian\b/gi,
+      'appoint [MISSING: guardian name] as guardian',
+    );
+    // Guardian — alternate "I appoint, as guardians".
+    segment = segment.replace(
+      /\bappoint\s*,\s+as guardians\b/gi,
+      'appoint [MISSING: alternate guardian name], as guardians',
+    );
+    // Guardian — successor "I appoint , , to be the successor guardians".
+    segment = segment.replace(
+      /\bappoint\s*,\s*,\s+to be the successor guardians\b/gi,
+      'appoint [MISSING: successor guardian name], to be the successor guardians',
+    );
+
     // Run the cleanups iteratively until the segment stabilises — multiple
     // empty slots in a row need multiple passes (e.g. ", , , " → ", , " → ", ").
     let prev: string;
@@ -854,6 +893,59 @@ function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   out = cleanEmptyListSlots(out);
   out = uppercaseKnownNames(out, collectKnownNames(ctx));
   out = insertOxfordAnd(out);
+  out = typographyCleanup(out);
+  return out;
+}
+
+/**
+ * General typography fixes that apply after all data injection and name
+ * uppercasing. Each pass operates on text segments only — never mutates
+ * tag contents — so attributes like class="x,y" or style="font-size:1em"
+ * are preserved.
+ *
+ * Passes:
+ *   1. Collapse `JR..` / `SR..` / `M.D..` / `ESQ..` etc. to a single period
+ *      when an abbreviation already ending in `.` collides with the
+ *      sentence-ending period.
+ *   2. Insert a space after `,` when followed by a letter (e.g. IL template
+ *      emits `, NJ,as my` — should read `, NJ, as my`). Skips digits so
+ *      `1,000` is not mangled.
+ *   3. Insert a space after `)` when followed by a capital letter without
+ *      one — e.g. `(050422014)Attorney at Law` → `(050422014) Attorney at
+ *      Law`. The IL notary block emits the bar number paren and the
+ *      attorney title with no separating whitespace.
+ *   4. Insert a space between `ARTICLE [ROMAN]` and an immediately-following
+ *      capitalized word — e.g. `ARTICLE XIINo Contest` → `ARTICLE XII No
+ *      Contest`. The IL Will template misformatted Article XII heading.
+ */
+export function typographyCleanup(html: string): string {
+  if (!html) return html;
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') {
+      const close = html.indexOf('>', i);
+      if (close === -1) { out += html.slice(i); break; }
+      out += html.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    const next = html.indexOf('<', i);
+    const segEnd = next === -1 ? html.length : next;
+    let segment = html.slice(i, segEnd);
+
+    // 1. Abbreviation period + sentence period collision: `JR..` → `JR.`.
+    segment = segment.replace(/([A-Z]+\.)\./g, '$1');
+    // 2. Comma without space before a letter: `NJ,as` → `NJ, as`.
+    segment = segment.replace(/,(?=[A-Za-z])/g, ', ');
+    // 3. Closing paren without space before a capital letter: `)Attorney` → `) Attorney`.
+    segment = segment.replace(/\)(?=[A-Z])/g, ') ');
+    // 4. ARTICLE [ROMAN] glued to next word: `ARTICLE XIINo` → `ARTICLE XII No`.
+    segment = segment.replace(/(ARTICLE\s+[IVXLCDM]+)([A-Z][a-z])/g, '$1 $2');
+
+    out += segment;
+    i = segEnd;
+  }
   return out;
 }
 
