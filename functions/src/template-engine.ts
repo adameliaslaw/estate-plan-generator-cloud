@@ -503,18 +503,21 @@ export function stripArticleHeaderDashes(html: string): string {
 
 /**
  * Uppercase every occurrence of every known person-name from the rendering
- * context inside the HTML body. Names are extracted from clientFullName,
- * spouseFullName, fiduciary names, child names, firm attorney + witnesses.
- * The longest names are replaced first so substrings (e.g. last-name-only
- * matches inside full names) don't double-replace.
+ * context inside the HTML body, AND ensure every occurrence is wrapped in
+ * <strong>...</strong> for visual consistency. Names that are already inside
+ * a <strong> tag are left alone (the existing wrap is preserved); bare text
+ * occurrences get a fresh wrap so e.g. "I appoint my Brother, KAREN K. ELIAS,"
+ * doesn't have one bold name and one plain.
+ *
+ * Names are extracted from clientFullName, spouseFullName, fiduciary names,
+ * child names, firm attorney + witnesses. The longest names are replaced
+ * first so substrings (e.g. last-name-only matches inside full names) don't
+ * double-replace.
  *
  * Whitespace inside the name is normalized to \s+ in the regex so a name
  * stored as "John  Smith" (double-space) still matches the rendered single
  * space form. Word boundaries on each end prevent partial-word matches like
  * uppercasing "Anne" inside "Annette".
- *
- * HTML tags within the body are skipped via a token-walk. Style attribute
- * names containing literal name substrings (rare) are left alone.
  */
 export function uppercaseKnownNames(html: string, names: string[]): string {
   if (!html || names.length === 0) return html;
@@ -531,7 +534,71 @@ export function uppercaseKnownNames(html: string, names: string[]): string {
     return new RegExp(`(?<![A-Za-z'-])${flexible}(?![A-Za-z'-])`, 'g');
   });
 
-  // Walk the HTML in tag/text segments so we don't mutate inside attributes.
+  // Walk the HTML — track whether we're inside a <strong> tag so name matches
+  // there get uppercased without a redundant wrap. Bare-text matches outside
+  // <strong> get wrapped with <strong>...</strong>.
+  let out = '';
+  let i = 0;
+  let strongDepth = 0;
+  while (i < html.length) {
+    if (html[i] === '<') {
+      const close = html.indexOf('>', i);
+      if (close === -1) { out += html.slice(i); break; }
+      const tag = html.slice(i, close + 1);
+      // Track <strong> open/close (case-insensitive). Self-closing <strong/>
+      // doesn't really exist in practice but we keep the math simple.
+      if (/^<strong(\s|>)/i.test(tag)) strongDepth++;
+      else if (/^<\/strong\s*>/i.test(tag)) strongDepth = Math.max(0, strongDepth - 1);
+      out += tag;
+      i = close + 1;
+      continue;
+    }
+    const next = html.indexOf('<', i);
+    const segEnd = next === -1 ? html.length : next;
+    let segment = html.slice(i, segEnd);
+    for (let k = 0; k < namePatterns.length; k++) {
+      const re = namePatterns[k];
+      re.lastIndex = 0;
+      const upper = unique[k].toUpperCase();
+      // Inside <strong>: just uppercase. Outside: uppercase + wrap.
+      const replacement = strongDepth > 0 ? upper : `<strong>${upper}</strong>`;
+      segment = segment.replace(re, replacement);
+    }
+    out += segment;
+    i = segEnd;
+  }
+  return out;
+}
+
+/**
+ * Strip empty inline-emphasis tags. After Handlebars renders a template
+ * that wraps a name in <strong>{{name}}</strong> with no name set, we get
+ * a literal `<strong></strong>` (or `<strong>  </strong>`). These eat
+ * surrounding cleanup logic because the text-walk in cleanEmptyListSlots
+ * skips tag tokens. Strip them once up front so the resulting text-only
+ * stream looks like one continuous segment to the cleanup pass.
+ */
+export function stripEmptyInlineTags(html: string): string {
+  if (!html) return html;
+  let prev: string;
+  let out = html;
+  do {
+    prev = out;
+    // Empty <strong>, <em>, <b>, <i>, <u>, <span> with only whitespace inside.
+    out = out.replace(/<(strong|em|b|i|u|span)(\s[^>]*)?>\s*<\/\1>/gi, '');
+  } while (out !== prev);
+  return out;
+}
+
+/**
+ * Clean up empty list slots that leak through when a template enumerates a
+ * fixed number of children/fiduciaries but the data has fewer. Patterns like
+ * "Adam Jr., , Karen", "Adam Jr. and .", or "Adam Jr., and ." appear when
+ * the template hardcodes {{children.[3].name}} or similar past the actual
+ * array length. Compresses these in TEXT segments only — never inside tags.
+ */
+export function cleanEmptyListSlots(html: string): string {
+  if (!html) return html;
   let out = '';
   let i = 0;
   while (i < html.length) {
@@ -545,11 +612,41 @@ export function uppercaseKnownNames(html: string, names: string[]): string {
     const next = html.indexOf('<', i);
     const segEnd = next === -1 ? html.length : next;
     let segment = html.slice(i, segEnd);
-    for (let k = 0; k < namePatterns.length; k++) {
-      const re = namePatterns[k];
-      re.lastIndex = 0;
-      segment = segment.replace(re, unique[k].toUpperCase());
-    }
+
+    // Run the cleanups iteratively until the segment stabilises — multiple
+    // empty slots in a row need multiple passes (e.g. ", , , " → ", , " → ", ").
+    let prev: string;
+    do {
+      prev = segment;
+      // Remove duplicate commas separated by whitespace (consecutive empties).
+      segment = segment.replace(/,(\s*,)+/g, ',');
+      // Remove trailing "and ." or "and . " (with optional comma+space before "and").
+      segment = segment.replace(/,?\s+and\s*\.\s*/g, '. ');
+      // Remove "and , " or "and  ," (orphan "and" before another empty).
+      segment = segment.replace(/\s+and\s*,/g, ',');
+      // Collapse ", ." (orphan comma right before a period) → ".".
+      segment = segment.replace(/,\s*\./g, '.');
+      // Strip an "I appoint my ," / "I appoint my [empty]," fragment by
+      // dropping the dangling possessive: "appoint my , Karen" → "appoint Karen".
+      segment = segment.replace(/\bappoint\s+my\s*,\s*/gi, 'appoint ');
+      // Strip dangling "appoint my and my" / "appoint my and " when both
+      // sides are empty (template hardcoded "my X and my Y" with both
+      // slots vacant). Collapses to a clean "appoint" so the surrounding
+      // "to serve as ..." text still reads.
+      segment = segment.replace(/\bappoint\s+my(?:\s+and\s+my)+\b\s*/gi, 'appoint ');
+      // Same for "appoint my [punct]" before " to " / "to be" / " as ".
+      segment = segment.replace(/\bappoint\s+my(?=\s+(?:to|as|hereunder|in)\b)/gi, 'appoint');
+      // Strip empty parenthetical inserts produced by missing fields, like
+      // "(my "")" or "(my )" — surfaces around bar IDs etc.
+      segment = segment.replace(/\(\s*\)/g, '');
+      // Repeated commas that may have accumulated.
+      segment = segment.replace(/,\s*,/g, ',');
+      // Squeeze multiple spaces and " ," / " ." artifacts.
+      segment = segment.replace(/[ \t]{2,}/g, ' ');
+      segment = segment.replace(/\s+,/g, ',');
+      segment = segment.replace(/\s+\./g, '.');
+    } while (segment !== prev);
+
     out += segment;
     i = segEnd;
   }
@@ -604,13 +701,21 @@ function collectKnownNames(ctx: ClientContext): string[] {
 
 /**
  * Apply user-requested document-wide formatting passes:
- *   - Strip em-dashes from article headers
- *   - Uppercase every known person name across the entire HTML
- * Runs at the very end of generation, on every return path.
+ *   1. Strip em-dashes from article headers
+ *   2. Clean up empty list slots from fixed-arity template enumerations
+ *      (e.g. "Adam Jr. and ." when a template hardcodes 4 child slots but
+ *      the client has 3)
+ *   3. Uppercase every known person name and bold-wrap each occurrence for
+ *      visual consistency throughout the document
+ *
+ * Runs at the very end of generation, on every return path. List cleanup
+ * happens BEFORE name-bolding so we don't bold trailing-empty fragments.
  */
 function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   if (!html) return html;
   let out = stripArticleHeaderDashes(html);
+  out = stripEmptyInlineTags(out);
+  out = cleanEmptyListSlots(out);
   out = uppercaseKnownNames(out, collectKnownNames(ctx));
   return out;
 }
