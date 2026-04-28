@@ -2315,10 +2315,15 @@ Return the enhanced HTML document.`;
   }
 
   try {
+    // maxTokens sized to the actual workload: a Will is ~5K input tokens;
+    // hybrid enhancement should output 5-8K tokens (preserves structure,
+    // adds citations, smooths prose). Previous 32K cap let runaway
+    // generations fill nearly the full 540s function timeout. 16K leaves
+    // generous headroom while keeping completion under ~3 min.
     let enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
       model: safeFirm?.documentDraftingModel || 'gpt-5.4',
       temperature: 0.15,
-      maxTokens: 32768,
+      maxTokens: 16384,
     });
 
     // Strip markdown fences — AI often wraps HTML in ```html ... ```
