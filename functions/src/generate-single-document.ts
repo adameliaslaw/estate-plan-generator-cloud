@@ -50,8 +50,14 @@ interface GenerateSingleRequest {
 
 export const generateSingleDocument = onCall(
   {
-    timeoutSeconds: 300,
-    memory: '512MiB',
+    // Hybrid mode with full RAG can run 3-5 min for the AI augmentation
+    // step (100K char KB context + 32K maxTokens output). Old 300s cap
+    // killed the function mid-AI-call; 540s = max for callable functions.
+    timeoutSeconds: 540,
+    // Hybrid prompt assembly + AI response handling holds the full prompt
+    // text in memory (100K chars KB + template + system prompt + response).
+    // 512Mi was tight; bumped to 2GiB to give headroom.
+    memory: '2GiB',
     region: 'us-east1',
     secrets: ['VERTEX_AI_KEY'],
   },

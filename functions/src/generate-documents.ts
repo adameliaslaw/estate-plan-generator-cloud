@@ -148,7 +148,10 @@ function expandForMarriedCouple(
 export const generateDocuments = onCall(
   {
     timeoutSeconds: 540,
-    memory: '1GiB',
+    // Bumped 1GiB → 2GiB to handle hybrid mode's 100K-char KB context
+    // assembled per-doc (and batch generation processes multiple in
+    // sequence with shared preloadedContext).
+    memory: '2GiB',
     region: 'us-east1',
     secrets: ['VERTEX_AI_KEY'],
   },
