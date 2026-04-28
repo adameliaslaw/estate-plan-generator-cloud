@@ -167,13 +167,36 @@ skipped — that's the opt-out mechanism.
 
 ---
 
-## 🔲 #5 — Questionnaire: collect fiduciary addresses
+## ✅ #5 — Questionnaire: fiduciary address capture (closed 2026-04-27)
 
-Surfaced 2026-04-24 during the LawPay investigation. The print-view
-fiduciary blocks already have address fields, but the questionnaire itself
-does not capture them on intake. Add address (line / city / state / zip)
-to the fiduciary steps so the data flows into trustee / executor / POA /
-healthcare proxy / guardian blocks without manual Firestore editing.
+Added a `type: 'address'` block (Google Places autocomplete + city / state /
+zip / county breakdown via the existing `AddressField` composite) to each of
+the five fiduciary steps in `src/types/questionnaire.ts`:
+- `fiduciaries_executor`: primary + alternate
+- `fiduciaries_trustee`: primary + alternate
+- `fiduciaries_poa`: agent + alternateAgent
+- `fiduciaries_healthcare`: agent + alternateAgent
+- `children_guardian`: guardianPrimary + guardianAlternate (top-level paths)
+
+Backend alignment in `functions/src/template-engine.ts`:
+- `CRITICAL_LEGAL_FIELDS` paths now match the actual data shape — fixed
+  `healthcareProxy.primary` → `healthcareProxy.agent`, added
+  `powerOfAttorney.alternateAgent` and `healthcareProxy.alternateAgent`.
+  Removed the guardian entry (lives at top-level `guardianPrimary`, not
+  under `fiduciaries.guardian`).
+- `markMissingFiduciaries()` updated: a "primary" slot is `level === 'primary'
+  || level === 'agent'` (POA / HC use `.agent` as the primary tier name).
+- `buildTemplateData()` now accepts a `{ markMissing: false }` opt-out used
+  by `validateTemplateData()` so the validator reports raw missing fields
+  rather than the post-marking placeholders.
+
+Verification: 589 tests pass. End-to-end generation for Karen Elias surfaced
+the new missing-marker logs (`fiduciaries.executor.primary.address`,
+`fiduciaries.trustee.primary.address`, `fiduciaries.powerOfAttorney.agent.address`,
+`fiduciaries.healthcareProxy.agent.address`) confirming the new paths reach
+`markMissingFiduciaries`. Deployed: generateDocuments, generateSingleDocument,
+generateFlexDocument, generateEstateDocument, processTemplateFile,
+retemplatizeTemplates + hosting.
 
 ---
 

@@ -231,7 +231,11 @@ export function validateTemplateData(
   variables: string[],
   ctx: ClientContext,
 ): ValidationResult {
-  const templateData = buildTemplateData(ctx);
+  // Use the un-marked template data — markMissingFiduciaries() fills primary
+  // slots with [MISSING: ...] placeholders for the rendering path, but for
+  // validation we want to report the raw missing fields, not the filled-in
+  // placeholders that would otherwise pass the truthiness check below.
+  const templateData = buildTemplateData(ctx, { markMissing: false });
   const missing: ValidationResult['missing'] = [];
   const available: ValidationResult['available'] = [];
 
@@ -908,15 +912,24 @@ export async function listTemplateVariants(
  * We inject "[MISSING: label]" into the template context before rendering so
  * the attorney sees a visible placeholder rather than a silent blank.
  */
+// Paths reflect the actual data shape written by the questionnaire — verified
+// against src/types/questionnaire.ts. Note that the questionnaire stores
+// healthcareProxy under `.agent` / `.alternateAgent` (not `.primary`) and the
+// guardian under top-level `guardianPrimary` / `guardianAlternate` (not
+// `fiduciaries.guardian.*`). The buildTemplateData() helper falls back from
+// top-level guardianPrimary into fiduciaries.guardian.primary, so to keep
+// markMissingFiduciaries() consistent we don't include guardian here — its
+// missing-marker is handled separately at the top-level paths if needed.
 const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
   // Names — primary slots are mandatory; alternates skipped silently if absent.
-  { path: ['executor', 'primary', 'name'],         label: 'executor name' },
-  { path: ['executor', 'alternate', 'name'],       label: 'alternate executor name' },
-  { path: ['trustee', 'primary', 'name'],          label: 'trustee name' },
-  { path: ['trustee', 'alternate', 'name'],        label: 'alternate trustee name' },
-  { path: ['powerOfAttorney', 'agent', 'name'],    label: 'POA agent name' },
-  { path: ['healthcareProxy', 'primary', 'name'],  label: 'healthcare proxy name' },
-  { path: ['guardian', 'primary', 'name'],         label: 'guardian name' },
+  { path: ['executor', 'primary', 'name'],            label: 'executor name' },
+  { path: ['executor', 'alternate', 'name'],          label: 'alternate executor name' },
+  { path: ['trustee', 'primary', 'name'],             label: 'trustee name' },
+  { path: ['trustee', 'alternate', 'name'],           label: 'alternate trustee name' },
+  { path: ['powerOfAttorney', 'agent', 'name'],       label: 'POA agent name' },
+  { path: ['powerOfAttorney', 'alternateAgent', 'name'], label: 'alternate POA agent name' },
+  { path: ['healthcareProxy', 'agent', 'name'],       label: 'healthcare proxy name' },
+  { path: ['healthcareProxy', 'alternateAgent', 'name'], label: 'alternate healthcare proxy name' },
   // Addresses — primary fiduciary addresses are required for legal validity in
   // most templates (executor/trustee blocks include "[Name], [Address]"). When
   // the questionnaire doesn't capture an address (HOMEWORK #5), this surfaces
@@ -926,8 +939,9 @@ const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
   { path: ['trustee', 'primary', 'address'],          label: 'trustee address' },
   { path: ['trustee', 'alternate', 'address'],        label: 'alternate trustee address' },
   { path: ['powerOfAttorney', 'agent', 'address'],    label: 'POA agent address' },
-  { path: ['healthcareProxy', 'primary', 'address'],  label: 'healthcare proxy address' },
-  { path: ['guardian', 'primary', 'address'],         label: 'guardian address' },
+  { path: ['powerOfAttorney', 'alternateAgent', 'address'], label: 'alternate POA agent address' },
+  { path: ['healthcareProxy', 'agent', 'address'],    label: 'healthcare proxy address' },
+  { path: ['healthcareProxy', 'alternateAgent', 'address'], label: 'alternate healthcare proxy address' },
 ];
 
 /**
@@ -947,10 +961,12 @@ function markMissingFiduciaries(
   for (const { path, label } of CRITICAL_LEGAL_FIELDS) {
     const [role, level, field] = path as [string, string, string];
 
-    // Skip alternate/successor if they aren't in the source data at all —
-    // the attorney may legitimately omit them (single-level appointment).
-    const isAlternate = level === 'alternate';
-    if (isAlternate && !fiduciaries[role]) continue;
+    // The "primary"-equivalent levels across roles: executor/trustee use
+    // 'primary'; powerOfAttorney + healthcareProxy use 'agent'. Anything else
+    // (alternate, alternateAgent, successor) is optional — skip the missing
+    // marker if the slot isn't filled at all.
+    const isPrimary = level === 'primary' || level === 'agent';
+    if (!isPrimary && !fiduciaries[role]) continue;
 
     const roleObj = (fiduciaries[role] ?? {}) as Record<string, unknown>;
     const levelObj = (roleObj[level] ?? {}) as Record<string, unknown>;
@@ -958,7 +974,6 @@ function markMissingFiduciaries(
 
     if (value === null || value === undefined || value === '') {
       // Only mark primary slots as mandatory; skip silently for optional ones
-      const isPrimary = level === 'primary';
       if (!isPrimary) continue;
 
       // Clone the chain down to avoid mutating shared references
@@ -979,8 +994,18 @@ function markMissingFiduciaries(
 /**
  * Build the flat template data object from a ClientContext.
  * Extracted so it can be reused by both renderTemplate and validateTemplateData.
+ *
+ * @param opts.markMissing — when true (default), fills missing primary
+ *   fiduciary slots with [MISSING: …] placeholders. The validator turns this
+ *   off so it can report the raw missing variables rather than the filled-in
+ *   placeholders.
  */
-export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
+export function buildTemplateData(
+  ctx: ClientContext,
+  opts: { markMissing?: boolean } = {},
+): Record<string, unknown> {
+  const markMissing = opts.markMissing !== false;
+  const fiduciariesRaw = (ctx.client.fiduciaries ?? {}) as Record<string, unknown>;
   return {
     // Client data (full)
     client: ctx.client,
@@ -989,9 +1014,9 @@ export function buildTemplateData(ctx: ClientContext): Record<string, unknown> {
     children: ctx.client.children ?? [],
     assets: ctx.client.assets ?? {},
     liabilities: ctx.client.liabilities ?? {},
-    fiduciaries: markMissingFiduciaries(
-      (ctx.client.fiduciaries ?? {}) as Record<string, unknown>,
-    ),
+    fiduciaries: markMissing
+      ? markMissingFiduciaries(fiduciariesRaw)
+      : fiduciariesRaw,
     distribution: ctx.client.distribution ?? {},
     healthcarePreferences: ctx.client.healthcarePreferences ?? {},
     trusts: ctx.client.trusts ?? [],
