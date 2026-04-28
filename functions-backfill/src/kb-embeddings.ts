@@ -237,8 +237,11 @@ async function embedResource(
 // ---------------------------------------------------------------------------
 
 /**
- * Remove Handlebars expressions ({{...}}) and block helpers from template
- * content so the embedding captures the legal prose, not variable placeholders.
+ * Remove Handlebars expressions AND HTML tags from template content. Templates
+ * store full HTML (~30% tag overhead); KB resources store plain text. Tag
+ * strip is a no-op on plain text. Without it, large HTML templates
+ * over-chunk by 50-66% on tag noise. MUST stay in sync with the same
+ * function in functions/src/kb-embeddings.ts.
  */
 function stripHandlebars(content: string): string {
   return content
@@ -248,6 +251,8 @@ function stripHandlebars(content: string): string {
     .replace(/\{\{![\s\S]*?\}\}/g, '')
     // Strip all Handlebars expressions (simple, block open, block close)
     .replace(/\{\{[^}]*\}\}/g, ' ')
+    // Strip HTML tags so embedding text is pure prose, not markup
+    .replace(/<[^>]+>/g, ' ')
     // Collapse excessive whitespace
     .replace(/\s{2,}/g, ' ')
     .trim();

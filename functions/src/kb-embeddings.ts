@@ -393,8 +393,18 @@ export const backfillEmbeddings = onCall(
 // ---------------------------------------------------------------------------
 
 /**
- * Remove Handlebars expressions ({{...}}) and block helpers from template
- * content so the embedding captures the legal prose, not variable placeholders.
+ * Remove Handlebars expressions AND HTML tags from template content so the
+ * embedding captures the legal prose, not variable placeholders or markup.
+ *
+ * Templates store full HTML (with `<p class="tr-base" style="...">`-style
+ * markup, ~30% tag overhead). KB resources store plain text (extracted at
+ * ingest time). Stripping tags is a no-op on plain text, so this function
+ * is safe to call on either source.
+ *
+ * Without the tag strip, large HTML templates over-chunk by 50-66% — every
+ * 6K-char chunk wastes ~2K chars on `<p class="...">` style markup
+ * instead of carrying actual legal prose. Caught when Joint Revocable
+ * Trust + Rizzo Living Trust embedded at 15/17 chunks instead of 9/11.
  */
 function stripHandlebars(content: string): string {
   return content
@@ -404,6 +414,8 @@ function stripHandlebars(content: string): string {
     .replace(/\{\{![\s\S]*?\}\}/g, '')
     // Strip all Handlebars expressions (simple, block open, block close)
     .replace(/\{\{[^}]*\}\}/g, ' ')
+    // Strip HTML tags so embedding text is pure prose, not markup
+    .replace(/<[^>]+>/g, ' ')
     // Collapse excessive whitespace
     .replace(/\s{2,}/g, ' ')
     .trim();
