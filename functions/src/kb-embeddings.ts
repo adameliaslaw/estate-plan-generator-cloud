@@ -23,14 +23,21 @@ import * as admin from 'firebase-admin';
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 768;
 
-/** Content shorter than this gets a single embedding on the document itself. */
-const CHUNK_THRESHOLD = 3000;
+/** Content shorter than this gets a single embedding on the document itself.
+ *  Tuned for clause/draft generation: a full sample will or trust agreement
+ *  is typically 8-15K chars, and we want it embedded as a single coherent
+ *  unit (not split into chunks that lose cross-article context). Anything
+ *  under 12K chars stays whole; only very long source materials get chunked. */
+const CHUNK_THRESHOLD = 12000;
 
-/** Target size for each chunk (~625 tokens — preserves full legal clauses). */
-const CHUNK_SIZE = 2500;
+/** Target size for each chunk (~1.5K tokens). Larger than the citation-
+ *  retrieval default so each chunk preserves multi-paragraph clause flow
+ *  and defined-term continuity. */
+const CHUNK_SIZE = 6000;
 
-/** Overlap between consecutive chunks to preserve context at boundaries. */
-const CHUNK_OVERLAP = 400;
+/** Overlap between consecutive chunks to preserve context at boundaries.
+ *  Scaled with CHUNK_SIZE — 10% overlap. */
+const CHUNK_OVERLAP = 600;
 
 /** Max resources to process per backfill invocation. */
 const BACKFILL_BATCH_SIZE = 5;
@@ -67,11 +74,14 @@ export async function generateEmbedding(
   geminiApiKey: string,
   taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[]> {
-  // Clean and truncate text — Gemini has a 2048 token limit per input
+  // Clean and truncate text — gemini-embedding-001 caps at 2048 input tokens,
+  // which is ~8000 chars at 4 chars/token. Stay under that to avoid silent
+  // API rejections. CHUNK_SIZE (6000) sits comfortably below this cap; this
+  // truncation is the safety net for any caller that bypasses chunkText.
   const cleanText = text
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 10000); // ~2K tokens rough estimate
+    .slice(0, 8000);
 
   if (!cleanText) {
     throw new Error('Cannot generate embedding for empty text.');

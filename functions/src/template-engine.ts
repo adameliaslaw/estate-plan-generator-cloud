@@ -2125,13 +2125,16 @@ async function enhanceWithAI(
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
 
-  // Build knowledge base context with token-cost guardrails. Hybrid prompts
-  // had been shipping every KB resource at full length (Codex P2: a probable
-  // cost driver). Each resource is capped at 4K chars; the aggregate is
-  // capped at 24K chars (~6K tokens). Truncation is logged so we can spot
-  // when firms grow KB content past these bounds.
-  const PER_RESOURCE_CAP = 4000;
-  const TOTAL_KB_CAP = 24000;
+  // Build knowledge base context. Sized for clause/draft generation use case
+  // where the AI needs to see whole sample documents and complete model
+  // clauses, not snippets. Per-resource cap large enough to fit a full
+  // sample will (~12-15K chars); aggregate cap leaves room for 5+ full
+  // exemplars per generation. Claude Sonnet 4 takes 200K input tokens — at
+  // 100K char cap we use ~12% of that on KB context. Truncation is logged
+  // so we can spot when firms grow individual resources past 20K.
+  // Cost note: ~$0.02 → ~$0.10 per generation in Anthropic input tokens.
+  const PER_RESOURCE_CAP = 20000;
+  const TOTAL_KB_CAP = 100000;
   let kbBudget = TOTAL_KB_CAP;
   let perResourceTruncations = 0;
   let totalTruncated = false;
