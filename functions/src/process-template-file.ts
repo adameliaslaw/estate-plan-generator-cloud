@@ -365,7 +365,7 @@ REPLACEMENT RULES:
 10. The firm's name, office address, and phone number (in signature blocks, letterhead, cover pages) should be replaced with {{firm.name}}, {{firm.address}}, {{firm.city}}, {{firm.state}}, {{firm.zip}}, and {{firm.phone}}.
 11. Replace specific dates in headers, execution clauses, and signature blocks with {{todayFormatted}}.
 12. Replace funeral/cremation/burial instructions with {{specialConsiderations.funeralWishes}}.
-13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables: {{children[0].name}}, {{children[1].name}}, etc. Use {{childrenWithTitles[0].childTitle}} for "son"/"daughter".
+13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables with the dotted-bracket Handlebars syntax: {{children.[0].name}}, {{children.[1].name}}, etc. Use {{childrenWithTitles.[0].childTitle}} for "son"/"daughter". The dot before the bracket is REQUIRED — Handlebars silently renders empty for {{children[0].name}} (no dot).
 14. Compound relationship titles like "sister-in-law", "father-in-law" are SINGLE values. NEVER split them (WRONG: {{relationship}}-in-law). The FULL compound title IS the variable value.
 
 CRITICAL: Replace EVERY instance of client-specific data. Do not leave any proper names (other than firm/attorney names in the signature block). Scan the ENTIRE document.
@@ -664,7 +664,7 @@ Respond with a valid JSON object (no markdown fences):
     // {{#each childrenWithTitles}} loops
     // -----------------------------------------------------------------------
     const hasIndexedChildren = detectedVariables.some(
-      (v) => /children\[\d+\]/.test(v.suggestedVariable),
+      (v) => /children(?:WithTitles)?\.?\[\d+\]/.test(v.suggestedVariable),
     );
 
     if (hasIndexedChildren) {
@@ -672,7 +672,7 @@ Respond with a valid JSON object (no markdown fences):
         // Find character positions of all indexed children references.
         // HTML from DOCX extraction is typically a single line, so line-based
         // splitting doesn't work — use character positions instead.
-        const allRefs = [...templatizedHtml.matchAll(/children(?:WithTitles)?\[\d+\]/g)];
+        const allRefs = [...templatizedHtml.matchAll(/children(?:WithTitles)?\.?\[\d+\]/g)];
 
         if (allRefs.length > 0) {
           const firstPos = allRefs[0].index!;
@@ -687,7 +687,7 @@ Respond with a valid JSON object (no markdown fences):
 
           console.log(`[processTemplateFile] Loop detection: processing chars ${sectionStart}-${sectionEnd} (${childSection.length} chars) out of ${templatizedHtml.length} total`);
 
-          const loopPrompt = `You are a Handlebars template expert. The following HTML snippet contains indexed child references like {{children[0].name}}, {{children[1].name}}, {{childrenWithTitles[0].childTitle}}, etc.
+          const loopPrompt = `You are a Handlebars template expert. The following HTML snippet contains indexed child references like {{children.[0].name}}, {{children.[1].name}}, {{childrenWithTitles.[0].childTitle}}, etc. (Older drafts may use the no-dot form {{children[0].name}} — treat both as equivalent inputs.)
 
 Your job: convert the indexed child references into {{#each childrenWithTitles}} loop blocks.
 

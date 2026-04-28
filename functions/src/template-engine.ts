@@ -404,35 +404,82 @@ function ensureHelpers() {
  * also write these styles inline before generation/saving. Existing inline
  * styles are appended after these defaults so template-specific styling wins.
  */
-const TEMPLATE_CLASS_INLINE_STYLES: Record<string, string> = {
-  'tr-title': 'text-align:center;text-decoration:underline;text-transform:uppercase;font-size:14pt;font-weight:bold;margin:0 0 18pt;page-break-after:avoid;',
-  'tr-cover-title': 'text-align:center;font-size:14pt;margin:36pt 0 18pt;',
-  'tr-cover': 'text-align:center;margin:0 0 6pt;',
-  'tr-mem-header1': 'text-align:center;text-decoration:underline;margin:24pt 0 14pt;page-break-after:avoid;',
-  'tr-body1': 'text-align:justify;margin:0 0 10pt;',
-  'tr-body3': 'text-align:justify;margin:10pt 0;',
-  'tr-art1': 'text-align:center;font-weight:bold;margin:24pt 0 14pt;page-break-after:avoid;',
-  'tr-art2': 'text-align:justify;margin:0 0 10pt;',
-  'tr-art3b': 'text-align:justify;text-indent:1in;margin:0 0 8pt;',
-  'tr-art4b': 'text-align:justify;text-indent:1.5in;margin:0 0 8pt;',
-  'tr-sig-line': 'margin-left:3.5in;margin-bottom:4pt;',
-  'tr-sig-name': 'margin-left:3.5in;font-weight:bold;margin-bottom:10pt;',
-  'tr-affid': 'margin:0 0 6pt;font-size:11pt;',
-  'tr-base': 'margin:0 0 6pt;min-height:1em;',
+export const TEMPLATE_CLASS_INLINE_STYLES: Record<string, string> = {
+  'tr-title': "text-align:center;text-decoration:underline;text-transform:uppercase;font-size:14pt;font-weight:bold;margin:0 0 18pt;page-break-after:avoid;font-family:'Times New Roman',Times,serif;",
+  'tr-cover-title': "text-align:center;font-size:14pt;margin:36pt 0 18pt;font-family:'Times New Roman',Times,serif;",
+  'tr-cover': "text-align:center;margin:0 0 6pt;font-family:'Times New Roman',Times,serif;",
+  'tr-mem-header1': "text-align:center;text-decoration:underline;margin:24pt 0 14pt;page-break-after:avoid;font-family:'Times New Roman',Times,serif;",
+  'tr-body1': "text-align:justify;margin:0 0 10pt;font-family:'Times New Roman',Times,serif;",
+  'tr-body3': "text-align:justify;margin:10pt 0;font-family:'Times New Roman',Times,serif;",
+  'tr-art1': "text-align:center;font-weight:bold;margin:24pt 0 14pt;page-break-after:avoid;font-family:'Times New Roman',Times,serif;",
+  'tr-art2': "text-align:justify;margin:0 0 10pt;font-family:'Times New Roman',Times,serif;",
+  'tr-art3b': "text-align:justify;text-indent:1in;margin:0 0 8pt;font-family:'Times New Roman',Times,serif;",
+  'tr-art4b': "text-align:justify;text-indent:1.5in;margin:0 0 8pt;font-family:'Times New Roman',Times,serif;",
+  'tr-sig-line': "margin-left:3.5in;margin-bottom:4pt;font-family:'Times New Roman',Times,serif;",
+  'tr-sig-name': "margin-left:3.5in;font-weight:bold;margin-bottom:10pt;font-family:'Times New Roman',Times,serif;",
+  'tr-affid': "margin:0 0 6pt;font-size:11pt;font-family:'Times New Roman',Times,serif;",
+  'tr-base': "margin:0 0 6pt;min-height:1.5em;font-family:'Times New Roman',Times,serif;",
 };
 
 function styleForTemplateClasses(classValue: string): string {
-  return classValue
+  // Concatenate class style strings, then deduplicate so multi-class elements
+  // ('tr-base tr-art1') produce a stable, last-wins style block. Without this,
+  // the first pass would emit duplicate declarations and a second pass would
+  // collapse them, breaking idempotency.
+  const concatenated = classValue
     .split(/\s+/)
     .map((cls) => TEMPLATE_CLASS_INLINE_STYLES[cls])
     .filter((style): style is string => !!style)
     .join('');
+  if (!concatenated) return '';
+  return serializeStyleMap(parseStyleString(concatenated));
+}
+
+/**
+ * Parse a CSS style string ("a:1;b:2;") into a property→value map. Preserves
+ * the last occurrence of each property — matches CSS cascade semantics where
+ * the rightmost declaration wins.
+ */
+function parseStyleString(style: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!style) return map;
+  for (const decl of style.split(';')) {
+    const colon = decl.indexOf(':');
+    if (colon === -1) continue;
+    const key = decl.slice(0, colon).trim().toLowerCase();
+    const val = decl.slice(colon + 1).trim();
+    if (key) map.set(key, val);
+  }
+  return map;
+}
+
+function serializeStyleMap(map: Map<string, string>): string {
+  const parts: string[] = [];
+  for (const [k, v] of map) parts.push(`${k}:${v}`);
+  return parts.length > 0 ? parts.join(';') + ';' : '';
+}
+
+/**
+ * Merge a class-derived style block into an existing inline style attribute.
+ * Class defaults LOSE to existing inline declarations (per the function's
+ * doc-comment: template-specific styling wins). Idempotent: re-running on a
+ * tag that already has all class defaults present is a no-op.
+ */
+function mergeClassStyleIntoExisting(classStyle: string, existing: string): string {
+  const classMap = parseStyleString(classStyle);
+  const existingMap = parseStyleString(existing);
+  const result = new Map<string, string>();
+  // Class defaults first; existing inline declarations override.
+  for (const [k, v] of classMap) result.set(k, v);
+  for (const [k, v] of existingMap) result.set(k, v);
+  return serializeStyleMap(result);
 }
 
 /**
  * Add inline styles for known template classes so formatting survives outside
- * the original upload preview CSS. Safe to call repeatedly; it leaves tags that
- * already have these defaults in place alone.
+ * the original upload preview CSS. Idempotent — re-running on already-styled
+ * content is a no-op even if the AI introduces additional tr-* classes between
+ * passes. Existing inline style declarations always override class defaults.
  */
 export function applyTemplateFormattingStyles(html: string): string {
   if (!html || !/\btr-[a-z0-9-]+\b/i.test(html)) return html;
@@ -443,15 +490,16 @@ export function applyTemplateFormattingStyles(html: string): string {
       if (!classStyle) return fullTag;
 
       const styleAttr = attrs.match(/\bstyle=(["'])(.*?)\1/i);
-      let nextAttrs: string;
       if (styleAttr) {
-        if (styleAttr[2].includes(classStyle)) return fullTag;
-        const mergedStyle = `${classStyle}${styleAttr[2]}`;
-        nextAttrs = attrs.replace(styleAttr[0], `style=${styleAttr[1]}${mergedStyle}${styleAttr[1]}`);
-      } else {
-        nextAttrs = `${attrs} style=${quote}${classStyle}${quote}`;
+        const merged = mergeClassStyleIntoExisting(classStyle, styleAttr[2]);
+        // Idempotency: if the merged style equals the existing one (modulo
+        // trailing-semicolon normalization), skip rewriting the tag.
+        const normalize = (s: string) => s.replace(/\s+/g, '').replace(/;+$/, '');
+        if (normalize(merged) === normalize(styleAttr[2])) return fullTag;
+        const nextAttrs = attrs.replace(styleAttr[0], `style=${styleAttr[1]}${merged}${styleAttr[1]}`);
+        return `<${tagName}${nextAttrs}>`;
       }
-
+      const nextAttrs = `${attrs} style=${quote}${classStyle}${quote}`;
       return `<${tagName}${nextAttrs}>`;
     });
 }

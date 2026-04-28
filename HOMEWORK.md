@@ -4,6 +4,44 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## Completed / Follow-up (2026-04-27 session — template fidelity)
+
+**Problem investigated:** generated documents were not reliably replicating the
+uploaded Knowledge Base / document-template formatting. The generator could find
+and use templates, but formatting could flatten because uploaded DOCX templates
+were converted to classed HTML (`tr-title`, `tr-body1`, `tr-art1`, etc.) and not
+all render paths carried the CSS for those classes.
+
+**Shipped tonight:**
+- `36b5fbb` — improved template resolution in `functions/src/template-engine.ts`.
+  Generator now falls back from `documentTemplates` to Knowledge Base
+  `form_template` resources and the legacy `firms/{firmId}/templates`
+  collection before falling back to AI.
+- `a3f15f8` — added inline formatting preservation for uploaded-template
+  classes. Fresh uploads, existing-template generation, and generated HTML now
+  inline the known `tr-*` styles so formatting travels with the content.
+- `6686a1b` — aligned `retemplatizeTemplates` with the same inline-formatting
+  helper so retemplatized templates behave consistently with fresh uploads and
+  generation.
+
+**Cloud deploys completed:** `generateDocuments`, `generateSingleDocument`,
+`processTemplateFile`, and `retemplatizeTemplates` in `us-east1`.
+
+**Verification completed:** `npm.cmd run build` passed in `functions`, and
+`npm.cmd test -- tests/unit/template-variable-extraction.test.ts` passed
+(`46 passed`). `Templates directory not found` appears during build but does not
+fail build or deploy.
+
+**Recommended next validation path:** regenerate one document from an existing
+uploaded template first. If formatting still looks flat, retemplatize that one
+template only using `templateId` and preferably `dryRun: true` first. Existing
+already-generated drafts will not update in place; regenerate them. Only remove
+templates that are duplicates, wrong doc type, or visibly bad conversions after
+single-template testing. See open item **#2D** for the Rizzo Living Trust
+re-upload that this validation path most directly applies to.
+
+---
+
 ## 🔲 #1 — Upload remaining software templates
 
 Firestore now contains only 9 real InteractiveLegal templates covering:
