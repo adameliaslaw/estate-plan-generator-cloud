@@ -4,7 +4,91 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## ⏭ Next session — open with this verification
+## ⏭ Next session — re-verify after deploy
+
+**Tonight's verification (2026-04-28 AM, session 3) found a long bug list,
+shipped 4 batches of fixes (commits `7bf4bb2` + `2cb994e`), and patched 9
+templates in Firestore. Engine-side code changes need a cloud deploy of
+`generateDocuments` + `generateSingleDocument` before re-running the
+checklist. After deploy, regenerate Karen + Adam packages and confirm:**
+
+1. **Karen's POA / AD primary HCR** renders full `93 Old Church Road, Monroe
+   Township, NJ` (was truncating to street only).
+2. **Karen's POA "Gifts to Husband"** heading (was "Gifts to Wife" — wrong).
+3. **Adam's spouse-swap Will** uses `Testator` not `Testatrix` in the three
+   notarial paragraphs.
+4. **Adam's AD successor HCR** reads `I appoint my Brother, ROGER KONDOS,
+   of [MISSING: alternate healthcare proxy address]` (was empty + wrong
+   POA-tier label).
+5. **Both Wills** have empty 2nd/3rd successor executor paragraphs replaced
+   with `[MISSING: successor executor name/address]` instead of "I appoint
+   , of, to serve". Same for empty trustee + guardian slots in Articles
+   VIII / XI.
+6. **Typography sweeps**: `JR.` (no double period), `, NJ, as` (space after
+   comma), `(050422014) Attorney` (space after paren), `ARTICLE XII No
+   Contest` (space between).
+
+Items still to verify from the original 2026-04-27 checklist (not yet done):
+- **Item 3**: Editor toolbar Regenerate button — appears, picks up `_spouse`
+  suffix from doc id, produces matching output.
+- **Item 4**: Vault top toolbar — `Generate Individual Document` is a
+  top-level button, dialog shows Karen / Adam-spouse toggle for married.
+
+Deferred — needs more thought / questionnaire schema work:
+- POA "Restriction on Authority" pronoun keys off the Principal's gender
+  but should follow the Attorney-in-Fact's gender. Karen's POA says "her
+  obligation" when AIF is Adam (should be "his"); Adam's POA says "his"
+  when AIF is Karen (should be "her"). Fix requires a `poaAgentPronouns`
+  computed field derived from the agent's gender — agent gender isn't
+  captured in the questionnaire fiduciary form yet, so this either needs
+  a questionnaire field or an inference (when agent IS spouse, derive from
+  spouse gender).
+
+---
+
+## Completed (2026-04-28 AM, session 3 — verification + batch fixes)
+
+User uploaded all 6 generated docs (Karen + Adam Will/POA/AD); diffed
+against the verification checklist. Most items passed but six categories
+of bugs surfaced and were fixed.
+
+- **Batch A (`7bf4bb2`)** — `cleanEmptyListSlots` extended with 6
+  `[MISSING: ...]` injection regexes for empty 2nd/3rd successor executor,
+  empty trustee primary, and primary/alternate/successor guardian slots.
+  Marker injection runs BEFORE the comma/space collapse so the patterns
+  aren't pre-mangled.
+- **Batch D (`7bf4bb2`)** — new `typographyCleanup` pass: `JR..` → `JR.`,
+  `,letter` → `, letter`, `)Capital` → `) Capital`, `ARTICLE XII<word>` →
+  `ARTICLE XII <word>`. Segment-walker preserves tag attributes.
+- **Batch B (`2cb994e`)** — `fix-poa-address-composite.cjs` patched 7 IL
+  templates to expand bare `{{...address}}` into the full
+  `{{address}}, {{city}}, {{state}}` composite. Upload-prompt rule #16
+  added to forbid bare-address future re-uploads.
+- **Batch C (`2cb994e`)** — new `normalizeTestatorTitle` pass keys off
+  `clientPronouns.subject` (he → Testator, she → Testatrix). Replaces
+  the wrong form globally. Plus extended `normalizeSpouseTitles` with a
+  `Gifts to {Wife|Husband|Spouse|Partner}` heading rewrite.
+- **Batch E (`2cb994e`)** — `fix-hc-template-paths.cjs` patched 2 IL HC
+  templates: (1) `healthcareProxy.alternate.X` → `.alternateAgent.X` (data
+  is at `.alternateAgent`, not `.alternate`); (2) the IL HC author had
+  mis-routed the successor HCR address through `powerOfAttorney.
+  alternateAgent.{address,city,state}` — re-routed to
+  `healthcareProxy.alternateAgent.{address,city,state}`. Upload-prompt
+  AVAILABLE_FIELDS docs in `process-template-file.ts` and
+  `retemplatize-templates.ts` corrected.
+- **Verification harness extras**: 5 inspection scripts added
+  (`inspect-ad-template.cjs`, `inspect-poa-template.cjs`,
+  `inspect-poa-deepak.cjs`, `inspect-deep-fid.cjs`, `inspect-saved-ad.cjs`)
+  for Firestore-side template + saved-doc + fiduciary-data inspection.
+
+Tests: 589 passing throughout. **Cloud deploy still pending** — Firestore
+template patches are live but engine code changes (`cleanEmptyListSlots`,
+`typographyCleanup`, `normalizeTestatorTitle`, expanded `normalizeSpouseTitles`)
+need `generateDocuments` + `generateSingleDocument` redeployed.
+
+---
+
+## ⏭ Old verification block (2026-04-27 evening, session 2) — superseded
 
 Tonight's session ended after a long sequence of generation-pipeline fixes
 landed but were not all hand-verified by the user. **First action next session:
