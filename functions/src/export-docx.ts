@@ -326,6 +326,17 @@ function parseHtml(html: string): HtmlNode[] {
     .replace(/<\s*(br|hr)\s*\/?>/gi, (m) =>
       m.toLowerCase().startsWith('<br') ? '<br/>' : '<hr/>',
     )
+    // Defensive: AI templatization sometimes emits malformed tags where the
+    // attribute name is concatenated to the tag name with no whitespace, e.g.
+    // `<pclass="tr-art1"`. The recursive-descent parser below requires a space
+    // before any attribute, so without this the parser silently drops the
+    // entire tag (and everything inside it) — turning a 90-paragraph document
+    // into a 7-paragraph one. Insert the missing space before known HTML
+    // attribute names that immediately follow a tag name.
+    .replace(
+      /<([a-z][\w-]*?)(class|style|id|href|src|alt|title|name|type|value|data-[\w-]+|aria-[\w-]+|role|rel|target|width|height|colspan|rowspan|align|valign)=/gi,
+      '<$1 $2=',
+    )
     .trim();
 
   return parseChildren(cleaned);

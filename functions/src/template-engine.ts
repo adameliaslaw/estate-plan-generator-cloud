@@ -480,13 +480,32 @@ function mergeClassStyleIntoExisting(classStyle: string, existing: string): stri
 }
 
 /**
+ * Repair tags where AI templatization concatenated an attribute name to the
+ * tag name with no whitespace (`<pclass="...">` instead of `<p class="...">`).
+ * This pattern silently breaks downstream HTML parsers that require whitespace
+ * after the tag name. Idempotent: well-formed HTML passes through unchanged.
+ */
+export function sanitizeMalformedTags(html: string): string {
+  if (!html) return html;
+  return html.replace(
+    /<([a-z][\w-]*?)(class|style|id|href|src|alt|title|name|type|value|data-[\w-]+|aria-[\w-]+|role|rel|target|width|height|colspan|rowspan|align|valign)=/gi,
+    '<$1 $2=',
+  );
+}
+
+/**
  * Add inline styles for known template classes so formatting survives outside
  * the original upload preview CSS. Idempotent — re-running on already-styled
  * content is a no-op even if the AI introduces additional tr-* classes between
  * passes. Existing inline style declarations always override class defaults.
+ *
+ * Also sanitizes any `<TAGattribute=` malformed tags introduced by AI
+ * templatization so downstream consumers (DOCX export, etc.) parse correctly.
  */
 export function applyTemplateFormattingStyles(html: string): string {
-  if (!html || !/\btr-[a-z0-9-]+\b/i.test(html)) return html;
+  if (!html) return html;
+  html = sanitizeMalformedTags(html);
+  if (!/\btr-[a-z0-9-]+\b/i.test(html)) return html;
 
   return html.replace(/<([a-z][\w:-]*)([^>]*\bclass=(["'])([^"']*\btr-[^"']*)\3[^>]*)>/gi,
     (fullTag: string, tagName: string, attrs: string, quote: string, classValue: string) => {

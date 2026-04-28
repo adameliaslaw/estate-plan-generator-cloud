@@ -75,3 +75,6 @@ functions/*.log
 git_log.txt
 recent_commits.txt
 recent_changes.txt
+
+# Local verification output (not for repo)
+out/
