@@ -40,12 +40,22 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "functions": {
-    "predeploy": [
-      "npm --prefix functions run build"
-    ],
-    "source": "functions"
-  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "predeploy": [
+        "npm --prefix functions run build"
+      ]
+    },
+    {
+      "source": "functions-backfill",
+      "codebase": "backfill",
+      "predeploy": [
+        "npm --prefix functions-backfill run build"
+      ]
+    }
+  ],
   "storage": {
     "rules": "storage.rules"
   },
