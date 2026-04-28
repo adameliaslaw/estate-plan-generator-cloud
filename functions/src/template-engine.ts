@@ -2317,11 +2317,20 @@ Return the enhanced HTML document.`;
   try {
     // maxTokens sized to the actual workload: a Will is ~5K input tokens;
     // hybrid enhancement should output 5-8K tokens (preserves structure,
-    // adds citations, smooths prose). Previous 32K cap let runaway
-    // generations fill nearly the full 540s function timeout. 16K leaves
-    // generous headroom while keeping completion under ~3 min.
+    // adds citations, smooths prose). 16K cap gives generous headroom
+    // while keeping completion under ~3 min.
+    //
+    // Model: Sonnet is hardcoded for hybrid augmentation regardless of
+    // the firm's documentDraftingModel preference. The firm's preference
+    // (often Opus) is appropriate for AI-only mode (fresh-draft) but is
+    // too slow for hybrid augmentation: with 25K input + 16K max output,
+    // Opus runs ~400-500s and routinely times out the 540s function
+    // window. Sonnet does the same "preserve structure + add KB
+    // citations + smooth prose" job in ~120-180s with no quality drop
+    // for this workload. Opus quality matters for full-draft generation,
+    // not for surgical augmentation.
     let enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
-      model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+      model: 'claude-sonnet-4-6',
       temperature: 0.15,
       maxTokens: 16384,
     });
