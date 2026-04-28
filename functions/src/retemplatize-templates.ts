@@ -11,7 +11,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI } from './ai-client';
-import { extractTemplateVariables } from './template-engine';
+import { applyTemplateFormattingStyles, extractTemplateVariables } from './template-engine';
 import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
 
 // ---------------------------------------------------------------------------
@@ -215,9 +215,11 @@ export const retemplatizeTemplates = onCall(
       // otherwise use current content. If current content has {{variables}},
       // strip them back to blank placeholders for clean re-templatization.
       let sourceContent: string;
+      let originalContentForRawStorage = data.content as string;
       if (data.rawContent && typeof data.rawContent === 'string' && data.rawContent.length > 100) {
         // rawContent was preserved from a previous run — use it
         sourceContent = data.rawContent;
+        originalContentForRawStorage = data.rawContent;
         console.log(`[retemplatize] ${name}: Using preserved rawContent (${sourceContent.length} chars)`);
       } else {
         sourceContent = data.content as string;
@@ -229,6 +231,8 @@ export const retemplatizeTemplates = onCall(
           sourceContent = sourceContent.replace(/\{\{[^}]+\}\}/g, '_______________');
         }
       }
+
+      sourceContent = applyTemplateFormattingStyles(sourceContent);
 
       console.log(`[retemplatize] Processing: ${name} (${docType}, ${sourceContent.length} chars)`);
 
@@ -242,7 +246,7 @@ export const retemplatizeTemplates = onCall(
         );
 
         // Strip markdown fences
-        templatized = stripFences(templatized);
+        templatized = applyTemplateFormattingStyles(stripFences(templatized));
 
         // Basic validity check
         const hasVariables = /\{\{[^}]+\}\}/.test(templatized);
@@ -277,7 +281,7 @@ export const retemplatizeTemplates = onCall(
             firmData,
             { temperature: 0, maxTokens: 16384 },
           );
-          retryResult = stripFences(retryResult);
+          retryResult = applyTemplateFormattingStyles(stripFences(retryResult));
 
           const retryHasVars = /\{\{[^}]+\}\}/.test(retryResult);
           const retryHasHtml = /<[a-z][\s\S]*>/i.test(retryResult);
@@ -291,7 +295,7 @@ export const retemplatizeTemplates = onCall(
 
             // Use retry if it improved fidelity
             if (retryFidelity.score > fidelity.score) {
-              templatized = retryResult;
+              templatized = applyTemplateFormattingStyles(retryResult);
               console.info(`[retemplatize] ${name}: Retry improved fidelity, using retry output.`);
             } else {
               console.info(`[retemplatize] ${name}: Retry did not improve, keeping original output.`);
@@ -317,7 +321,7 @@ export const retemplatizeTemplates = onCall(
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           };
           if (!data.rawContent) {
-            updateData.rawContent = data.content; // Save the original before overwriting
+            updateData.rawContent = originalContentForRawStorage; // Save the original before overwriting
           }
           await col.doc(templateId).update(updateData);
           console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'})`);
