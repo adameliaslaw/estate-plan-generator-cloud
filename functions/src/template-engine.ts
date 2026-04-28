@@ -965,9 +965,85 @@ function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   out = normalizeTestatorTitle(out, ctx.computed?.clientPronouns?.subject);
   out = stripEmptyInlineTags(out);
   out = cleanEmptyListSlots(out);
+  out = repairAiArtifacts(out);
   out = uppercaseKnownNames(out, collectKnownNames(ctx));
   out = insertOxfordAnd(out);
   out = typographyCleanup(out);
+  return out;
+}
+
+/**
+ * Repair structural artifacts that surface when the hybrid AI augmentation
+ * step (Sonnet) returns text that doesn't match what we expect from the
+ * template. Three known patterns:
+ *
+ *   1. `<br />` between a word and a `<strong>` opening tag — orphaned
+ *      template line break that DOCX export collapses to no-space, leaving
+ *      "appoint[NAME]" or "Brother,ROGER" run-together text. Convert the
+ *      `<br />` to a space when it follows word/punctuation (preserve real
+ *      `<br />` in signature blocks where the preceding content is a long
+ *      underscore line).
+ *   2. Leading `, ` inside a `<strong>` — IL template renders the
+ *      relationship+name pair as `<strong>{{rel}}, {{name}}</strong>`;
+ *      when relationship is empty the strong inherits a leading comma
+ *      ("<strong>, ROGER KONDOS</strong>"). Strip leading commas
+ *      from strong contents.
+ *   3. Single `<strong>` containing 3+ comma-separated names without an
+ *      Oxford "and" — Sonnet sometimes consolidates a children/fiduciary
+ *      list into one wrapped span. insertOxfordAnd's regex counts `<strong>`
+ *      boundaries so it misses this. Inject "and " before the last name
+ *      fragment, accounting for trailing suffix tokens like "JR." / "SR." /
+ *      "III" / "ESQ." that contain their own commas.
+ */
+function repairAiArtifacts(html: string): string {
+  if (!html) return html;
+  let out = html;
+
+  // (1) `word<br /><strong>` or `word,<br /><strong>` → `word <strong>`.
+  // Capture letters / numbers / common punctuation but NOT underscores
+  // (signature lines like ___________________ should keep their `<br />`).
+  out = out.replace(
+    /([A-Za-z][A-Za-z0-9.,;:'\-]*)\s*<br\s*\/?>\s*<strong>/g,
+    '$1 <strong>',
+  );
+
+  // (2) Strip leading `, ` (one or more commas + whitespace) immediately
+  // inside a <strong> opening tag. Repeats with do-while in case multiple
+  // commas accumulated.
+  let prev: string;
+  do {
+    prev = out;
+    out = out.replace(/<strong>\s*,\s*/g, '<strong>');
+  } while (out !== prev);
+
+  // (3) Single <strong> containing 3+ comma-separated name tokens without
+  // an Oxford "and": inject ", and " before the last name. Suffix-aware:
+  // tokens ending in JR/SR/II/III/IV/ESQ/MD/PHD (with optional period)
+  // are treated as part of the preceding name (they contain a comma like
+  // "ADAM J. ELIAS, JR.").
+  const NAME_SUFFIX = /^(JR|SR|II|III|IV|V|ESQ|MD|M\.D|PHD|PH\.D|JD|J\.D)\.?$/i;
+  out = out.replace(/<strong>([^<]+)<\/strong>/g, (whole, content: string) => {
+    if (/\band\b/i.test(content)) return whole; // already has "and"
+    if (!content.includes(',')) return whole;
+    // Split on ", " then re-join suffix fragments back into the prior name.
+    const parts = content.split(/,\s+/).map((s) => s.trim()).filter(Boolean);
+    const merged: string[] = [];
+    for (const part of parts) {
+      if (merged.length > 0 && NAME_SUFFIX.test(part)) {
+        merged[merged.length - 1] = `${merged[merged.length - 1]}, ${part}`;
+      } else {
+        merged.push(part);
+      }
+    }
+    if (merged.length < 3) return whole; // 2-name lists handled by insertOxfordAnd
+    // Each merged item must look like a Title Case or ALL CAPS name (heuristic
+    // to avoid mangling non-name content like statutory text inside <strong>).
+    const looksLikeName = (s: string) => /^[A-Z][A-Z .,'-]*[A-Z.]$/i.test(s) && s.length >= 2;
+    if (!merged.every(looksLikeName)) return whole;
+    const last = merged.pop()!;
+    return `<strong>${merged.join(', ')}, and ${last}</strong>`;
+  });
+
   return out;
 }
 
