@@ -973,6 +973,23 @@ function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
  */
 export function typographyCleanup(html: string): string {
   if (!html) return html;
+
+  // Cross-tag passes (operate on the full HTML, before segment-walking) —
+  // catch patterns where a closing inline tag splits text that should
+  // collapse together.
+  // (a) Abbreviation period + closing tag + sentence period:
+  //     `JR.</strong>.` → `JR.</strong>` (drop the trailing sentence period
+  //     when the abbrev already ends in one). The abbreviation pattern
+  //     allows mixed case so "Jr.", "Sr.", "Esq.", "Inc." all qualify, not
+  //     just all-caps "JR." (which is what uppercaseKnownNames produces for
+  //     names but child-name lists from the data may be title-case).
+  html = html.replace(/([A-Z][A-Za-z]{0,5}\.)(<\/(?:strong|b|em|i|u)>)\.(\s|<|$)/g, '$1$2$3');
+  // (b) ARTICLE [ROMAN] followed by tag(s) then a Title-Case word: insert
+  //     a space before the first inline tag so the heading reads
+  //     `ARTICLE XII No Contest` instead of `ARTICLE XIINo Contest`.
+  //     Allows arbitrary intermediate tags like <br/> + <a id="..."></a>.
+  html = html.replace(/(ARTICLE\s+[IVXLCDM]+)((?:<[^>]+>)+)([A-Z][a-z])/g, '$1 $2$3');
+
   let out = '';
   let i = 0;
   while (i < html.length) {
@@ -1439,7 +1456,7 @@ export async function listTemplateVariants(
 // top-level guardianPrimary into fiduciaries.guardian.primary, so to keep
 // markMissingFiduciaries() consistent we don't include guardian here — its
 // missing-marker is handled separately at the top-level paths if needed.
-const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
+const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string; force?: boolean }[] = [
   // Names — primary slots are mandatory; alternates skipped silently if absent.
   { path: ['executor', 'primary', 'name'],            label: 'executor name' },
   { path: ['executor', 'alternate', 'name'],          label: 'alternate executor name' },
@@ -1461,6 +1478,19 @@ const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
   { path: ['powerOfAttorney', 'alternateAgent', 'address'], label: 'alternate POA agent address' },
   { path: ['healthcareProxy', 'agent', 'address'],    label: 'healthcare proxy address' },
   { path: ['healthcareProxy', 'alternateAgent', 'address'], label: 'alternate healthcare proxy address' },
+  // Successor tiers — IL templates always render these paragraphs (4-tier
+  // executor chain, 3-tier guardian chain) even when the data model only
+  // carries primary + alternate. Without `force: true` markers, unfilled
+  // successor slots render as bare "I appoint , of, to serve as Executor"
+  // — visible to the user as a silent gap. force=true bypasses the
+  // !slotHasName skip in markMissingFiduciaries() so these always emit
+  // [MISSING: ...] markers prompting the lawyer to fill them.
+  { path: ['executor', 'successor', 'name'],          label: 'second successor executor name', force: true },
+  { path: ['executor', 'successor', 'address'],       label: 'second successor executor address', force: true },
+  { path: ['executor', 'secondSuccessor', 'name'],    label: 'third successor executor name', force: true },
+  { path: ['executor', 'secondSuccessor', 'address'], label: 'third successor executor address', force: true },
+  { path: ['guardian', 'successor', 'name'],          label: 'successor guardian name', force: true },
+  { path: ['guardian', 'successor', 'address'],       label: 'successor guardian address', force: true },
 ];
 
 /**
@@ -1549,15 +1579,17 @@ function markMissingFiduciaries(
   // Shallow clone at depth-1 so we don't mutate the shared ctx object
   const result: Record<string, unknown> = { ...fiduciaries };
 
-  for (const { path, label } of CRITICAL_LEGAL_FIELDS) {
+  for (const { path, label, force } of CRITICAL_LEGAL_FIELDS) {
     const [role, level, field] = path as [string, string, string];
 
     // The "primary"-equivalent levels across roles: executor/trustee use
     // 'primary'; powerOfAttorney + healthcareProxy use 'agent'. Anything else
     // (alternate, alternateAgent, successor) is optional — skip the missing
-    // marker if the slot isn't filled at all.
+    // marker if the slot isn't filled at all. UNLESS the field is flagged
+    // force=true, in which case the template references the slot regardless
+    // of data presence (IL successor tiers).
     const isPrimary = level === 'primary' || level === 'agent';
-    if (!isPrimary && !fiduciaries[role]) continue;
+    if (!isPrimary && !force && !fiduciaries[role]) continue;
 
     // Read from `result` (the accumulator) so successive iterations on the
     // same slot accumulate markers instead of clobbering each other. The
@@ -1582,7 +1614,9 @@ function markMissingFiduciaries(
     if (value === null || value === undefined || value === '') {
       // Primary slots are always required. Non-primary slots are only required
       // when a name has been set (i.e. the lawyer started filling in this tier).
-      if (!isPrimary && !slotHasName) continue;
+      // force=true bypasses the slotHasName guard so successor tiers always
+      // get markers regardless of whether any data is present.
+      if (!isPrimary && !force && !slotHasName) continue;
 
       result[role] = {
         ...roleObj,
@@ -1906,13 +1940,17 @@ export async function generateFromTemplate(
 
   // Hybrid: template + AI enhancement
   if (mode === 'hybrid') {
-    // Skip AI enhancement if template rendered perfectly (no missing vars).
-    // When the template filled every field cleanly, enhancement adds ~6,000
-    // tokens of cost (3K input + 3K output) with marginal value.
-    if (unresolvedVars.length === 0) {
+    // Skip AI enhancement ONLY when (a) template rendered cleanly AND (b)
+    // there's no KB context to enrich with. Previously we skipped on (a)
+    // alone, which silently bypassed the entire RAG pipeline whenever the
+    // template substituted every variable — making hybrid mode equivalent
+    // to template mode for any well-formed template. With KB resources
+    // present, the AI step adds meaningful value (citations, smoothed
+    // prose, KB-aware language) even on cleanly-rendered templates.
+    if (unresolvedVars.length === 0 && (ctx.knowledgeResources?.length ?? 0) === 0) {
       console.info(
         `[template-engine] Skipping AI enhancement for ${docType} — ` +
-        `template rendered with zero unresolved variables (saving ~6,000 tokens)`,
+        `clean template + zero KB resources (saving ~6,000 tokens)`,
       );
       return {
         docType,
@@ -1924,7 +1962,14 @@ export async function generateFromTemplate(
         ...provenance,
       };
     }
-    const enhanced = await enhanceWithAI(applyTemplateFormattingStyles(renderedHtml), ctx, docType, formattingPreset);
+    // Pre-AI cleanup: strip empty inline tag wrappers and inject [MISSING:]
+    // markers BEFORE the AI sees the rendered template. Without this, the
+    // AI would receive `<strong></strong>, of, ` patterns that defeat the
+    // segment-walker regexes in applyFinalFormattingPasses (the AI tends
+    // to preserve all wrappers, leaving empty strongs that split text
+    // segments and prevent the post-AI cleanup from matching).
+    const preCleaned = cleanEmptyListSlots(stripEmptyInlineTags(renderedHtml));
+    const enhanced = await enhanceWithAI(applyTemplateFormattingStyles(preCleaned), ctx, docType, formattingPreset);
     return {
       docType,
       title,
@@ -2213,6 +2258,7 @@ ABSOLUTE RULES — VIOLATION OF THESE WILL PRODUCE REJECTED OUTPUT:
 - NEVER insert placeholder text ([INSERT], [TBD], [TODO], blanks). Every field must use actual client data.
 - NEVER fabricate statutory citations. Only cite N.J.S.A. references you find in the KNOWLEDGE BASE below.
 - NEVER add new substantive legal provisions not present in the template.
+- PRESERVE every [MISSING: ...] marker EXACTLY as it appears. These are intentional placeholders flagging gaps in client data that the attorney must fill manually. Do not remove, reword, or replace them with guessed values.
 
 PERMITTED ENHANCEMENTS:
 - Add relevant N.J.S.A. citations from the knowledge base to strengthen existing clauses.
