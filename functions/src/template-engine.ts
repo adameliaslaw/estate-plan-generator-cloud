@@ -952,6 +952,71 @@ const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
  *
  * The clone is intentionally shallow-at-depth-1 to avoid mutating ctx.client.
  */
+/**
+ * If a fiduciary has relationship='Spouse' and no address, copy the client's
+ * own address into the fiduciary slot. Couples typically share a residence
+ * and lawyers shouldn't have to enter the same address twice. Only fills
+ * fields that are blank — never overwrites a fiduciary-specific address.
+ */
+function autoFillSpouseFiduciaryAddresses(
+  fiduciaries: Record<string, unknown>,
+  personalInfo: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!personalInfo) return fiduciaries;
+  const clientAddress = {
+    address: personalInfo.address,
+    city: personalInfo.city,
+    state: personalInfo.state,
+    zip: personalInfo.zip,
+    county: personalInfo.county,
+  };
+  // Only proceed if the client has a meaningful address to copy from.
+  const hasClientAddress =
+    typeof clientAddress.address === 'string' && clientAddress.address.trim().length > 0;
+  if (!hasClientAddress) return fiduciaries;
+
+  // The fiduciary tiers we may want to fill. Mirrors CRITICAL_LEGAL_FIELDS
+  // primary-equivalent slots; secondaries are filled too if relationship is Spouse.
+  const tiers: Array<[string, string]> = [
+    ['executor', 'primary'], ['executor', 'alternate'], ['executor', 'successor'],
+    ['trustee', 'primary'], ['trustee', 'alternate'], ['trustee', 'successor'],
+    ['powerOfAttorney', 'agent'], ['powerOfAttorney', 'alternateAgent'],
+    ['healthcareProxy', 'agent'], ['healthcareProxy', 'alternateAgent'],
+  ];
+
+  let mutated = fiduciaries as Record<string, unknown>;
+
+  for (const [role, level] of tiers) {
+    const roleObj = mutated[role] as Record<string, unknown> | undefined;
+    if (!roleObj) continue;
+    const levelObj = roleObj[level] as Record<string, unknown> | undefined;
+    if (!levelObj) continue;
+
+    const relationship = typeof levelObj.relationship === 'string'
+      ? (levelObj.relationship as string).toLowerCase()
+      : '';
+    if (relationship !== 'spouse') continue;
+
+    const hasFiduciaryAddress = typeof levelObj.address === 'string'
+      && (levelObj.address as string).trim().length > 0;
+    if (hasFiduciaryAddress) continue;
+
+    // Build a new object tree so we don't mutate the caller's data.
+    if (mutated === fiduciaries) mutated = { ...fiduciaries };
+    const nextRole = { ...(mutated[role] as Record<string, unknown>) };
+    nextRole[level] = {
+      ...levelObj,
+      address: clientAddress.address ?? '',
+      city: levelObj.city ?? clientAddress.city ?? '',
+      state: levelObj.state ?? clientAddress.state ?? '',
+      zip: levelObj.zip ?? clientAddress.zip ?? '',
+      county: levelObj.county ?? clientAddress.county ?? '',
+    };
+    mutated[role] = nextRole;
+  }
+  return mutated;
+}
+
 function markMissingFiduciaries(
   fiduciaries: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -972,9 +1037,18 @@ function markMissingFiduciaries(
     const levelObj = (roleObj[level] ?? {}) as Record<string, unknown>;
     const value = levelObj[field];
 
+    // For non-primary tiers, only mark fields if the slot is partially
+    // populated (a name is set). Without this, an alternate executor with a
+    // name but no address renders as "Roger Kondos, of , to serve" — the
+    // questionnaire-side blank silently bleeds into the document. With this,
+    // the same case renders as "Roger Kondos, of [MISSING: alt exec address],
+    // to serve" so the lawyer sees the gap.
+    const slotHasName = typeof levelObj.name === 'string' && (levelObj.name as string).trim().length > 0;
+
     if (value === null || value === undefined || value === '') {
-      // Only mark primary slots as mandatory; skip silently for optional ones
-      if (!isPrimary) continue;
+      // Primary slots are always required. Non-primary slots are only required
+      // when a name has been set (i.e. the lawyer started filling in this tier).
+      if (!isPrimary && !slotHasName) continue;
 
       // Clone the chain down to avoid mutating shared references
       result[role] = {
@@ -1005,13 +1079,29 @@ export function buildTemplateData(
   opts: { markMissing?: boolean } = {},
 ): Record<string, unknown> {
   const markMissing = opts.markMissing !== false;
-  const fiduciariesRaw = (ctx.client.fiduciaries ?? {}) as Record<string, unknown>;
+  const fiduciariesRaw = autoFillSpouseFiduciaryAddresses(
+    (ctx.client.fiduciaries ?? {}) as Record<string, unknown>,
+    ctx.client.personalInfo as Record<string, unknown> | undefined,
+  );
+
+  // Filter empty / partial children entries before render. The questionnaire
+  // can persist trailing blank entries (e.g. user added a 4th child slot but
+  // never filled in the name). Without this filter the template renders
+  // "Addison Elias, Alina Elias, Adam Elias, Jr. and ." with a trailing empty
+  // slot that bleeds into every children-list interpolation.
+  const childrenRaw = (ctx.client.children ?? []) as Array<Record<string, unknown>>;
+  const children = childrenRaw.filter((c) => {
+    if (!c || typeof c !== 'object') return false;
+    const name = c.name;
+    return typeof name === 'string' && name.trim().length > 0;
+  });
+
   return {
     // Client data (full)
     client: ctx.client,
     personalInfo: ctx.client.personalInfo ?? {},
     spouseInfo: ctx.client.spouseInfo,
-    children: ctx.client.children ?? [],
+    children,
     assets: ctx.client.assets ?? {},
     liabilities: ctx.client.liabilities ?? {},
     fiduciaries: markMissing
@@ -1024,7 +1114,7 @@ export function buildTemplateData(
     packageDetails: ctx.client.packageDetails ?? {},
 
     // Questionnaire-only fields (not always on the client doc directly)
-    hasChildren: ctx.client.hasChildren ?? (ctx.client.children?.length > 0),
+    hasChildren: ctx.client.hasChildren ?? (children.length > 0),
     hasOtherDependents: ctx.client.hasOtherDependents ?? false,
     otherDependents: ctx.client.otherDependents ?? [],
     guardianPrimary: ctx.client.guardianPrimary ?? ctx.client.fiduciaries?.guardian?.primary ?? {},
@@ -1255,6 +1345,11 @@ export async function generateFromTemplate(
   }
   const title = buildStandardTitle(docType, ctx.computed.clientFullName);
 
+  // Always preserve the raw (pre-render) template as templateBaseline so the
+  // editor's compare-mode can show "raw template with {{vars}}" vs "rendered
+  // for this client" on every saved doc. Previously only the AI-enhanced
+  // hybrid path saved a baseline, so docs that rendered cleanly (zero
+  // unresolved vars) had no compare option in the editor.
   if (mode === 'template') {
     return {
       docType,
@@ -1262,6 +1357,7 @@ export async function generateFromTemplate(
       content: applyTemplateFormattingStyles(renderedHtml),
       status: 'draft',
       promptVersion,
+      templateBaseline: template.content,
       ...provenance,
     };
   }
@@ -1282,6 +1378,7 @@ export async function generateFromTemplate(
         content: applyTemplateFormattingStyles(renderedHtml),
         status: 'draft',
         promptVersion,
+        templateBaseline: template.content,
         ...provenance,
       };
     }
@@ -1297,7 +1394,15 @@ export async function generateFromTemplate(
     };
   }
 
-  return { docType, title, content: applyTemplateFormattingStyles(renderedHtml), status: 'draft', promptVersion, ...provenance };
+  return {
+    docType,
+    title,
+    content: applyTemplateFormattingStyles(renderedHtml),
+    status: 'draft',
+    promptVersion,
+    templateBaseline: template.content,
+    ...provenance,
+  };
 }
 
 // ---------------------------------------------------------------------------

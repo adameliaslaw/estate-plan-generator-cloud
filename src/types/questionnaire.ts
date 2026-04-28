@@ -626,6 +626,12 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Other', value: 'Other' },
         ],
       },
+      {
+        name: 'spouseInfo',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
+      },
     ],
   },
 
@@ -716,6 +722,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
             rows: 2,
             width: 'full',
             condition: { field: 'specialNeeds', operator: 'equals', value: true },
+          },
+          {
+            // Address is written at the item level — RepeaterField's InnerField
+            // spreads the address subfields directly onto each child object.
+            name: '__address__',
+            label: 'Address',
+            type: 'address',
+            width: 'full',
           },
         ],
       },

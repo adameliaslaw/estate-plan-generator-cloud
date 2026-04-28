@@ -22,6 +22,7 @@ import { RadioCardField } from './RadioCardField';
 import { CurrencyField } from './CurrencyField';
 import { DateField } from './DateField';
 import { ComboboxField } from './ComboboxField';
+import { AddressField } from './AddressField';
 
 interface RepeaterFieldProps {
   field: FieldConfig;
@@ -194,6 +195,25 @@ function InnerField({ field, itemData, onFieldChange, parentData }: InnerFieldPr
       );
       break;
 
+    case 'address': {
+      // Address fields in a repeater item are written at the item level —
+      // the address composite (address/city/state/zip/county) becomes
+      // sibling keys of the item's other fields like name/dob.
+      input = (
+        <AddressField
+          parentPath={field.name}
+          value={itemData}
+          onChange={(v) => {
+            for (const k of ['address', 'city', 'state', 'zip', 'county']) {
+              if (v[k] !== undefined) onFieldChange(k, v[k]);
+            }
+          }}
+          clientAddressSource={parentData?.personalInfo as Record<string, unknown> | undefined}
+        />
+      );
+      break;
+    }
+
     case 'phone':
       input = (
         <input
@@ -237,7 +257,7 @@ function InnerField({ field, itemData, onFieldChange, parentData }: InnerFieldPr
 
   return (
     <div className={cn(widthClass, 'flex flex-col gap-1.5')}>
-      {field.label && field.type !== 'yesno' && (
+      {field.label && field.type !== 'yesno' && field.type !== 'address' && (
         <label className="text-sm font-medium text-gray-600">
           {field.label}
           {field.required && (

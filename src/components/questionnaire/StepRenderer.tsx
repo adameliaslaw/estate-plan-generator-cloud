@@ -354,6 +354,7 @@ export function StepRenderer({ step }: StepRendererProps) {
                 parentPath={field.name}
                 value={value as Record<string, unknown> | undefined}
                 onChange={(v) => onChange(v)}
+                clientAddressSource={(data as unknown as Record<string, unknown> | undefined)?.personalInfo as Record<string, unknown> | undefined}
               />
             );
             break;
