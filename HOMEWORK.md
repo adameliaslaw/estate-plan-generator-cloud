@@ -34,14 +34,14 @@ Items still to verify from the original 2026-04-27 checklist (not yet done):
 - **Item 4**: Vault top toolbar — `Generate Individual Document` is a
   top-level button, dialog shows Karen / Adam-spouse toggle for married.
 
-Phase-2 follow-up (not blocking deploy):
-- Optional `gender` field on each fiduciary slot in the questionnaire form,
-  for non-spouse non-gendered-relation AIFs (e.g. Parent / Child / Sibling
-  / Cousin / Friend) where pronoun inference falls back to neutral. The
-  current Phase-1 fix covers (a) spouse-AIF via spousePronouns and (b)
-  any gendered relationship word (Mother / Father / Sister / Brother /
-  Aunt / etc) via a relationship→gender map. Only ambiguous relations end
-  up using neutral pronouns ("their"), which is acceptable but not ideal.
+Phase-2 (shipped same session): optional `gender` select added to all 10
+fiduciary slots in the questionnaire — guardian primary/alternate, executor
+primary/alternate, trustee primary/alternate, POA agent/alternate-agent,
+healthcare agent/alternate-agent. Field is `'male' | 'female' | ''`,
+defaults to blank. The pronouns resolver already prefers an explicit
+gender over the relationship-inference fallback, so populating the field
+overrides the inference for ambiguous relations (Parent/Child/Sibling/
+Friend/etc).
 
 ---
 

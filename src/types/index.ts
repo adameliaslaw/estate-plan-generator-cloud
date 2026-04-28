@@ -533,6 +533,12 @@ export interface Liabilities {
 export interface FiduciaryPerson {
   name: string;
   relationship: string;
+  /** Optional explicit gender — used to render correct pronouns in generated
+   * documents when the relationship word is ambiguous (Parent/Child/Sibling/
+   * Friend/etc). For gendered relations (Mother/Father/Sister/etc) and for
+   * spouse/husband/wife relations, the engine infers from the relationship
+   * itself; this field is the override. Empty/undefined → neutral pronouns. */
+  gender?: 'male' | 'female' | '';
   address?: string;
   city?: string;
   state?: string;
