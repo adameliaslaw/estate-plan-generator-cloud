@@ -4,6 +4,51 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🅿️ Parked decisions (revisit on a trigger, not speculatively)
+
+### Gemini Embedding 2 upgrade — parked 2026-04-28
+
+**Decision: do NOT upgrade `gemini-embedding-001` → `gemini-embedding-2`
+right now.** Marginal quality gain for text-only legal-clause retrieval is
+small-to-zero; migration cost is real.
+
+What we'd be changing:
+- Generative Language API (free-tier `x-goog-api-key`) → Vertex AI
+  (service-account + project + region). New auth code path in
+  `kb-embeddings.ts:80-95`.
+- Free-tier embeddings → Vertex PayGo (~$0.10–0.15 per 1M input tokens).
+- Mandatory full `backfillEmbeddings` run + Firestore vector index
+  rebuild — old v1 vectors and new v2 vectors are in different vector
+  spaces, mixing them returns garbage similarity scores.
+
+What we'd gain (none of which are blocking us now):
+- Multimodal — embed PDFs / images / audio without preprocessing. Our KB
+  is 100% text; not used.
+- 8K-token input vs 2K. Our chunks are ~1.5K tokens; not bottlenecked.
+- Custom task instructions (`task:legal clause retrieval` etc) — needs
+  code work to leverage, modest expected gain.
+
+Triggers that would flip this decision:
+1. Real-world MTEB v2 retrieval scores publish + show ≥10% gain.
+2. We pick up a use case that needs multimodal embeddings (scanned
+   exemplars, attorney consultation audio for chat-AI grounding,
+   photographed deeds).
+3. The current `gemini-embedding-001` retrieval starts pulling weak/wrong
+   results in production — i.e. the embedding becomes the bottleneck,
+   not the chunk/budget tuning we just shipped (`a9e176f`).
+
+If/when one of those fires, migration sketch: (a) wire Vertex AI client
+with service-account auth (mirror `ai-client.ts` Vertex pattern); (b)
+swap `EMBEDDING_MODEL` constant + endpoint + auth header in
+`kb-embeddings.ts`; (c) run full `backfillEmbeddings` against KB
+resources AND templates; (d) verify `findNearest` queries still serve.
+
+Until then: the recently-tuned chunk/budget settings (CHUNK_SIZE=6K,
+CHUNK_THRESHOLD=12K, PER_RESOURCE_CAP=20K, TOTAL_KB_CAP=100K — see
+`a9e176f`) are the actual lever for clause/draft generation quality.
+
+---
+
 ## ⏭ Next session — re-verify after deploy
 
 **Tonight's verification (2026-04-28 AM, session 3) found a long bug list,
