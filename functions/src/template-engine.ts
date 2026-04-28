@@ -758,28 +758,47 @@ export function normalizeSpouseTitles(html: string, spouseTitle: string): string
   const lower = spouseTitle.toLowerCase();
   // Only spouse / husband / wife / partner are valid replacement targets.
   if (!['spouse', 'husband', 'wife', 'partner'].includes(lower)) return html;
+  const cap = lower.charAt(0).toUpperCase() + lower.slice(1);
 
   // Walk in tag/text segments so attribute values aren't touched.
   let out = '';
   let i = 0;
+  // Track whether the current text segment is inside a <strong>/<em>/<b> —
+  // those are subheaders in IL templates ("If my husband Survives.") where
+  // we want the spouse-title word AND the leading "my" to be capitalized.
+  let inEmphasis = 0;
   while (i < html.length) {
     if (html[i] === '<') {
       const close = html.indexOf('>', i);
       if (close === -1) { out += html.slice(i); break; }
-      out += html.slice(i, close + 1);
+      const tag = html.slice(i, close + 1);
+      if (/^<(strong|b|em|i)(\s|>)/i.test(tag)) inEmphasis++;
+      else if (/^<\/(strong|b|em|i)\s*>/i.test(tag)) inEmphasis = Math.max(0, inEmphasis - 1);
+      out += tag;
       i = close + 1;
       continue;
     }
     const next = html.indexOf('<', i);
     const segEnd = next === -1 ? html.length : next;
     let segment = html.slice(i, segEnd);
-    // Match "my (husband|wife)" with case-insensitive flag, preserving
-    // the matched word's first-letter casing on the replacement.
+
+    // (1) Inside emphasis (subheader): title-case "If my husband/wife/spouse"
+    // → "If My Husband/Wife/Spouse" so subheaders read as proper titles.
+    // Anchored on "If" because that's the IL template's subheader pattern
+    // ("If my husband Survives.", "If my wife Does Not Survive."). Generic
+    // "my husband"/"my wife" outside this anchor stays mid-sentence.
+    if (inEmphasis > 0) {
+      segment = segment.replace(/\bIf\s+my\s+(husband|wife|spouse|partner)\b/gi, () => {
+        return `If My ${cap}`;
+      });
+    }
+
+    // (2) Anywhere: rewrite "my husband/wife/spouse/partner" to the
+    // testator-correct title, preserving the first-letter case of the
+    // matched word.
     segment = segment.replace(/\b(my)\s+(husband|wife|spouse|partner)\b/gi, (_match, my: string, word: string) => {
       const isCapital = word[0] === word[0].toUpperCase();
-      const replacement = isCapital
-        ? lower.charAt(0).toUpperCase() + lower.slice(1)
-        : lower;
+      const replacement = isCapital ? cap : lower;
       return `${my} ${replacement}`;
     });
     out += segment;
@@ -1330,14 +1349,21 @@ function autoFillSpouseFiduciaryAddresses(
     typeof clientAddress.address === 'string' && clientAddress.address.trim().length > 0;
   if (!hasClientAddress) return fiduciaries;
 
-  // The fiduciary tiers we may want to fill. Mirrors CRITICAL_LEGAL_FIELDS
-  // primary-equivalent slots; secondaries are filled too if relationship is Spouse.
+  // The fiduciary tiers we may want to fill.
   const tiers: Array<[string, string]> = [
     ['executor', 'primary'], ['executor', 'alternate'], ['executor', 'successor'],
     ['trustee', 'primary'], ['trustee', 'alternate'], ['trustee', 'successor'],
     ['powerOfAttorney', 'agent'], ['powerOfAttorney', 'alternateAgent'],
     ['healthcareProxy', 'agent'], ['healthcareProxy', 'alternateAgent'],
   ];
+
+  // Only auto-fill when the user has explicitly indicated the fiduciary is
+  // their spouse / partner. Inferring "same household" from a shared
+  // surname is reckless — adult children who moved out, estranged siblings,
+  // and ex-spouses can all share a surname but not the testator's address.
+  const HOUSEHOLD_RELATIONSHIPS = new Set([
+    'spouse', 'husband', 'wife', 'partner', 'domestic partner',
+  ]);
 
   let mutated = fiduciaries as Record<string, unknown>;
 
@@ -1350,12 +1376,7 @@ function autoFillSpouseFiduciaryAddresses(
     const relationship = typeof levelObj.relationship === 'string'
       ? (levelObj.relationship as string).toLowerCase().trim()
       : '';
-    // Household members share an address. Recognize the common forms users
-    // pick from the questionnaire combobox (Spouse, Husband, Wife) and the
-    // domestic-partner variants. Without this, the auto-fill missed Karen's
-    // POA agent (relationship='Husband' not 'Spouse').
-    const HOUSEHOLD = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
-    if (!HOUSEHOLD.has(relationship)) continue;
+    if (!HOUSEHOLD_RELATIONSHIPS.has(relationship)) continue;
 
     const hasFiduciaryAddress = typeof levelObj.address === 'string'
       && (levelObj.address as string).trim().length > 0;

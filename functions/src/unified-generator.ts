@@ -537,11 +537,59 @@ export async function generateDocument(
       // domestic-partnership / other: leave undefined; user must set explicitly.
     }
 
+    // Swap fiduciary entries whose relationship marks them as the spouse:
+    // when generating Adam's doc via spouseRole='spouse' from Karen's vault,
+    // Karen's fiduciaries say "agent: Adam (Husband)" — but in Adam's doc,
+    // his spouse is Karen, not himself. Without this swap, Adam's AD would
+    // appoint Adam as his own healthcare rep. Replaces the spouse-tagged
+    // fiduciary's name with the now-spouse's full name and inverts the
+    // relationship label to match the new testator's perspective.
+    const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+    const newSpouseFullName = [originalPersonal.firstName, originalPersonal.middleName, originalPersonal.lastName].filter(Boolean).join(' ').trim();
+    const newSpouseRelationship = (() => {
+      const og = typeof originalPersonal.gender === 'string' ? (originalPersonal.gender as string).trim().toLowerCase() : '';
+      if (og === 'female') return 'Wife';
+      if (og === 'male') return 'Husband';
+      return 'Spouse';
+    })();
+    const swapFiduciaries = (raw: Record<string, unknown> | undefined): Record<string, unknown> | undefined => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const out: Record<string, unknown> = { ...raw };
+      for (const [role, roleVal] of Object.entries(out)) {
+        if (!roleVal || typeof roleVal !== 'object') continue;
+        const nextRole: Record<string, unknown> = { ...(roleVal as Record<string, unknown>) };
+        for (const [tier, tierVal] of Object.entries(nextRole)) {
+          if (!tierVal || typeof tierVal !== 'object') continue;
+          const t = tierVal as Record<string, unknown>;
+          const rel = typeof t.relationship === 'string' ? (t.relationship as string).trim().toLowerCase() : '';
+          if (!HOUSEHOLD_REL.has(rel)) continue;
+          // Re-target this slot at the now-spouse (the original primary).
+          nextRole[tier] = {
+            ...t,
+            name: newSpouseFullName || t.name,
+            relationship: newSpouseRelationship,
+            // Address fields auto-fill via the template-engine pass; clear
+            // any stale ones tied to the previous person so the auto-fill
+            // re-populates with the new testator's household address.
+            address: '',
+            city: '',
+            state: '',
+            zip: '',
+            county: '',
+          };
+        }
+        out[role] = nextRole;
+      }
+      return out;
+    };
+    const swappedClientFiduciaries = swapFiduciaries(clientData.fiduciaries as Record<string, unknown> | undefined);
+
     // Swap clientData for generators
     clientData = {
       ...clientData,
       personalInfo: swappedPersonal,
       spouseInfo: originalPersonal,
+      fiduciaries: swappedClientFiduciaries ?? clientData.fiduciaries,
     };
 
     // Swap clientContext for template engine
@@ -564,6 +612,13 @@ export async function generateDocument(
       }
       clientContext.client.personalInfo = ctxSwappedPersonal;
       clientContext.client.spouseInfo = ctxOriginalPersonal;
+
+      // Mirror the fiduciary swap on the context-side copy so the template
+      // engine sees the same remapped entries on its render path.
+      const ctxSwappedFiduciaries = swapFiduciaries(clientContext.client.fiduciaries as Record<string, unknown> | undefined);
+      if (ctxSwappedFiduciaries) {
+        clientContext.client.fiduciaries = ctxSwappedFiduciaries as never;
+      }
 
       // Swap computed names
       const originalClientFullName = clientContext.computed.clientFullName;
