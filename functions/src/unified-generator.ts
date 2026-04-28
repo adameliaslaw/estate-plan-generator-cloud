@@ -645,8 +645,51 @@ export async function generateDocument(
       if (newGender) {
         const malePronouns = { subject: 'he', object: 'him', possessive: 'his' };
         const femalePronouns = { subject: 'she', object: 'her', possessive: 'her' };
+        const neutralPronouns = { subject: 'they', object: 'them', possessive: 'their' };
         clientContext.computed.clientPronouns = newClientIsFemale ? femalePronouns : malePronouns;
         clientContext.computed.spousePronouns = newClientIsFemale ? malePronouns : femalePronouns;
+
+        // Recompute fiduciary pronouns now that the testator perspective has
+        // flipped. A spouse-tagged fiduciary slot now points at the new
+        // spouse (the original primary), so its inferred pronoun must follow
+        // the new spousePronouns. Any non-spouse slot retains its slot's
+        // explicit gender if set, else neutral.
+        const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+        // Same relationship-gender inference as client-context-aggregator —
+        // kept inline so the spouse-swap rebuild stays self-contained.
+        const FEMALE_REL = new Set([
+          'wife', 'mother', 'daughter', 'sister', 'grandmother', 'granddaughter',
+          'aunt', 'niece', 'mother-in-law', 'daughter-in-law', 'sister-in-law',
+          'great-grandmother', 'great-granddaughter', 'great-aunt', 'great-niece',
+          'great-great-grandmother', 'great-great-granddaughter',
+        ]);
+        const MALE_REL = new Set([
+          'husband', 'father', 'son', 'brother', 'grandfather', 'grandson',
+          'uncle', 'nephew', 'father-in-law', 'son-in-law', 'brother-in-law',
+          'great-grandfather', 'great-grandson', 'great-uncle', 'great-nephew',
+          'great-great-grandfather', 'great-great-grandson',
+        ]);
+        const newSpousePronouns = clientContext.computed.spousePronouns;
+        const recompute = (slot: Record<string, unknown> | undefined) => {
+          if (!slot || typeof slot !== 'object') return neutralPronouns;
+          const explicit = typeof slot.gender === 'string' ? (slot.gender as string).trim().toLowerCase() : '';
+          if (explicit === 'male') return malePronouns;
+          if (explicit === 'female') return femalePronouns;
+          const rel = typeof slot.relationship === 'string' ? (slot.relationship as string).trim().toLowerCase() : '';
+          if (HOUSEHOLD_REL.has(rel)) return newSpousePronouns;
+          if (FEMALE_REL.has(rel)) return femalePronouns;
+          if (MALE_REL.has(rel)) return malePronouns;
+          return neutralPronouns;
+        };
+        const fids = clientContext.client.fiduciaries as Record<string, Record<string, Record<string, unknown> | undefined> | undefined> | undefined;
+        clientContext.computed.poaAgentPronouns = recompute(fids?.powerOfAttorney?.agent);
+        clientContext.computed.poaAlternateAgentPronouns = recompute(fids?.powerOfAttorney?.alternateAgent);
+        clientContext.computed.healthcareRepPronouns = recompute(fids?.healthcareProxy?.agent);
+        clientContext.computed.healthcareRepAlternatePronouns = recompute(fids?.healthcareProxy?.alternateAgent);
+        clientContext.computed.executorPronouns = recompute(fids?.executor?.primary);
+        clientContext.computed.executorAlternatePronouns = recompute(fids?.executor?.alternate);
+        clientContext.computed.trusteePronouns = recompute(fids?.trustee?.primary);
+        clientContext.computed.trusteeAlternatePronouns = recompute(fids?.trustee?.alternate);
       }
     }
   }

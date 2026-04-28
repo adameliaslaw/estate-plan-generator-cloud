@@ -114,7 +114,11 @@ trusteeTitle — relationship descriptor for trustee
 poaAgentTitle — relationship descriptor for POA agent
 healthcareRepTitle — relationship descriptor for healthcare rep
 guardianTitle — relationship descriptor for guardian
-clientPronouns.subject / .object / .possessive — he/him/his or she/her/her
+clientPronouns.subject / .object / .possessive — he/him/his or she/her/her (PRINCIPAL only)
+spousePronouns.subject / .object / .possessive — pronouns for the principal's spouse
+poaAgentPronouns / poaAlternateAgentPronouns — pronouns for the POA Attorney-in-Fact and alternate. USE THESE for any sentence whose subject is the AIF (e.g. "to satisfy {{poaAgentPronouns.possessive}} obligation of support") — clientPronouns is the PRINCIPAL's gender and is wrong here when AIF is a different person.
+healthcareRepPronouns / healthcareRepAlternatePronouns — pronouns for the Healthcare Representative and alternate. USE THESE for sentences whose subject is the HCR.
+executorPronouns / executorAlternatePronouns / trusteePronouns / trusteeAlternatePronouns — pronouns for those fiduciary slots. USE THESE for sentences whose subject is that fiduciary.
 spousePronouns.subject / .object / .possessive — he/him/his or she/her/her
 childrenWithTitles[] — same as children[] but each child also has a "childTitle" field = "son"/"daughter"/"stepson"/"stepdaughter"
 

@@ -73,8 +73,11 @@ clientFullName, spouseFullName, hasSpouse, hasMinorChildren
 childCount, minorChildren[], adultChildren[], propertyCount
 todayFormatted, todayISO, packageType, packageLabel
 spouseTitle, clientTitle, executorTitle, trusteeTitle
-clientPronouns.subject / .object / .possessive
+clientPronouns.subject / .object / .possessive — PRINCIPAL only
 spousePronouns.subject / .object / .possessive
+poaAgentPronouns / poaAlternateAgentPronouns — pronouns for the POA AIF and alternate. USE for any sentence whose subject is the AIF ("to satisfy {{poaAgentPronouns.possessive}} obligation of support") — clientPronouns is the principal's and is wrong here.
+healthcareRepPronouns / healthcareRepAlternatePronouns — pronouns for the HCR and alternate.
+executorPronouns / executorAlternatePronouns / trusteePronouns / trusteeAlternatePronouns — pronouns for those fiduciary slots.
 childrenWithTitles[] — same as children[] but each child also has childTitle
 `;
 

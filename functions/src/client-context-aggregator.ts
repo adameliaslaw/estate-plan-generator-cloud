@@ -62,6 +62,18 @@ export interface ComputedFields {
   poaAgentTitle: string;
   healthcareRepTitle: string;
   guardianTitle: string;
+  // Fiduciary pronouns — derived from explicit gender field on the
+  // fiduciary slot, or inferred from spouse-relationship + spouse gender.
+  // Falls back to neutral pronouns when AIF gender is unknown so templates
+  // don't render with the wrong specific pronoun.
+  poaAgentPronouns: { subject: string; object: string; possessive: string };
+  poaAlternateAgentPronouns: { subject: string; object: string; possessive: string };
+  healthcareRepPronouns: { subject: string; object: string; possessive: string };
+  healthcareRepAlternatePronouns: { subject: string; object: string; possessive: string };
+  executorPronouns: { subject: string; object: string; possessive: string };
+  executorAlternatePronouns: { subject: string; object: string; possessive: string };
+  trusteePronouns: { subject: string; object: string; possessive: string };
+  trusteeAlternatePronouns: { subject: string; object: string; possessive: string };
   // Children enriched with relationship titles
   childrenWithTitles: Array<Record<string, unknown> & { childTitle: string }>;
   /** Fields missing from the client data that could cause document issues */
@@ -324,6 +336,52 @@ function computeFields(
   const healthcareRepTitle = (fid.healthcareProxy?.agent?.relationship ?? fid.healthcareRep?.primary?.relationship ?? '').toLowerCase();
   const guardianTitle = (client.guardianPrimary?.relationship ?? fid.guardian?.primary?.relationship ?? '').toLowerCase();
 
+  // Fiduciary pronouns — separate from clientPronouns/spousePronouns so a
+  // template can correctly render "her obligation" vs "his obligation" when
+  // the AIF's gender differs from the principal's. Resolution priority:
+  //   1. Explicit `gender` field on the fiduciary (Phase 2 — not yet collected)
+  //   2. Spouse-relationship → spouse pronouns (when AIF is the spouse)
+  //   3. Relationship-implied gender (Mother/Father/Sister/etc — most family
+  //      titles in the questionnaire dropdown unambiguously imply a gender)
+  //   4. Falls back to neutralPronouns so templates that hardcode an
+  //      AIF-pronoun assumption don't render with the WRONG specific pronoun
+  //      when AIF gender is genuinely ambiguous (Spouse/Parent/Child/etc).
+  const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+  // Relationship words that unambiguously imply a gender. Spouse/Parent/
+  // Child/Sibling/Cousin/Friend/etc are intentionally NOT here — those are
+  // genuinely ambiguous and fall through to neutral pronouns.
+  const FEMALE_REL = new Set([
+    'wife', 'mother', 'daughter', 'sister', 'grandmother', 'granddaughter',
+    'aunt', 'niece', 'mother-in-law', 'daughter-in-law', 'sister-in-law',
+    'great-grandmother', 'great-granddaughter', 'great-aunt', 'great-niece',
+    'great-great-grandmother', 'great-great-granddaughter',
+  ]);
+  const MALE_REL = new Set([
+    'husband', 'father', 'son', 'brother', 'grandfather', 'grandson',
+    'uncle', 'nephew', 'father-in-law', 'son-in-law', 'brother-in-law',
+    'great-grandfather', 'great-grandson', 'great-uncle', 'great-nephew',
+    'great-great-grandfather', 'great-great-grandson',
+  ]);
+  function pronounsForFiduciary(slot: Record<string, unknown> | undefined) {
+    if (!slot || typeof slot !== 'object') return neutralPronouns;
+    const explicit = typeof slot.gender === 'string' ? (slot.gender as string).trim().toLowerCase() : '';
+    if (explicit === 'male') return malePronouns;
+    if (explicit === 'female') return femalePronouns;
+    const rel = typeof slot.relationship === 'string' ? (slot.relationship as string).trim().toLowerCase() : '';
+    if (HOUSEHOLD_REL.has(rel) && hasSpouse) return spousePronouns;
+    if (FEMALE_REL.has(rel)) return femalePronouns;
+    if (MALE_REL.has(rel)) return malePronouns;
+    return neutralPronouns;
+  }
+  const poaAgentPronouns = pronounsForFiduciary(fid.powerOfAttorney?.agent ?? fid.poaAgent?.primary);
+  const poaAlternateAgentPronouns = pronounsForFiduciary(fid.powerOfAttorney?.alternateAgent);
+  const healthcareRepPronouns = pronounsForFiduciary(fid.healthcareProxy?.agent ?? fid.healthcareRep?.primary);
+  const healthcareRepAlternatePronouns = pronounsForFiduciary(fid.healthcareProxy?.alternateAgent);
+  const executorPronouns = pronounsForFiduciary(fid.executor?.primary);
+  const executorAlternatePronouns = pronounsForFiduciary(fid.executor?.alternate);
+  const trusteePronouns = pronounsForFiduciary(fid.trustee?.primary);
+  const trusteeAlternatePronouns = pronounsForFiduciary(fid.trustee?.alternate);
+
   // Enrich children with gendered titles ("son", "daughter", "child")
   const childrenWithTitles = children.map((c) => {
     const gender = (c.gender as string) ?? '';
@@ -398,6 +456,15 @@ function computeFields(
     poaAgentTitle,
     healthcareRepTitle,
     guardianTitle,
+    // Fiduciary pronouns (see pronounsForFiduciary above for resolution logic)
+    poaAgentPronouns,
+    poaAlternateAgentPronouns,
+    healthcareRepPronouns,
+    healthcareRepAlternatePronouns,
+    executorPronouns,
+    executorAlternatePronouns,
+    trusteePronouns,
+    trusteeAlternatePronouns,
     childrenWithTitles,
     missingFields: computeMissingFields(pi, spouse, hasSpouse, realEstate),
   };

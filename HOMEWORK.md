@@ -34,15 +34,14 @@ Items still to verify from the original 2026-04-27 checklist (not yet done):
 - **Item 4**: Vault top toolbar — `Generate Individual Document` is a
   top-level button, dialog shows Karen / Adam-spouse toggle for married.
 
-Deferred — needs more thought / questionnaire schema work:
-- POA "Restriction on Authority" pronoun keys off the Principal's gender
-  but should follow the Attorney-in-Fact's gender. Karen's POA says "her
-  obligation" when AIF is Adam (should be "his"); Adam's POA says "his"
-  when AIF is Karen (should be "her"). Fix requires a `poaAgentPronouns`
-  computed field derived from the agent's gender — agent gender isn't
-  captured in the questionnaire fiduciary form yet, so this either needs
-  a questionnaire field or an inference (when agent IS spouse, derive from
-  spouse gender).
+Phase-2 follow-up (not blocking deploy):
+- Optional `gender` field on each fiduciary slot in the questionnaire form,
+  for non-spouse non-gendered-relation AIFs (e.g. Parent / Child / Sibling
+  / Cousin / Friend) where pronoun inference falls back to neutral. The
+  current Phase-1 fix covers (a) spouse-AIF via spousePronouns and (b)
+  any gendered relationship word (Mother / Father / Sister / Brother /
+  Aunt / etc) via a relationship→gender map. Only ambiguous relations end
+  up using neutral pronouns ("their"), which is acceptable but not ideal.
 
 ---
 
@@ -76,6 +75,21 @@ of bugs surfaced and were fixed.
   `healthcareProxy.alternateAgent.{address,city,state}`. Upload-prompt
   AVAILABLE_FIELDS docs in `process-template-file.ts` and
   `retemplatize-templates.ts` corrected.
+- **Phase-1 AIF/HCR pronouns** (post-batches commit pending) — added 8 new
+  computed pronoun fields to `ClientContext.computed`:
+  `poaAgentPronouns`, `poaAlternateAgentPronouns`, `healthcareRepPronouns`,
+  `healthcareRepAlternatePronouns`, `executorPronouns`,
+  `executorAlternatePronouns`, `trusteePronouns`,
+  `trusteeAlternatePronouns`. Resolution priority: explicit `gender` field
+  on fiduciary → spouse-relationship + spouse pronouns → gendered family
+  relation (Mother/Father/Sister/etc → female/male) → neutral. Spouse-swap
+  path in `unified-generator.ts` recomputes all 8 fields after the swap.
+  `fix-aif-pronouns.cjs` patched 2 active POA templates to swap
+  `{{clientPronouns.possessive}}` / `{{spousePronouns.possessive}}` for
+  `{{poaAgentPronouns.possessive}}` in the "Restriction on Authority"
+  sentence. Upload prompts (`process-template-file.ts` and
+  `retemplatize-templates.ts`) updated to teach the AI which pronoun
+  source belongs to which fiduciary subject.
 - **Verification harness extras**: 5 inspection scripts added
   (`inspect-ad-template.cjs`, `inspect-poa-template.cjs`,
   `inspect-poa-deepak.cjs`, `inspect-deep-fid.cjs`, `inspect-saved-ad.cjs`)
