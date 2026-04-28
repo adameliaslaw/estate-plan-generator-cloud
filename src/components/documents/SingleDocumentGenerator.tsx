@@ -73,8 +73,8 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   const spouseFullName = client?.spouseInfo
     ? [client.spouseInfo.firstName, client.spouseInfo.lastName].filter(Boolean).join(' ').trim()
     : '';
-  const isMarried = client?.personalInfo?.maritalStatus === 'married'
-    || client?.personalInfo?.maritalStatus === 'domesticPartnership'
+  const isMarried = client?.personalInfo?.maritalStatus === 'Married'
+    || client?.personalInfo?.maritalStatus === 'Domestic Partnership'
     || (!!spouseFullName && spouseFullName.length > 0);
   // Per-spouse docs only make sense for personal docs (will/POA/HC/trust);
   // skip for joint/property docs that don't have a per-testator variant.
