@@ -36,6 +36,7 @@ import { GeneratedDoc } from './generate-documents';
 import { buildStandardTitle } from './unified-generator';
 import { computePromptHash } from './unified-generator';
 import { VARIABLE_TO_QUESTIONNAIRE_MAP } from './template-variables';
+import { getFormattingPreset } from './config/formatting-presets';
 
 // Re-export so downstream consumers (tests, etc.) don't break
 export type { VariableMapping } from './template-variables';
@@ -1916,7 +1917,7 @@ export async function generateFromTemplate(
         ...provenance,
       };
     }
-    const enhanced = await enhanceWithAI(applyTemplateFormattingStyles(renderedHtml), ctx, docType);
+    const enhanced = await enhanceWithAI(applyTemplateFormattingStyles(renderedHtml), ctx, docType, formattingPreset);
     return {
       docType,
       title,
@@ -2122,8 +2123,20 @@ async function enhanceWithAI(
   templateHtml: string,
   ctx: ClientContext,
   docType: string,
+  formattingPreset?: string,
 ): Promise<string> {
   const safeFirm = sanitizeObject(ctx.firm);
+
+  // Resolve the formatting preset for the chosen template source. When the
+  // AI augmentation step adds new prose (transitional language, smoothed
+  // clauses, KB-citation insertions), it needs to know the CSS class
+  // vocabulary the document uses — otherwise the new <p> tags ship without
+  // tr-* classes and render as unstyled text in DOCX/PDF export. Falls back
+  // gracefully to no preset block when unset / unrecognized.
+  const preset = formattingPreset ? getFormattingPreset(formattingPreset) : undefined;
+  const formattingBlock = preset?.promptBlock
+    ? `\n\n${preset.promptBlock}\n\nWhen you ADD any new <p> elements during enhancement (e.g. transitional language, KB-citation insertions, smoothed clauses), tag them with the appropriate tr-* class from the list above. When you MODIFY existing prose, preserve the existing class on the surrounding <p> exactly.`
+    : '';
 
   // Build knowledge base context. Sized for clause/draft generation use case
   // where the AI needs to see whole sample documents and complete model
@@ -2204,7 +2217,7 @@ PERMITTED ENHANCEMENTS:
 OUTPUT FORMAT:
 - Return ONLY the enhanced HTML content (no JSON wrapper, no markdown fences, no preamble).
 - Preserve ALL HTML tags, CSS classes, inline styles, and document structure exactly.
-- The output must be a COMPLETE document — do not truncate or omit closing tags.
+- The output must be a COMPLETE document — do not truncate or omit closing tags.${formattingBlock}
 
 KNOWLEDGE BASE:
 ${kbContext || 'No specific resources available.'}
