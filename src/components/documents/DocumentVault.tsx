@@ -683,26 +683,41 @@ export default function DocumentVault({
             docCount={documents.length}
           />
 
+          {/* Single-doc generation surfaced as its own button (was previously
+              buried inside an 'Additional Document' dropdown — users
+              consistently missed it and ended up regenerating the entire
+              package when they only needed one doc). Matches the layout
+              shown in the empty-vault state. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+            onClick={() => setShowSingleGen(true)}
+          >
+            <Wand2 className="h-4 w-4" />
+            Generate Individual Document
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+            onClick={() => setShowFlexGen(true)}
+          >
+            <Sparkles className="h-4 w-4" />
+            Generate Supplementary Document
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2 border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
+                className="gap-2 text-gray-600 hover:border-[#2b6cb0] hover:text-[#2b6cb0]"
               >
                 <PlusCircle className="h-4 w-4" />
-                Additional Document
+                More
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowSingleGen(true)}>
-                <Wand2 className="mr-2 h-4 w-4 text-[#2b6cb0]" />
-                Generate Standard Document
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowFlexGen(true)}>
-                <Sparkles className="mr-2 h-4 w-4 text-[#2b6cb0]" />
-                Generate Supplementary Document
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setShowUploadDraft(true)}>
                 <Upload className="mr-2 h-4 w-4 text-gray-500" />
                 Upload existing draft
