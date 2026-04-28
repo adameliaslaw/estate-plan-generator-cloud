@@ -66,8 +66,10 @@ fiduciaries.powerOfAttorney.alternateAgent.name, fiduciaries.powerOfAttorney.alt
 fiduciaries.powerOfAttorney.effectiveDate, fiduciaries.powerOfAttorney.giftingAuthority
 fiduciaries.powerOfAttorney.powers[]
 
-fiduciaries.healthcareProxy.primary.name, fiduciaries.healthcareProxy.primary.relationship
-fiduciaries.healthcareProxy.alternate.name
+fiduciaries.healthcareProxy.agent.name, fiduciaries.healthcareProxy.agent.relationship
+fiduciaries.healthcareProxy.agent.address, fiduciaries.healthcareProxy.agent.city, fiduciaries.healthcareProxy.agent.state, fiduciaries.healthcareProxy.agent.zip
+fiduciaries.healthcareProxy.alternateAgent.name, fiduciaries.healthcareProxy.alternateAgent.relationship
+fiduciaries.healthcareProxy.alternateAgent.address, fiduciaries.healthcareProxy.alternateAgent.city, fiduciaries.healthcareProxy.alternateAgent.state, fiduciaries.healthcareProxy.alternateAgent.zip
 fiduciaries.healthcareProxy.lifeSupport, fiduciaries.healthcareProxy.nutrition
 fiduciaries.healthcareProxy.painManagement, fiduciaries.healthcareProxy.organDonation
 
@@ -368,6 +370,7 @@ REPLACEMENT RULES:
 13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables with the dotted-bracket Handlebars syntax: {{children.[0].name}}, {{children.[1].name}}, etc. Use {{childrenWithTitles.[0].childTitle}} for "son"/"daughter". The dot before the bracket is REQUIRED — Handlebars silently renders empty for {{children[0].name}} (no dot).
 14. Compound relationship titles like "sister-in-law", "father-in-law" are SINGLE values. NEVER split them (WRONG: {{relationship}}-in-law). The FULL compound title IS the variable value.
 15. NEVER use pipe syntax — Handlebars has no Liquid/Vue-style pipes. WRONG: {{path | helper}}. CORRECT: {{helper path}} (subexpression). When unsure, just emit the bare path: {{path}}. childTitle is a FIELD on childrenWithTitles[i], NOT a helper — never write a pipe before it.
+16. ADDRESSES are composite. Whenever you replace a person's street address with {{...address}}, you MUST also append the city and state in the same expression: {{x.address}}, {{x.city}}, {{x.state}}. The {{...address}} field holds ONLY the street line — it does NOT include city/state. This applies to personalInfo, spouseInfo, AND every fiduciary tier (executor.primary, powerOfAttorney.agent, healthcareProxy.agent, etc.). Failing to include city/state produces output like "of 93 Old Church Road, to be my attorney" instead of "of 93 Old Church Road, Monroe Township, NJ, to be my attorney".
 
 CRITICAL: Replace EVERY instance of client-specific data. Do not leave any proper names (other than firm/attorney names in the signature block). Scan the ENTIRE document.
 

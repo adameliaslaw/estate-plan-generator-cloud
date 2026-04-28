@@ -45,8 +45,10 @@ fiduciaries.powerOfAttorney.agent.name, fiduciaries.powerOfAttorney.agent.relati
 fiduciaries.powerOfAttorney.agent.address, fiduciaries.powerOfAttorney.agent.city, fiduciaries.powerOfAttorney.agent.state, fiduciaries.powerOfAttorney.agent.zip
 fiduciaries.powerOfAttorney.alternateAgent.name, fiduciaries.powerOfAttorney.alternateAgent.relationship
 
-fiduciaries.healthcareProxy.primary.name, fiduciaries.healthcareProxy.primary.relationship
-fiduciaries.healthcareProxy.alternate.name
+fiduciaries.healthcareProxy.agent.name, fiduciaries.healthcareProxy.agent.relationship
+fiduciaries.healthcareProxy.agent.address, fiduciaries.healthcareProxy.agent.city, fiduciaries.healthcareProxy.agent.state, fiduciaries.healthcareProxy.agent.zip
+fiduciaries.healthcareProxy.alternateAgent.name, fiduciaries.healthcareProxy.alternateAgent.relationship
+fiduciaries.healthcareProxy.alternateAgent.address, fiduciaries.healthcareProxy.alternateAgent.city, fiduciaries.healthcareProxy.alternateAgent.state, fiduciaries.healthcareProxy.alternateAgent.zip
 
 fiduciaries.guardian.primary.name, fiduciaries.guardian.primary.relationship, fiduciaries.guardian.primary.address
 fiduciaries.guardian.alternate.name, fiduciaries.guardian.alternate.relationship, fiduciaries.guardian.alternate.address
@@ -89,7 +91,7 @@ REPLACEMENT RULES:
 4. Replace gendered pronouns referring to the client with {{clientPronouns.subject}}, {{clientPronouns.object}}, {{clientPronouns.possessive}}.
 5. Replace gendered pronouns referring to the spouse with {{spousePronouns.subject}}, {{spousePronouns.object}}, {{spousePronouns.possessive}}.
 6. Replace names of fiduciaries (executors, trustees, guardians, POA agents, healthcare proxies) with the appropriate fiduciary field path.
-7. Replace fiduciary addresses with the corresponding .address field.
+7. Replace fiduciary addresses with the corresponding .address field — and ALWAYS include city + state in the same expression: {{x.address}}, {{x.city}}, {{x.state}}. The .address field holds ONLY the street line. Failing to include city/state produces "of 93 Old Church Road, to be my attorney" instead of "of 93 Old Church Road, Monroe Township, NJ, to be my attorney".
 8. Replace witness names with {{firm.witness1Name}} / {{firm.witness2Name}} and their addresses with {{firm.witness1Address}} / {{firm.witness2Address}}.
 9. Replace the attorney name with {{firm.attorneyName}} and bar ID with {{firm.attorneyId}}.
 10. Firm name, office address, and phone → {{firm.name}}, {{firm.address}}, {{firm.city}}, {{firm.state}}, {{firm.zip}}, {{firm.phone}}.

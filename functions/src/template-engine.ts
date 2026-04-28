@@ -840,6 +840,57 @@ export function normalizeSpouseTitles(html: string, spouseTitle: string): string
       const replacement = isCapital ? cap : lower;
       return `${my} ${replacement}`;
     });
+    // (3) Subheading: "Gifts to Wife" / "Gifts to Husband" / "Gifts to
+    // Spouse" / "Gifts to Partner" → rewrite to the testator-correct title.
+    // Catches IL POA template hardcodings like "Gifts to Wife" where the
+    // body says "gifts to or for the benefit of my husband". The heading
+    // refers to the gift recipient (spouse), same as the body, so the
+    // spouse-title is the right substitution.
+    segment = segment.replace(/\bGifts to (Wife|Husband|Spouse|Partner)\b/g, () => `Gifts to ${cap}`);
+    out += segment;
+    i = segEnd;
+  }
+  return out;
+}
+
+/**
+ * Replace stray "Testator" / "Testatrix" with the gender-correct form for
+ * the current client. IL Will templates hardcode the term matching the
+ * originally-templatized client's gender (e.g. Karen Elias → "Testatrix"
+ * baked in), so when the same template renders for a male client the
+ * notarial paragraphs read "ADAM J. ELIAS, the Testatrix above named".
+ *
+ * Source of truth: clientPronouns.subject — "he" → male → Testator,
+ * "she" → female → Testatrix. Skips when pronoun source is missing or
+ * non-binary (no safe substitution).
+ *
+ * Operates on text segments only — never touches tag attributes.
+ */
+export function normalizeTestatorTitle(html: string, pronounSubject: string | undefined): string {
+  if (!html || !pronounSubject) return html;
+  const subj = pronounSubject.toLowerCase().trim();
+  let correct: string;
+  let wrong: string;
+  if (subj === 'he') { correct = 'Testator'; wrong = 'Testatrix'; }
+  else if (subj === 'she') { correct = 'Testatrix'; wrong = 'Testator'; }
+  else return html;
+
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') {
+      const close = html.indexOf('>', i);
+      if (close === -1) { out += html.slice(i); break; }
+      out += html.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    const next = html.indexOf('<', i);
+    const segEnd = next === -1 ? html.length : next;
+    let segment = html.slice(i, segEnd);
+    // Word-boundary replace. The two words are unambiguous (no substrings
+    // of other legal terms), so a global replace is safe.
+    segment = segment.replace(new RegExp(`\\b${wrong}\\b`, 'g'), correct);
     out += segment;
     i = segEnd;
   }
@@ -889,6 +940,7 @@ function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
   let out = stripArticleHeaderDashes(html);
   out = normalizeArticleHeaderClasses(out);
   out = normalizeSpouseTitles(out, ctx.computed?.spouseTitle ?? '');
+  out = normalizeTestatorTitle(out, ctx.computed?.clientPronouns?.subject);
   out = stripEmptyInlineTags(out);
   out = cleanEmptyListSlots(out);
   out = uppercaseKnownNames(out, collectKnownNames(ctx));
