@@ -760,9 +760,30 @@ function collectKnownNames(ctx: ClientContext): string[] {
  */
 export function insertOxfordAnd(html: string): string {
   if (!html) return html;
+  // Pre-normalize: insert ", " between adjacent <strong>...</strong> tags
+  // that have no separator. The hybrid AI sometimes returns children/
+  // fiduciary lists with names in separate strongs but missing the comma
+  // between them (e.g. "<strong>ALINA J. ELIAS</strong><strong>ADAM J.
+  // ELIAS, JR.</strong>" instead of "<strong>ALINA J. ELIAS</strong>,
+  // <strong>ADAM J. ELIAS, JR.</strong>"). Without this normalization,
+  // the Oxford-comma regex below sees fewer items than actually exist
+  // and produces malformed output. Adjacent <strong>s are almost always
+  // a missing-separator bug in a name list — legitimate consecutive
+  // emphasis spans are rare enough that this is safe.
+  let out = html.replace(/<\/strong>(\s*)<strong>/g, '</strong>, <strong>');
+  // Also un-do any " and " the AI may have already inserted between
+  // non-final pair of items in a 3+ list (e.g. "X and Y<strong>Z</strong>"
+  // → after the adjacency-fix becomes "X and Y, Z"). Convert " and Y, Z"
+  // back to ", Y, Z" so the Oxford-comma pass below can re-insert "and"
+  // before the actual last item. Conservative: only touches "<strong>X</strong>
+  //  and <strong>Y</strong>, <strong>Z</strong>" patterns.
+  out = out.replace(
+    /(<strong>[^<]+<\/strong>)\s+and\s+(<strong>[^<]+<\/strong>),\s+(<strong>[^<]+<\/strong>)/g,
+    '$1, $2, $3',
+  );
   // First: handle 3+ <strong> entries separated by ", " (Oxford comma).
   // "X, Y, Z" → "X, Y, and Z".
-  let out = html.replace(
+  out = out.replace(
     /((?:<strong>[^<]+<\/strong>,\s+){2,})(<strong>[^<]+<\/strong>)/g,
     (_match, lead: string, last: string) => {
       if (/\band\s*$/i.test(lead)) return lead + last;
