@@ -484,6 +484,138 @@ function mergeClassStyleIntoExisting(classStyle: string, existing: string): stri
 }
 
 /**
+ * Strip the em / en / hyphen dash suffix from "ARTICLE [ROMAN]" headers.
+ * IL templates emit `ARTICLE I —` / `ARTICLE II - ` / `ARTICLE III –` style
+ * headers with a trailing dash before the article subtitle. The user prefers
+ * the dash removed throughout, so this normalizes them all.
+ *
+ * Matches: `ARTICLE` + whitespace + roman numeral + optional whitespace +
+ * em/en/hyphen dash + optional trailing whitespace. Replaces with just the
+ * `ARTICLE [ROMAN]` portion.
+ */
+export function stripArticleHeaderDashes(html: string): string {
+  if (!html) return html;
+  return html.replace(
+    /\bARTICLE\s+([IVXLCDM]+)\s*[—–-]\s*/gi,
+    'ARTICLE $1 ',
+  );
+}
+
+/**
+ * Uppercase every occurrence of every known person-name from the rendering
+ * context inside the HTML body. Names are extracted from clientFullName,
+ * spouseFullName, fiduciary names, child names, firm attorney + witnesses.
+ * The longest names are replaced first so substrings (e.g. last-name-only
+ * matches inside full names) don't double-replace.
+ *
+ * Whitespace inside the name is normalized to \s+ in the regex so a name
+ * stored as "John  Smith" (double-space) still matches the rendered single
+ * space form. Word boundaries on each end prevent partial-word matches like
+ * uppercasing "Anne" inside "Annette".
+ *
+ * HTML tags within the body are skipped via a token-walk. Style attribute
+ * names containing literal name substrings (rare) are left alone.
+ */
+export function uppercaseKnownNames(html: string, names: string[]): string {
+  if (!html || names.length === 0) return html;
+  // Dedupe + drop empties + sort longest first.
+  const unique = Array.from(new Set(names.map((n) => (n ?? '').trim()).filter((n) => n.length >= 2)));
+  unique.sort((a, b) => b.length - a.length);
+  if (unique.length === 0) return html;
+
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const namePatterns = unique.map((name) => {
+    // Replace runs of whitespace in the name with \s+ so the regex tolerates
+    // varying whitespace in the rendered output. Word boundaries on outsides.
+    const flexible = escapeRegex(name).replace(/\s+/g, '\\s+');
+    return new RegExp(`(?<![A-Za-z'-])${flexible}(?![A-Za-z'-])`, 'g');
+  });
+
+  // Walk the HTML in tag/text segments so we don't mutate inside attributes.
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') {
+      const close = html.indexOf('>', i);
+      if (close === -1) { out += html.slice(i); break; }
+      out += html.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    const next = html.indexOf('<', i);
+    const segEnd = next === -1 ? html.length : next;
+    let segment = html.slice(i, segEnd);
+    for (let k = 0; k < namePatterns.length; k++) {
+      const re = namePatterns[k];
+      re.lastIndex = 0;
+      segment = segment.replace(re, unique[k].toUpperCase());
+    }
+    out += segment;
+    i = segEnd;
+  }
+  return out;
+}
+
+/**
+ * Collect every person-name we should uppercase from the context.
+ * Includes the client, spouse, every fiduciary tier across every role,
+ * every child, the firm attorney, witnesses, and any computed names.
+ */
+function collectKnownNames(ctx: ClientContext): string[] {
+  const names: string[] = [];
+  const push = (n: unknown) => {
+    if (typeof n === 'string' && n.trim().length >= 2) names.push(n.trim());
+  };
+  push(ctx.computed?.clientFullName);
+  push(ctx.computed?.spouseFullName);
+  const c = ctx.client as Record<string, unknown>;
+  // First/last separately so e.g. "Karen" alone is uppercased too.
+  const pi = (c.personalInfo ?? {}) as Record<string, unknown>;
+  const si = (c.spouseInfo ?? {}) as Record<string, unknown>;
+  push(pi.firstName);
+  push(pi.lastName);
+  push([pi.firstName, pi.middleName, pi.lastName].filter(Boolean).join(' '));
+  push(si.firstName);
+  push(si.lastName);
+  push([si.firstName, si.middleName, si.lastName].filter(Boolean).join(' '));
+  // Children
+  for (const child of (c.children ?? []) as Array<Record<string, unknown>>) {
+    push(child?.name);
+  }
+  // Fiduciaries — walk every role/tier
+  const fid = (c.fiduciaries ?? {}) as Record<string, unknown>;
+  for (const role of Object.values(fid)) {
+    if (!role || typeof role !== 'object') continue;
+    for (const tier of Object.values(role as Record<string, unknown>)) {
+      if (!tier || typeof tier !== 'object') continue;
+      push((tier as Record<string, unknown>).name);
+    }
+  }
+  // Top-level guardian (different shape)
+  push((c.guardianPrimary as Record<string, unknown> | undefined)?.name);
+  push((c.guardianAlternate as Record<string, unknown> | undefined)?.name);
+  // Firm
+  const firm = (ctx.firm ?? {}) as Record<string, unknown>;
+  push(firm.attorneyName);
+  push(firm.witness1Name);
+  push(firm.witness2Name);
+  return names;
+}
+
+/**
+ * Apply user-requested document-wide formatting passes:
+ *   - Strip em-dashes from article headers
+ *   - Uppercase every known person name across the entire HTML
+ * Runs at the very end of generation, on every return path.
+ */
+function applyFinalFormattingPasses(html: string, ctx: ClientContext): string {
+  if (!html) return html;
+  let out = stripArticleHeaderDashes(html);
+  out = uppercaseKnownNames(out, collectKnownNames(ctx));
+  return out;
+}
+
+/**
  * Repair tags where AI templatization concatenated an attribute name to the
  * tag name with no whitespace (`<pclass="...">` instead of `<p class="...">`).
  * This pattern silently breaks downstream HTML parsers that require whitespace
@@ -1259,13 +1391,16 @@ export async function generateFromTemplate(
       `[template-engine] Smart route: raw uploaded template for ${docType} ` +
       `(source=${template.softwareSource || template.folder || 'knowledge-base'}) → focused substitution (${mode})`,
     );
-    const content = applyTemplateFormattingStyles(
-      await substituteTemplateValues(
-        applyTemplateFormattingStyles(template.content),
-        ctx,
-        docType,
-        formattingPreset,
+    const content = applyFinalFormattingPasses(
+      applyTemplateFormattingStyles(
+        await substituteTemplateValues(
+          applyTemplateFormattingStyles(template.content),
+          ctx,
+          docType,
+          formattingPreset,
+        ),
       ),
+      ctx,
     );
 
     // For hybrid mode, we might optionally want to do an enhancement pass later, but right now
@@ -1288,12 +1423,15 @@ export async function generateFromTemplate(
       // Template has invalid HBS syntax — use focused text substitution
       // to preserve the template's formatting while swapping client data
       console.info(`[template-engine] Using focused substitution for ${docType} (HBS failed)`);
-      const substituted = applyTemplateFormattingStyles(await substituteTemplateValues(
-        applyTemplateFormattingStyles(template.content),
+      const substituted = applyFinalFormattingPasses(
+        applyTemplateFormattingStyles(await substituteTemplateValues(
+          applyTemplateFormattingStyles(template.content),
+          ctx,
+          docType,
+          formattingPreset,
+        )),
         ctx,
-        docType,
-        formattingPreset,
-      ));
+      );
       return {
         docType,
         title: buildStandardTitle(docType, ctx.computed.clientFullName),
@@ -1307,12 +1445,15 @@ export async function generateFromTemplate(
     // In template mode, fall back to focused text substitution (same as hybrid)
     // rather than serving raw unrendered HTML with {{variables}} visible
     console.info(`[template-engine] Using focused substitution for ${docType} (HBS failed, template mode)`);
-    const substituted = applyTemplateFormattingStyles(await substituteTemplateValues(
-      applyTemplateFormattingStyles(template.content),
+    const substituted = applyFinalFormattingPasses(
+      applyTemplateFormattingStyles(await substituteTemplateValues(
+        applyTemplateFormattingStyles(template.content),
+        ctx,
+        docType,
+        formattingPreset,
+      )),
       ctx,
-      docType,
-      formattingPreset,
-    ));
+    );
     return {
       docType,
       title: buildStandardTitle(docType, ctx.computed.clientFullName),
@@ -1354,7 +1495,7 @@ export async function generateFromTemplate(
     return {
       docType,
       title,
-      content: applyTemplateFormattingStyles(renderedHtml),
+      content: applyFinalFormattingPasses(applyTemplateFormattingStyles(renderedHtml), ctx),
       status: 'draft',
       promptVersion,
       templateBaseline: template.content,
@@ -1375,7 +1516,7 @@ export async function generateFromTemplate(
       return {
         docType,
         title,
-        content: applyTemplateFormattingStyles(renderedHtml),
+        content: applyFinalFormattingPasses(applyTemplateFormattingStyles(renderedHtml), ctx),
         status: 'draft',
         promptVersion,
         templateBaseline: template.content,
@@ -1386,7 +1527,7 @@ export async function generateFromTemplate(
     return {
       docType,
       title,
-      content: applyTemplateFormattingStyles(enhanced),
+      content: applyFinalFormattingPasses(applyTemplateFormattingStyles(enhanced), ctx),
       status: 'draft',
       promptVersion,
       templateBaseline: renderedHtml,
@@ -1397,7 +1538,7 @@ export async function generateFromTemplate(
   return {
     docType,
     title,
-    content: applyTemplateFormattingStyles(renderedHtml),
+    content: applyFinalFormattingPasses(applyTemplateFormattingStyles(renderedHtml), ctx),
     status: 'draft',
     promptVersion,
     templateBaseline: template.content,
