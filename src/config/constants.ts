@@ -450,6 +450,7 @@ export const ROUTES = {
   SETTINGS_BILLING: '/settings/billing',
   CLIENT_PORTAL: (firmId: string, clientId: string) =>
     `/portal/${firmId}/${clientId}`,
+  CHAT: '/chat',
 } as const;
 
 // ---------------------------------------------------------------------------

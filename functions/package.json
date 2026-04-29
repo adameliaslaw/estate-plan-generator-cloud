@@ -12,7 +12,9 @@
     "node": "22"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
     "@google/genai": "^1.48.0",
+    "@pinecone-database/pinecone": "^7.2.0",
     "@sparticuz/chromium": "^143.0.4",
     "archiver": "^7.0.1",
     "carbone": "^3.5.6",

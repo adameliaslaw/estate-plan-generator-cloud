@@ -57,3 +57,6 @@ export { groundedReviewDocument } from './grounded-review';
 export { estimateGenerationCost } from './cost-estimator';
 export { cleanupTemplates } from './cleanup-templates';
 export { sendWeeklyDigest } from './weekly-digest';
+
+// RAG Chat — Voyage AI + Pinecone + Claude streaming
+export { ragChat } from './rag-chat';
