@@ -132,10 +132,20 @@ export const ragChat = onRequest(
       res.status(401).json({ error: 'Missing Bearer token' });
       return;
     }
+    let decoded: admin.auth.DecodedIdToken;
     try {
-      await admin.auth().verifyIdToken(authHeader.slice(7));
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
     } catch {
       res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // Enforce staff-only access server-side — UI routing alone is insufficient
+    // for an HTTP function that can be called directly with a valid ID token.
+    const staffRoles = new Set(['admin', 'attorney', 'paralegal']);
+    const callerRole = decoded['role'] as string | undefined;
+    if (!callerRole || !staffRoles.has(callerRole)) {
+      res.status(403).json({ error: 'Forbidden: staff access only' });
       return;
     }
 
