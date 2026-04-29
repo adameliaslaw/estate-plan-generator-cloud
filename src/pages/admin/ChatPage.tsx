@@ -12,9 +12,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamRagChat, type Citation } from '@/services/rag-chat-service';
+import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -132,6 +133,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -210,6 +212,8 @@ export default function ChatPage() {
   const isEmpty = messages.length === 0 && !isStreaming;
 
   return (
+    <>
+    <UploadDocumentModal open={uploadOpen} onOpenChange={setUploadOpen} />
     <div className="flex h-full min-h-0 overflow-hidden">
       {/* ── Left panel — chat (70%) ──────────────────────────────────────── */}
       <div className="flex flex-[7] flex-col min-h-0 border-r border-gray-200 bg-gray-50">
@@ -219,10 +223,17 @@ export default function ChatPage() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a365d]">
             <Bot className="h-4 w-4 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
             <p className="text-[11px] text-gray-500">Powered by Pinecone · Voyage AI · Claude</p>
           </div>
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Upload Document
+          </button>
         </div>
 
         {/* Messages */}
@@ -355,5 +366,6 @@ export default function ChatPage() {
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -60,3 +60,4 @@ export { sendWeeklyDigest } from './weekly-digest';
 
 // RAG Chat — Voyage AI + Pinecone + Claude streaming
 export { ragChat } from './rag-chat';
+export { ingestDocument } from './ingest-document';

@@ -1,0 +1,24 @@
+{
+  "name": "estate-plan-ingest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bulk ingestion script — chunks PDFs/DOCX and upserts to Pinecone via Voyage AI embeddings",
+  "scripts": {
+    "ingest": "ts-node --esm src/ingest.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@pinecone-database/pinecone": "^7.2.0",
+    "dotenv": "^16.4.5",
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^2.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pdf-parse": "^1.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}
