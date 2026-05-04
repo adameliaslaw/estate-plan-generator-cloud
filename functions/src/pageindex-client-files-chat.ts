@@ -1,20 +1,13 @@
 /**
- * functions/src/rag-chat.ts
+ * functions/src/pageindex-client-files-chat.ts
  *
- * RAG chat — PageIndex document retrieval → Claude streaming.
+ * RPC 1.6 — privileged endpoint for the client-files namespace only.
  *
- * Flow (research mode):
- *   1. Verify Firebase ID token (staff-only)
- *   2. Load PageIndex doc IDs from Firestore pageindex_docs/{ns}/files
- *   3. Submit PageIndex retrievals in parallel for all docs
- *   4. Poll until all complete or timeout
- *   5. Emit citations SSE event
- *   6. Stream Claude response
- *
- * Flow (draft mode):
- *   1–2. Skip Firestore; use sourceDocId directly
- *   3–4. PageIndex retrieval on single doc
- *   5–6. Draft-optimised system prompt → Claude stream
+ * Attorney-client privilege requires that client-file context is NEVER
+ * mixed with reference or work-product results. This separate Cloud Function
+ * guarantees isolation: it queries ONLY pageindex_docs/client-files/files,
+ * issues its own Claude call with a privilege-specific system prompt, and
+ * the response objects are structurally separate from ragChat's responses.
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
@@ -33,32 +26,24 @@ const PAGEINDEX_API_KEY = defineSecret('PAGEINDEX_API_KEY');
 // ---------------------------------------------------------------------------
 const MODEL          = 'claude-sonnet-4-6';
 const MAX_TOKENS     = 4096;
-const POLL_INTERVAL  = 1500;   // ms between poll cycles
-const POLL_TIMEOUT   = 90_000; // ms before giving up on a retrieval
+const POLL_INTERVAL  = 1500;
+const POLL_TIMEOUT   = 90_000;
 const TOP_CITATIONS  = 5;
 const CONTEXT_CHUNKS = 8;
 
-const RESEARCH_NAMESPACES = ['reference', 'work-product'] as const;
-
-const RESEARCH_SYSTEM =
-  'You are an estate planning legal research assistant for Adam Elias, a New Jersey attorney. ' +
-  'Use only the provided source documents to answer questions. ' +
-  'If the answer is not in the sources, say so clearly. ' +
-  'Always flag if an answer requires independent legal verification. ' +
-  'Never fabricate citations.';
-
-const DRAFT_SYSTEM =
-  'You are a legal drafting assistant for Adam Elias, a New Jersey estate planning attorney. ' +
-  'You are given excerpts from a prior work-product document as a style reference. ' +
-  'Draft the requested document following the same structure, tone, and formatting as the reference. ' +
-  'Produce complete, professional legal text ready for attorney review. ' +
-  'Never fabricate facts or legal citations.';
+const SYSTEM_PROMPT =
+  'You are a confidential legal assistant for Adam Elias, a New Jersey estate planning attorney. ' +
+  'You are working with attorney-client privileged client files. ' +
+  'Use only the provided client documents to answer questions. ' +
+  'Never reference or mix in information from any other source. ' +
+  'If the answer is not clearly stated in the client documents, say so. ' +
+  'Never fabricate facts about a client.';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-export interface Citation {
-  namespace: string;
+export interface ClientFilesCitation {
+  namespace: 'client-files';
   documentName: string;
   section: string;
   pageNumber: number;
@@ -113,49 +98,10 @@ async function pollRetrieval(retrievalId: string, apiKey: string): Promise<PageI
   return (await r.json()) as PageIndexResponse;
 }
 
-interface DocSpec { docId: string; namespace: string; fileName: string }
-interface RetrievalResult { namespace: string; fileName: string; nodes: PageIndexNode[] }
-
-async function runRetrievals(docs: DocSpec[], query: string, apiKey: string): Promise<RetrievalResult[]> {
-  // Submit all in parallel
-  const submissions = await Promise.allSettled(
-    docs.map(async (d) => ({ ...d, retrievalId: await submitRetrieval(d.docId, query, apiKey) })),
-  );
-
-  const active: Array<DocSpec & { retrievalId: string }> = [];
-  for (const s of submissions) {
-    if (s.status === 'fulfilled') active.push(s.value);
-    else console.warn('[ragChat] submit failed:', s.reason);
-  }
-  if (active.length === 0) return [];
-
-  // Poll all in parallel until complete or timeout
-  const deadline = Date.now() + POLL_TIMEOUT;
-  const settled = new Map<string, PageIndexNode[]>();
-
-  while (active.some((a) => !settled.has(a.retrievalId)) && Date.now() < deadline) {
-    await sleep(POLL_INTERVAL);
-    const pending = active.filter((a) => !settled.has(a.retrievalId));
-    const polls = await Promise.allSettled(
-      pending.map(async (a) => ({ ...a, data: await pollRetrieval(a.retrievalId, apiKey) })),
-    );
-    for (const p of polls) {
-      if (p.status === 'rejected') { console.warn('[ragChat] poll failed:', p.reason); continue; }
-      const { retrievalId, data } = p.value;
-      if (data.status === 'completed') settled.set(retrievalId, data.nodes ?? []);
-      else if (data.status === 'failed') settled.set(retrievalId, []);
-    }
-  }
-
-  return active
-    .filter((a) => settled.has(a.retrievalId))
-    .map((a) => ({ namespace: a.namespace, fileName: a.fileName, nodes: settled.get(a.retrievalId)! }));
-}
-
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
-export const ragChat = onRequest(
+export const pageIndexClientFilesChat = onRequest(
   {
     region: 'us-east1',
     secrets: [ANTHROPIC_API_KEY, PAGEINDEX_API_KEY],
@@ -189,19 +135,9 @@ export const ragChat = onRequest(
     }
 
     // ── Input validation ────────────────────────────────────────────────────
-    const { query, mode = 'research', sourceDocId, instructions } = req.body as {
-      query?: string;
-      mode?: 'research' | 'draft';
-      sourceDocId?: string;
-      instructions?: string;
-    };
-
+    const { query } = req.body as { query?: string };
     if (!query?.trim()) {
       res.status(400).json({ error: '`query` is required' });
-      return;
-    }
-    if (mode === 'draft' && !sourceDocId?.trim()) {
-      res.status(400).json({ error: '`sourceDocId` is required in draft mode' });
       return;
     }
 
@@ -217,57 +153,68 @@ export const ragChat = onRequest(
     const pageIndexKey = PAGEINDEX_API_KEY.value();
 
     try {
-      // ── Resolve documents to query ────────────────────────────────────────
-      let docs: DocSpec[];
-
-      if (mode === 'draft') {
-        docs = [{ docId: sourceDocId!, namespace: 'work-product', fileName: sourceDocId! }];
-      } else {
-        const db = admin.firestore();
-        const namespaceDocs = await Promise.all(
-          RESEARCH_NAMESPACES.map(async (ns) => {
-            const snap = await db.collection(`pageindex_docs/${ns}/files`).get();
-            return snap.docs.map((d) => {
-              const entry = d.data() as FirestoreDocEntry;
-              return { docId: entry.doc_id, namespace: ns, fileName: entry.fileName };
-            });
-          }),
-        );
-        docs = namespaceDocs.flat();
-      }
+      // ── Load client-files docs from Firestore ─────────────────────────────
+      const db = admin.firestore();
+      const snap = await db.collection('pageindex_docs/client-files/files').get();
+      const docs = snap.docs.map((d) => {
+        const entry = d.data() as FirestoreDocEntry;
+        return { docId: entry.doc_id, fileName: entry.fileName };
+      });
 
       if (docs.length === 0) {
         sse(res, { type: 'citations', data: [] });
-        sse(res, {
-          type: 'chunk',
-          text: 'No documents have been indexed yet. Upload documents via the Upload Document button.',
-        });
+        sse(res, { type: 'chunk', text: 'No client documents have been indexed yet.' });
         sse(res, { type: 'done' });
         res.end();
         return;
       }
 
-      // ── PageIndex retrieval ───────────────────────────────────────────────
-      const results = await runRetrievals(docs, query, pageIndexKey);
+      // ── Submit retrievals in parallel ─────────────────────────────────────
+      const submissions = await Promise.allSettled(
+        docs.map(async (d) => ({ ...d, retrievalId: await submitRetrieval(d.docId, query, pageIndexKey) })),
+      );
 
-      // Flatten nodes, keeping top content per node
+      const active: Array<{ docId: string; fileName: string; retrievalId: string }> = [];
+      for (const s of submissions) {
+        if (s.status === 'fulfilled') active.push(s.value);
+        else console.warn('[clientFilesChat] submit failed:', s.reason);
+      }
+
+      // ── Poll until complete ───────────────────────────────────────────────
+      const deadline = Date.now() + POLL_TIMEOUT;
+      const settled = new Map<string, PageIndexNode[]>();
+
+      while (active.some((a) => !settled.has(a.retrievalId)) && Date.now() < deadline) {
+        await sleep(POLL_INTERVAL);
+        const pending = active.filter((a) => !settled.has(a.retrievalId));
+        const polls = await Promise.allSettled(
+          pending.map(async (a) => ({ ...a, data: await pollRetrieval(a.retrievalId, pageIndexKey) })),
+        );
+        for (const p of polls) {
+          if (p.status === 'rejected') { console.warn('[clientFilesChat] poll failed:', p.reason); continue; }
+          const { retrievalId, data } = p.value;
+          if (data.status === 'completed') settled.set(retrievalId, data.nodes ?? []);
+          else if (data.status === 'failed') settled.set(retrievalId, []);
+        }
+      }
+
+      // ── Flatten nodes ─────────────────────────────────────────────────────
       const allNodes: Array<{
-        namespace: string;
         fileName: string;
         node: PageIndexNode;
         top: { page_index: number; relevant_content: string };
       }> = [];
 
-      for (const r of results) {
-        for (const node of r.nodes) {
+      for (const a of active) {
+        for (const node of (settled.get(a.retrievalId) ?? [])) {
           const top = node.relevant_contents[0];
-          if (top) allNodes.push({ namespace: r.namespace, fileName: r.fileName, node, top });
+          if (top) allNodes.push({ fileName: a.fileName, node, top });
         }
       }
 
       // ── Citations ─────────────────────────────────────────────────────────
-      const citations: Citation[] = allNodes.slice(0, TOP_CITATIONS).map(({ namespace, fileName, node, top }) => ({
-        namespace,
+      const citations: ClientFilesCitation[] = allNodes.slice(0, TOP_CITATIONS).map(({ fileName, node, top }) => ({
+        namespace: 'client-files',
         documentName: fileName,
         section: node.title,
         pageNumber: top.page_index,
@@ -279,32 +226,21 @@ export const ragChat = onRequest(
       // ── Build Claude prompt ───────────────────────────────────────────────
       const contextBlocks = allNodes
         .slice(0, CONTEXT_CHUNKS)
-        .map(({ namespace, fileName, node, top }, i) =>
-          `[Source ${i + 1}] namespace="${namespace}" file="${fileName}" section="${node.title}" page=${top.page_index}\n${top.relevant_content}`,
+        .map(({ fileName, node, top }, i) =>
+          `[Client Doc ${i + 1}] file="${fileName}" section="${node.title}" page=${top.page_index}\n${top.relevant_content}`,
         )
         .join('\n\n---\n\n');
 
-      let systemPrompt: string;
-      let userMessage: string;
-
-      if (mode === 'draft') {
-        systemPrompt = DRAFT_SYSTEM;
-        userMessage =
-          `<style_reference>\n${contextBlocks}\n</style_reference>\n\n` +
-          `<instructions>${instructions ?? query}</instructions>`;
-      } else {
-        systemPrompt = RESEARCH_SYSTEM;
-        userMessage =
-          `<sources>\n${contextBlocks}\n</sources>\n\n` +
-          `<question>${query}</question>`;
-      }
+      const userMessage =
+        `<client_documents>\n${contextBlocks}\n</client_documents>\n\n` +
+        `<question>${query}</question>`;
 
       // ── Stream Claude ─────────────────────────────────────────────────────
       const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
       const stream = anthropic.messages.stream({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        system: systemPrompt,
+        system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       });
 
@@ -317,7 +253,7 @@ export const ragChat = onRequest(
       sse(res, { type: 'done' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Internal server error';
-      console.error('[ragChat] error:', err);
+      console.error('[clientFilesChat] error:', err);
       sse(res, { type: 'error', message });
     } finally {
       res.end();

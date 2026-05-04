@@ -1,20 +1,22 @@
 /**
  * src/services/rag-chat-service.ts
  *
- * Thin client for the ragChat Cloud Function.
+ * Thin clients for the RAG Cloud Functions.
  * Handles Firebase Auth token retrieval and SSE stream parsing.
  */
 
 import { getAuth } from 'firebase/auth';
 
 // ---------------------------------------------------------------------------
-// Types (mirror the function's Citation interface)
+// Types
 // ---------------------------------------------------------------------------
 export interface Citation {
   namespace: string;
   documentName: string;
+  section: string;
+  pageNumber: number;
   excerpt: string;
-  score: number;
+  nodeId: string;
 }
 
 export interface RagStreamCallbacks {
@@ -25,23 +27,30 @@ export interface RagStreamCallbacks {
 }
 
 // ---------------------------------------------------------------------------
-// Function URL — dev uses the Functions emulator, prod uses the deployed URL
+// Function URLs
 // ---------------------------------------------------------------------------
 const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID as string;
 const REGION = 'us-east1';
 
-const FUNCTION_URL =
-  import.meta.env.DEV &&
-  (import.meta.env.VITE_USE_EMULATORS === 'true' ||
-    import.meta.env.VITE_USE_EMULATORS === true)
-    ? `http://localhost:5001/${PROJECT_ID}/${REGION}/ragChat`
-    : `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/ragChat`;
+function functionUrl(name: string): string {
+  if (
+    import.meta.env.DEV &&
+    (import.meta.env.VITE_USE_EMULATORS === 'true' || import.meta.env.VITE_USE_EMULATORS === true)
+  ) {
+    return `http://localhost:5001/${PROJECT_ID}/${REGION}/${name}`;
+  }
+  return `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/${name}`;
+}
+
+const RAG_CHAT_URL          = functionUrl('ragChat');
+const CLIENT_FILES_CHAT_URL = functionUrl('pageIndexClientFilesChat');
 
 // ---------------------------------------------------------------------------
-// streamRagChat
+// SSE stream helper
 // ---------------------------------------------------------------------------
-export async function streamRagChat(
-  query: string,
+async function streamSse(
+  url: string,
+  body: Record<string, unknown>,
   callbacks: RagStreamCallbacks,
 ): Promise<void> {
   const auth = getAuth();
@@ -50,19 +59,18 @@ export async function streamRagChat(
 
   const idToken = await user.getIdToken();
 
-  const response = await fetch(FUNCTION_URL, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${idToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    throw new Error(`ragChat HTTP ${response.status}: ${await response.text()}`);
+    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
-
   if (!response.body) {
     throw new Error('Response body is null — streaming not supported');
   }
@@ -77,18 +85,14 @@ export async function streamRagChat(
 
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE frames are separated by double newlines.
-    // We split on \n\n and keep any partial frame in the buffer.
     const frames = buffer.split('\n\n');
     buffer = frames.pop() ?? '';
 
     for (const frame of frames) {
-      // Each frame may contain multiple lines; the data line starts with "data: ".
       for (const line of frame.split('\n')) {
         if (!line.startsWith('data: ')) continue;
         const json = line.slice(6).trim();
         if (!json) continue;
-
         try {
           const event = JSON.parse(json) as {
             type: 'citations' | 'chunk' | 'done' | 'error';
@@ -96,7 +100,6 @@ export async function streamRagChat(
             text?: string;
             message?: string;
           };
-
           if (event.type === 'citations' && event.data) {
             callbacks.onCitations(event.data);
           } else if (event.type === 'chunk' && event.text != null) {
@@ -112,4 +115,32 @@ export async function streamRagChat(
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/** Research chat — queries reference + work-product namespaces. */
+export async function streamRagChat(query: string, callbacks: RagStreamCallbacks): Promise<void> {
+  return streamSse(RAG_CHAT_URL, { query }, callbacks);
+}
+
+/** Client-files chat — queries client-files namespace only (RPC 1.6 isolated). */
+export async function streamClientFilesChat(query: string, callbacks: RagStreamCallbacks): Promise<void> {
+  return streamSse(CLIENT_FILES_CHAT_URL, { query }, callbacks);
+}
+
+/** Draft generation — queries a single work-product doc as style reference. */
+export async function streamDraftChat(
+  sourceDocId: string,
+  instructions: string,
+  callbacks: RagStreamCallbacks,
+): Promise<void> {
+  return streamSse(RAG_CHAT_URL, {
+    query: instructions,
+    mode: 'draft',
+    sourceDocId,
+    instructions,
+  }, callbacks);
 }

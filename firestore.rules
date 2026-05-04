@@ -505,6 +505,19 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /pageindex_docs/{namespace}/files/{docId}
+    // PageIndex document registry — tracks which doc IDs have been
+    // ingested per namespace (reference, work-product, client-files).
+    // Written only by Cloud Functions; staff may read to populate the
+    // Draft tab document picker.
+    // ==========================================================
+    match /pageindex_docs/{namespace}/files/{docId} {
+      allow read: if isAuthenticated()
+                  && request.auth.token.role in ['admin', 'attorney', 'paralegal'];
+      allow write: if false;
+    }
+
+    // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
     // This is Firestore's built-in behaviour, but calling it out

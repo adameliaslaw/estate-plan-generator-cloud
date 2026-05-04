@@ -115,10 +115,10 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-4 w-4 text-[#1a365d]" />
-            Upload Document to Pinecone
+            Upload Document to PageIndex
           </DialogTitle>
           <DialogDescription>
-            Chunks and embeds a PDF or DOCX into your vector index for RAG retrieval.
+            Indexes a PDF or DOCX into PageIndex for reasoning-based RAG retrieval.
           </DialogDescription>
         </DialogHeader>
 

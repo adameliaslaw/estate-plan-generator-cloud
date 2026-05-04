@@ -2,20 +2,19 @@
  * src/pages/admin/ChatPage.tsx
  *
  * Two-panel RAG chat interface.
- *  Left  (70%) — chat history + streaming response + fixed input bar
- *  Right (30%) — citation panel (top-5 Pinecone results per response)
- *
- * Responses are rendered as Markdown. Citations populate the right panel
- * immediately when the function emits them (before the LLM text begins).
+ *  Left  (70%) — Research tab (chat + streaming) or Draft tab
+ *  Right (30%) — Citations panel with separate sections for
+ *                reference/work-product and client-files (RPC 1.6)
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen, Upload } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload, FileEdit } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { streamRagChat, type Citation } from '@/services/rag-chat-service';
+import { streamRagChat, streamClientFilesChat, type Citation } from '@/services/rag-chat-service';
 import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
+import { DraftTab } from '@/components/chat/DraftTab';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,11 +25,13 @@ interface Message {
   content: string;
 }
 
+type ActiveTab = 'research' | 'draft';
+
 // ---------------------------------------------------------------------------
 // Namespace badge colours
 // ---------------------------------------------------------------------------
 const NS_COLOURS: Record<string, string> = {
-  reference: 'bg-blue-50 text-blue-700 border border-blue-200',
+  reference:      'bg-blue-50 text-blue-700 border border-blue-200',
   'work-product': 'bg-purple-50 text-purple-700 border border-purple-200',
   'client-files': 'bg-emerald-50 text-emerald-700 border border-emerald-200',
 };
@@ -56,13 +57,7 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function AssistantBubble({
-  content,
-  isStreaming,
-}: {
-  content: string;
-  isStreaming?: boolean;
-}) {
+function AssistantBubble({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
   return (
     <div className="flex justify-start gap-3">
       <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 ring-1 ring-gray-200">
@@ -88,14 +83,6 @@ function AssistantBubble({
 }
 
 function CitationCard({ citation, rank }: { citation: Citation; rank: number }) {
-  const scorePercent = Math.round(citation.score * 100);
-  const scoreColor =
-    scorePercent >= 80
-      ? 'text-emerald-600'
-      : scorePercent >= 60
-        ? 'text-amber-600'
-        : 'text-gray-500';
-
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm space-y-2">
       <div className="flex items-start gap-2">
@@ -105,14 +92,23 @@ function CitationCard({ citation, rank }: { citation: Citation; rank: number }) 
         <p className="flex-1 truncate text-xs font-semibold text-gray-900" title={citation.documentName}>
           {citation.documentName || 'Untitled document'}
         </p>
-        <span className={cn('text-xs font-bold shrink-0', scoreColor)}>
-          {scorePercent}%
-        </span>
+        {citation.pageNumber != null && (
+          <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+            p.{citation.pageNumber}
+          </span>
+        )}
       </div>
 
-      <span className={cn('inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', nsBadge(citation.namespace))}>
-        {citation.namespace}
-      </span>
+      <div className="flex flex-wrap gap-1.5">
+        <span className={cn('inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', nsBadge(citation.namespace))}>
+          {citation.namespace}
+        </span>
+        {citation.section && (
+          <span className="inline-block rounded bg-gray-50 border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 truncate max-w-[140px]" title={citation.section}>
+            {citation.section}
+          </span>
+        )}
+      </div>
 
       {citation.excerpt && (
         <p className="line-clamp-4 text-[11px] leading-relaxed text-gray-500">
@@ -127,24 +123,24 @@ function CitationCard({ citation, rank }: { citation: Citation; rank: number }) 
 // Main page
 // ---------------------------------------------------------------------------
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [activeTab, setActiveTab]               = useState<ActiveTab>('research');
+  const [messages, setMessages]                 = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
-  const [citations, setCitations] = useState<Citation[]>([]);
-  const [input, setInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [citations, setCitations]               = useState<Citation[]>([]);
+  const [clientFilesCitations, setClientFilesCitations] = useState<Citation[]>([]);
+  const [input, setInput]                       = useState('');
+  const [isStreaming, setIsStreaming]           = useState(false);
+  const [error, setError]                       = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen]             = useState(false);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const abortRef = useRef(false);
+  const abortRef    = useRef(false);
 
-  // Auto-scroll to bottom whenever messages or streaming content change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -160,6 +156,7 @@ export default function ChatPage() {
     setError(null);
     setIsStreaming(true);
     setStreamingContent('');
+    setClientFilesCitations([]);
     abortRef.current = false;
 
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: query };
@@ -167,11 +164,18 @@ export default function ChatPage() {
 
     let accumulated = '';
 
+    // Fire client-files stream in background — only captures citations (RPC 1.6)
+    void streamClientFilesChat(query, {
+      onCitations: (data) => setClientFilesCitations(data),
+      onChunk: () => {},
+      onDone: () => {},
+      onError: (msg) => console.warn('[clientFilesChat]', msg),
+    });
+
+    // Research stream drives the main chat UI
     try {
       await streamRagChat(query, {
-        onCitations: (data) => {
-          setCitations(data);
-        },
+        onCitations: (data) => setCitations(data),
         onChunk: (text) => {
           if (abortRef.current) return;
           accumulated += text;
@@ -179,12 +183,10 @@ export default function ChatPage() {
         },
         onDone: () => {
           if (abortRef.current) return;
-          const assistantMsg: Message = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: accumulated,
-          };
-          setMessages((prev) => [...prev, assistantMsg]);
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), role: 'assistant', content: accumulated },
+          ]);
           setStreamingContent('');
           setIsStreaming(false);
         },
@@ -210,162 +212,221 @@ export default function ChatPage() {
   }
 
   const isEmpty = messages.length === 0 && !isStreaming;
+  const totalCitations = citations.length + clientFilesCitations.length;
 
   return (
     <>
-    <UploadDocumentModal open={uploadOpen} onOpenChange={setUploadOpen} />
-    <div className="flex h-full min-h-0 overflow-hidden">
-      {/* ── Left panel — chat (70%) ──────────────────────────────────────── */}
-      <div className="flex flex-[7] flex-col min-h-0 border-r border-gray-200 bg-gray-50">
+      <UploadDocumentModal open={uploadOpen} onOpenChange={setUploadOpen} />
+      <div className="flex h-full min-h-0 overflow-hidden">
+        {/* ── Left panel ──────────────────────────────────────────────────── */}
+        <div className="flex flex-[7] flex-col min-h-0 border-r border-gray-200 bg-gray-50">
 
-        {/* Header */}
-        <div className="flex items-center gap-2.5 border-b border-gray-200 bg-white px-5 py-3.5 shrink-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a365d]">
-            <Bot className="h-4 w-4 text-white" />
-          </div>
-          <div className="flex-1">
-            <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
-            <p className="text-[11px] text-gray-500">Powered by Pinecone · Voyage AI · Claude</p>
-          </div>
-          <button
-            onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            Upload Document
-          </button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-5 min-h-0">
-          {isEmpty && (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a365d]/10">
-                <Bot className="h-8 w-8 text-[#1a365d]" />
-              </div>
-              <h2 className="mt-4 text-base font-semibold text-gray-900">
-                Estate Planning Research
-              </h2>
-              <p className="mt-1.5 max-w-sm text-sm text-gray-500">
-                Ask any question about estate planning law. I'll search your reference
-                library, work product, and client files, then answer using only those
-                sources.
-              </p>
-              <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 text-left max-w-md">
-                {[
-                  'What are the NJ requirements for a valid will?',
-                  'How does a pour-over will work with a revocable trust?',
-                  'What is the NJ estate tax exemption amount?',
-                  'Explain Medicaid look-back period rules.',
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => setInput(suggestion)}
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-xs text-gray-600 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+          {/* Header */}
+          <div className="flex items-center gap-2.5 border-b border-gray-200 bg-white px-5 py-3.5 shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a365d]">
+              <Bot className="h-4 w-4 text-white" />
             </div>
-          )}
-
-          {messages.map((msg) =>
-            msg.role === 'user' ? (
-              <UserBubble key={msg.id} content={msg.content} />
-            ) : (
-              <AssistantBubble key={msg.id} content={msg.content} />
-            ),
-          )}
-
-          {isStreaming && (
-            <AssistantBubble content={streamingContent} isStreaming />
-          )}
-
-          {error && (
-            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>{error}</p>
+            <div className="flex-1">
+              <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
+              <p className="text-[11px] text-gray-500">Powered by PageIndex · Claude</p>
             </div>
-          )}
-
-          <div ref={bottomRef} />
-        </div>
-
-        {/* Input bar */}
-        <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
-          <div className="flex items-end gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm focus-within:border-[#2b6cb0] focus-within:ring-1 focus-within:ring-[#2b6cb0] transition-shadow">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask a question… (Enter to send, Shift+Enter for new line)"
-              rows={1}
-              disabled={isStreaming}
-              className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:opacity-60"
-              style={{ minHeight: '24px', maxHeight: '160px' }}
-            />
             <button
-              onClick={() => void handleSubmit()}
-              disabled={isStreaming || !input.trim()}
-              className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
-                isStreaming || !input.trim()
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-[#1a365d] text-white hover:bg-[#2b6cb0]',
-              )}
-              aria-label="Send"
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
             >
-              <Send className="h-3.5 w-3.5" />
+              <Upload className="h-3.5 w-3.5" />
+              Upload Document
             </button>
           </div>
-          <p className="mt-1.5 text-[10px] text-gray-400 text-center">
-            Answers are based solely on your indexed documents. Always verify independently.
-          </p>
-        </div>
-      </div>
 
-      {/* ── Right panel — citations (30%) ────────────────────────────────── */}
-      <div className="flex flex-[3] flex-col min-h-0 bg-white">
-        <div className="shrink-0 flex items-center gap-2 border-b border-gray-200 px-4 py-3.5">
-          <BookOpen className="h-4 w-4 text-gray-500" />
-          <h2 className="text-sm font-semibold text-gray-700">Sources</h2>
-          {citations.length > 0 && (
-            <span className="ml-auto rounded-full bg-[#1a365d] px-2 py-0.5 text-[10px] font-semibold text-white">
-              {citations.length}
-            </span>
+          {/* Tabs */}
+          <div className="shrink-0 flex gap-1 border-b border-gray-200 bg-white px-4 pt-2">
+            <button
+              onClick={() => setActiveTab('research')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-t-lg px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
+                activeTab === 'research'
+                  ? 'border-[#1a365d] text-[#1a365d]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700',
+              )}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Research
+            </button>
+            <button
+              onClick={() => setActiveTab('draft')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-t-lg px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
+                activeTab === 'draft'
+                  ? 'border-[#1a365d] text-[#1a365d]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700',
+              )}
+            >
+              <FileEdit className="h-3.5 w-3.5" />
+              Draft
+            </button>
+          </div>
+
+          {/* Content */}
+          {activeTab === 'draft' ? (
+            <DraftTab />
+          ) : (
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-5 py-6 space-y-5 min-h-0">
+                {isEmpty && (
+                  <div className="flex h-full flex-col items-center justify-center text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a365d]/10">
+                      <Bot className="h-8 w-8 text-[#1a365d]" />
+                    </div>
+                    <h2 className="mt-4 text-base font-semibold text-gray-900">
+                      Estate Planning Research
+                    </h2>
+                    <p className="mt-1.5 max-w-sm text-sm text-gray-500">
+                      Ask any question about estate planning law. I'll search your reference
+                      library, work product, and client files, then answer using only those
+                      sources.
+                    </p>
+                    <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 text-left max-w-md">
+                      {[
+                        'What are the NJ requirements for a valid will?',
+                        'How does a pour-over will work with a revocable trust?',
+                        'What is the NJ estate tax exemption amount?',
+                        'Explain Medicaid look-back period rules.',
+                      ].map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => setInput(suggestion)}
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-xs text-gray-600 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((msg) =>
+                  msg.role === 'user' ? (
+                    <UserBubble key={msg.id} content={msg.content} />
+                  ) : (
+                    <AssistantBubble key={msg.id} content={msg.content} />
+                  ),
+                )}
+
+                {isStreaming && <AssistantBubble content={streamingContent} isStreaming />}
+
+                {error && (
+                  <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>{error}</p>
+                  </div>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+
+              {/* Input bar */}
+              <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+                <div className="flex items-end gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm focus-within:border-[#2b6cb0] focus-within:ring-1 focus-within:ring-[#2b6cb0] transition-shadow">
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask a question… (Enter to send, Shift+Enter for new line)"
+                    rows={1}
+                    disabled={isStreaming}
+                    className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:opacity-60"
+                    style={{ minHeight: '24px', maxHeight: '160px' }}
+                  />
+                  <button
+                    onClick={() => void handleSubmit()}
+                    disabled={isStreaming || !input.trim()}
+                    className={cn(
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                      isStreaming || !input.trim()
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-[#1a365d] text-white hover:bg-[#2b6cb0]',
+                    )}
+                    aria-label="Send"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[10px] text-gray-400 text-center">
+                  Answers are based solely on your indexed documents. Always verify independently.
+                </p>
+              </div>
+            </>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
-          {citations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <BookOpen className="h-8 w-8 text-gray-200" />
-              <p className="mt-3 text-xs text-gray-400">
-                Source documents will appear here after each response, ranked by
-                similarity score.
+        {/* ── Right panel — citations (30%) ────────────────────────────────── */}
+        <div className="flex flex-[3] flex-col min-h-0 bg-white">
+          <div className="shrink-0 flex items-center gap-2 border-b border-gray-200 px-4 py-3.5">
+            <BookOpen className="h-4 w-4 text-gray-500" />
+            <h2 className="text-sm font-semibold text-gray-700">Sources</h2>
+            {totalCitations > 0 && (
+              <span className="ml-auto rounded-full bg-[#1a365d] px-2 py-0.5 text-[10px] font-semibold text-white">
+                {totalCitations}
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+            {totalCitations === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                <BookOpen className="h-8 w-8 text-gray-200" />
+                <p className="mt-3 text-xs text-gray-400">
+                  Source documents will appear here after each response, ranked by
+                  relevance.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Reference + work-product citations */}
+                {citations.length > 0 && (
+                  <div className="space-y-3">
+                    {citations.map((citation, i) => (
+                      <CitationCard key={i} citation={citation} rank={i + 1} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Client-files citations — RPC 1.6 isolated section */}
+                {clientFilesCitations.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-emerald-100" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                        Client Files
+                      </span>
+                      <div className="h-px flex-1 bg-emerald-100" />
+                    </div>
+                    <div className="space-y-3">
+                      {clientFilesCitations.map((citation, i) => (
+                        <CitationCard key={i} citation={citation} rank={i + 1} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {totalCitations > 0 && (
+            <div className="shrink-0 border-t border-gray-200 px-4 py-2.5">
+              <p className="text-[10px] text-gray-400">
+                Scores reflect document relevance across{' '}
+                <span className="font-medium">reference</span>,{' '}
+                <span className="font-medium">work-product</span>, and{' '}
+                <span className="font-medium text-emerald-600">client-files</span> namespaces.
               </p>
             </div>
-          ) : (
-            citations.map((citation, i) => (
-              <CitationCard key={i} citation={citation} rank={i + 1} />
-            ))
           )}
         </div>
-
-        {citations.length > 0 && (
-          <div className="shrink-0 border-t border-gray-200 px-4 py-2.5">
-            <p className="text-[10px] text-gray-400">
-              Scores reflect vector similarity to your query across{' '}
-              <span className="font-medium">reference</span>,{' '}
-              <span className="font-medium">work-product</span>, and{' '}
-              <span className="font-medium">client-files</span> namespaces.
-            </p>
-          </div>
-        )}
       </div>
-    </div>
     </>
   );
 }
