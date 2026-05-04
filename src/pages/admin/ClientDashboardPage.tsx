@@ -1139,7 +1139,7 @@ export default function ClientDashboardPage() {
 
         {/* ── Tab 8: Draft ───────────────────────────────────────────────── */}
         <TabsContent value="draft">
-          <DraftTab />
+          <DraftTab firmId={firmId} clientId={clientId ?? ''} />
         </TabsContent>
       </Tabs>
 

@@ -626,10 +626,11 @@ export default function SettingsPage() {
       // in the user's Google Account permissions.
       if (firmDoc?.googleCalendar?.accessToken) {
         try {
-          await fetch(
-            `https://oauth2.googleapis.com/revoke?token=${firmDoc.googleCalendar.accessToken}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-          );
+          await fetch('https://oauth2.googleapis.com/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token: firmDoc.googleCalendar.accessToken }),
+          });
         } catch {
           // Non-critical — token may already be expired/revoked
         }
@@ -674,10 +675,11 @@ export default function SettingsPage() {
     try {
       if (firmDoc?.googleDrive?.accessToken) {
         try {
-          await fetch(
-            `https://oauth2.googleapis.com/revoke?token=${firmDoc.googleDrive.accessToken}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-          );
+          await fetch('https://oauth2.googleapis.com/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token: firmDoc.googleDrive.accessToken }),
+          });
         } catch {
           // Non-critical — token may already be expired/revoked
         }

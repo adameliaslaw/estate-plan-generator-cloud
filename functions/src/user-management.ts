@@ -214,6 +214,12 @@ export const updateUserCapabilities = onCall(
       const auth = admin.auth();
       const userRecord = await auth.getUser(userId);
 
+      // Verify the target user belongs to the same firm as the caller
+      const targetClaims = userRecord.customClaims || {};
+      if (targetClaims['firmId'] !== firmId) {
+        throw new HttpsError('permission-denied', 'Cannot update capabilities for a user in a different firm.');
+      }
+
       // Preserve existing custom claims (like firmId, role) while updating capabilities
       const currentClaims = userRecord.customClaims || {};
       const newClaims = {

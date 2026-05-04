@@ -1,20 +1,21 @@
 /**
  * src/pages/admin/ChatPage.tsx
  *
- * Two-panel RAG chat interface.
- *  Left  (70%) — Research tab (chat + streaming) or Draft tab
+ * Two-panel RAG research interface.
+ *  Left  (70%) — Chat + streaming response
  *  Right (30%) — Citations panel with separate sections for
  *                reference/work-product and client-files (RPC 1.6)
+ *
+ * Document drafting lives in the Client Dashboard → Draft tab.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen, Upload, FileEdit } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamRagChat, streamClientFilesChat, type Citation } from '@/services/rag-chat-service';
 import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
-import { DraftTab } from '@/components/chat/DraftTab';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,8 +25,6 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
-
-type ActiveTab = 'research' | 'draft';
 
 // ---------------------------------------------------------------------------
 // Namespace badge colours
@@ -123,7 +122,6 @@ function CitationCard({ citation, rank }: { citation: Citation; rank: number }) 
 // Main page
 // ---------------------------------------------------------------------------
 export default function ChatPage() {
-  const [activeTab, setActiveTab]               = useState<ActiveTab>('research');
   const [messages, setMessages]                 = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [citations, setCitations]               = useState<Citation[]>([]);
@@ -228,7 +226,7 @@ export default function ChatPage() {
             </div>
             <div className="flex-1">
               <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
-              <p className="text-[11px] text-gray-500">Powered by PageIndex · Claude</p>
+              <p className="text-[11px] text-gray-500">Powered by PageIndex · CourtListener · Claude</p>
             </div>
             <button
               onClick={() => setUploadOpen(true)}
@@ -239,39 +237,8 @@ export default function ChatPage() {
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="shrink-0 flex gap-1 border-b border-gray-200 bg-white px-4 pt-2">
-            <button
-              onClick={() => setActiveTab('research')}
-              className={cn(
-                'flex items-center gap-1.5 rounded-t-lg px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
-                activeTab === 'research'
-                  ? 'border-[#1a365d] text-[#1a365d]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700',
-              )}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              Research
-            </button>
-            <button
-              onClick={() => setActiveTab('draft')}
-              className={cn(
-                'flex items-center gap-1.5 rounded-t-lg px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
-                activeTab === 'draft'
-                  ? 'border-[#1a365d] text-[#1a365d]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700',
-              )}
-            >
-              <FileEdit className="h-3.5 w-3.5" />
-              Draft
-            </button>
-          </div>
-
-          {/* Content */}
-          {activeTab === 'draft' ? (
-            <DraftTab />
-          ) : (
-            <>
+          {/* Messages */}
+          <>
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-5 py-6 space-y-5 min-h-0">
                 {isEmpty && (
@@ -358,8 +325,7 @@ export default function ChatPage() {
                   Answers are based solely on your indexed documents. Always verify independently.
                 </p>
               </div>
-            </>
-          )}
+          </>
         </div>
 
         {/* ── Right panel — citations (30%) ────────────────────────────────── */}

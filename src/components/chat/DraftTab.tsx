@@ -5,15 +5,19 @@
  * reference, enter drafting instructions, and stream a new draft from Claude.
  *
  * Documents are listed from Firestore pageindex_docs/work-product/files.
+ * When firmId + clientId are provided (Client Dashboard context), a
+ * "Save to Vault" button appears after generation to persist the draft.
  */
 
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { getFirestore, collection, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { FileEdit, AlertCircle, ChevronDown } from 'lucide-react';
+import { getFirestore, collection, onSnapshot, orderBy, query, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { FileEdit, AlertCircle, ChevronDown, Save, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamDraftChat } from '@/services/rag-chat-service';
+import { useAuth } from '@/hooks/useAuth';
+import { COLLECTIONS } from '@/config/constants';
 
 interface WorkProductDoc {
   id: string;
@@ -21,12 +25,22 @@ interface WorkProductDoc {
   doc_id: string;
 }
 
-export function DraftTab() {
+interface DraftTabProps {
+  /** When provided, shows a Save to Vault button after generation. */
+  firmId?: string;
+  clientId?: string;
+}
+
+export function DraftTab({ firmId, clientId }: DraftTabProps = {}) {
+  const { user } = useAuth();
+
   const [docs, setDocs]               = useState<WorkProductDoc[]>([]);
   const [selectedId, setSelectedId]   = useState('');
   const [instructions, setInstructions] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [isStreaming, setIsStreaming]   = useState(false);
+  const [isSaving, setIsSaving]         = useState(false);
+  const [savedDocId, setSavedDocId]     = useState<string | null>(null);
   const [error, setError]               = useState<string | null>(null);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
@@ -66,6 +80,7 @@ export function DraftTab() {
 
     setDraftContent('');
     setError(null);
+    setSavedDocId(null);
     setIsStreaming(true);
     abortRef.current = false;
 
@@ -93,7 +108,43 @@ export function DraftTab() {
     }
   }
 
-  const canGenerate = !!selectedId && !!instructions.trim() && !isStreaming;
+  async function handleSaveToVault() {
+    if (!firmId || !clientId || !draftContent || isSaving || !user) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const db       = getFirestore();
+      const colPath  = COLLECTIONS.DOCUMENTS(firmId, clientId);
+      const docRef   = doc(collection(db, colPath));
+      const title    = instructions.trim().slice(0, 80) || 'AI Draft';
+      const now      = serverTimestamp();
+
+      await setDoc(docRef, {
+        docType:   'custom',
+        title,
+        content:   draftContent,
+        status:    'draft',
+        firmId,
+        clientId,
+        source:    'ai-draft',
+        createdBy: user.uid,
+        updatedBy: user.uid,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      setSavedDocId(docRef.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save to vault');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const canGenerate    = !!selectedId && !!instructions.trim() && !isStreaming;
+  const canSaveToVault = !!firmId && !!clientId && !!draftContent && !isStreaming && !savedDocId;
 
   // Empty state — no docs indexed
   if (docs.length === 0) {
@@ -200,11 +251,34 @@ export function DraftTab() {
         <div ref={bottomRef} />
       </div>
 
+      {/* Footer — disclaimer + Save to Vault */}
       {!isStreaming && draftContent && (
-        <div className="shrink-0 border-t border-gray-200 px-4 py-2.5">
-          <p className="text-[10px] text-gray-400">
-            Draft generated from style reference. Review carefully before use — always verify legal accuracy.
+        <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between gap-3">
+          <p className="text-[10px] text-gray-400 leading-snug">
+            Review carefully before use — always verify legal accuracy.
           </p>
+
+          {canSaveToVault && (
+            <button
+              onClick={() => void handleSaveToVault()}
+              disabled={isSaving}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {isSaving ? (
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <Save className="h-3 w-3" />
+              )}
+              Save to Vault
+            </button>
+          )}
+
+          {savedDocId && (
+            <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-emerald-600">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Saved to Vault
+            </span>
+          )}
         </div>
       )}
     </div>
