@@ -503,8 +503,11 @@ export default function DashboardPage() {
       await setDoc(docRef, newNote);
 
       if (storagePath) {
-        requestTranscription(firmId, clientId, activeNoteId, storagePath);
-        toast.success('Note saved. Audio uploading and transcription started.');
+        requestTranscription(firmId, clientId, activeNoteId, storagePath).catch((err) => {
+          console.error('[DashboardPage] Transcription request failed:', err);
+          toast.error('Transcription request failed. You can retry from the Notes tab.');
+        });
+        toast.success('Note saved. Transcription started.');
       } else {
         toast.success('Note saved successfully.');
       }

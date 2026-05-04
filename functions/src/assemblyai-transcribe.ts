@@ -14,8 +14,6 @@
  * enabling auto-fill of client data from dictated notes.
  */
 
-import * as admin from 'firebase-admin';
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -31,10 +29,6 @@ export interface TranscribeOptions {
   piiRedaction?: boolean;
   /** Policy for PII: 'hash' replaces with hash, 'redact' replaces with ###  */
   piiRedactionPolicy?: 'hash' | 'redact';
-  /** Enable auto-generated summary */
-  autoSummary?: boolean;
-  /** Summary type */
-  summaryType?: 'informative' | 'conversational' | 'catchy';
 }
 
 export interface SpeakerUtterance {
@@ -106,25 +100,6 @@ interface AssemblyAITranscriptResult {
   confidence?: number;
   audio_duration?: number;
   error?: string;
-}
-
-async function _getAssemblyAIKey(firmId: string): Promise<string> {
-  const db = admin.firestore();
-  const firmSnap = await db.doc(`firms/${firmId}`).get();
-  const firmData = firmSnap.data();
-
-  const apiKey =
-    firmData?.assemblyaiApiKey ??
-    firmData?.settings?.assemblyaiApiKey ??
-    process.env.ASSEMBLYAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error(
-      'AssemblyAI API key not configured. Set it in firm settings or as ASSEMBLYAI_API_KEY environment variable.'
-    );
-  }
-
-  return apiKey as string;
 }
 
 async function assemblyAIRequest(

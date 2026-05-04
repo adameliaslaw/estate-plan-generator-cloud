@@ -198,7 +198,6 @@ export const transcribeAudio = functions
         const result = await transcribeWithAssemblyAI(audioBuffer, assemblyaiKey, {
           speakerDiarization: true,
           entityExtraction: true,
-          autoSummary: true,
         });
 
         // Use speaker-labeled transcript if available, otherwise plain text
