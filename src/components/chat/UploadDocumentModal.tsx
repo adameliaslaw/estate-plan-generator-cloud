@@ -48,7 +48,7 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [namespace, setNamespace] = useState<IngestNamespace>('reference');
   const [uploadState, setUploadState] = useState<UploadState>('idle');
-  const [result, setResult] = useState<{ chunksIngested: number; fileName: string } | null>(null);
+  const [result, setResult] = useState<{ docId: string; fileName: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +70,7 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
   function handleFileChange(selected: File | null) {
     if (!selected) return;
     if (!(ACCEPTED_MIME_TYPES as readonly string[]).includes(selected.type)) {
-      setError('Only PDF and DOCX files are supported.');
+      setError('Only PDF files are supported.');
       return;
     }
     if (selected.size > 20 * 1024 * 1024) {
@@ -118,7 +118,7 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
             Upload Document to PageIndex
           </DialogTitle>
           <DialogDescription>
-            Indexes a PDF or DOCX into PageIndex for reasoning-based RAG retrieval.
+            Uploads a PDF to PageIndex and registers it for reasoning-based RAG retrieval.
           </DialogDescription>
         </DialogHeader>
 
@@ -142,7 +142,7 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx"
+              accept=".pdf"
               className="hidden"
               onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
               disabled={isUploading}
@@ -169,7 +169,7 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
                 <p className="text-sm text-gray-500">
                   Drop a file here or <span className="font-medium text-[#2b6cb0]">browse</span>
                 </p>
-                <p className="text-xs text-gray-400">PDF or DOCX · max 20 MB</p>
+                <p className="text-xs text-gray-400">PDF only · max 20 MB</p>
               </div>
             )}
           </div>
@@ -214,8 +214,8 @@ export function UploadDocumentModal({ open, onOpenChange }: Props) {
             <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
               <div>
-                <p className="font-medium">{result.fileName} ingested</p>
-                <p className="text-xs text-emerald-700 mt-0.5">{result.chunksIngested} chunks upserted to <span className="font-semibold">{namespace}</span></p>
+                <p className="font-medium">{result.fileName} indexed</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Added to <span className="font-semibold">{namespace}</span> · doc ID: {result.docId}</p>
               </div>
             </div>
           )}

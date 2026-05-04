@@ -18,7 +18,7 @@ interface IngestRequest {
 }
 
 interface IngestResponse {
-  chunksIngested: number;
+  docId: string;
   fileName: string;
 }
 
@@ -32,7 +32,6 @@ export const NAMESPACE_LABELS: Record<IngestNamespace, string> = {
 
 export const ACCEPTED_MIME_TYPES = [
   'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ] as const;
 
 export async function ingestDocument(
@@ -54,7 +53,6 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      // Strip the "data:<mime>;base64," prefix
       resolve(dataUrl.split(',')[1]);
     };
     reader.onerror = () => reject(new Error('Failed to read file'));
