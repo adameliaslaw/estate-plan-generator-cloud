@@ -475,7 +475,7 @@ function buildResearchUserPrompt(
 // ---------------------------------------------------------------------------
 
 export const chatAi = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ['PAGEINDEX_API_KEY'] })
   .region('us-east1')
   .https.onCall(
   async (data: ChatAiRequest, context: functions.https.CallableContext) => {
@@ -627,7 +627,9 @@ export const chatAi = functions
       if (mode === 'research') {
         console.log(`[chatAi] Research mode — fetching firm docs, case law, and web results in parallel`);
 
-        const pageIndexKey       = (firmData as Record<string, unknown>).pageindexApiKey as string | undefined ?? '';
+        const pageIndexKey       = (firmData as Record<string, unknown>).pageindexApiKey as string | undefined
+                               ?? process.env.PAGEINDEX_API_KEY
+                               ?? '';
         const courtListenerKey   = (firmData as Record<string, unknown>).courtlistenerApiKey as string | undefined ?? '';
         const fastcaseKey        = (firmData as Record<string, unknown>).fastcaseApiKey as string | undefined ?? '';
         const db                 = admin.firestore();

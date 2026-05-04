@@ -59,8 +59,6 @@ export interface EnhancedTranscript {
   utterances: SpeakerUtterance[];
   /** Extracted entities (if entity extraction enabled) */
   entities: ExtractedEntity[];
-  /** Auto-generated summary (if enabled) */
-  summary: string;
   /** PII-redacted version of the transcript (if redaction enabled) */
   redactedText: string;
   /** Number of distinct speakers detected */
@@ -96,7 +94,6 @@ interface AssemblyAITranscriptResult {
     start: number;
     end: number;
   }>;
-  summary?: string;
   confidence?: number;
   audio_duration?: number;
   error?: string;
@@ -259,7 +256,6 @@ export async function transcribeWithAssemblyAI(
       confidence: u.confidence,
     })),
     entities,
-    summary: result.summary ?? '',
     redactedText: options.piiRedaction ? (result.text ?? '') : '',
     speakerCount: new Set((result.utterances ?? []).map(u => u.speaker)).size,
     confidence: result.confidence ?? 0,

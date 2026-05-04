@@ -3,7 +3,7 @@
  *
  * Full client matter management page with:
  *   - Client summary header (name, package, questionnaire status, documents status, balance)
- *   - Tabs: Client Information | Document Vault | Notes | Payments | Calendar | Tasks | Activity
+ *   - Tabs: Client Information | Document Vault | Notes | Payments | Calendar | Tasks | Activity | Draft
  *
  * Data is fetched in real-time from:
  *   /firms/{firmId}/clients/{clientId}
@@ -80,6 +80,7 @@ import CalendarTab from '@/components/dashboard/CalendarTab';
 import { TasksList } from '@/components/dashboard/TasksList';
 import { AudioRecorderModal } from '@/components/ui/audio-recorder-modal';
 import { UploadScanModal } from '@/components/ui/upload-scan-modal';
+import { DraftTab } from '@/components/chat/DraftTab';
 import { db } from '@/config/firebase';
 import { uploadAudioToStorage, requestTranscription } from '@/utils/audio-helpers';
 
@@ -767,6 +768,13 @@ export default function ClientDashboardPage() {
             <Activity className="h-4 w-4" />
             Activity
           </TabsTrigger>
+          <TabsTrigger
+            value="draft"
+            className="gap-2 data-[state=active]:bg-white data-[state=active]:text-[#1a365d] data-[state=active]:shadow-sm"
+          >
+            <FileEdit className="h-4 w-4" />
+            Draft
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Tab 1: Client Information ──────────────────────────────────── */}
@@ -1127,6 +1135,11 @@ export default function ClientDashboardPage() {
         {/* ── Tab 7: Activity ────────────────────────────────────────────── */}
         <TabsContent value="activity">
           <ClientActivityFeed firmId={firmId ?? ''} clientId={clientId ?? ''} />
+        </TabsContent>
+
+        {/* ── Tab 8: Draft ───────────────────────────────────────────────── */}
+        <TabsContent value="draft">
+          <DraftTab />
         </TabsContent>
       </Tabs>
 

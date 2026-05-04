@@ -206,7 +206,6 @@ export const transcribeAudio = functions
           : result.text;
 
         enhancedData = {
-          transcriptionSummary: result.summary,
           extractedEntities: result.entities,
           speakerCount: result.speakerCount,
           audioDuration: result.audioDuration,
