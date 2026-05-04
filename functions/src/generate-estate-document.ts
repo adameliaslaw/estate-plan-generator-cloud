@@ -33,6 +33,10 @@ export const generateEstateDocument = functions
       );
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot generate documents for a different firm.');
+    }
+
     console.log(`[generateEstateDocument] Routing to unified generator for client ${clientId} (${docType})...`);
 
     try {

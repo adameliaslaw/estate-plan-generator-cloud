@@ -580,57 +580,62 @@ export const lawpayWebhook = onRequest(
       }
 
       // ------------------------------------------------------------------
-      // 4. Build status update based on event type
+      // 4. Apply state transition inside a transaction (idempotency guard).
+      //    Only advance to the new state if the current state allows it, so
+      //    duplicate or out-of-order delivery cannot corrupt the record.
       // ------------------------------------------------------------------
-      let updatePayload: Record<string, unknown> = {
-        updatedAt: now,
-        lastWebhookEventType: type,
-        lastWebhookReceivedAt: now,
+      const VALID_TRANSITIONS: Record<string, string[]> = {
+        'charge.completed': ['pending', 'failed'],   // pending/failed → paid
+        'charge.failed':    ['pending'],              // pending → failed (stays pending for retry)
+        'charge.refunded':  ['paid'],                 // paid → refunded
       };
 
-      switch (type) {
-        case 'charge.completed':
-          updatePayload = {
-            ...updatePayload,
-            status: 'paid',
-            amountPaid: data.amount,
-            balanceDue: 0,
-            paidAt: now,
-          };
-          console.log(`[lawpayWebhook] Marking payment PAID — transactionId=${transactionId}`);
-          break;
-
-        case 'charge.failed':
-          // Keep as pending so the attorney can re-send or retry
-          updatePayload = {
-            ...updatePayload,
-            status: 'pending',
-            lastFailureReason: (data.failure_reason as string) ?? 'Charge failed',
-          };
-          console.log(`[lawpayWebhook] Charge FAILED — transactionId=${transactionId} (status stays pending)`);
-          break;
-
-        case 'charge.refunded':
-          updatePayload = {
-            ...updatePayload,
-            status: 'refunded',
-            refundedAt: now,
-            refundedAmount: data.amount,
-          };
-          console.log(`[lawpayWebhook] Charge REFUNDED — transactionId=${transactionId}`);
-          break;
-
-        default:
-          // Unknown event type — log and acknowledge without mutating Firestore
-          console.log(`[lawpayWebhook] Unhandled event type="${type}" — ignoring`);
-          res.status(200).send('OK');
-          return;
+      const allowed = VALID_TRANSITIONS[type];
+      if (!allowed) {
+        // Unknown event type — log and acknowledge without mutating Firestore
+        console.log(`[lawpayWebhook] Unhandled event type="${type}" — ignoring`);
+        res.status(200).send('OK');
+        return;
       }
 
-      // ------------------------------------------------------------------
-      // 5. Write the update
-      // ------------------------------------------------------------------
-      await paymentDocRef.update(updatePayload);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(paymentDocRef!);
+        if (!snap.exists) {
+          console.warn(`[lawpayWebhook] Payment doc disappeared mid-transaction transactionId=${transactionId}`);
+          return;
+        }
+        const currentStatus = (snap.data() as Record<string, unknown>).status as string | undefined;
+        if (!allowed.includes(currentStatus ?? 'pending')) {
+          console.log(
+            `[lawpayWebhook] Skipping ${type} — current status "${currentStatus}" not in allowed set [${allowed.join(', ')}]`,
+          );
+          return;
+        }
+
+        let updatePayload: Record<string, unknown> = {
+          updatedAt: now,
+          lastWebhookEventType: type,
+          lastWebhookReceivedAt: now,
+        };
+
+        switch (type) {
+          case 'charge.completed':
+            updatePayload = { ...updatePayload, status: 'paid', amountPaid: data.amount, balanceDue: 0, paidAt: now };
+            console.log(`[lawpayWebhook] Marking payment PAID — transactionId=${transactionId}`);
+            break;
+          case 'charge.failed':
+            updatePayload = { ...updatePayload, status: 'pending', lastFailureReason: (data.failure_reason as string) ?? 'Charge failed' };
+            console.log(`[lawpayWebhook] Charge FAILED — transactionId=${transactionId} (status stays pending)`);
+            break;
+          case 'charge.refunded':
+            updatePayload = { ...updatePayload, status: 'refunded', refundedAt: now, refundedAmount: data.amount };
+            console.log(`[lawpayWebhook] Charge REFUNDED — transactionId=${transactionId}`);
+            break;
+        }
+
+        tx.update(paymentDocRef!, updatePayload);
+      });
+
       console.log(`[lawpayWebhook] Payment doc updated — transactionId=${transactionId} type=${type}`);
     } catch (error) {
       // Log the error but return 200 so LawPay doesn't retry indefinitely.

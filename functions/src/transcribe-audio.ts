@@ -118,6 +118,10 @@ export const transcribeAudio = functions
       );
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot transcribe audio for a different firm.');
+    }
+
     console.log(
       `[transcribeAudio] START firmId=${firmId} clientId=${clientId} noteId=${noteId} path=${storagePath}`,
     );
@@ -328,6 +332,10 @@ export const summarizeTranscription = functions
 
     if (!firmId || !clientId || !noteId) {
       throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and noteId are required.');
+    }
+
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot summarize transcriptions for a different firm.');
     }
 
     console.log(
