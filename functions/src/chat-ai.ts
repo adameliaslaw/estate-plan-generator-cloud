@@ -14,6 +14,8 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
+import { fetchPageIndexContext } from './pageindex-retrieval';
+import { searchCaseLaw, formatCaseCitations } from './courtlistener-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot, DocSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
 import { getDocTypeDisplayName } from './unified-generator';
@@ -53,8 +55,10 @@ interface ChatAiResponse {
   draftTitle?: string;
   /** Persistent conversation ID for resuming */
   conversationId?: string;
-  /** Source citations from Perplexity (research mode) */
+  /** Source citations — URLs from Perplexity + case law from CourtListener/Fastcase */
   citations?: string[];
+  /** Firm documents retrieved from PageIndex (research mode) */
+  pageIndexSources?: Array<{ namespace: string; documentName: string; section: string; pageNumber: number; excerpt: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +439,38 @@ function detectGenerationIntent(raw: string, draftDocType?: string): GenerationA
 }
 
 // ---------------------------------------------------------------------------
+// Research mode prompt builder
+// ---------------------------------------------------------------------------
+
+function buildResearchUserPrompt(
+  message: string,
+  history: Array<{ role: string; content: string }>,
+  firmDocsContext: string,
+  caseLawContext: string,
+): string {
+  const parts: string[] = [];
+
+  if (firmDocsContext) {
+    parts.push(`FIRM DOCUMENTS (from your indexed reference library and work product):\n${firmDocsContext}`);
+  }
+
+  if (caseLawContext) {
+    parts.push(`RELEVANT CASE LAW:\n${caseLawContext}`);
+  }
+
+  if (history.length > 0) {
+    const historyStr = history
+      .slice(-10)
+      .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+      .join('\n');
+    parts.push(`Previous research conversation:\n${historyStr}`);
+  }
+
+  parts.push(`QUESTION: ${message}`);
+  return parts.join('\n\n---\n\n');
+}
+
+// ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
 
@@ -585,13 +621,26 @@ export const chatAi = functions
       }
 
       // =====================================================================
-      // 4b. RESEARCH MODE: Pure Perplexity — no client context, no KB.
-      //     Returns grounded answers with source citations.
+      // 4b. RESEARCH MODE: PageIndex firm docs + CourtListener case law +
+      //     Perplexity web search — all in parallel, synthesised by the LLM.
       // =====================================================================
       if (mode === 'research') {
-        console.log(`[chatAi] Research mode — calling Perplexity`);
+        console.log(`[chatAi] Research mode — fetching firm docs, case law, and web results in parallel`);
 
-        const researchSystemPrompt = `You are an expert legal research assistant specializing in estate planning, trust and estate law, elder law, and related practice areas.
+        const pageIndexKey       = (firmData as Record<string, unknown>).pageindexApiKey as string | undefined ?? '';
+        const courtListenerKey   = (firmData as Record<string, unknown>).courtlistenerApiKey as string | undefined ?? '';
+        const fastcaseKey        = (firmData as Record<string, unknown>).fastcaseApiKey as string | undefined ?? '';
+        const db                 = admin.firestore();
+
+        // Phase 1: Fetch firm docs + case law in parallel (fast lookups)
+        const [pageIndexResult, caseLawResult] = await Promise.all([
+          fetchPageIndexContext(['reference', 'work-product'], message, pageIndexKey, db),
+          searchCaseLaw(message, courtListenerKey, fastcaseKey),
+        ]);
+
+        // Phase 2: Perplexity web search, enriched with internal context
+        const researchSystemPrompt =
+          `You are an expert legal research assistant specializing in estate planning, trust and estate law, elder law, and related practice areas.
 
 YOUR ROLE:
 • Provide thorough, well-researched answers grounded in current legal sources.
@@ -599,6 +648,7 @@ YOUR ROLE:
 • Focus especially on New Jersey law (N.J.S.A. Title 3B, Title 46, etc.) but cover federal and other state laws when relevant.
 • Organize your answers with clear headings and numbered citations.
 • Distinguish between current law and proposed/pending legislation.
+• When internal firm documents or case law are provided below, incorporate them into your answer and cite them explicitly.
 
 RULES:
 • Always indicate the jurisdiction of cited authorities.
@@ -606,39 +656,36 @@ RULES:
 • Never fabricate citations — if you cannot find a specific source, say so.
 • Provide practical implications for estate planning practitioners where applicable.`;
 
-        let userPrompt = '';
-        if (resolvedHistory.length > 0) {
-          userPrompt += 'Previous research conversation:\n';
-          for (const msg of resolvedHistory.slice(-10)) {
-            userPrompt += `${msg.role.toUpperCase()}: ${msg.content}\n`;
-          }
-          userPrompt += `\nNEW QUESTION: ${message}`;
-        } else {
-          userPrompt = message;
-        }
+        const perplexityResult = await callPerplexityWithCitations(
+          researchSystemPrompt,
+          buildResearchUserPrompt(message, resolvedHistory, pageIndexResult.contextString, caseLawResult.contextString),
+          firmData,
+          { model: modelOverride ?? 'sonar', temperature: 0.2 },
+        );
 
-        const { content: researchContent, citations: researchCitations } =
-          await callPerplexityWithCitations(researchSystemPrompt, userPrompt, firmData, {
-            model: modelOverride ?? 'sonar',
-            temperature: 0.2,
-          });
-        console.log(`[chatAi] Research response received: ${researchContent.length} chars, ${researchCitations.length} citations (${Date.now() - t0}ms)`);
+        console.log(
+          `[chatAi] Research complete: ${pageIndexResult.sources.length} firm docs, ` +
+          `${caseLawResult.results.length} cases, ${perplexityResult.citations.length} web citations (${Date.now() - t0}ms)`,
+        );
+
+        // Merge all citation types
+        const allCitations = [
+          ...perplexityResult.citations,
+          ...formatCaseCitations(caseLawResult.results),
+        ];
 
         const allMessages: ConversationMessage[] = [
-          ...resolvedHistory.map((m) => ({
-            role: m.role,
-            content: m.content,
-            timestamp: new Date().toISOString(),
-          })),
+          ...resolvedHistory.map((m) => ({ role: m.role, content: m.content, timestamp: new Date().toISOString() })),
           { role: 'user' as const, content: message, timestamp: new Date().toISOString() },
-          { role: 'assistant' as const, content: researchContent, timestamp: new Date().toISOString() },
+          { role: 'assistant' as const, content: perplexityResult.content, timestamp: new Date().toISOString() },
         ];
 
         const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, 'research', clientId);
 
         return {
-          reply: researchContent,
-          citations: researchCitations,
+          reply: perplexityResult.content,
+          citations: allCitations,
+          pageIndexSources: pageIndexResult.sources,
           conversationId: convId,
         } as ChatAiResponse;
       }
