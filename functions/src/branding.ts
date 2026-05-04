@@ -19,6 +19,9 @@ export const getFirmBranding = functions.region('us-east1').https.onCall(
             return {
                 logoUrl: firmData.logoUrl || null,
                 firmName: firmData.firmName || null,
+                // Browser-side key required for Google Places Autocomplete in the questionnaire.
+                // Restrict this key by HTTP referrer in GCP Console so it is only
+                // accepted from your firm's domains.
                 googleMapsApiKey: firmData.settings?.googleMapsApiKey || null,
             };
         } catch (error) {
