@@ -496,6 +496,10 @@ export const chatAi = functions
       throw new functions.https.HttpsError('invalid-argument', 'message is required.');
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot access AI assistant for a different firm.');
+    }
+
     try {
       const t0 = Date.now();
 
@@ -902,6 +906,9 @@ export const listAiConversations = functions
       if (!firmId) {
         throw new functions.https.HttpsError('invalid-argument', 'firmId is required.');
       }
+      if ((context.auth.token.firmId as string | undefined) !== firmId) {
+        throw new functions.https.HttpsError('permission-denied', 'Cannot list conversations for a different firm.');
+      }
       const { listConversations } = await import('./ai-memory');
       return listConversations(firmId, clientId, lim);
     },
@@ -924,6 +931,9 @@ export const saveMessageAsNote = functions
       const { firmId, clientId, messageContent, messageRole, conversationId: convId } = data;
       if (!firmId || !clientId || !messageContent) {
         throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and messageContent are required.');
+      }
+      if ((context.auth.token.firmId as string | undefined) !== firmId) {
+        throw new functions.https.HttpsError('permission-denied', 'Cannot save notes for a different firm.');
       }
 
       const noteRef = admin.firestore()

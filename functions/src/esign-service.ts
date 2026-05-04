@@ -13,6 +13,10 @@ export const sendForSignature = functions.region('us-east1').https.onCall(async 
         throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters.');
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+        throw new functions.https.HttpsError('permission-denied', 'Cannot send for signature on behalf of a different firm.');
+    }
+
     // 2. Fetch firm settings to get the API Key (HelloSign/DocuSign mock or real integration)
     const firmRef = admin.firestore().collection('firms').doc(firmId);
     const firmDoc = await firmRef.get();

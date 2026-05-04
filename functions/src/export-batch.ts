@@ -185,6 +185,10 @@ export const exportBatchDocuments = functions
       );
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot export documents for a different firm.');
+    }
+
     if (!['pdf', 'docx', 'both'].includes(format)) {
       throw new functions.https.HttpsError(
         'invalid-argument',
