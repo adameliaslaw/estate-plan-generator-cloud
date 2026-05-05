@@ -342,6 +342,42 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "wills_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "firmId",        "order": "ASCENDING"  },
+        { "fieldPath": "document_type", "order": "ASCENDING"  },
+        { "fieldPath": "ingest_timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "wills_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "firmId",              "order": "ASCENDING"  },
+        { "fieldPath": "needs_human_review",  "order": "ASCENDING"  },
+        { "fieldPath": "ingest_timestamp",    "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "wills_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "firmId",           "order": "ASCENDING"  },
+        { "fieldPath": "processing_status","order": "ASCENDING"  },
+        { "fieldPath": "ingest_timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "wills_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "firmId",           "order": "ASCENDING" },
+        { "fieldPath": "client_name",      "order": "ASCENDING" },
+        { "fieldPath": "ingest_timestamp", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

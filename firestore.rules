@@ -537,6 +537,44 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /wills_documents/{fileId}
+    // Wills ingestion pipeline — one doc per Drive file, keyed by
+    // drive_file_id. Written only by Cloud Functions (Admin SDK).
+    // Staff may read for precedent search and review queue.
+    // ==========================================================
+    match /wills_documents/{fileId} {
+      allow read: if isAuthenticated()
+                  && request.auth.token.role in ['admin', 'attorney', 'paralegal']
+                  && request.auth.token.firmId == resource.data.firmId;
+      allow write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // ==========================================================
+    // /pipeline_state/{docId}
+    // Operational state for the wills ingestion pipeline:
+    //   pipeline_state/control         — kill switch + spend tracking
+    //   pipeline_state/drive_sync      — Drive change-watch cursor
+    //   pipeline_state/backfill_progress — backfill job status
+    // Admins may read (for monitoring); all writes via Admin SDK.
+    // ==========================================================
+    match /pipeline_state/{docId} {
+      allow read: if isAdmin();
+      allow write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // ==========================================================
+    // /pipeline_audit_log/{logId}
+    // Append-only ingestion + query audit log for the wills pipeline.
+    // Separate from the firm-level auditLog at firms/{firmId}/auditLog.
+    // Admins may read; no client creates — written by Admin SDK only.
+    // ==========================================================
+    match /pipeline_audit_log/{logId} {
+      allow read: if isAdmin();
+      allow create: if false; // Cloud Functions (Admin SDK) only
+      allow update, delete: if false;
+    }
+
+    // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
     // This is Firestore's built-in behaviour, but calling it out
