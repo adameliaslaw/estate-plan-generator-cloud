@@ -59,6 +59,35 @@ Open any client dashboard for a client who has at least one fiduciary named on f
 
 ## 🛠 Mid-term projects
 
+### Wills → PageIndex ingestion pipeline — started 2026-05-05
+
+**Branch:** `claude/review-wills-pipeline-aYxwD` | **PR:** #4 | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
+
+**Status: STOP GATE 2 — Phase 1 complete, Phase 2 next.**
+
+Phase 1 shipped:
+- `functions/src/wills-schema.ts` — all TypeScript types (universal fields locked, type-specific DRAFT pending docx review)
+- `functions/src/wills-processor.ts` — Pub/Sub stub on topic `wills-document-processing`
+- `firestore.rules` — new rules for `wills_documents`, `pipeline_state`, `pipeline_audit_log`
+- `firestore.indexes.json` — 4 composite indexes on `wills_documents`
+- `functions/tsconfig.json` — pre-existing TS5107 deprecation error fixed
+
+**Before next session starts Phase 2, confirm these pre-flight items:**
+- [ ] `ANTHROPIC_API_KEY` provisioned in Firebase Secret Manager (currently placeholder per item 3 in ⏱ Short-term)
+- [ ] `gcloud pubsub topics create wills-document-processing --project=estate-plan-generator`
+- [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com`
+- [ ] Service account created (Drive Viewer + Pub/Sub Publisher + Firestore User roles)
+- [ ] Service account granted Viewer on Drive folder `1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j`
+
+**Phase 2 (next) — Document Processor:**
+Build the full 10-step pipeline body in `wills-processor.ts`: kill switch check, cost circuit breaker, Drive file fetch, mammoth/.pdf-parse text extraction, folder-path parser, Haiku 4.5 classifier, Sonnet 4.6 extractor, schema validation + retry, Firestore write, PageIndex submission to `work-product` namespace, audit log append. Add `googleapis` to `functions/package.json`. Add `claude-haiku-4-5-20251001` to `KNOWN_MODELS` in `ai-client.ts`.
+
+**Type-specific schema:** field groups are DRAFT — Adam to review `Wills_Metadata_Schema_v1.0.docx` and correct `wills-schema.ts` before Phase 5 backfill. Pilot (Phase 4) may proceed with the draft.
+
+**Locked decisions (do not redesign):** PageIndex namespace = `work-product`. Classification model = `claude-haiku-4-5-20251001`. Extraction model = `claude-sonnet-4-6`. Full-document context (no chunking). Tool-use API for strict JSON output (not `callAI()`).
+
+---
+
 ### RAG-chat graceful-degradation when Anthropic streaming fails — added 2026-05-05
 
 **Problem.** `functions/src/rag-chat.ts` and `functions/src/pageindex-client-files-chat.ts` both import the Anthropic SDK directly and use `messages.stream()` for SSE streaming to the browser. They bypass `functions/src/ai-client.ts`'s multi-provider fallback chain, because that helper (`callAI`) is request/response/JSON-mode and cannot stream. **Result:** during an Anthropic outage, RAG chat is fully unavailable for users — even though OpenAI and Vertex are configured and healthy.

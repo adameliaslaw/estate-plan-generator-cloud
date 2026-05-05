@@ -36,7 +36,17 @@ export const willsProcessor = onMessagePublished(
     memory: '1GiB',
   },
   async (event) => {
-    const msg = event.data.message.json as WillsIngestMessage;
+    let msg: WillsIngestMessage;
+    try {
+      msg = event.data.message.json as WillsIngestMessage;
+    } catch (err) {
+      logger.error('[willsProcessor] Failed to parse Pub/Sub message as JSON — dropping', {
+        error: err instanceof Error ? err.message : String(err),
+        data: event.data.message.data,
+      });
+      return; // ack the message so it isn't retried
+    }
+
     logger.info('[willsProcessor] Phase 1 stub — pipeline implementation in Phase 2', {
       drive_file_id: msg.drive_file_id,
       event_type: msg.event_type,
