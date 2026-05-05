@@ -12,7 +12,16 @@
  *   onSuccess   — called after successful generation with doc type + id
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  Timestamp,
+} from 'firebase/firestore';
+import { COLLECTIONS } from '@/config/constants';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +53,22 @@ import {
 } from 'lucide-react';
 import { documentService, type GenerateFlexDocumentResponse } from '@/services/document-service';
 import { cn } from '@/lib/utils';
+
+// ── Generation stage helpers ─────────────────────────────────────────────────
+
+function getGenerationStage(elapsed: number): string {
+  if (elapsed < 15) return 'Building context…';
+  if (elapsed < 45) return 'Drafting with AI…';
+  if (elapsed < 120) return 'Drafting with AI… (this typically takes 1–3 minutes)';
+  if (elapsed < 180) return 'Reviewing and formatting…';
+  return 'Finalizing… (almost there)';
+}
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+}
 
 // ── Flex document catalog ─────────────────────────────────────────────────────
 
@@ -163,6 +188,55 @@ export default function FlexDocumentGenerator({
   const [customPrompt, setCustomPrompt] = useState('');
   const [result, setResult] = useState<GenerateFlexDocumentResponse | null>(null);
   const [error, setError] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Guards against double-fire from both the httpsCallable promise and the
+  // Firestore listener (whichever wins first).
+  const succeededRef = useRef(false);
+
+  useEffect(() => {
+    if (phase !== 'generating') {
+      setElapsedSeconds(0);
+      return;
+    }
+    succeededRef.current = false;
+    setElapsedSeconds(0);
+    const interval = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  // Firestore polling fallback: detects the saved doc even if the long-running
+  // httpsCallable response is dropped silently by an intermediate proxy.
+  useEffect(() => {
+    if (phase !== 'generating' || !firmId || !clientId || !selected) return;
+    const startTime = Timestamp.now();
+    const q = query(
+      collection(getFirestore(), COLLECTIONS.DOCUMENTS(firmId, clientId)),
+      where('docType', '==', selected.docType),
+      where('updatedAt', '>=', startTime),
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      if (snap.empty) return;
+      const docSnap = snap.docs[0];
+      const data = docSnap.data();
+      markSuccess({
+        success: true,
+        docType: (data.docType as string) ?? selected.docType,
+        title: (data.displayName as string) ?? (data.title as string) ?? selected.docType,
+        documentId: docSnap.id,
+        status: (data.status as string) ?? 'draft',
+      });
+    });
+    return () => unsub();
+  }, [phase, firmId, clientId, selected]);
+
+  const markSuccess = (response: GenerateFlexDocumentResponse) => {
+    if (succeededRef.current) return;
+    succeededRef.current = true;
+    setResult(response);
+    setPhase('success');
+    onSuccess?.(response);
+  };
 
   const handleSelect = (option: FlexDocOption) => {
     setSelected(option);
@@ -181,10 +255,11 @@ export default function FlexDocumentGenerator({
         docType: selected.docType,
         customPrompt: customPrompt.trim() || '',
       });
-      setResult(response);
-      setPhase('success');
-      onSuccess?.(response);
+      markSuccess(response);
     } catch (err: unknown) {
+      // If the Firestore listener already saw the saved doc, ignore the
+      // late-arriving rejection.
+      if (succeededRef.current) return;
       setError(
         err instanceof Error ? err.message : 'Generation failed. Please try again.',
       );
@@ -333,7 +408,10 @@ export default function FlexDocumentGenerator({
                 Generating {selected.label}…
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                This may take up to a minute. Please wait.
+                {getGenerationStage(elapsedSeconds)}
+              </p>
+              <p className="mt-2 text-xs tabular-nums text-gray-400">
+                {formatElapsed(elapsedSeconds)} elapsed
               </p>
             </div>
           </div>

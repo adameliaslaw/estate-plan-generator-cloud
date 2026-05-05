@@ -2396,17 +2396,17 @@ Return the enhanced HTML document.`;
     // adds citations, smooths prose). 16K cap gives generous headroom
     // while keeping completion under ~3 min.
     //
-    // Model: Sonnet is hardcoded for hybrid augmentation regardless of
-    // the firm's documentDraftingModel preference. The firm's preference
-    // (often Opus) is appropriate for AI-only mode (fresh-draft) but is
-    // too slow for hybrid augmentation: with 25K input + 16K max output,
-    // Opus runs ~400-500s and routinely times out the 540s function
-    // window. Sonnet does the same "preserve structure + add KB
-    // citations + smooth prose" job in ~120-180s with no quality drop
-    // for this workload. Opus quality matters for full-draft generation,
-    // not for surgical augmentation.
+    // Model: Haiku 4.5 is hardcoded for hybrid augmentation. The firm's
+    // documentDraftingModel preference (often Opus) is appropriate for
+    // AI-only mode (fresh-draft) but is too slow for hybrid augmentation:
+    // with 25K input + 16K max output, Opus runs ~400-500s and routinely
+    // times out the 540s function window. Sonnet 4.6 ran the same workload
+    // in ~120-180s but Haiku 4.5 does it in ~50-70s with comparable quality
+    // for this "preserve structure + add KB citations + smooth prose" job
+    // (it's a surgical augmentation, not fresh drafting). Opus / Sonnet
+    // quality matters for full-draft generation, not for this path.
     let enhanced = await callAI(systemPrompt, userPrompt, safeFirm, {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       temperature: 0.15,
       maxTokens: 16384,
     });

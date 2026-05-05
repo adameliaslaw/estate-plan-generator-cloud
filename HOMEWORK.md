@@ -22,11 +22,7 @@ These items surfaced during the post-merge production deploy of PR #1 (`04a2739`
 - Filter rewrite — backfill loop only passed `forceAll=true` on iter 1; old filter (`!embeddedAt`) made subsequent iters see zero candidates since everything had a stale Gemini timestamp. New filter (`embeddingModel !== 'text-embedding-005'`) drains the queue model-by-model.
 - Metadata fetch limit raised from 50 → 500 in backfill codebase (Adam's KB had 54 resources; trailing 4 were silently skipped).
 
-**Runtime project resolution** via `GoogleAuth.getProjectId()` instead of hardcoded constant, so the same code runs under sibling projects (staging/forks) without `PERMISSION_DENIED`.
-
-### 3. ✅ PageIndex / Anthropic — secrets set and RAG functions deployed (closed 2026-05-05)
-
-**Resolution.** Adam created Anthropic and PageIndex accounts and set real API keys in Cloud Secret Manager. All 4 RAG functions deployed: `ragChat`, `ingestDocument`, `pageIndexClientFilesChat`, `backfillPageIndexFirmId`. The Draft tab in the UI (PR #9, pending hosting redeploy) will expose `pageIndexClientFilesChat` to users.
+**Runtime project resolution** via `GoogleAuth.getProjectId()` instead of hardcoded `VERTEX_PROJECT = 'estate-plan-generator'`, so the same code runs under sibling projects (staging/forks) without `PERMISSION_DENIED`.
 
 **Architecture note:** Vertex vector search (KB aggregation for doc generation) and PageIndex (interactive chat over client files) serve different roles and coexist intentionally. Vertex is batch/generation-time; PageIndex is user-facing/interactive. Cost delta is 1000-5000× per call in absolute terms but negligible at law-firm scale (~$0.005-0.015/PageIndex call vs ~$0.0000035/Vertex embed call).
 
@@ -50,7 +46,7 @@ Open any client dashboard for a client who has at least one fiduciary named on f
 
 ### Wills → PageIndex ingestion pipeline — started 2026-05-05
 
-**Branch:** `claude/review-wills-pipeline-aYxwD` | **PR:** open | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
+**PR:** #4 merged | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
 
 **Status: Phases 1–3 on main. Pre-flight required, then STOP GATE 3, then STOP GATE 4 before Phase 4.**
 
@@ -63,8 +59,8 @@ Phases shipped (all on main):
 
 #### Pre-flight checklist (one-time infrastructure — do before any deploy)
 
-- [x] `ANTHROPIC_API_KEY` — real key in Secret Manager (closed 2026-05-05, item 3)
-- [ ] `PAGEINDEX_API_KEY` — real key in Secret Manager (closed 2026-05-05, item 3) ✓ done
+- [x] `ANTHROPIC_API_KEY` — real key in Secret Manager (done 2026-05-05, see item 3)
+- [x] `PAGEINDEX_API_KEY` — real key in Secret Manager (done 2026-05-05, see item 3)
 - [ ] `gcloud pubsub topics create wills-document-processing --project=estate-plan-generator`
 - [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com --project=estate-plan-generator`
 - [ ] Create a service account with **Drive Viewer + Pub/Sub Publisher + Firestore User** roles
@@ -94,6 +90,7 @@ Phases shipped (all on main):
    - `document_type` looks correct for the file you chose
    - `type_fields` populated with extracted metadata
    - `pageindex_doc_id` is not null
+   - `pageindex_docs/work-product/files/<doc_id>` document exists
 
 If `processing_status` = `"error"`, check `processing_error` field and logs before proceeding.
 
@@ -107,10 +104,14 @@ After STOP GATE 3 passes:
    ```
    firebase deploy --only functions:willsProcessor,functions:willsDriveWebhook,functions:willsDriveWatchRenew,functions:willsSetupDriveWatch,functions:willsStartBackfill --project=estate-plan-generator
    ```
-2. Note the `willsDriveWebhook` HTTPS URL from the deploy output.
-3. From an admin-role Firebase account, call `willsSetupDriveWatch({ webhookUrl: "<willsDriveWebhook URL>" })`. Confirm `pipeline_state/drive_sync` in Firestore is populated.
+2. Note the `willsDriveWebhook` HTTPS URL from the deploy output (looks like `https://us-east1-estate-plan-generator.cloudfunctions.net/willsDriveWebhook`).
+3. From an admin-role Firebase account, call:
+   ```js
+   willsSetupDriveWatch({ webhookUrl: "<willsDriveWebhook URL>" })
+   ```
+   Confirm `pipeline_state/drive_sync` in Firestore is populated with a channel ID and expiry.
 4. Drop a test `.docx` into the Drive folder. Within ~30 seconds, confirm `wills_documents/<file_id>` appears in Firestore.
-5. Call `willsStartBackfill()` from admin. Watch `pipeline_state/backfill_progress` tick up.
+5. Call `willsStartBackfill()` from admin. Watch `pipeline_state/backfill_progress` tick up. Confirm all existing Drive files are queued and processed.
 
 ---
 
