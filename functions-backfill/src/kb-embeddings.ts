@@ -348,7 +348,7 @@ export const backfillEmbeddings = onCall(
       .collection(`firms/${firmId}/knowledgeBase`)
       .where('isActive', '==', true)
       .select('embeddedAt', 'title')
-      .limit(50)
+      .limit(500)
       .get();
 
     // Filter to those needing embedding, then take up to BACKFILL_BATCH_SIZE
@@ -425,7 +425,7 @@ export const backfillTemplateEmbeddings = onCall(
       .collection(`firms/${firmId}/documentTemplates`)
       .where('isActive', '==', true)
       .select('embeddedAt', 'name')
-      .limit(50)
+      .limit(500)
       .get();
 
     const needsEmbedding = snap.docs
