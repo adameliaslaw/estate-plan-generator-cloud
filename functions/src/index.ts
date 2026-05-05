@@ -64,5 +64,7 @@ export { ingestDocument } from './ingest-document';
 export { pageIndexClientFilesChat } from './pageindex-client-files-chat';
 export { backfillPageIndexFirmId } from './backfill-pageindex-firmid';
 
-// Wills → PageIndex ingestion pipeline (Phase 1 stub — Phase 2 implements)
+// Wills → PageIndex ingestion pipeline
 export { willsProcessor } from './wills-processor';
+export { willsDriveWebhook, willsDriveWatchRenew, willsSetupDriveWatch } from './wills-drive-watcher';
+export { willsStartBackfill } from './wills-backfill';
