@@ -157,15 +157,16 @@ const POA_RULES: StructureRule[] = [
   },
   {
     name: 'Notary Block',
-    // NJ POAs typically use the "ACKNOWLEDGMENT" header + "acknowledged under
-    // oath" phrasing rather than the words "notary" or "sworn before me".
-    // Broaden the OR-of-patterns to recognize that style.
+    // NJ POAs typically use the "acknowledged under oath" phrasing and the
+    // ") ss:" jurat preamble rather than the words "notary" or "sworn before
+    // me". Each pattern below is structural enough that casual prose
+    // ("Agent acknowledgment and acceptance") cannot accidentally satisfy it.
     patterns: [
-      p('notar'),
-      p('notari'),
-      p('acknowledgment'),
-      p('sworn'),
-      p('acknowledg.*oath'),
+      p('notar'),                  // notary, notarial, notarize, etc.
+      p('sworn'),                  // 'sworn before me', 'sworn statement', etc.
+      p('acknowledg.*oath'),       // 'acknowledged under oath' (NJ POA)
+      p('\\)\\s*ss\\s*:'),         // 'STATE OF X ) ss:' jurat preamble
+      p('commission\\s+expires'),  // 'My commission expires ...'
     ],
     severity: 'error',
   },
@@ -280,7 +281,7 @@ const RULES_BY_DOC_TYPE: Record<string, StructureRule[]> = {
   affidavitOfConsideration: [
     { name: 'Grantor Reference', patterns: [p('grantor')], severity: 'error' },
     { name: 'Consideration Amount', patterns: [p('consideration'), p('\\$')], severity: 'error' },
-    { name: 'Notary Block', patterns: [p('notar'), p('sworn'), p('acknowledgment'), p('acknowledg.*oath')], severity: 'error' },
+    { name: 'Notary Block', patterns: [p('notar'), p('sworn'), p('acknowledg.*oath'), p('\\)\\s*ss\\s*:'), p('commission\\s+expires')], severity: 'error' },
   ],
   gitRep3: [
     { name: 'Seller/Transferor Identification', patterns: [p('seller'), p('transferor')], severity: 'error' },
