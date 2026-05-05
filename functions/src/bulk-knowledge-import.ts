@@ -251,6 +251,10 @@ export const bulkProcessKnowledgeFiles = onCall(
       throw new HttpsError('permission-denied', 'Only staff members can import knowledge resources.');
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot import knowledge resources for a different firm.');
+    }
+
     // Fetch firm data for AI provider keys
     const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
     const firmData = firmSnap.data() ?? {};

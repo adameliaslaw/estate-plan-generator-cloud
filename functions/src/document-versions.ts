@@ -29,6 +29,10 @@ export const getDocumentVersions = onCall(
       throw new HttpsError('invalid-argument', 'firmId, clientId, and documentId are required.');
     }
 
+    if ((auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot access document versions for a different firm.');
+    }
+
     const versions = await getVersionHistory(firmId, clientId, documentId);
 
     return {
@@ -114,6 +118,10 @@ export const revertDocumentVersion = onCall(
 
     if (!firmId || !clientId || !documentId || !targetVersion) {
       throw new HttpsError('invalid-argument', 'firmId, clientId, documentId, and targetVersion are required.');
+    }
+
+    if ((auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot revert document versions for a different firm.');
     }
 
     try {
