@@ -531,7 +531,8 @@ service cloud.firestore {
     // ==========================================================
     match /pageindex_docs/{namespace}/files/{docId} {
       allow read: if isAuthenticated()
-                  && request.auth.token.role in ['admin', 'attorney', 'paralegal'];
+                  && request.auth.token.role in ['admin', 'attorney', 'paralegal']
+                  && request.auth.token.firmId == resource.data.firmId;
       allow write: if false;
     }
 

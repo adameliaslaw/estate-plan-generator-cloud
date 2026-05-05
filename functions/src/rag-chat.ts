@@ -187,6 +187,11 @@ export const ragChat = onRequest(
       res.status(403).json({ error: 'Forbidden: staff access only' });
       return;
     }
+    const callerFirmId = decoded['firmId'] as string | undefined;
+    if (!callerFirmId) {
+      res.status(403).json({ error: 'Forbidden: no firm association found' });
+      return;
+    }
 
     // ── Input validation ────────────────────────────────────────────────────
     const { query, mode = 'research', sourceDocId, instructions } = req.body as {
@@ -220,13 +225,28 @@ export const ragChat = onRequest(
       // ── Resolve documents to query ────────────────────────────────────────
       let docs: DocSpec[];
 
+      const db = admin.firestore();
+
       if (mode === 'draft') {
-        docs = [{ docId: sourceDocId!, namespace: 'work-product', fileName: sourceDocId! }];
+        // Validate sourceDocId belongs to the caller's firm before using it
+        const docSnap = await db.collection('pageindex_docs/work-product/files')
+          .where('doc_id', '==', sourceDocId!)
+          .where('firmId', '==', callerFirmId)
+          .limit(1)
+          .get();
+        if (docSnap.empty) {
+          sse(res, { type: 'error', message: 'Source document not found or access denied' });
+          res.end();
+          return;
+        }
+        const entry = docSnap.docs[0].data() as FirestoreDocEntry;
+        docs = [{ docId: entry.doc_id, namespace: 'work-product', fileName: entry.fileName }];
       } else {
-        const db = admin.firestore();
         const namespaceDocs = await Promise.all(
           RESEARCH_NAMESPACES.map(async (ns) => {
-            const snap = await db.collection(`pageindex_docs/${ns}/files`).get();
+            const snap = await db.collection(`pageindex_docs/${ns}/files`)
+              .where('firmId', '==', callerFirmId)
+              .get();
             return snap.docs.map((d) => {
               const entry = d.data() as FirestoreDocEntry;
               return { docId: entry.doc_id, namespace: ns, fileName: entry.fileName };

@@ -133,6 +133,11 @@ export const pageIndexClientFilesChat = onRequest(
       res.status(403).json({ error: 'Forbidden: staff access only' });
       return;
     }
+    const callerFirmId = decoded['firmId'] as string | undefined;
+    if (!callerFirmId) {
+      res.status(403).json({ error: 'Forbidden: no firm association found' });
+      return;
+    }
 
     // ── Input validation ────────────────────────────────────────────────────
     const { query } = req.body as { query?: string };
@@ -155,7 +160,9 @@ export const pageIndexClientFilesChat = onRequest(
     try {
       // ── Load client-files docs from Firestore ─────────────────────────────
       const db = admin.firestore();
-      const snap = await db.collection('pageindex_docs/client-files/files').get();
+      const snap = await db.collection('pageindex_docs/client-files/files')
+        .where('firmId', '==', callerFirmId)
+        .get();
       const docs = snap.docs.map((d) => {
         const entry = d.data() as FirestoreDocEntry;
         return { docId: entry.doc_id, fileName: entry.fileName };

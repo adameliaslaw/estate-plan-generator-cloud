@@ -62,6 +62,10 @@ export const ingestDocument = functions
     if (!role || !STAFF_ROLES.has(role)) {
       throw new functions.https.HttpsError('permission-denied', 'Staff access only');
     }
+    const callerFirmId = context.auth.token['firmId'] as string | undefined;
+    if (!callerFirmId) {
+      throw new functions.https.HttpsError('permission-denied', 'No firm association found');
+    }
 
     // ── Input validation ────────────────────────────────────────────────────
     const { fileBase64, mimeType, fileName, namespace } = data;
@@ -129,6 +133,7 @@ export const ingestDocument = functions
       doc_id,
       fileName,
       namespace,
+      firmId: callerFirmId,
       uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
