@@ -54,18 +54,20 @@ export const templatizeKnowledgeBase = onCall(
       throw new HttpsError('permission-denied', 'Only admins/attorneys can force-templatize.');
     }
 
-    const { firmId } = request.data as { firmId?: string } || {};
+    const callerFirmId = request.auth.token.firmId as string | undefined;
+    if (!callerFirmId) {
+      throw new HttpsError('permission-denied', 'No firm association found.');
+    }
+
+    const { firmId: requestedFirmId } = (request.data as { firmId?: string }) || {};
+    if (requestedFirmId && requestedFirmId !== callerFirmId) {
+      throw new HttpsError('permission-denied', 'Cannot templatize templates for a different firm.');
+    }
+    const firmId = callerFirmId;
 
     const db = admin.firestore();
-    let snapshot;
-    
-    if (firmId) {
-      snapshot = await db.collection(`firms/${firmId}/templates`).get();
-      console.log(`[templatizeKnowledgeBase] Found ${snapshot.size} templates for firm ${firmId}.`);
-    } else {
-      snapshot = await db.collectionGroup('templates').get();
-      console.log(`[templatizeKnowledgeBase] Found ${snapshot.size} templates across ALL firms.`);
-    }
+    const snapshot = await db.collection(`firms/${firmId}/templates`).get();
+    console.log(`[templatizeKnowledgeBase] Found ${snapshot.size} templates for firm ${firmId}.`);
 
     const report = {
       investigated: snapshot.size,

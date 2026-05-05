@@ -234,10 +234,13 @@ export const processTemplateFile = onCall(
       throw new HttpsError('invalid-argument', 'firmId, storagePath, and fileName are required.');
     }
 
-    // Validate role
+    // Validate role and firm access
     const role = request.auth.token.role as string | undefined;
     if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
       throw new HttpsError('permission-denied', 'Only staff members can process templates.');
+    }
+    if ((request.auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot process templates for a different firm.');
     }
 
     const ext = fileName.toLowerCase().split('.').pop();
@@ -772,6 +775,9 @@ export const consolidateTemplateVariables = onCall(
     if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
       throw new HttpsError('permission-denied', 'Only staff members can process templates.');
     }
+    if ((request.auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot process templates for a different firm.');
+    }
 
     console.log(`[consolidateTemplateVariables] Consolidating ${files.length} "${docType}" templates for firm ${firmId}`);
 
@@ -828,6 +834,9 @@ export const recordTemplateCorrection = onCall(
     if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
       throw new HttpsError('permission-denied', 'Only staff members can record corrections.');
     }
+    if ((request.auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot record corrections for a different firm.');
+    }
 
     for (const correction of corrections) {
       await recordCorrection(firmId, {
@@ -869,6 +878,9 @@ export const confirmTemplateVariables = onCall(
     const role = request.auth.token.role as string | undefined;
     if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
       throw new HttpsError('permission-denied', 'Only staff members can confirm variables.');
+    }
+    if ((request.auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot confirm variables for a different firm.');
     }
 
     await recordConfirmedVariables(firmId, templateName, docType, variables);

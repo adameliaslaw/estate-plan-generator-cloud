@@ -404,7 +404,7 @@ function DocumentsTab({ documents, loading }: DocumentsTabProps) {
                 </div>
               </div>
             </div>
-            {doc.downloadUrl && doc.status === 'final' && (
+            {doc.downloadUrl && doc.status === 'final' && isHttpUrl(doc.downloadUrl) && (
               <a
                 href={doc.downloadUrl}
                 target="_blank"

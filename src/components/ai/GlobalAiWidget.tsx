@@ -17,7 +17,7 @@ import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react
 import { Bot, X, Maximize2, Minimize2, Send, FileText, PenTool, History, Plus, ChevronLeft, Bookmark, AtSign, UserCheck, FolderOpen, Search, ExternalLink, BookOpen } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { cn } from '@/lib/utils';
+import { cn, isHttpUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { functions, db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -81,7 +81,7 @@ function CitationBlock({ citations }: { citations: string[] }) {
         </span>
       </div>
       <div className="space-y-0.5">
-        {visible.map((url, i) => {
+        {visible.filter(isHttpUrl).map((url, i) => {
           let hostname = '';
           try {
             hostname = new URL(url).hostname.replace('www.', '');
