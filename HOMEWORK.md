@@ -8,44 +8,33 @@ Items requiring human action or decisions before the next agent session can proc
 
 These items surfaced during the post-merge production deploy of PR #1 (`04a2739`). All non-blocking — production is live and validated. Knock these out in roughly the order listed.
 
-### 1. Browser "hang" UX during long generations
+### 1. ✅ Browser "hang" UX during long generations — closed 2026-05-05
 
-**Problem.** Will / trust generation takes 2–3 minutes server-side (Anthropic call dominates). The browser SSE / HTTP client gives up before the function finishes — the UI looks "hung" while the document actually writes successfully. User retries, gets duplicate drafts, or assumes the deploy is broken.
+**Resolution.** Two-part fix shipped:
+1. Elapsed timer + progressive stage messages added to the generation modal (commit `956de17`): "Building context…" → "Drafting with AI… (this typically takes 2-3 min)" → "Saving to vault…"
+2. Firestore polling fallback added to `SingleDocumentGenerator` and `FlexDocumentGenerator` (PR #6): subscribes `onSnapshot` to the client's `documents` collection filtered by `docType + updatedAt >= startTime`. Even if the HTTP connection drops silently, the listener detects the saved doc and marks success. A `succeededRef` guard prevents double-fire. Deployed and verified — modal resolves cleanly even when the function runs well past the browser timeout.
 
-**Evidence (2026-05-05 deploy smoke test).** User saw a hang on Will generation. Cloud Function logs showed `[unifiedGenerator] ✓ will generated: 21177 chars, 157424ms, mode=hybrid, status=draft` 2m 38s after kickoff — the generation succeeded; the UI just lost the connection. Document was waiting in the vault on refresh.
+### 2. ✅ Gemini Embedding API 403 — migrated to Vertex AI (closed 2026-05-05)
 
-**Fix sketch (~half a day).**
-- Show progressive status text in the generation modal: "Building context… (10s)" → "Drafting with AI… (this typically takes 2-3 min)" → "Saving to vault…"
-- Add a heartbeat ping from the function every ~20 sec so the SSE/HTTP connection doesn't time out browser-side.
-- Or: poll Firestore for the new document by `clientId` + `docType` + `status: 'draft'` instead of relying on the long-lived HTTP response.
-- Either way, surface a clear error if the function actually fails (vs. silent timeout).
+**Resolution.** Migrated KB embeddings from `gemini-embedding-001` (firm-level API key, free tier — access revoked) to Vertex AI `text-embedding-005` (service-account / ADC, paid tier ~$0.10–0.15 per 1M tokens). PR #5. Both `functions/` and `functions-backfill/` redeployed in `us-east1`. All 54 KB resources and 11 templates re-embedded against the new model — vector search restored. The `[aggregateClientContext] Vector search failed, falling back to flat query` log line is gone.
 
-### 2. Gemini Embedding API 403 — restore access or migrate to Vertex
+**Two follow-on fixes shipped in the same PR:**
+- Filter rewrite — backfill loop only passed `forceAll=true` on iter 1; old filter (`!embeddedAt`) made subsequent iters see zero candidates since everything had a stale Gemini timestamp. New filter (`embeddingModel !== 'text-embedding-005'`) drains the queue model-by-model.
+- Metadata fetch limit raised from 50 → 500 in backfill codebase (Adam's KB had 54 resources; trailing 4 were silently skipped).
 
-**Problem.** Project-level access to `gemini-embedding-001` was revoked at some point before 2026-04-28. KB vector search throws `403 PERMISSION_DENIED` on every call; the codebase falls back gracefully to a flat Firestore KB query, but document drafts are getting less topically-relevant KB context as a result.
+**Runtime project resolution** via `GoogleAuth.getProjectId()` instead of hardcoded constant, so the same code runs under sibling projects (staging/forks) without `PERMISSION_DENIED`.
 
-**Evidence.** Every recent generation log line: `[aggregateClientContext] Vector search failed, falling back to flat query: Error: Gemini Embedding API error: 403 Forbidden — "Your project has been denied access. Please contact support."`
+### 3. ✅ PageIndex / Anthropic — secrets set and RAG functions deployed (closed 2026-05-05)
 
-**Two fix options (pick one).**
-- **Restore current access.** Open https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com for project `estate-plan-generator`, check enabled status, contact Google Cloud support if the denial is account-level. ~30 min if access just needs re-enabling; potentially blocked entirely if the denial was policy-driven.
-- **Migrate to Vertex AI** (the parked decision below already sketches this — pull it forward if option A fails). Vertex uses service-account auth instead of an API key, costs ~$0.10–0.15 per 1M tokens, requires running `backfillEmbeddings` to repopulate vectors. ~4-6 hours including the backfill run.
+**Resolution.** Adam created Anthropic and PageIndex accounts and set real API keys in Cloud Secret Manager. All 4 RAG functions deployed: `ragChat`, `ingestDocument`, `pageIndexClientFilesChat`, `backfillPageIndexFirmId`. The Draft tab in the UI (PR #9, pending hosting redeploy) will expose `pageIndexClientFilesChat` to users.
 
-### 3. PageIndex / Anthropic — replace placeholder secrets when accounts exist
+**Architecture note:** Vertex vector search (KB aggregation for doc generation) and PageIndex (interactive chat over client files) serve different roles and coexist intentionally. Vertex is batch/generation-time; PageIndex is user-facing/interactive. Cost delta is 1000-5000× per call in absolute terms but negligible at law-firm scale (~$0.005-0.015/PageIndex call vs ~$0.0000035/Vertex embed call).
 
-**Status.** The 2026-05-05 deploy required `ANTHROPIC_API_KEY` and `PAGEINDEX_API_KEY` to exist in Cloud Secret Manager (because the functions/src code calls `defineSecret()` at module load). Adam hasn't signed up for PageIndex yet and has no Anthropic key in Secret Manager. Workaround: deployed placeholder string values to satisfy the deploy validator. **The 4 functions that consume these secrets are NOT deployed** (`ragChat`, `ingestDocument`, `pageIndexClientFilesChat`, `backfillPageIndexFirmId`).
+### 3b. ✅ Generation UX improvements — deployed as PRs #7, #8, #9 (2026-05-05)
 
-**To do when ready.**
-1. Create accounts: Anthropic Console → API key, PageIndex → API key.
-2. Replace the placeholders:
-   ```powershell
-   firebase functions:secrets:set ANTHROPIC_API_KEY --project estate-plan-generator
-   firebase functions:secrets:set PAGEINDEX_API_KEY --project estate-plan-generator
-   ```
-3. Deploy the 4 RAG functions:
-   ```powershell
-   firebase deploy --only functions:ragChat,functions:ingestDocument,functions:pageIndexClientFilesChat,functions:backfillPageIndexFirmId --project estate-plan-generator
-   ```
-4. Smoke-test the `/chat` route in the admin UI.
+- **PR #7** — NJ POA `ACKNOWLEDGMENT` block now recognized as a valid Notary Block by the structural validator. Patterns: `acknowledg.*oath`, `) ss:`, `commission expires`. Prevents false-positive `needs_review` status on NJ POAs.
+- **PR #8** — Hybrid template augmentation switched from `claude-sonnet-4-6` → `claude-haiku-4-5-20251001`. ~2.5× faster for the structure-preservation step (the step that matters most for latency UX). Quality is maintained since the task is structure/bracket-preservation, not creative drafting.
+- **PR #9** — "Generate Estate Plan Documents" dialog now shows a checkbox list; attorney can select a subset to generate without regenerating the whole package. Defaults to all-checked (unchanged behavior). Married-couple pairs expand to per-role rows. **Requires hosting redeploy from laptop** (`npm run build && firebase deploy --only hosting`) — PR #9 is merged on the backend but the frontend bundle hasn't been rebuilt yet.
 
 ### 4. POA smoke test (deferred from 2026-05-05)
 
@@ -61,30 +50,85 @@ Open any client dashboard for a client who has at least one fiduciary named on f
 
 ### Wills → PageIndex ingestion pipeline — started 2026-05-05
 
-**Branch:** `claude/review-wills-pipeline-aYxwD` | **PR:** #4 | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
+**Branch:** `claude/review-wills-pipeline-aYxwD` | **PR:** open | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
 
-**Status: STOP GATE 2 — Phase 1 complete, Phase 2 next.**
+**Status: Phases 1–3 on main. Pre-flight required, then STOP GATE 3, then STOP GATE 4 before Phase 4.**
 
-Phase 1 shipped:
-- `functions/src/wills-schema.ts` — all TypeScript types (universal fields locked, type-specific DRAFT pending docx review)
-- `functions/src/wills-processor.ts` — Pub/Sub stub on topic `wills-document-processing`
-- `firestore.rules` — new rules for `wills_documents`, `pipeline_state`, `pipeline_audit_log`
-- `firestore.indexes.json` — 4 composite indexes on `wills_documents`
-- `functions/tsconfig.json` — pre-existing TS5107 deprecation error fixed
+Phases shipped (all on main):
+- **Phase 1** — `wills-schema.ts` (all types), Firestore rules/indexes, `functions/tsconfig.json` fix
+- **Phase 2** — Full 10-step Document Processor: kill switch → cost circuit breaker → Drive fetch → text extraction (mammoth/pdf-parse) → folder-path parser → Haiku 4.5 classify → Sonnet 4.6 extract → Firestore write → PageIndex upload → audit log
+- **Phase 3** — Drive watcher (`willsDriveWebhook`, `willsDriveWatchRenew`, `willsSetupDriveWatch`) + backfill orchestrator (`willsStartBackfill`)
 
-**Before next session starts Phase 2, confirm these pre-flight items:**
-- [ ] `ANTHROPIC_API_KEY` provisioned in Firebase Secret Manager (currently placeholder per item 3 in ⏱ Short-term)
+---
+
+#### Pre-flight checklist (one-time infrastructure — do before any deploy)
+
+- [x] `ANTHROPIC_API_KEY` — real key in Secret Manager (closed 2026-05-05, item 3)
+- [ ] `PAGEINDEX_API_KEY` — real key in Secret Manager (closed 2026-05-05, item 3) ✓ done
 - [ ] `gcloud pubsub topics create wills-document-processing --project=estate-plan-generator`
-- [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com`
-- [ ] Service account created (Drive Viewer + Pub/Sub Publisher + Firestore User roles)
-- [ ] Service account granted Viewer on Drive folder `1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j`
+- [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com --project=estate-plan-generator`
+- [ ] Create a service account with **Drive Viewer + Pub/Sub Publisher + Firestore User** roles
+- [ ] Share Drive folder `1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j` with the service account (Viewer)
+- [ ] Set `pipeline_state/control` in Firestore: `{ enabled: true, mode: "live", firmId: "<elias-counsel>", daily_spend_usd: 0 }`
 
-**Phase 2 (next) — Document Processor:**
-Build the full 10-step pipeline body in `wills-processor.ts`: kill switch check, cost circuit breaker, Drive file fetch, mammoth/.pdf-parse text extraction, folder-path parser, Haiku 4.5 classifier, Sonnet 4.6 extractor, schema validation + retry, Firestore write, PageIndex submission to `work-product` namespace, audit log append. Add `googleapis` to `functions/package.json`. Add `claude-haiku-4-5-20251001` to `KNOWN_MODELS` in `ai-client.ts`.
+---
 
-**Type-specific schema:** field groups are DRAFT — Adam to review `Wills_Metadata_Schema_v1.0.docx` and correct `wills-schema.ts` before Phase 5 backfill. Pilot (Phase 4) may proceed with the draft.
+#### STOP GATE 3 — Test the Document Processor (Phase 2) in isolation
 
-**Locked decisions (do not redesign):** PageIndex namespace = `work-product`. Classification model = `claude-haiku-4-5-20251001`. Extraction model = `claude-sonnet-4-6`. Full-document context (no chunking). Tool-use API for strict JSON output (not `callAI()`).
+**Do this before running the Drive watcher or backfill.** It confirms the 10-step pipeline works on a real file.
+
+1. Deploy the processor only:
+   ```
+   firebase deploy --only functions:willsProcessor --project=estate-plan-generator
+   ```
+2. Pick any `.docx` or `.pdf` already in the Drive folder. Note its file ID (visible in the URL when you open it in Drive: `https://drive.google.com/file/d/<FILE_ID>/view`).
+3. Publish a single test message via Cloud Console or gcloud:
+   ```
+   gcloud pubsub topics publish wills-document-processing \
+     --project=estate-plan-generator \
+     --message='{"drive_file_id":"<FILE_ID>","drive_path":"Smith, John","file_name":"TestWill.docx","mime_type":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","file_size_bytes":50000,"created_time":"2026-01-01T00:00:00Z","modified_time":"2026-01-01T00:00:00Z","event_type":"new","source":"backfill"}'
+   ```
+4. Watch logs: `firebase functions:log --only willsProcessor --project=estate-plan-generator`
+5. Confirm success in Firestore → `wills_documents/<FILE_ID>`:
+   - `processing_status` = `"indexed"`
+   - `document_type` looks correct for the file you chose
+   - `type_fields` populated with extracted metadata
+   - `pageindex_doc_id` is not null
+
+If `processing_status` = `"error"`, check `processing_error` field and logs before proceeding.
+
+---
+
+#### STOP GATE 4 — End-to-end Drive watcher + backfill (Phase 3 validation)
+
+After STOP GATE 3 passes:
+
+1. Deploy all wills functions:
+   ```
+   firebase deploy --only functions:willsProcessor,functions:willsDriveWebhook,functions:willsDriveWatchRenew,functions:willsSetupDriveWatch,functions:willsStartBackfill --project=estate-plan-generator
+   ```
+2. Note the `willsDriveWebhook` HTTPS URL from the deploy output.
+3. From an admin-role Firebase account, call `willsSetupDriveWatch({ webhookUrl: "<willsDriveWebhook URL>" })`. Confirm `pipeline_state/drive_sync` in Firestore is populated.
+4. Drop a test `.docx` into the Drive folder. Within ~30 seconds, confirm `wills_documents/<file_id>` appears in Firestore.
+5. Call `willsStartBackfill()` from admin. Watch `pipeline_state/backfill_progress` tick up.
+
+---
+
+#### Phases remaining
+
+- **Phase 4** — 30-doc synchronous pilot harness with acceptance-criteria report (agent task; start new session after STOP GATE 4 passes)
+- **Phase 5** — Full backfill — **DO NOT START until:**
+  - [ ] Adam reviews type-specific interfaces in `wills-schema.ts` against `Wills_Metadata_Schema_v1.0.docx` (field groups are currently DRAFT)
+  - [ ] Few-shot PLACEHOLDER blocks in `wills-extractor.ts` (§8.3) replaced with real examples
+- **Phase 6** — Multi-user + paralegal access, audit log review UI
+
+#### Locked decisions (do not redesign)
+
+- PageIndex namespace = `work-product`
+- Classification model = `claude-haiku-4-5-20251001`
+- Extraction model = `claude-sonnet-4-6`
+- Full-document context (no chunking)
+- Tool-use API for strict JSON output (not `callAI()`)
 
 ---
 
@@ -109,46 +153,11 @@ Document generation (the legal-output path) is unaffected — it routes through 
 
 ## 🅿️ Parked decisions (revisit on a trigger, not speculatively)
 
-### Gemini Embedding 2 upgrade — parked 2026-04-28
+### ✅ Gemini Embedding 2 upgrade — superseded by Vertex migration (2026-05-05)
 
-**Decision: do NOT upgrade `gemini-embedding-001` → `gemini-embedding-2`
-right now.** Marginal quality gain for text-only legal-clause retrieval is
-small-to-zero; migration cost is real.
+This decision was pre-empted: Google revoked free-tier access to `gemini-embedding-001`, forcing the migration to Vertex AI `text-embedding-005` (PR #5, short-term item 2). The migration is complete — Vertex is now live with service-account auth, and all 54 KB resources + 11 templates are re-embedded. The "upgrade vs. stay" question is no longer relevant; we're already on Vertex.
 
-What we'd be changing:
-- Generative Language API (free-tier `x-goog-api-key`) → Vertex AI
-  (service-account + project + region). New auth code path in
-  `kb-embeddings.ts:80-95`.
-- Free-tier embeddings → Vertex PayGo (~$0.10–0.15 per 1M input tokens).
-- Mandatory full `backfillEmbeddings` run + Firestore vector index
-  rebuild — old v1 vectors and new v2 vectors are in different vector
-  spaces, mixing them returns garbage similarity scores.
-
-What we'd gain (none of which are blocking us now):
-- Multimodal — embed PDFs / images / audio without preprocessing. Our KB
-  is 100% text; not used.
-- 8K-token input vs 2K. Our chunks are ~1.5K tokens; not bottlenecked.
-- Custom task instructions (`task:legal clause retrieval` etc) — needs
-  code work to leverage, modest expected gain.
-
-Triggers that would flip this decision:
-1. Real-world MTEB v2 retrieval scores publish + show ≥10% gain.
-2. We pick up a use case that needs multimodal embeddings (scanned
-   exemplars, attorney consultation audio for chat-AI grounding,
-   photographed deeds).
-3. The current `gemini-embedding-001` retrieval starts pulling weak/wrong
-   results in production — i.e. the embedding becomes the bottleneck,
-   not the chunk/budget tuning we just shipped (`a9e176f`).
-
-If/when one of those fires, migration sketch: (a) wire Vertex AI client
-with service-account auth (mirror `ai-client.ts` Vertex pattern); (b)
-swap `EMBEDDING_MODEL` constant + endpoint + auth header in
-`kb-embeddings.ts`; (c) run full `backfillEmbeddings` against KB
-resources AND templates; (d) verify `findNearest` queries still serve.
-
-Until then: the recently-tuned chunk/budget settings (CHUNK_SIZE=6K,
-CHUNK_THRESHOLD=12K, PER_RESOURCE_CAP=20K, TOTAL_KB_CAP=100K — see
-`a9e176f`) are the actual lever for clause/draft generation quality.
+**Upgrade to `text-embedding-005` → `text-embedding-006` (future):** park until Google publishes MTEB scores showing ≥10% retrieval improvement for English legal text. Migration would be a model-constant swap + full `backfillEmbeddings` run — the Vertex auth plumbing is already in place.
 
 ---
 
