@@ -6,7 +6,7 @@ import { COLLECTIONS } from '@/config/constants';
 import { useCollection } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
 import type { CalendarEvent } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, isHttpUrl } from '@/lib/utils';
 
 export interface UpcomingAppointmentsProps {
     activeClientIds?: string[];
@@ -147,7 +147,7 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
                                             {event.isVirtual ? (
                                                 <>
                                                     <Video className="h-3.5 w-3.5 text-blue-500" />
-                                                    {event.meetingUrl ? (
+                                                    {event.meetingUrl && isHttpUrl(event.meetingUrl) ? (
                                                         <a href={event.meetingUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
                                                             Video Meeting Link
                                                         </a>

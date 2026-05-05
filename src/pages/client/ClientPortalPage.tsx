@@ -28,6 +28,7 @@ import {
 import { useDocument, useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, FIRM_DEFAULTS } from '@/config/constants';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { isHttpUrl } from '@/lib/utils';
 import type {
   Client,
   Document,
@@ -467,7 +468,7 @@ function AppointmentsTab({ events, loading }: AppointmentsTabProps) {
                     {event.location}
                   </span>
                 )}
-                {event.isVirtual && event.meetingUrl && (
+                {event.isVirtual && event.meetingUrl && isHttpUrl(event.meetingUrl) && (
                   <a
                     href={event.meetingUrl}
                     target="_blank"

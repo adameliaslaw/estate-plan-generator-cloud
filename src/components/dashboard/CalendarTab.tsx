@@ -54,7 +54,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { cn } from '@/lib/utils';
+import { cn, isHttpUrl } from '@/lib/utils';
 import { useCollection } from '@/hooks/useFirestore';
 import { createDoc, updateDoc, deleteDoc } from '@/hooks/useFirestore';
 import { COLLECTIONS } from '@/config/constants';
@@ -985,7 +985,7 @@ function EventDetailDialog({
                 </div>
               )}
 
-              {event.isVirtual && event.meetingUrl && (
+              {event.isVirtual && event.meetingUrl && isHttpUrl(event.meetingUrl) && (
                 <div className="flex gap-2">
                   <dt className="w-24 shrink-0 text-xs font-medium uppercase tracking-wider text-gray-400 pt-0.5">
                     Meeting
