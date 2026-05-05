@@ -157,16 +157,22 @@ const POA_RULES: StructureRule[] = [
   },
   {
     name: 'Notary Block',
-    // NJ POAs typically use the "acknowledged under oath" phrasing and the
-    // ") ss:" jurat preamble rather than the words "notary" or "sworn before
-    // me". Each pattern below is structural enough that casual prose
-    // ("Agent acknowledgment and acceptance") cannot accidentally satisfy it.
+    // Each pattern below is structural enough that casual prose ("the witness
+    // made a sworn statement") cannot accidentally satisfy it. A bare 'sworn'
+    // pattern was deliberately dropped — it was too loose, and the four
+    // patterns below cover every standard NJ/US notary block style:
+    //   • 'notar' — explicit 'notary public' / 'notarized' / 'notarial'
+    //   • 'acknowledg.*oath' — NJ POA: 'acknowledged under oath'
+    //   • ') ss:' — jurat preamble (universal across states)
+    //   • 'commission expires' — notary commission line (universal)
+    // For sworn-style affidavits, 'subscribed and sworn before me' contains
+    // 'notar' once the notary's name/title appears below, plus the jurat
+    // preamble and commission line.
     patterns: [
-      p('notar'),                  // notary, notarial, notarize, etc.
-      p('sworn'),                  // 'sworn before me', 'sworn statement', etc.
-      p('acknowledg.*oath'),       // 'acknowledged under oath' (NJ POA)
-      p('\\)\\s*ss\\s*:'),         // 'STATE OF X ) ss:' jurat preamble
-      p('commission\\s+expires'),  // 'My commission expires ...'
+      p('notar'),
+      p('acknowledg.*oath'),
+      p('\\)\\s*ss\\s*:'),
+      p('commission\\s+expires'),
     ],
     severity: 'error',
   },
@@ -281,7 +287,7 @@ const RULES_BY_DOC_TYPE: Record<string, StructureRule[]> = {
   affidavitOfConsideration: [
     { name: 'Grantor Reference', patterns: [p('grantor')], severity: 'error' },
     { name: 'Consideration Amount', patterns: [p('consideration'), p('\\$')], severity: 'error' },
-    { name: 'Notary Block', patterns: [p('notar'), p('sworn'), p('acknowledg.*oath'), p('\\)\\s*ss\\s*:'), p('commission\\s+expires')], severity: 'error' },
+    { name: 'Notary Block', patterns: [p('notar'), p('acknowledg.*oath'), p('\\)\\s*ss\\s*:'), p('commission\\s+expires')], severity: 'error' },
   ],
   gitRep3: [
     { name: 'Seller/Transferor Identification', patterns: [p('seller'), p('transferor')], severity: 'error' },
