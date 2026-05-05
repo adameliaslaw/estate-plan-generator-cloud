@@ -4,6 +4,59 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## ⏱ Short-term (queued 2026-05-05 production deploy)
+
+These items surfaced during the post-merge production deploy of PR #1 (`04a2739`). All non-blocking — production is live and validated. Knock these out in roughly the order listed.
+
+### 1. Browser "hang" UX during long generations
+
+**Problem.** Will / trust generation takes 2–3 minutes server-side (Anthropic call dominates). The browser SSE / HTTP client gives up before the function finishes — the UI looks "hung" while the document actually writes successfully. User retries, gets duplicate drafts, or assumes the deploy is broken.
+
+**Evidence (2026-05-05 deploy smoke test).** User saw a hang on Will generation. Cloud Function logs showed `[unifiedGenerator] ✓ will generated: 21177 chars, 157424ms, mode=hybrid, status=draft` 2m 38s after kickoff — the generation succeeded; the UI just lost the connection. Document was waiting in the vault on refresh.
+
+**Fix sketch (~half a day).**
+- Show progressive status text in the generation modal: "Building context… (10s)" → "Drafting with AI… (this typically takes 2-3 min)" → "Saving to vault…"
+- Add a heartbeat ping from the function every ~20 sec so the SSE/HTTP connection doesn't time out browser-side.
+- Or: poll Firestore for the new document by `clientId` + `docType` + `status: 'draft'` instead of relying on the long-lived HTTP response.
+- Either way, surface a clear error if the function actually fails (vs. silent timeout).
+
+### 2. Gemini Embedding API 403 — restore access or migrate to Vertex
+
+**Problem.** Project-level access to `gemini-embedding-001` was revoked at some point before 2026-04-28. KB vector search throws `403 PERMISSION_DENIED` on every call; the codebase falls back gracefully to a flat Firestore KB query, but document drafts are getting less topically-relevant KB context as a result.
+
+**Evidence.** Every recent generation log line: `[aggregateClientContext] Vector search failed, falling back to flat query: Error: Gemini Embedding API error: 403 Forbidden — "Your project has been denied access. Please contact support."`
+
+**Two fix options (pick one).**
+- **Restore current access.** Open https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com for project `estate-plan-generator`, check enabled status, contact Google Cloud support if the denial is account-level. ~30 min if access just needs re-enabling; potentially blocked entirely if the denial was policy-driven.
+- **Migrate to Vertex AI** (the parked decision below already sketches this — pull it forward if option A fails). Vertex uses service-account auth instead of an API key, costs ~$0.10–0.15 per 1M tokens, requires running `backfillEmbeddings` to repopulate vectors. ~4-6 hours including the backfill run.
+
+### 3. PageIndex / Anthropic — replace placeholder secrets when accounts exist
+
+**Status.** The 2026-05-05 deploy required `ANTHROPIC_API_KEY` and `PAGEINDEX_API_KEY` to exist in Cloud Secret Manager (because the functions/src code calls `defineSecret()` at module load). Adam hasn't signed up for PageIndex yet and has no Anthropic key in Secret Manager. Workaround: deployed placeholder string values to satisfy the deploy validator. **The 4 functions that consume these secrets are NOT deployed** (`ragChat`, `ingestDocument`, `pageIndexClientFilesChat`, `backfillPageIndexFirmId`).
+
+**To do when ready.**
+1. Create accounts: Anthropic Console → API key, PageIndex → API key.
+2. Replace the placeholders:
+   ```powershell
+   firebase functions:secrets:set ANTHROPIC_API_KEY --project estate-plan-generator
+   firebase functions:secrets:set PAGEINDEX_API_KEY --project estate-plan-generator
+   ```
+3. Deploy the 4 RAG functions:
+   ```powershell
+   firebase deploy --only functions:ragChat,functions:ingestDocument,functions:pageIndexClientFilesChat,functions:backfillPageIndexFirmId --project estate-plan-generator
+   ```
+4. Smoke-test the `/chat` route in the admin UI.
+
+### 4. POA smoke test (deferred from 2026-05-05)
+
+The POA template is what changed most heavily in PR #1 (single-string address rendering, removed orphan `city/state/zip` placeholders). We validated the Will path end-to-end on deploy; POA needs the same. ~2 minutes. Generate a POA for any client with a fiduciary that has a name + address — confirm the `residing at <full address>,` line renders cleanly without phantom blanks.
+
+### 5. Missing-address admin banner spot check
+
+Open any client dashboard for a client who has at least one fiduciary named on file but no address (likely several pre-deploy clients qualify). Confirm the amber **"Missing fiduciary addresses: [slot list]"** banner shows up. ~1 minute.
+
+---
+
 ## 🛠 Mid-term projects
 
 ### RAG-chat graceful-degradation when Anthropic streaming fails — added 2026-05-05
