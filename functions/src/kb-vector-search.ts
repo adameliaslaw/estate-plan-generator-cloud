@@ -3,7 +3,7 @@
  *
  * Core semantic search module for the Knowledge Base.
  * Uses Firestore's native vector search (`findNearest`) with
- * Gemini gemini-embedding-001 (768 dimensions).
+ * Vertex AI text-embedding-005 (768 dimensions, ADC auth).
  *
  * Features:
  *  - Generates query embedding, then runs findNearest on both
@@ -50,27 +50,6 @@ export interface VectorSearchResult {
   sourceType: 'kb' | 'template' | 'chatInsight';
   /** Client ID (for chatInsight results) */
   clientId?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Retrieve the firm's Gemini API key.
- */
-export async function getGeminiApiKey(firmId: string): Promise<string> {
-  const firmSnap = await admin.firestore().doc(`firms/${firmId}`).get();
-  const firmData = firmSnap.data() ?? {};
-  const apiKey =
-    firmData.geminiApiKey ??
-    firmData.settings?.geminiApiKey;
-
-  if (!apiKey) {
-    throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
-  }
-
-  return apiKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,10 +106,9 @@ export async function searchKnowledgeBase(
   } = options;
 
   const db = admin.firestore();
-  const geminiApiKey = await getGeminiApiKey(firmId);
 
   // 1. Generate query embedding (use RETRIEVAL_QUERY for search queries)
-  const queryEmbedding = await generateEmbedding(queryText, geminiApiKey, 'RETRIEVAL_QUERY');
+  const queryEmbedding = await generateEmbedding(queryText, 'RETRIEVAL_QUERY');
   const queryVector = admin.firestore.FieldValue.vector(queryEmbedding);
 
   // 2. Search parent documents (short content with embedding on the doc)
@@ -480,19 +458,12 @@ export async function searchTemplatesByDocType(
   const MIN_SIMILARITY = 0.65;
 
   const db = admin.firestore();
-  let geminiApiKey: string;
-  try {
-    geminiApiKey = await getGeminiApiKey(firmId);
-  } catch {
-    console.warn('[kb-vector-search] No Gemini API key — cannot run template vector search fallback.');
-    return null;
-  }
 
   // Build a semantic query from the doc type label
   const label = DOC_TYPE_LABELS[docType] ?? docType;
   const queryText = `${label} legal document template`;
 
-  const queryEmbedding = await generateEmbedding(queryText, geminiApiKey, 'RETRIEVAL_QUERY');
+  const queryEmbedding = await generateEmbedding(queryText, 'RETRIEVAL_QUERY');
   const queryVector = admin.firestore.FieldValue.vector(queryEmbedding);
 
   const templateRef = db.collection(`firms/${firmId}/documentTemplates`);

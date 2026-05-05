@@ -12,7 +12,6 @@
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt } from './ai-client';
 import { generateEmbedding } from './kb-embeddings';
-import { getGeminiApiKey } from './kb-vector-search';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -380,7 +379,6 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
 
     // ── Embed key facts into chatInsights for cross-client semantic search ──
     try {
-      const geminiApiKey = await getGeminiApiKey(firmId);
       const insightsCol = db().collection(`firms/${firmId}/chatInsights`);
       const batch = db().batch();
       let embeddedCount = 0;
@@ -388,7 +386,7 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
       for (const fact of deduped) {
         try {
           const embeddingText = `[${fact.category}] ${fact.fact}`;
-          const embedding = await generateEmbedding(embeddingText, geminiApiKey);
+          const embedding = await generateEmbedding(embeddingText);
           const insightRef = insightsCol.doc();
           batch.set(insightRef, {
             fact: fact.fact,
