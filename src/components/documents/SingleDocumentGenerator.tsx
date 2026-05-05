@@ -6,7 +6,7 @@
  * generation pipeline as batch — this just controls scope (one document).
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +34,20 @@ import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 import type { Client } from '@/types';
 
 type GenerationMode = 'template' | 'ai' | 'hybrid';
+
+function getGenerationStage(elapsed: number): string {
+  if (elapsed < 15) return 'Building context…';
+  if (elapsed < 45) return 'Drafting with AI…';
+  if (elapsed < 120) return 'Drafting with AI… (this typically takes 1–3 minutes)';
+  if (elapsed < 180) return 'Reviewing and formatting…';
+  return 'Finalizing… (almost there)';
+}
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+}
 
 // ── Standard document types available for individual generation ───────────────
 
@@ -73,6 +87,17 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!generating) {
+      setElapsedSeconds(0);
+      return;
+    }
+    setElapsedSeconds(0);
+    const interval = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [generating]);
 
   // Pull client + spouse so the spouse-role selector shows real names.
   const clientPath = firmId && clientId ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}` : null;
@@ -295,6 +320,20 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
               These instructions are treated as attorney directives and appended to the AI prompt.
             </p>
           </div>
+
+          {generating && (
+            <div className="flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2.5">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#2b6cb0]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-[#1a365d]">
+                  {getGenerationStage(elapsedSeconds)}
+                </p>
+                <p className="text-[11px] tabular-nums text-gray-400">
+                  {formatElapsed(elapsedSeconds)} elapsed
+                </p>
+              </div>
+            </div>
+          )}
 
           {successMessage && (
             <Alert className="border-emerald-200 bg-emerald-50">

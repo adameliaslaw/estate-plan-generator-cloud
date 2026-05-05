@@ -14,7 +14,7 @@
  * not stop the batch; a summary is shown at the end.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +48,14 @@ import { documentService } from '@/services/document-service';
 import { SOFTWARE_SOURCES } from '@/config/software-sources';
 import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 import type { Client } from '@/types';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+}
 
 // ── Package display helpers ───────────────────────────────────────────────────
 
@@ -118,6 +126,17 @@ export default function BatchGenerateDialog({
   const [phase, setPhase] = useState<Phase>('configuring');
   const [statusById, setStatusById] = useState<Record<string, ClientStatus>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [clientElapsed, setClientElapsed] = useState(0);
+
+  useEffect(() => {
+    if (phase !== 'running') {
+      setClientElapsed(0);
+      return;
+    }
+    setClientElapsed(0);
+    const interval = setInterval(() => setClientElapsed((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [phase, currentIndex]);
 
   const selectedClients = useMemo(
     () => batchableClients.filter((c) => selectedIds.has(c.id)),
@@ -457,6 +476,11 @@ export default function BatchGenerateDialog({
                     {status.state === 'success' && (
                       <span className="text-xs text-emerald-600">
                         {status.docsGenerated} docs
+                      </span>
+                    )}
+                    {status.state === 'running' && (
+                      <span className="shrink-0 text-xs tabular-nums text-gray-400">
+                        {formatElapsed(clientElapsed)}
                       </span>
                     )}
                     {status.state === 'error' && (
