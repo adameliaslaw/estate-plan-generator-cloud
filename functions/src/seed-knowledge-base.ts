@@ -433,6 +433,10 @@ export const seedKnowledgeBase = onCall(
       throw new HttpsError('permission-denied', 'Only staff members can seed the knowledge base.');
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot seed knowledge base for a different firm.');
+    }
+
     const db = admin.firestore();
     const kbCol = db.collection('firms').doc(firmId).collection('knowledgeBase');
     const now = admin.firestore.FieldValue.serverTimestamp();

@@ -227,9 +227,15 @@ service cloud.firestore {
                     || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
                     || request.auth.uid == userId;
 
-        // Only admins or capability managers can write to users (or the user themselves)
-        allow write: if canManageUsers() && belongsToFirm(firmId)
-                     || request.auth.uid == userId;
+        // Staff managers can create/update/delete any profile in their firm.
+        allow create, delete: if canManageUsers() && belongsToFirm(firmId);
+
+        // Managers can do full updates; users may update their own profile but cannot
+        // change role, customCapabilities, or firmId (prevents self-escalation).
+        allow update: if canManageUsers() && belongsToFirm(firmId)
+                      || (request.auth.uid == userId
+                          && !request.resource.data.diff(resource.data)
+                              .affectedKeys().hasAny(['role', 'customCapabilities', 'firmId']));
       }
       
       // ========================================================
@@ -248,6 +254,18 @@ service cloud.firestore {
       match /activities/{activityId} {
         allow read: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
         allow write: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      }
+
+      // ========================================================
+      // /firms/{firmId}/auditLog/{logId}
+      // Immutable compliance audit trail — written only by Cloud Functions
+      // (admin SDK). Staff may read for compliance review; no client access.
+      // ========================================================
+      match /auditLog/{logId} {
+        allow read: if isAdmin()
+                    || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow create: if false; // Cloud Functions (admin SDK) only
+        allow update, delete: if false;
       }
 
       // ========================================================

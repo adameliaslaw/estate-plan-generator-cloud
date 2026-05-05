@@ -16,16 +16,14 @@ import { DocumentTemplate, extractTemplateVariables } from './template-engine';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function assertFirmAccess(auth: { token: Record<string, string | undefined>; uid: string }, firmId: string): void {
+function assertFirmAccess(auth: { token: Record<string, unknown>; uid: string }, firmId: string): void {
   const role = auth.token.role as string | undefined;
   if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
     throw new HttpsError('permission-denied', 'Only staff members can manage templates.');
   }
-  if (role !== 'admin') {
-    const callerFirmId = auth.token.firmId as string | undefined;
-    if (callerFirmId && callerFirmId !== firmId) {
-      throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
-    }
+  const callerFirmId = auth.token.firmId as string | undefined;
+  if (!callerFirmId || callerFirmId !== firmId) {
+    throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
   }
 }
 

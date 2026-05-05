@@ -165,6 +165,10 @@ export const checkDocumentCompliance = onCall(
       );
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot check compliance for a different firm.');
+    }
+
     const db = admin.firestore();
 
     // ── Fetch the document ────────────────────────────────────────────────

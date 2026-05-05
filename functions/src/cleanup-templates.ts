@@ -43,6 +43,10 @@ export const cleanupTemplates = onCall(
     const { firmId, dryRun = false } = request.data as { firmId: string; dryRun?: boolean };
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot clean templates for a different firm.');
+    }
+
     const db = admin.firestore();
     const col = db.collection(`firms/${firmId}/documentTemplates`);
     const snapshot = await col.get();
