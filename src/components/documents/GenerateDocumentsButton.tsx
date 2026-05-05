@@ -171,16 +171,20 @@ export default function GenerateDocumentsButton({
   const packageDocs = selectableDocs.map((d) => d.label);
 
   // Selection state — defaults to all docs selected. Re-initialized whenever
-  // the package or marital status changes (e.g. user re-opens the dialog
-  // after switching client).
+  // the package, marital status, OR the dialog re-opens (`phase` transitioning
+  // back to 'confirming'), so a previous subset selection doesn't silently
+  // carry over after a Cancel.
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(selectableDocs.map((d) => d.key)),
   );
   useEffect(() => {
-    setSelectedKeys(new Set(selectableDocs.map((d) => d.key)));
-    // Intentionally re-run only when packageType / isMarried change.
+    if (phase === 'confirming') {
+      setSelectedKeys(new Set(selectableDocs.map((d) => d.key)));
+    }
+    // selectableDocs is recomputed every render but is value-stable per
+    // (packageType, isMarried), so depending on those is sufficient.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packageType, isMarried]);
+  }, [phase, packageType, isMarried]);
 
   const allSelected = selectedKeys.size === selectableDocs.length && selectableDocs.length > 0;
   const noneSelected = selectedKeys.size === 0;
@@ -258,6 +262,7 @@ export default function GenerateDocumentsButton({
               clientId,
               docType: sel.docType,
               spouseRole: sel.spouseRole,
+              trustTypes,
               generationMode: generationMode as 'template' | 'ai' | 'hybrid',
               softwareSource: softwareSource === 'none' ? '' : softwareSource,
               formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
