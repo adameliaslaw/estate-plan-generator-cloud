@@ -1482,6 +1482,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
+        name: 'fiduciaries.executor.primary.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
+      },
+      {
         name: 'heading_executor_alternate',
         label: 'Alternate Executor',
         type: 'heading',
@@ -1545,6 +1552,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Professional Advisor', value: 'Professional Advisor' },
           { label: 'Other', value: 'Other' },
         ],
+      },
+      {
+        name: 'fiduciaries.executor.alternate.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
       },
     ],
   },
@@ -1635,6 +1649,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
+        name: 'fiduciaries.trustee.primary.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
+      },
+      {
         name: 'heading_trustee_alternate',
         label: 'Alternate Successor Trustee',
         type: 'heading',
@@ -1698,6 +1719,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Professional Advisor', value: 'Professional Advisor' },
           { label: 'Other', value: 'Other' },
         ],
+      },
+      {
+        name: 'fiduciaries.trustee.alternate.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
       },
     ],
   },
@@ -1787,6 +1815,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
+        name: 'fiduciaries.powerOfAttorney.agent.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
+      },
+      {
         name: 'heading_poa_alternate',
         label: 'Alternate POA Agent',
         type: 'heading',
@@ -1849,6 +1884,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Professional Advisor', value: 'Professional Advisor' },
           { label: 'Other', value: 'Other' },
         ],
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.alternateAgent.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
       },
       {
         name: 'fiduciaries.powerOfAttorney.effectiveDate',
@@ -1961,6 +2003,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
+        name: 'fiduciaries.healthcareProxy.agent.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
+      },
+      {
         name: 'heading_hcp_alternate',
         label: 'Alternate Healthcare Representative',
         type: 'heading',
@@ -2023,6 +2072,13 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Professional Advisor', value: 'Professional Advisor' },
           { label: 'Other', value: 'Other' },
         ],
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.alternateAgent.address',
+        label: 'Address',
+        type: 'text',
+        placeholder: 'Street address, city, state, ZIP',
+        width: 'full',
       },
       {
         name: 'fiduciaries.healthcareProxy.hipaaAuthorization',

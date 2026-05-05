@@ -62,3 +62,4 @@ export { sendWeeklyDigest } from './weekly-digest';
 export { ragChat } from './rag-chat';
 export { ingestDocument } from './ingest-document';
 export { pageIndexClientFilesChat } from './pageindex-client-files-chat';
+export { backfillPageIndexFirmId } from './backfill-pageindex-firmid';
