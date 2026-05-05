@@ -177,7 +177,7 @@ export default function BatchGenerateDialog({
           clientId: client.id,
           packageType: pkg,
           trustTypes,
-          generationMode: generationMode as 'template' | 'ai' | 'hybrid' | 'high-fidelity',
+          generationMode: generationMode as 'template' | 'ai' | 'hybrid',
           softwareSource: softwareSource === 'none' ? '' : softwareSource,
           formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
         });

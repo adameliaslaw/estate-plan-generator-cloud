@@ -19,14 +19,16 @@ import * as admin from 'firebase-admin';
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 768;
 
-/** Content shorter than this gets a single embedding on the document itself. */
-const CHUNK_THRESHOLD = 3000;
+/** Content shorter than this gets a single embedding on the document itself.
+ *  MUST stay in sync with functions/src/kb-embeddings.ts — the two files are
+ *  duplicated for the OOM-isolation reason in this package's README. */
+const CHUNK_THRESHOLD = 12000;
 
-/** Target size for each chunk (~625 tokens — preserves full legal clauses). */
-const CHUNK_SIZE = 2500;
+/** Target size for each chunk (~1.5K tokens). */
+const CHUNK_SIZE = 6000;
 
 /** Overlap between consecutive chunks to preserve context at boundaries. */
-const CHUNK_OVERLAP = 400;
+const CHUNK_OVERLAP = 600;
 
 /** Max resources to process per backfill invocation. */
 const BACKFILL_BATCH_SIZE = 2;
@@ -63,11 +65,12 @@ async function generateEmbedding(
   geminiApiKey: string,
   taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[]> {
-  // Clean and truncate text — Gemini has a 2048 token limit per input
+  // Clean and truncate text — gemini-embedding-001 caps at 2048 input tokens
+  // (~8000 chars). Stay under that to avoid silent API rejections.
   const cleanText = text
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 10000); // ~2K tokens rough estimate
+    .slice(0, 8000);
 
   if (!cleanText) {
     throw new Error('Cannot generate embedding for empty text.');
@@ -234,8 +237,11 @@ async function embedResource(
 // ---------------------------------------------------------------------------
 
 /**
- * Remove Handlebars expressions ({{...}}) and block helpers from template
- * content so the embedding captures the legal prose, not variable placeholders.
+ * Remove Handlebars expressions AND HTML tags from template content. Templates
+ * store full HTML (~30% tag overhead); KB resources store plain text. Tag
+ * strip is a no-op on plain text. Without it, large HTML templates
+ * over-chunk by 50-66% on tag noise. MUST stay in sync with the same
+ * function in functions/src/kb-embeddings.ts.
  */
 function stripHandlebars(content: string): string {
   return content
@@ -245,6 +251,8 @@ function stripHandlebars(content: string): string {
     .replace(/\{\{![\s\S]*?\}\}/g, '')
     // Strip all Handlebars expressions (simple, block open, block close)
     .replace(/\{\{[^}]*\}\}/g, ' ')
+    // Strip HTML tags so embedding text is pure prose, not markup
+    .replace(/<[^>]+>/g, ' ')
     // Collapse excessive whitespace
     .replace(/\s{2,}/g, ' ')
     .trim();

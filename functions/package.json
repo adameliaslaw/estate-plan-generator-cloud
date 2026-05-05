@@ -16,7 +16,6 @@
     "@google/genai": "^1.48.0",
     "@sparticuz/chromium": "^143.0.4",
     "archiver": "^7.0.1",
-    "carbone": "^3.5.6",
     "cors": "^2.8.5",
     "docx": "^9.6.0",
     "docxtemplater": "^3.68.3",
@@ -39,6 +38,7 @@
     "@types/express": "^5.0.6",
     "@types/handlebars": "^4.0.40",
     "@types/pdf-parse": "^1.1.5",
+    "adm-zip": "^0.5.17",
     "typescript": "^5.5.0"
   }
 }

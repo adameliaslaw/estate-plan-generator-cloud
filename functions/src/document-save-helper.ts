@@ -31,8 +31,21 @@ export interface SaveDocumentParams {
   tags?: string[];
   /** Version change notes */
   changeNotes?: string;
-  /** How this doc was generated */
-  generationMode?: 'batch' | 'chat-draft';
+  /** Generation pipeline mode: how the AI/template was invoked. Persisted
+   *  for audit trail so future fidelity reports can answer "why does this
+   *  doc not match the template?" without re-running. */
+  generationMode?: 'template' | 'hybrid' | 'ai' | 'flex';
+  /** Where the call originated from (UI surface): batch, single, chat-draft,
+   *  flex, etc. Distinct from generationMode — a single-doc batch may still
+   *  be generated in 'hybrid' mode. */
+  triggerSource?: 'batch' | 'single' | 'chat-draft' | 'flex' | 'retemplatize';
+  /** ID of the template used (if any). null when generationMode='ai' or
+   *  no template was matched. */
+  templateId?: string | null;
+  /** Which Firestore collection the template was resolved from. */
+  templateSourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | null;
+  /** Software source filter applied at resolution time (e.g. 'InteractiveLegal'). */
+  softwareSource?: string | null;
   /**
    * If provided, use this ID (deterministic). Otherwise auto-generate.
    * Deterministic IDs allow re-generation to replace the old draft.
@@ -48,7 +61,7 @@ export interface SaveDocumentParams {
   promptVersion?: string;
   /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
   templateBaseline?: string;
-  /** Binary version of the document (for high-fidelity .docx generation) */
+  /** Binary version of the document (.docx fallback path). */
   binaryBuffer?: Buffer;
   /** AI-extracted structured data (for debugging and review) */
   extractedData?: Record<string, unknown>;
@@ -194,6 +207,23 @@ export async function saveDocumentToVault(
   }
   if (params.templateBaseline) {
     docData.templateBaseline = params.templateBaseline;
+  }
+  // Generation provenance — surface real values so audit queries can answer
+  // "what produced this document?" without replaying the call.
+  if (params.generationMode !== undefined) {
+    docData.generationMode = params.generationMode;
+  }
+  if (params.triggerSource !== undefined) {
+    docData.triggerSource = params.triggerSource;
+  }
+  if (params.templateId !== undefined) {
+    docData.templateId = params.templateId;
+  }
+  if (params.templateSourceCollection !== undefined) {
+    docData.templateSourceCollection = params.templateSourceCollection;
+  }
+  if (params.softwareSource !== undefined) {
+    docData.softwareSource = params.softwareSource;
   }
   if (params.binaryBuffer) {
     docData.hasBinary = true;

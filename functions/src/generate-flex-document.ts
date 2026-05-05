@@ -29,6 +29,16 @@ interface FlexDocumentRequest {
   customPrompt?: string;
   /** Additional data for specific doc types (e.g., amendment text) */
   additionalData?: Record<string, unknown>;
+  /** Generation mode override. Defaults to 'ai'; pass 'template' or 'hybrid'
+   *  to opt into template-based rendering when a flex template has been
+   *  uploaded for this docType. Falls back to AI if no template exists. */
+  generationMode?: 'template' | 'ai' | 'hybrid';
+  /** Specific template ID to use (overrides resolution). */
+  templateId?: string;
+  /** Filter to a specific software source (e.g. firm letterhead variant). */
+  softwareSource?: string;
+  /** Optional formatting preset name. */
+  formattingPreset?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +48,8 @@ interface FlexDocumentRequest {
 export const generateFlexDocument = onCall(
   {
     timeoutSeconds: 540,
-    memory: '1GiB',
+    // Bumped 1GiB → 2GiB to handle hybrid mode's 100K-char KB context.
+    memory: '2GiB',
     region: 'us-east1',
   },
   async (request: CallableRequest<unknown>) => {
@@ -55,8 +66,17 @@ export const generateFlexDocument = onCall(
       throw new HttpsError('permission-denied', 'Insufficient permissions.');
     }
 
-    const { firmId, clientId, docType, customPrompt, additionalData } =
-      request.data as FlexDocumentRequest;
+    const {
+      firmId,
+      clientId,
+      docType,
+      customPrompt,
+      additionalData,
+      generationMode,
+      templateId,
+      softwareSource,
+      formattingPreset,
+    } = request.data as FlexDocumentRequest;
 
     if (!firmId || !clientId || !docType) {
       throw new HttpsError('invalid-argument', 'firmId, clientId, and docType are required.');
@@ -74,11 +94,19 @@ export const generateFlexDocument = onCall(
     // 2. Generate via unified generator
     // ------------------------------------------------------------------
     try {
+      // Default to AI when caller didn't pick a mode — preserves prior
+      // behaviour for callers that don't yet pass generationMode. When the
+      // caller does opt into template/hybrid, the unified generator will
+      // route through the template engine and fall back to AI if no
+      // matching flex template exists.
       const result = await generateDocument({
         firmId,
         clientId,
         docType,
-        generationMode: 'ai', // Flex docs are AI-only (no templates yet)
+        generationMode: generationMode ?? 'ai',
+        templateId,
+        softwareSource,
+        formattingPreset,
         customPrompt,
         additionalData,
         createdBy: auth.uid,

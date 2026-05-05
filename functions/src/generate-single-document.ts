@@ -36,6 +36,12 @@ interface GenerateSingleRequest {
   softwareSource?: string;
   /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
   formattingPreset?: string;
+  /** Whose document is this — the client (testator), or their spouse?
+   *  Defaults to 'client'. When 'spouse', the unified generator swaps
+   *  testator/spouse identities so e.g. the will is generated FOR the
+   *  spouse using the same client doc as the data source. The saved
+   *  document gets a `_spouse` suffix to distinguish it. */
+  spouseRole?: 'client' | 'spouse';
 }
 
 // ---------------------------------------------------------------------------
@@ -44,8 +50,14 @@ interface GenerateSingleRequest {
 
 export const generateSingleDocument = onCall(
   {
-    timeoutSeconds: 300,
-    memory: '512MiB',
+    // Hybrid mode with full RAG can run 3-5 min for the AI augmentation
+    // step (100K char KB context + 32K maxTokens output). Old 300s cap
+    // killed the function mid-AI-call; 540s = max for callable functions.
+    timeoutSeconds: 540,
+    // Hybrid prompt assembly + AI response handling holds the full prompt
+    // text in memory (100K chars KB + template + system prompt + response).
+    // 512Mi was tight; bumped to 2GiB to give headroom.
+    memory: '2GiB',
     region: 'us-east1',
     secrets: ['VERTEX_AI_KEY'],
   },
@@ -58,7 +70,7 @@ export const generateSingleDocument = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in to generate documents.');
     }
 
-    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'template', templateId, softwareSource, formattingPreset } =
+    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'template', templateId, softwareSource, formattingPreset, spouseRole } =
       request.data as GenerateSingleRequest;
 
     if (!firmId || !clientId || !docType) {
@@ -106,6 +118,7 @@ export const generateSingleDocument = onCall(
         propertyIndex,
         templateId,
         trustTypes,
+        spouseRole,
         createdBy: auth.uid,
         triggerSource: 'single',
       });

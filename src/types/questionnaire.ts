@@ -626,6 +626,12 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Other', value: 'Other' },
         ],
       },
+      {
+        name: 'spouseInfo',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
+      },
     ],
   },
 
@@ -716,6 +722,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
             rows: 2,
             width: 'full',
             condition: { field: 'specialNeeds', operator: 'equals', value: true },
+          },
+          {
+            // Address is written at the item level — RepeaterField's InnerField
+            // spreads the address subfields directly onto each child object.
+            name: '__address__',
+            label: 'Address',
+            type: 'address',
+            width: 'full',
           },
         ],
       },
@@ -869,6 +883,18 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
+        name: 'guardianPrimary.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
         name: 'guardianPrimary.phone',
         label: 'Phone',
         type: 'phone',
@@ -879,6 +905,12 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         label: 'Email',
         type: 'email',
         width: 'half',
+      },
+      {
+        name: 'guardianPrimary',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
       },
       {
         name: 'heading_guardian_alternate',
@@ -929,6 +961,24 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           { label: 'Friend', value: 'Friend' },
           { label: 'Other', value: 'Other' },
         ],
+      },
+      {
+        name: 'guardianAlternate.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'guardianAlternate',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
       },
     ],
   },
@@ -1470,6 +1520,18 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
+        name: 'fiduciaries.executor.primary.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
         name: 'fiduciaries.executor.primary.phone',
         label: 'Phone',
         type: 'phone',
@@ -1482,10 +1544,9 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
-        name: 'fiduciaries.executor.primary.address',
+        name: 'fiduciaries.executor.primary',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
       {
@@ -1554,10 +1615,21 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
-        name: 'fiduciaries.executor.alternate.address',
+        name: 'fiduciaries.executor.alternate.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'fiduciaries.executor.alternate',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
     ],
@@ -1637,6 +1709,18 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
+        name: 'fiduciaries.trustee.primary.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
         name: 'fiduciaries.trustee.primary.phone',
         label: 'Phone',
         type: 'phone',
@@ -1649,10 +1733,9 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
-        name: 'fiduciaries.trustee.primary.address',
+        name: 'fiduciaries.trustee.primary',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
       {
@@ -1721,10 +1804,21 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
-        name: 'fiduciaries.trustee.alternate.address',
+        name: 'fiduciaries.trustee.alternate.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'fiduciaries.trustee.alternate',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
     ],
@@ -1803,6 +1897,18 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
+        name: 'fiduciaries.powerOfAttorney.agent.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
         name: 'fiduciaries.powerOfAttorney.agent.phone',
         label: 'Phone',
         type: 'phone',
@@ -1815,10 +1921,9 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
-        name: 'fiduciaries.powerOfAttorney.agent.address',
+        name: 'fiduciaries.powerOfAttorney.agent',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
       {
@@ -1886,10 +1991,21 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
-        name: 'fiduciaries.powerOfAttorney.alternateAgent.address',
+        name: 'fiduciaries.powerOfAttorney.alternateAgent.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.alternateAgent',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
       {
@@ -2014,6 +2130,18 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
+        name: 'fiduciaries.healthcareProxy.agent.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
         name: 'fiduciaries.healthcareProxy.agent.phone',
         label: 'Phone',
         type: 'phone',
@@ -2026,10 +2154,9 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'half',
       },
       {
-        name: 'fiduciaries.healthcareProxy.agent.address',
+        name: 'fiduciaries.healthcareProxy.agent',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
       {
@@ -2097,10 +2224,21 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         ],
       },
       {
-        name: 'fiduciaries.healthcareProxy.alternateAgent.address',
+        name: 'fiduciaries.healthcareProxy.alternateAgent.gender',
+        label: 'Gender (optional)',
+        type: 'select',
+        helpText: "Used to render the correct pronouns in generated documents. Leave blank for ambiguous relations (Parent/Child/Sibling/Friend/etc) — neutral pronouns will be used.",
+        width: 'full',
+        options: [
+          { label: '— Not specified —', value: '' },
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.alternateAgent',
         label: 'Address',
-        type: 'text',
-        placeholder: 'Street address, city, state, ZIP',
+        type: 'address',
         width: 'full',
       },
       {

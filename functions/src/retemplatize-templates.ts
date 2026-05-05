@@ -11,7 +11,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI } from './ai-client';
-import { extractTemplateVariables } from './template-engine';
+import { applyTemplateFormattingStyles, extractTemplateVariables } from './template-engine';
 import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
 
 // ---------------------------------------------------------------------------
@@ -45,8 +45,10 @@ fiduciaries.powerOfAttorney.agent.name, fiduciaries.powerOfAttorney.agent.relati
 fiduciaries.powerOfAttorney.agent.address, fiduciaries.powerOfAttorney.agent.city, fiduciaries.powerOfAttorney.agent.state, fiduciaries.powerOfAttorney.agent.zip
 fiduciaries.powerOfAttorney.alternateAgent.name, fiduciaries.powerOfAttorney.alternateAgent.relationship
 
-fiduciaries.healthcareProxy.primary.name, fiduciaries.healthcareProxy.primary.relationship
-fiduciaries.healthcareProxy.alternate.name
+fiduciaries.healthcareProxy.agent.name, fiduciaries.healthcareProxy.agent.relationship
+fiduciaries.healthcareProxy.agent.address, fiduciaries.healthcareProxy.agent.city, fiduciaries.healthcareProxy.agent.state, fiduciaries.healthcareProxy.agent.zip
+fiduciaries.healthcareProxy.alternateAgent.name, fiduciaries.healthcareProxy.alternateAgent.relationship
+fiduciaries.healthcareProxy.alternateAgent.address, fiduciaries.healthcareProxy.alternateAgent.city, fiduciaries.healthcareProxy.alternateAgent.state, fiduciaries.healthcareProxy.alternateAgent.zip
 
 fiduciaries.guardian.primary.name, fiduciaries.guardian.primary.relationship, fiduciaries.guardian.primary.address
 fiduciaries.guardian.alternate.name, fiduciaries.guardian.alternate.relationship, fiduciaries.guardian.alternate.address
@@ -71,8 +73,11 @@ clientFullName, spouseFullName, hasSpouse, hasMinorChildren
 childCount, minorChildren[], adultChildren[], propertyCount
 todayFormatted, todayISO, packageType, packageLabel
 spouseTitle, clientTitle, executorTitle, trusteeTitle
-clientPronouns.subject / .object / .possessive
+clientPronouns.subject / .object / .possessive — PRINCIPAL only
 spousePronouns.subject / .object / .possessive
+poaAgentPronouns / poaAlternateAgentPronouns — pronouns for the POA AIF and alternate. USE for any sentence whose subject is the AIF ("to satisfy {{poaAgentPronouns.possessive}} obligation of support") — clientPronouns is the principal's and is wrong here.
+healthcareRepPronouns / healthcareRepAlternatePronouns — pronouns for the HCR and alternate.
+executorPronouns / executorAlternatePronouns / trusteePronouns / trusteeAlternatePronouns — pronouns for those fiduciary slots.
 childrenWithTitles[] — same as children[] but each child also has childTitle
 `;
 
@@ -89,7 +94,7 @@ REPLACEMENT RULES:
 4. Replace gendered pronouns referring to the client with {{clientPronouns.subject}}, {{clientPronouns.object}}, {{clientPronouns.possessive}}.
 5. Replace gendered pronouns referring to the spouse with {{spousePronouns.subject}}, {{spousePronouns.object}}, {{spousePronouns.possessive}}.
 6. Replace names of fiduciaries (executors, trustees, guardians, POA agents, healthcare proxies) with the appropriate fiduciary field path.
-7. Replace fiduciary addresses with the corresponding .address field.
+7. Replace fiduciary addresses with the corresponding .address field — and ALWAYS include city + state in the same expression: {{x.address}}, {{x.city}}, {{x.state}}. The .address field holds ONLY the street line. Failing to include city/state produces "of 93 Old Church Road, to be my attorney" instead of "of 93 Old Church Road, Monroe Township, NJ, to be my attorney".
 8. Replace witness names with {{firm.witness1Name}} / {{firm.witness2Name}} and their addresses with {{firm.witness1Address}} / {{firm.witness2Address}}.
 9. Replace the attorney name with {{firm.attorneyName}} and bar ID with {{firm.attorneyId}}.
 10. Firm name, office address, and phone → {{firm.name}}, {{firm.address}}, {{firm.city}}, {{firm.state}}, {{firm.zip}}, {{firm.phone}}.
@@ -219,9 +224,11 @@ export const retemplatizeTemplates = onCall(
       // otherwise use current content. If current content has {{variables}},
       // strip them back to blank placeholders for clean re-templatization.
       let sourceContent: string;
+      let originalContentForRawStorage = data.content as string;
       if (data.rawContent && typeof data.rawContent === 'string' && data.rawContent.length > 100) {
         // rawContent was preserved from a previous run — use it
         sourceContent = data.rawContent;
+        originalContentForRawStorage = data.rawContent;
         console.log(`[retemplatize] ${name}: Using preserved rawContent (${sourceContent.length} chars)`);
       } else {
         sourceContent = data.content as string;
@@ -233,6 +240,8 @@ export const retemplatizeTemplates = onCall(
           sourceContent = sourceContent.replace(/\{\{[^}]+\}\}/g, '_______________');
         }
       }
+
+      sourceContent = applyTemplateFormattingStyles(sourceContent);
 
       console.log(`[retemplatize] Processing: ${name} (${docType}, ${sourceContent.length} chars)`);
 
@@ -246,7 +255,7 @@ export const retemplatizeTemplates = onCall(
         );
 
         // Strip markdown fences
-        templatized = stripFences(templatized);
+        templatized = applyTemplateFormattingStyles(stripFences(templatized));
 
         // Basic validity check
         const hasVariables = /\{\{[^}]+\}\}/.test(templatized);
@@ -281,7 +290,7 @@ export const retemplatizeTemplates = onCall(
             firmData,
             { temperature: 0, maxTokens: 16384 },
           );
-          retryResult = stripFences(retryResult);
+          retryResult = applyTemplateFormattingStyles(stripFences(retryResult));
 
           const retryHasVars = /\{\{[^}]+\}\}/.test(retryResult);
           const retryHasHtml = /<[a-z][\s\S]*>/i.test(retryResult);
@@ -295,7 +304,7 @@ export const retemplatizeTemplates = onCall(
 
             // Use retry if it improved fidelity
             if (retryFidelity.score > fidelity.score) {
-              templatized = retryResult;
+              templatized = applyTemplateFormattingStyles(retryResult);
               console.info(`[retemplatize] ${name}: Retry improved fidelity, using retry output.`);
             } else {
               console.info(`[retemplatize] ${name}: Retry did not improve, keeping original output.`);
@@ -313,18 +322,48 @@ export const retemplatizeTemplates = onCall(
         console.log(`[retemplatize] ${name}: ${variables.length} variables found, fidelity=${(finalFidelity.score * 100).toFixed(1)}%`);
 
         if (!dryRun) {
-          // Update template in Firestore
-          // Preserve rawContent (original untouched HTML) if not already saved
+          // Phase 4.3: preserve all metadata fields and emit an audit trail.
+          // Prior to this commit the update only wrote {content, variables,
+          // updatedAt} — every other field (_sourceCollection, softwareSource,
+          // variant, isDefault, isActive, docTypes, tags, folder, etc.) was
+          // dropped on the round-trip, breaking provenance and version tracking
+          // when re-running retemplatize on a template more than once.
           const updateData: Record<string, unknown> = {
             content: templatized,
             variables,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            // Bump version so change-detection downstream sees the rewrite.
+            version: admin.firestore.FieldValue.increment(1),
+            // Audit trail for "when / by whom / with what model" — replaces
+            // log-only history that disappears when Cloud Logs are pruned.
+            retemplatizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            retemplatizedBy: request.auth?.uid ?? 'system',
+            retemplatizeFidelityScore: finalFidelity.score,
           };
           if (!data.rawContent) {
-            updateData.rawContent = data.content; // Save the original before overwriting
+            updateData.rawContent = originalContentForRawStorage; // Save the original before overwriting
+          }
+          // Re-affirm preserved metadata so a partial-write or schema migration
+          // can't silently drop these. Falls back to existing values when fields
+          // are present; only writes a value if the source had one.
+          for (const field of [
+            '_sourceCollection',
+            'softwareSource',
+            'variant',
+            'isDefault',
+            'isActive',
+            'docTypes',
+            'tags',
+            'folder',
+            'complexity',
+            'learnedVariables',
+            'promptVersion',
+            'createdBy',
+          ]) {
+            if (data[field] !== undefined) updateData[field] = data[field];
           }
           await col.doc(templateId).update(updateData);
-          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'})`);
+          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'}, +metadata)`);
         }
 
         results.push({

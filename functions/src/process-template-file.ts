@@ -17,7 +17,7 @@ if (typeof global !== 'undefined' && !(global as any).DOMMatrix) {
 const { PDFParse } = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';
-import { extractTemplateVariables } from './template-engine';
+import { applyTemplateFormattingStyles, extractTemplateVariables } from './template-engine';
 import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
 
 // ---------------------------------------------------------------------------
@@ -66,8 +66,10 @@ fiduciaries.powerOfAttorney.alternateAgent.name, fiduciaries.powerOfAttorney.alt
 fiduciaries.powerOfAttorney.effectiveDate, fiduciaries.powerOfAttorney.giftingAuthority
 fiduciaries.powerOfAttorney.powers[]
 
-fiduciaries.healthcareProxy.primary.name, fiduciaries.healthcareProxy.primary.relationship
-fiduciaries.healthcareProxy.alternate.name
+fiduciaries.healthcareProxy.agent.name, fiduciaries.healthcareProxy.agent.relationship
+fiduciaries.healthcareProxy.agent.address, fiduciaries.healthcareProxy.agent.city, fiduciaries.healthcareProxy.agent.state, fiduciaries.healthcareProxy.agent.zip
+fiduciaries.healthcareProxy.alternateAgent.name, fiduciaries.healthcareProxy.alternateAgent.relationship
+fiduciaries.healthcareProxy.alternateAgent.address, fiduciaries.healthcareProxy.alternateAgent.city, fiduciaries.healthcareProxy.alternateAgent.state, fiduciaries.healthcareProxy.alternateAgent.zip
 fiduciaries.healthcareProxy.lifeSupport, fiduciaries.healthcareProxy.nutrition
 fiduciaries.healthcareProxy.painManagement, fiduciaries.healthcareProxy.organDonation
 
@@ -112,7 +114,11 @@ trusteeTitle — relationship descriptor for trustee
 poaAgentTitle — relationship descriptor for POA agent
 healthcareRepTitle — relationship descriptor for healthcare rep
 guardianTitle — relationship descriptor for guardian
-clientPronouns.subject / .object / .possessive — he/him/his or she/her/her
+clientPronouns.subject / .object / .possessive — he/him/his or she/her/her (PRINCIPAL only)
+spousePronouns.subject / .object / .possessive — pronouns for the principal's spouse
+poaAgentPronouns / poaAlternateAgentPronouns — pronouns for the POA Attorney-in-Fact and alternate. USE THESE for any sentence whose subject is the AIF (e.g. "to satisfy {{poaAgentPronouns.possessive}} obligation of support") — clientPronouns is the PRINCIPAL's gender and is wrong here when AIF is a different person.
+healthcareRepPronouns / healthcareRepAlternatePronouns — pronouns for the Healthcare Representative and alternate. USE THESE for sentences whose subject is the HCR.
+executorPronouns / executorAlternatePronouns / trusteePronouns / trusteeAlternatePronouns — pronouns for those fiduciary slots. USE THESE for sentences whose subject is that fiduciary.
 spousePronouns.subject / .object / .possessive — he/him/his or she/her/her
 childrenWithTitles[] — same as children[] but each child also has a "childTitle" field = "son"/"daughter"/"stepson"/"stepdaughter"
 
@@ -299,7 +305,7 @@ export const processTemplateFile = onCall(
           "r[style-name='Object'] => ",
         ];
         const result = await mammoth.convertToHtml({ buffer }, { styleMap });
-        extractedHtml = postProcessTemplateHtml(result.value);
+        extractedHtml = applyTemplateFormattingStyles(postProcessTemplateHtml(result.value));
         // Log any mammoth conversion warnings (e.g., unmapped styles)
         if (result.messages.length > 0) {
           const styleWarnings = result.messages
@@ -374,8 +380,10 @@ REPLACEMENT RULES:
 10. The firm's name, office address, and phone number (in signature blocks, letterhead, cover pages) should be replaced with {{firm.name}}, {{firm.address}}, {{firm.city}}, {{firm.state}}, {{firm.zip}}, and {{firm.phone}}.
 11. Replace specific dates in headers, execution clauses, and signature blocks with {{todayFormatted}}.
 12. Replace funeral/cremation/burial instructions with {{specialConsiderations.funeralWishes}}.
-13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables: {{children[0].name}}, {{children[1].name}}, etc. Use {{childrenWithTitles[0].childTitle}} for "son"/"daughter".
+13. FOR CHILDREN: If multiple children are listed by index (child 1, child 2, child 3), use indexed variables with the dotted-bracket Handlebars syntax: {{children.[0].name}}, {{children.[1].name}}, etc. Use {{childrenWithTitles.[0].childTitle}} for "son"/"daughter". The dot before the bracket is REQUIRED — Handlebars silently renders empty for {{children[0].name}} (no dot).
 14. Compound relationship titles like "sister-in-law", "father-in-law" are SINGLE values. NEVER split them (WRONG: {{relationship}}-in-law). The FULL compound title IS the variable value.
+15. NEVER use pipe syntax — Handlebars has no Liquid/Vue-style pipes. WRONG: {{path | helper}}. CORRECT: {{helper path}} (subexpression). When unsure, just emit the bare path: {{path}}. childTitle is a FIELD on childrenWithTitles[i], NOT a helper — never write a pipe before it.
+16. ADDRESSES are composite. Whenever you replace a person's street address with {{...address}}, you MUST also append the city and state in the same expression: {{x.address}}, {{x.city}}, {{x.state}}. The {{...address}} field holds ONLY the street line — it does NOT include city/state. This applies to personalInfo, spouseInfo, AND every fiduciary tier (executor.primary, powerOfAttorney.agent, healthcareProxy.agent, etc.). Failing to include city/state produces output like "of 93 Old Church Road, to be my attorney" instead of "of 93 Old Church Road, Monroe Township, NJ, to be my attorney".
 
 CRITICAL: Replace EVERY instance of client-specific data. Do not leave any proper names (other than firm/attorney names in the signature block). Scan the ENTIRE document.
 
@@ -490,7 +498,7 @@ Respond with a valid JSON object (no markdown fences):
       const looksLikeHtml = /<[a-z][\s\S]*>/i.test(templatizeResult);
 
       if (hasVariables && looksLikeHtml) {
-        templatizedHtml = templatizeResult;
+        templatizedHtml = applyTemplateFormattingStyles(templatizeResult);
         console.log(`[processTemplateFile] Phase 1: AI templatization successful (${templatizedHtml.length} chars output)`);
 
         // Strip legacy [OBJ:...] / [OBJ ...] object codes from source drafting software
@@ -544,7 +552,7 @@ Respond with a valid JSON object (no markdown fences):
               `(was ${(fidelity.score * 100).toFixed(1)}%)`,
             );
             if (retryFidelity.score > fidelity.score) {
-              templatizedHtml = retryResult;
+              templatizedHtml = applyTemplateFormattingStyles(retryResult);
               console.info('[processTemplateFile] Retry improved fidelity, using retry output.');
             } else {
               console.info('[processTemplateFile] Retry did not improve, keeping original output.');
@@ -622,7 +630,7 @@ Respond with a valid JSON object (no markdown fences):
         });
 
         if (fixCount > 0) {
-          templatizedHtml = correctedParagraphs.join('');
+          templatizedHtml = applyTemplateFormattingStyles(correctedParagraphs.join(''));
           console.log(`[processTemplateFile] Fiduciary path enforcement: ${fixCount} corrections applied`);
         }
       } else {
@@ -673,7 +681,7 @@ Respond with a valid JSON object (no markdown fences):
     // {{#each childrenWithTitles}} loops
     // -----------------------------------------------------------------------
     const hasIndexedChildren = detectedVariables.some(
-      (v) => /children\[\d+\]/.test(v.suggestedVariable),
+      (v) => /children(?:WithTitles)?\.?\[\d+\]/.test(v.suggestedVariable),
     );
 
     if (hasIndexedChildren) {
@@ -681,7 +689,7 @@ Respond with a valid JSON object (no markdown fences):
         // Find character positions of all indexed children references.
         // HTML from DOCX extraction is typically a single line, so line-based
         // splitting doesn't work — use character positions instead.
-        const allRefs = [...templatizedHtml.matchAll(/children(?:WithTitles)?\[\d+\]/g)];
+        const allRefs = [...templatizedHtml.matchAll(/children(?:WithTitles)?\.?\[\d+\]/g)];
 
         if (allRefs.length > 0) {
           const firstPos = allRefs[0].index!;
@@ -696,7 +704,7 @@ Respond with a valid JSON object (no markdown fences):
 
           console.log(`[processTemplateFile] Loop detection: processing chars ${sectionStart}-${sectionEnd} (${childSection.length} chars) out of ${templatizedHtml.length} total`);
 
-          const loopPrompt = `You are a Handlebars template expert. The following HTML snippet contains indexed child references like {{children[0].name}}, {{children[1].name}}, {{childrenWithTitles[0].childTitle}}, etc.
+          const loopPrompt = `You are a Handlebars template expert. The following HTML snippet contains indexed child references like {{children.[0].name}}, {{children.[1].name}}, {{childrenWithTitles.[0].childTitle}}, etc. (Older drafts may use the no-dot form {{children[0].name}} — treat both as equivalent inputs.)
 
 Your job: convert the indexed child references into {{#each childrenWithTitles}} loop blocks.
 
@@ -722,7 +730,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
             // Splice the processed section back into the full document
             const before = templatizedHtml.slice(0, sectionStart);
             const after = templatizedHtml.slice(sectionEnd);
-            templatizedHtml = before + loopResult.trim() + after;
+            templatizedHtml = applyTemplateFormattingStyles(before + loopResult.trim() + after);
             console.log('[processTemplateFile] AI loop detection: converted indexed children to {{#each}} block');
           } else {
             console.log('[processTemplateFile] AI loop detection: no {{#each}} in response, keeping original');
@@ -739,7 +747,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
 
     return {
       success: true,
-      extractedHtml: templatizedHtml,
+      extractedHtml: applyTemplateFormattingStyles(templatizedHtml),
       rawContent: extractedHtml, // Original pre-templatization HTML for future re-runs
       extractedText: truncateAtWordBoundary(extractedText, 5000),
       rawExtractedText: truncateAtWordBoundary(extractedText, 20000),

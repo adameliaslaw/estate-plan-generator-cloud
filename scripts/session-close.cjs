@@ -1,0 +1,140 @@
+#!/usr/bin/env node
+/**
+ * session-close.cjs
+ *
+ * Pure Node, no LLM calls, no mutations.
+ * Prints:
+ *   1. A drafted "Done" block summarizing what changed in this session.
+ *   2. A drift checklist of things a human should eyeball before logging off.
+ *
+ * Usage:
+ *   node scripts/session-close.cjs            # diff vs. origin/main
+ *   node scripts/session-close.cjs <base>     # diff vs. <base>
+ */
+
+const { execSync } = require('node:child_process');
+const path = require('node:path');
+
+const REPO_ROOT = path.resolve(__dirname, '..');
+const BASE = process.argv[2] || 'origin/main';
+
+function sh(cmd) {
+  try {
+    return execSync(cmd, { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch (err) {
+    return '';
+  }
+}
+
+function header(title) {
+  const bar = '─'.repeat(Math.max(8, 60 - title.length));
+  return `\n── ${title} ${bar}`;
+}
+
+function uniq(arr) { return Array.from(new Set(arr)); }
+
+const branch = sh('git rev-parse --abbrev-ref HEAD') || '(detached)';
+const baseExists = sh(`git rev-parse --verify ${BASE}`) !== '';
+const compareBase = baseExists ? BASE : 'HEAD~10';
+
+const commits = sh(`git log --pretty=tformat:'%h %s' ${compareBase}..HEAD`)
+  .split('\n')
+  .filter(Boolean)
+  .map((line) => {
+    const idx = line.indexOf(' ');
+    return idx === -1
+      ? { hash: line, subject: '' }
+      : { hash: line.slice(0, idx), subject: line.slice(idx + 1) };
+  });
+
+const diffNameStatus = sh(`git diff --name-status ${compareBase}...HEAD`)
+  .split('\n')
+  .filter(Boolean)
+  .map((line) => {
+    const [status, ...rest] = line.split('\t');
+    return { status, file: rest.join('\t') };
+  });
+
+const diffStat = sh(`git diff --shortstat ${compareBase}...HEAD`);
+const status = sh('git status --short');
+const untracked = status.split('\n').filter((l) => l.startsWith('??')).map((l) => l.slice(3));
+const modifiedDirty = status.split('\n').filter((l) => l && !l.startsWith('??'));
+const ahead = sh(`git rev-list --count ${compareBase}..HEAD`);
+const behind = sh(`git rev-list --count HEAD..${compareBase}`);
+const unpushed = sh('git log --oneline @{u}..HEAD 2>/dev/null')
+  .split('\n')
+  .filter(Boolean);
+
+const touchedAreas = uniq(
+  diffNameStatus.map(({ file }) => {
+    if (file.startsWith('functions/src/templates/')) return 'templates';
+    if (file.startsWith('functions/src/')) return 'functions';
+    if (file.startsWith('src/')) return 'frontend';
+    if (file === 'firestore.rules') return 'firestore-rules';
+    if (file === 'storage.rules') return 'storage-rules';
+    if (file === 'firestore.indexes.json') return 'firestore-indexes';
+    if (file === 'firebase.json') return 'firebase-config';
+    if (file.startsWith('.env')) return 'env';
+    if (file.endsWith('.md')) return 'docs';
+    if (file.startsWith('scripts/') || file.startsWith('.agents/')) return 'tooling';
+    return 'other';
+  })
+);
+
+const deployTargets = [];
+if (touchedAreas.includes('frontend')) deployTargets.push('hosting');
+if (touchedAreas.includes('functions')) deployTargets.push('functions');
+if (touchedAreas.includes('firestore-rules')) deployTargets.push('firestore:rules');
+if (touchedAreas.includes('firestore-indexes')) deployTargets.push('firestore:indexes');
+if (touchedAreas.includes('storage-rules')) deployTargets.push('storage');
+
+const out = [];
+
+out.push(header('Done block (draft)'));
+out.push(`Branch:  ${branch}`);
+out.push(`Base:    ${compareBase}`);
+out.push(`Commits: ${commits.length}    Ahead: ${ahead || 0}    Behind: ${behind || 0}`);
+out.push(`Stat:    ${diffStat || '(no committed changes vs. base)'}`);
+out.push('');
+out.push('Commits in this session:');
+if (commits.length === 0) {
+  out.push('  (none)');
+} else {
+  for (const c of commits) out.push(`  ${c.hash}  ${c.subject}`);
+}
+out.push('');
+out.push('Touched areas: ' + (touchedAreas.join(', ') || '(none)'));
+out.push('Suggested deploy targets: ' + (deployTargets.length ? deployTargets.join(', ') : '(none — docs/tooling only)'));
+
+out.push(header('Drift checklist'));
+const checklist = [];
+if (modifiedDirty.length) checklist.push(`Uncommitted modifications (${modifiedDirty.length}):\n    ${modifiedDirty.join('\n    ')}`);
+if (untracked.length) checklist.push(`Untracked files (${untracked.length}):\n    ${untracked.join('\n    ')}`);
+if (unpushed.length) checklist.push(`Unpushed commits (${unpushed.length}):\n    ${unpushed.join('\n    ')}`);
+if (touchedAreas.includes('firestore-rules') || touchedAreas.includes('storage-rules')) {
+  checklist.push('Security rules touched — re-read the diff line by line; test with the emulator.');
+}
+if (touchedAreas.includes('firestore-indexes')) {
+  checklist.push('Firestore indexes changed — deploy together with the code that depends on them.');
+}
+if (touchedAreas.includes('templates')) {
+  checklist.push('Handlebars templates touched — confirm prose changes were authorized; render a sample.');
+}
+if (touchedAreas.includes('env')) {
+  checklist.push('.env touched — confirm no real secret was committed; mirror new vars in .env.example.');
+}
+if (touchedAreas.includes('functions')) {
+  checklist.push('Functions changed — run `cd functions && npx tsc --noEmit` and check Cloud Logging after deploy.');
+}
+if (touchedAreas.includes('frontend')) {
+  checklist.push('Frontend changed — manually exercise the affected page in a browser before reporting done.');
+}
+checklist.push('Run: `npx tsc --noEmit && (cd functions && npx tsc --noEmit) && npm run lint && npm run build`.');
+checklist.push('Confirm HOMEWORK.md reflects what shipped (close items per .agents/workflows/homework-close.md).');
+
+for (let i = 0; i < checklist.length; i++) {
+  out.push(`  [ ] ${checklist[i]}`);
+}
+
+out.push('');
+process.stdout.write(out.join('\n') + '\n');

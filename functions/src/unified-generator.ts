@@ -373,6 +373,42 @@ export function buildStandardTitle(
 // ---------------------------------------------------------------------------
 // Core unified generation function
 // ---------------------------------------------------------------------------
+// Context cloning — Timestamp-aware deep clone for batch preload (Phase 3.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Recursive deep-clone that preserves Firestore Timestamp instances and Date
+ * objects. JSON.parse(JSON.stringify(...)) would coerce both to strings,
+ * breaking any helper that calls .toDate() / .toMillis() and producing date
+ * drift between single and batch generation paths.
+ */
+function cloneTimestampAware<T>(value: T, seen: WeakMap<object, unknown> = new WeakMap()): T {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  if (value instanceof Date) return new Date(value.getTime()) as unknown as T;
+  // Firestore Timestamp has toMillis/toDate but not isFrozen — duck-type detect.
+  if (value instanceof admin.firestore.Timestamp) {
+    return admin.firestore.Timestamp.fromMillis(value.toMillis()) as unknown as T;
+  }
+  if (seen.has(value as object)) return seen.get(value as object) as T;
+
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    seen.set(value as object, out);
+    for (const item of value as unknown[]) out.push(cloneTimestampAware(item, seen));
+    return out as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  seen.set(value as object, out);
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = cloneTimestampAware(v, seen);
+  }
+  return out as unknown as T;
+}
+
+function cloneClientContext(ctx: ClientContext): ClientContext {
+  return cloneTimestampAware(ctx);
+}
 
 /**
  * Generate a single document for a client. This is THE function that every
@@ -401,14 +437,6 @@ export async function generateDocument(
     additionalData,
     modelOverride,
   } = params;
-
-  if (generationMode === 'high-fidelity') {
-    throw new HttpsError(
-      'unimplemented',
-      'high-fidelity binary DOCX generation is not yet available. ' +
-      'Select template, hybrid, or ai mode instead.',
-    );
-  }
 
   const db = admin.firestore();
 
@@ -464,8 +492,13 @@ export async function generateDocument(
   let contextFailed = false;
 
   if (params.preloadedContext) {
-    // Deep clone preloaded context so we don't mutate the shared batch instance
-    clientContext = JSON.parse(JSON.stringify(params.preloadedContext));
+    // Deep clone preloaded context so we don't mutate the shared batch instance.
+    // Use structuredClone so Firestore Timestamp / Date objects survive (a plain
+    // JSON.stringify round-trip would coerce them to ISO strings, breaking any
+    // template helper that calls .toDate() — silent date drift between batch
+    // and single generation paths). Timestamp instances aren't structured-
+    // cloneable directly; fall back to a Timestamp-aware recursive clone.
+    clientContext = cloneClientContext(params.preloadedContext);
   } else {
     try {
       clientContext = await aggregateClientContext(firmId, clientId, docType);
@@ -479,26 +512,185 @@ export async function generateDocument(
     const originalPersonal = { ...clientData.personalInfo };
     const originalSpouse = { ...clientData.spouseInfo };
     console.log(`[unifiedGenerator] Spouse swap for ${docType}: ${originalSpouse.firstName ?? 'unknown'} ↔ ${originalPersonal.firstName ?? 'unknown'}`);
-    
+
+    // The questionnaire's spouseInfo block typically captures name + dob +
+    // citizenship but NOT address or gender (those are derived for the
+    // primary client). When we swap to make the spouse the testator, the
+    // resulting personalInfo can be missing those fields — which causes
+    // downstream errors like "Gender is required" and blank address
+    // renders on AD/POA templates. Backfill missing fields from the
+    // original primary's data: spouses share a household address; gender
+    // inverts under heteronormative marriage (skipped silently for
+    // domestic-partnership where we can't infer).
+    const backfillFields = ['address', 'city', 'state', 'zip', 'county', 'lastName'] as const;
+    const swappedPersonal: Record<string, unknown> = { ...originalSpouse };
+    for (const field of backfillFields) {
+      const val = swappedPersonal[field];
+      if ((val === undefined || val === null || val === '') && originalPersonal[field] !== undefined) {
+        swappedPersonal[field] = originalPersonal[field];
+      }
+    }
+    if (!swappedPersonal.gender && typeof originalPersonal.gender === 'string') {
+      const og = (originalPersonal.gender as string).trim().toLowerCase();
+      if (og === 'female') swappedPersonal.gender = 'male';
+      else if (og === 'male') swappedPersonal.gender = 'female';
+      // domestic-partnership / other: leave undefined; user must set explicitly.
+    }
+
+    // Swap fiduciary entries whose relationship marks them as the spouse:
+    // when generating Adam's doc via spouseRole='spouse' from Karen's vault,
+    // Karen's fiduciaries say "agent: Adam (Husband)" — but in Adam's doc,
+    // his spouse is Karen, not himself. Without this swap, Adam's AD would
+    // appoint Adam as his own healthcare rep. Replaces the spouse-tagged
+    // fiduciary's name with the now-spouse's full name and inverts the
+    // relationship label to match the new testator's perspective.
+    const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+    const newSpouseFullName = [originalPersonal.firstName, originalPersonal.middleName, originalPersonal.lastName].filter(Boolean).join(' ').trim();
+    const newSpouseRelationship = (() => {
+      const og = typeof originalPersonal.gender === 'string' ? (originalPersonal.gender as string).trim().toLowerCase() : '';
+      if (og === 'female') return 'Wife';
+      if (og === 'male') return 'Husband';
+      return 'Spouse';
+    })();
+    const swapFiduciaries = (raw: Record<string, unknown> | undefined): Record<string, unknown> | undefined => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const out: Record<string, unknown> = { ...raw };
+      for (const [role, roleVal] of Object.entries(out)) {
+        if (!roleVal || typeof roleVal !== 'object') continue;
+        const nextRole: Record<string, unknown> = { ...(roleVal as Record<string, unknown>) };
+        for (const [tier, tierVal] of Object.entries(nextRole)) {
+          if (!tierVal || typeof tierVal !== 'object') continue;
+          const t = tierVal as Record<string, unknown>;
+          const rel = typeof t.relationship === 'string' ? (t.relationship as string).trim().toLowerCase() : '';
+          if (!HOUSEHOLD_REL.has(rel)) continue;
+          // Re-target this slot at the now-spouse (the original primary).
+          nextRole[tier] = {
+            ...t,
+            name: newSpouseFullName || t.name,
+            relationship: newSpouseRelationship,
+            // Address fields auto-fill via the template-engine pass; clear
+            // any stale ones tied to the previous person so the auto-fill
+            // re-populates with the new testator's household address.
+            address: '',
+            city: '',
+            state: '',
+            zip: '',
+            county: '',
+          };
+        }
+        out[role] = nextRole;
+      }
+      return out;
+    };
+    const swappedClientFiduciaries = swapFiduciaries(clientData.fiduciaries as Record<string, unknown> | undefined);
+
     // Swap clientData for generators
     clientData = {
       ...clientData,
-      personalInfo: originalSpouse,
+      personalInfo: swappedPersonal,
       spouseInfo: originalPersonal,
+      fiduciaries: swappedClientFiduciaries ?? clientData.fiduciaries,
     };
 
     // Swap clientContext for template engine
     if (clientContext?.client?.spouseInfo) {
       const ctxOriginalPersonal = { ...clientContext.client.personalInfo };
       const ctxOriginalSpouse = { ...clientContext.client.spouseInfo };
-      clientContext.client.personalInfo = ctxOriginalSpouse;
+      // Apply the same backfills to the context-side copy so the template
+      // engine sees the merged data on its render path.
+      const ctxSwappedPersonal: Record<string, unknown> = { ...ctxOriginalSpouse };
+      for (const field of backfillFields) {
+        const val = ctxSwappedPersonal[field];
+        if ((val === undefined || val === null || val === '') && ctxOriginalPersonal[field] !== undefined) {
+          ctxSwappedPersonal[field] = ctxOriginalPersonal[field];
+        }
+      }
+      if (!ctxSwappedPersonal.gender && typeof ctxOriginalPersonal.gender === 'string') {
+        const og = (ctxOriginalPersonal.gender as string).trim().toLowerCase();
+        if (og === 'female') ctxSwappedPersonal.gender = 'male';
+        else if (og === 'male') ctxSwappedPersonal.gender = 'female';
+      }
+      clientContext.client.personalInfo = ctxSwappedPersonal;
       clientContext.client.spouseInfo = ctxOriginalPersonal;
+
+      // Mirror the fiduciary swap on the context-side copy so the template
+      // engine sees the same remapped entries on its render path.
+      const ctxSwappedFiduciaries = swapFiduciaries(clientContext.client.fiduciaries as Record<string, unknown> | undefined);
+      if (ctxSwappedFiduciaries) {
+        clientContext.client.fiduciaries = ctxSwappedFiduciaries as never;
+      }
 
       // Swap computed names
       const originalClientFullName = clientContext.computed.clientFullName;
       const originalSpouseFullName = clientContext.computed.spouseFullName;
       clientContext.computed.clientFullName = originalSpouseFullName;
       clientContext.computed.spouseFullName = originalClientFullName;
+
+      // Swap derived spouse-title / client-title / pronouns. Without this,
+      // generating Adam's will from Karen's vault would still report
+      // spouseTitle='husband' (Karen's view) and Adam's will would say "my
+      // husband" referring to Karen — wrong. Reflip from the now-current
+      // testator's gender.
+      const newGender = (ctxSwappedPersonal.gender as string | undefined)?.trim().toLowerCase();
+      const newClientIsFemale = newGender === 'female';
+      const newMaritalStatus = (ctxSwappedPersonal.maritalStatus as string | undefined) ?? '';
+      const isDP = newMaritalStatus === 'Domestic Partnership';
+      if (isDP) {
+        clientContext.computed.spouseTitle = 'partner';
+        clientContext.computed.clientTitle = 'partner';
+      } else if (newGender) {
+        clientContext.computed.spouseTitle = newClientIsFemale ? 'husband' : 'wife';
+        clientContext.computed.clientTitle = newClientIsFemale ? 'wife' : 'husband';
+      }
+      if (newGender) {
+        const malePronouns = { subject: 'he', object: 'him', possessive: 'his' };
+        const femalePronouns = { subject: 'she', object: 'her', possessive: 'her' };
+        const neutralPronouns = { subject: 'they', object: 'them', possessive: 'their' };
+        clientContext.computed.clientPronouns = newClientIsFemale ? femalePronouns : malePronouns;
+        clientContext.computed.spousePronouns = newClientIsFemale ? malePronouns : femalePronouns;
+
+        // Recompute fiduciary pronouns now that the testator perspective has
+        // flipped. A spouse-tagged fiduciary slot now points at the new
+        // spouse (the original primary), so its inferred pronoun must follow
+        // the new spousePronouns. Any non-spouse slot retains its slot's
+        // explicit gender if set, else neutral.
+        const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+        // Same relationship-gender inference as client-context-aggregator —
+        // kept inline so the spouse-swap rebuild stays self-contained.
+        const FEMALE_REL = new Set([
+          'wife', 'mother', 'daughter', 'sister', 'grandmother', 'granddaughter',
+          'aunt', 'niece', 'mother-in-law', 'daughter-in-law', 'sister-in-law',
+          'great-grandmother', 'great-granddaughter', 'great-aunt', 'great-niece',
+          'great-great-grandmother', 'great-great-granddaughter',
+        ]);
+        const MALE_REL = new Set([
+          'husband', 'father', 'son', 'brother', 'grandfather', 'grandson',
+          'uncle', 'nephew', 'father-in-law', 'son-in-law', 'brother-in-law',
+          'great-grandfather', 'great-grandson', 'great-uncle', 'great-nephew',
+          'great-great-grandfather', 'great-great-grandson',
+        ]);
+        const newSpousePronouns = clientContext.computed.spousePronouns;
+        const recompute = (slot: Record<string, unknown> | undefined) => {
+          if (!slot || typeof slot !== 'object') return neutralPronouns;
+          const explicit = typeof slot.gender === 'string' ? (slot.gender as string).trim().toLowerCase() : '';
+          if (explicit === 'male') return malePronouns;
+          if (explicit === 'female') return femalePronouns;
+          const rel = typeof slot.relationship === 'string' ? (slot.relationship as string).trim().toLowerCase() : '';
+          if (HOUSEHOLD_REL.has(rel)) return newSpousePronouns;
+          if (FEMALE_REL.has(rel)) return femalePronouns;
+          if (MALE_REL.has(rel)) return malePronouns;
+          return neutralPronouns;
+        };
+        const fids = clientContext.client.fiduciaries as Record<string, Record<string, Record<string, unknown> | undefined> | undefined> | undefined;
+        clientContext.computed.poaAgentPronouns = recompute(fids?.powerOfAttorney?.agent);
+        clientContext.computed.poaAlternateAgentPronouns = recompute(fids?.powerOfAttorney?.alternateAgent);
+        clientContext.computed.healthcareRepPronouns = recompute(fids?.healthcareProxy?.agent);
+        clientContext.computed.healthcareRepAlternatePronouns = recompute(fids?.healthcareProxy?.alternateAgent);
+        clientContext.computed.executorPronouns = recompute(fids?.executor?.primary);
+        clientContext.computed.executorAlternatePronouns = recompute(fids?.executor?.alternate);
+        clientContext.computed.trusteePronouns = recompute(fids?.trustee?.primary);
+        clientContext.computed.trusteeAlternatePronouns = recompute(fids?.trustee?.alternate);
+      }
     }
   }
 
@@ -548,7 +740,32 @@ export async function generateDocument(
     if (isFlexDocType(docType)) {
       (clientData as Record<string, unknown>)._customPrompt = customPrompt;
       (clientData as Record<string, unknown>)._additionalData = additionalData;
-      generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+      // Phase 1.2: flex docs can opt into template/hybrid rendering by passing
+      // a generationMode other than 'ai'. When a clientContext exists and a
+      // matching flex template is uploaded, route through the template engine;
+      // otherwise fall back to the AI flex generator (closure preserves the
+      // injected customPrompt/additionalData).
+      if (generationMode !== 'ai' && clientContext) {
+        console.info(`[unifiedGenerator] dispatch: docType=${docType} path=template-flex generationMode=${generationMode}`);
+        const aiGenFn = () => {
+          console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-fallback-from-template (flex)`);
+          return generatorFn(clientData, firmData, packageType, trustTypes);
+        };
+        generatedDoc = await generateFromTemplate(
+          clientContext,
+          docType,
+          generationMode,
+          templateId,
+          undefined,
+          aiGenFn,
+          softwareSource,
+          formattingPreset,
+          additionalData,
+        );
+      } else {
+        console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-only-direct (flex) reason=${generationMode === 'ai' ? 'mode' : 'no-context'}`);
+        generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
+      }
     } else {
       // Resolve property for per-property docs
       let property: admin.firestore.DocumentData | undefined;
@@ -576,8 +793,34 @@ export async function generateDocument(
             );
           }
           property = properties[idx] ?? properties[0];
-          // Per-property docs always use AI (complex property-specific logic)
-          generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
+          // Try templates first when a clientContext is available; per-property
+          // generators are then used as the AI fallback (closure carries the
+          // resolved property forward). When no template exists for this
+          // doc type, generateFromTemplate falls through to aiGenFn — yielding
+          // identical behaviour to the legacy direct-AI path. Per-property
+          // Handlebars templates can read {{property.address}} etc. via the
+          // additionalData payload.
+          if (generationMode !== 'ai' && clientContext) {
+            console.info(`[unifiedGenerator] dispatch: docType=${docType} path=template-with-property generationMode=${generationMode}`);
+            const aiGenFn = () => {
+              console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-fallback-from-template (per-property)`);
+              return generatorFn(clientData, firmData, packageType, trustTypes, property);
+            };
+            generatedDoc = await generateFromTemplate(
+              clientContext,
+              docType,
+              generationMode,
+              templateId,
+              undefined,
+              aiGenFn,
+              softwareSource,
+              formattingPreset,
+              { property },
+            );
+          } else {
+            console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-only-direct (per-property) reason=${generationMode === 'ai' ? 'mode' : 'no-context'}`);
+            generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes, property);
+          }
           generatedDoc.propertyAddress = property.address;
         }
       }
@@ -586,7 +829,11 @@ export async function generateDocument(
       if (!generatedDoc!) {
         if (generationMode !== 'ai' && clientContext) {
           // Legacy Template or hybrid mode (HTML based)
-          const aiGenFn = () => generatorFn(clientData, firmData, packageType, trustTypes);
+          console.info(`[unifiedGenerator] dispatch: docType=${docType} path=template generationMode=${generationMode}`);
+          const aiGenFn = () => {
+            console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-fallback-from-template`);
+            return generatorFn(clientData, firmData, packageType, trustTypes);
+          };
 
           // Special case: Estate Plan Summary needs its own complex data mapper 
           // (it's not just a simple questionnaire field lookup)
@@ -608,6 +855,7 @@ export async function generateDocument(
           );
         } else {
           // AI-only mode or context aggregation failed — direct AI generation
+          console.info(`[unifiedGenerator] dispatch: docType=${docType} path=ai-only-direct reason=${generationMode === 'ai' ? 'mode' : 'no-context'}`);
           generatedDoc = await generatorFn(clientData, firmData, packageType, trustTypes);
         }
       }
@@ -762,6 +1010,14 @@ export async function generateDocument(
     if (contextFailed) {
       console.warn(`[unifiedGenerator] Saving ${docType} with _contextFailed=true (degraded AI-only output)`);
     }
+    // Resolved generation mode — what actually ran. When generateFromTemplate
+    // matched a template, generatedDoc.resolvedMode is set; otherwise we ran
+    // the AI fallback directly so resolvedMode is 'ai'. Flex docs report
+    // 'flex' to distinguish them from standard AI generation.
+    const resolvedMode: 'template' | 'hybrid' | 'ai' | 'flex' =
+      generatedDoc.resolvedMode
+        ?? (isFlexType ? 'flex' : 'ai');
+
     saveResult = await saveDocumentToVault({
       firmId,
       clientId,
@@ -773,7 +1029,11 @@ export async function generateDocument(
       status: finalStatus === 'error' ? 'error' : finalStatus,
       createdBy,
       documentId,
-      generationMode: triggerSource === 'chat-draft' ? 'chat-draft' : 'batch',
+      generationMode: resolvedMode,
+      triggerSource,
+      templateId: generatedDoc.resolvedTemplateId ?? null,
+      templateSourceCollection: generatedDoc.resolvedTemplateSource ?? null,
+      softwareSource: generatedDoc.resolvedSoftwareSource ?? softwareSource ?? null,
       propertyAddress: generatedDoc.propertyAddress,
       changeNotes,
       tags,

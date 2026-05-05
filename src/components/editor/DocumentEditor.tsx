@@ -63,6 +63,7 @@ import {
   PenSquare,
   Save,
   Clock,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,6 +83,7 @@ import { type Document, type DocStatus } from '@/types';
 import { serverTimestamp } from 'firebase/firestore';
 import { logSystemActivity } from '@/utils/activity-logger';
 import { usePermissions } from '@/hooks/usePermissions';
+import { documentService } from '@/services/document-service';
 
 // Editor subcomponents
 import EditorToolbar from './EditorToolbar';
@@ -139,6 +141,8 @@ export default function DocumentEditor({
   const [showComparePanel, setShowComparePanel] = useState(false);
   const [contentLoaded, setContentLoaded] = useState(false);
   const [docUnlocked, setDocUnlocked] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
 
   // Refs for debounced auto-save
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -365,6 +369,48 @@ export default function DocumentEditor({
     [editor, docPath, saveVersion, userProfile],
   );
 
+  // ── Regenerate this document from the underlying template + client data ──
+  // Preserves the doc's spouseRole if it's the spouse's copy (deterministic
+  // from the doc id suffix `_spouse` since that's how saveDocumentToVault
+  // builds it). Without this, regenerating Adam's spouse-version of a will
+  // would overwrite the client (Karen's) doc instead.
+  const handleRegenerate = useCallback(async () => {
+    if (!document || !document.docType) return;
+    const inferredSpouseRole: 'client' | 'spouse' = documentId.endsWith('_spouse') ? 'spouse' : 'client';
+    const whoseLabel = inferredSpouseRole === 'spouse' ? ' (spouse)' : '';
+    const confirmMsg =
+      `Regenerate "${document.displayName ?? document.docType}"${whoseLabel} from the current ` +
+      `template and client data?\n\nYour current edits will be saved as version ${document.currentVersion ?? '?'} ` +
+      `before the new draft replaces the working copy.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setRegenerating(true);
+    setRegenError(null);
+    try {
+      // Snapshot current edits so they aren't lost (versions subcollection
+      // already retains prior content, but make doubly sure).
+      if (editor && hasUnsavedChanges) {
+        await updateDoc<Document & { editorContent: string }>(docPath, {
+          editorContent: editor.getHTML(),
+          updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
+        });
+      }
+      await documentService.generateSingleDocument({
+        firmId,
+        clientId,
+        docType: document.docType,
+        spouseRole: inferredSpouseRole,
+      });
+      // Document data auto-refreshes via the useDocument subscription.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setRegenError(msg);
+      console.error('[DocumentEditor] regenerate failed:', err);
+    } finally {
+      setRegenerating(false);
+    }
+  }, [document, documentId, docPath, editor, firmId, clientId, hasUnsavedChanges, userProfile]);
+
   // ── Restore a version ──
   const handleRestoreVersion = useCallback(
     (content: string, _vn: number) => {
@@ -554,6 +600,37 @@ export default function DocumentEditor({
                 <p>Save now (Ctrl+S)</p>
               </TooltipContent>
             </Tooltip>
+          )}
+
+          {/* Regenerate this document — attorney/admin/paralegal only,
+              available for any doc that has a docType (i.e. was generated
+              by the system). Snapshots current content as a version, then
+              re-runs the unified generator and overwrites the working copy. */}
+          {(isAttorney || isAdmin || isParalegal) && document?.docType && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff] disabled:opacity-50"
+                  onClick={handleRegenerate}
+                  disabled={regenerating || isReadOnly}
+                >
+                  {regenerating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  {regenerating ? 'Regenerating…' : 'Regenerate'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                <p>Re-run generation from the latest template + client data. Current edits saved as a version first.</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {regenError && (
+            <span className="text-xs text-red-600">{regenError}</span>
           )}
 
           {/* Unlock final document (attorney only) */}

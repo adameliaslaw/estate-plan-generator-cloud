@@ -99,6 +99,170 @@ function getTrClass(node: HtmlNode): string | undefined {
   return match ? match[0] : undefined;
 }
 
+// ── Inline style → TrStyleConfig fallback ────────────────────────────────────
+//
+// When AI-generated content drops the original tr-* class but the inline style
+// attribute still carries the equivalent properties (because applyTemplateFormattingStyles
+// baked them in), parse the style string into a TrStyleConfig so the paragraph
+// builder can apply the same formatting it would for a classed paragraph.
+
+const ALIGN_MAP: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> = {
+  center: AlignmentType.CENTER,
+  right: AlignmentType.RIGHT,
+  left: AlignmentType.LEFT,
+  justify: AlignmentType.JUSTIFIED,
+};
+
+function parseLengthToTwips(value: string): number | undefined {
+  const m = value.trim().match(/^([\d.]+)\s*(in|pt|cm|mm|px)?$/i);
+  if (!m) return undefined;
+  const n = parseFloat(m[1]);
+  if (isNaN(n)) return undefined;
+  const unit = (m[2] ?? 'pt').toLowerCase();
+  switch (unit) {
+    case 'in': return Math.round(n * 1440);
+    case 'pt': return Math.round(n * 20);
+    case 'cm': return Math.round(n * 567);
+    case 'mm': return Math.round(n * 56.7);
+    case 'px': return Math.round(n * 15); // approx 96dpi
+    default: return Math.round(n * 20);
+  }
+}
+
+function parseFontSizeToHalfPoints(value: string): number | undefined {
+  const m = value.trim().match(/^([\d.]+)\s*pt$/i);
+  if (!m) return undefined;
+  const n = parseFloat(m[1]);
+  if (isNaN(n)) return undefined;
+  return Math.round(n * 2); // half-points
+}
+
+/**
+ * Build a TrStyleConfig from an inline style string. Returns undefined if no
+ * recognisable styling properties are present.
+ */
+function inlineStyleToTrConfig(styleAttr: string): TrStyleConfig | undefined {
+  if (!styleAttr) return undefined;
+  const style = styleAttr.toLowerCase();
+  const config: TrStyleConfig = {};
+  let touched = false;
+
+  const pairs = style.split(';').map((p) => p.trim()).filter(Boolean);
+  const props: Record<string, string> = {};
+  for (const pair of pairs) {
+    const colon = pair.indexOf(':');
+    if (colon === -1) continue;
+    const key = pair.slice(0, colon).trim();
+    const val = pair.slice(colon + 1).trim();
+    props[key] = val;
+  }
+
+  // Alignment
+  if (props['text-align'] && ALIGN_MAP[props['text-align']]) {
+    config.alignment = ALIGN_MAP[props['text-align']];
+    touched = true;
+  }
+
+  // Font size
+  if (props['font-size']) {
+    const halfPts = parseFontSizeToHalfPoints(props['font-size']);
+    if (halfPts) {
+      config.fontSize = halfPts;
+      touched = true;
+    }
+  }
+
+  // Bold
+  if (props['font-weight'] && /^(bold|[6-9]\d{2})$/.test(props['font-weight'])) {
+    config.bold = true;
+    touched = true;
+  }
+
+  // Underline
+  if (props['text-decoration'] && /\bunderline\b/.test(props['text-decoration'])) {
+    config.underline = true;
+    touched = true;
+  }
+
+  // All caps
+  if (props['text-transform'] === 'uppercase') {
+    config.allCaps = true;
+    touched = true;
+  }
+
+  // Margins → spacing (before/after in twips)
+  const spacing: { before?: number; after?: number; line?: number } = {};
+  if (props['margin-top']) {
+    const t = parseLengthToTwips(props['margin-top']);
+    if (t !== undefined) { spacing.before = t; touched = true; }
+  }
+  if (props['margin-bottom']) {
+    const t = parseLengthToTwips(props['margin-bottom']);
+    if (t !== undefined) { spacing.after = t; touched = true; }
+  }
+  if (props['margin'] && (spacing.before === undefined || spacing.after === undefined)) {
+    // Shorthand: 1 / 2 / 3 / 4 values
+    const parts = props['margin'].split(/\s+/).map(parseLengthToTwips);
+    if (parts.every((p) => p !== undefined)) {
+      const [t, r, b, l] = parts as number[];
+      if (parts.length === 1) {
+        if (spacing.before === undefined) spacing.before = t;
+        if (spacing.after === undefined) spacing.after = t;
+      } else if (parts.length === 2) {
+        if (spacing.before === undefined) spacing.before = t;
+        if (spacing.after === undefined) spacing.after = t;
+      } else if (parts.length === 3) {
+        if (spacing.before === undefined) spacing.before = t;
+        if (spacing.after === undefined) spacing.after = parts[2];
+      } else if (parts.length === 4) {
+        if (spacing.before === undefined) spacing.before = t;
+        if (spacing.after === undefined) spacing.after = b;
+      }
+      void r; void l;
+      touched = true;
+    }
+  }
+  if (props['line-height']) {
+    const n = parseFloat(props['line-height']);
+    if (!isNaN(n) && n >= 1.0) {
+      spacing.line = Math.round(n * 240);
+      touched = true;
+    }
+  }
+  if (Object.keys(spacing).length > 0) config.spacing = spacing;
+
+  // Indentation
+  const indent: { left?: number; firstLine?: number } = {};
+  if (props['margin-left']) {
+    const t = parseLengthToTwips(props['margin-left']);
+    if (t !== undefined) { indent.left = t; touched = true; }
+  }
+  if (props['text-indent']) {
+    const t = parseLengthToTwips(props['text-indent']);
+    if (t !== undefined && t > 0) { indent.firstLine = t; touched = true; }
+  }
+  if (Object.keys(indent).length > 0) config.indent = indent;
+
+  return touched ? config : undefined;
+}
+
+/**
+ * Merge two TrStyleConfigs. The override config wins on any defined property.
+ * Used to layer inline-style overrides on top of a class-derived base config.
+ */
+function mergeTrConfigs(base: TrStyleConfig, override: TrStyleConfig): TrStyleConfig {
+  return {
+    alignment: override.alignment ?? base.alignment,
+    indent: { ...(base.indent ?? {}), ...(override.indent ?? {}) },
+    spacing: { ...(base.spacing ?? {}), ...(override.spacing ?? {}) },
+    bold: override.bold ?? base.bold,
+    underline: override.underline ?? base.underline,
+    allCaps: override.allCaps ?? base.allCaps,
+    fontSize: override.fontSize ?? base.fontSize,
+    tabStops: override.tabStops ?? base.tabStops,
+  };
+}
+
 /**
  * Build a docx Paragraph from an HtmlNode using a TrStyleConfig.
  */
@@ -161,6 +325,17 @@ function parseHtml(html: string): HtmlNode[] {
     .replace(/<head[\s\S]*?<\/head>/gi, '')     // strip <head> blocks (meta tags, title, etc.)
     .replace(/<\s*(br|hr)\s*\/?>/gi, (m) =>
       m.toLowerCase().startsWith('<br') ? '<br/>' : '<hr/>',
+    )
+    // Defensive: AI templatization sometimes emits malformed tags where the
+    // attribute name is concatenated to the tag name with no whitespace, e.g.
+    // `<pclass="tr-art1"`. The recursive-descent parser below requires a space
+    // before any attribute, so without this the parser silently drops the
+    // entire tag (and everything inside it) — turning a 90-paragraph document
+    // into a 7-paragraph one. Insert the missing space before known HTML
+    // attribute names that immediately follow a tag name.
+    .replace(
+      /<([a-z][\w-]*?)(class|style|id|href|src|alt|title|name|type|value|data-[\w-]+|aria-[\w-]+|role|rel|target|width|height|colspan|rowspan|align|valign)=/gi,
+      '<$1 $2=',
     )
     .trim();
 
@@ -360,9 +535,15 @@ function convertNode(
   const children = node.children ?? [];
 
   // ── TR_ style-mapped elements (template-referenced generation) ────────
+  // If a tr-* class is present, use its base config. Layer any inline-style
+  // overrides on top so AI-introduced style changes win over the class default.
   const trClass = getTrClass(node);
   if (trClass && TR_STYLE_MAP[trClass]) {
-    return [buildTrStyledParagraph(node, TR_STYLE_MAP[trClass])];
+    const inlineOverride = inlineStyleToTrConfig(node.attrs?.style ?? '');
+    const config = inlineOverride
+      ? mergeTrConfigs(TR_STYLE_MAP[trClass], inlineOverride)
+      : TR_STYLE_MAP[trClass];
+    return [buildTrStyledParagraph(node, config)];
   }
 
   // ── Headings ──────────────────────────────────────────────────────────────
@@ -399,35 +580,28 @@ function convertNode(
 
   // ── Paragraph ─────────────────────────────────────────────────────────────
   if (tag === 'p') {
-    const runs = buildTextRuns(children);
-    
-    const styleAttr = (node.attrs?.style ?? '').toLowerCase();
-    
-    // Parse alignment
-    const alignmentStr = node.attrs?.['text-align'] ?? node.attrs?.align ?? '';
-    let alignment: (typeof AlignmentType)[keyof typeof AlignmentType] = AlignmentType.JUSTIFIED;
-    if (alignmentStr.includes('center') || styleAttr.includes('text-align: center')) alignment = AlignmentType.CENTER;
-    if (alignmentStr.includes('right') || styleAttr.includes('text-align: right')) alignment = AlignmentType.RIGHT;
-    if (alignmentStr.includes('left') || styleAttr.includes('text-align: left')) alignment = AlignmentType.LEFT;
+    const styleAttr = node.attrs?.style ?? '';
+    const inlineConfig = inlineStyleToTrConfig(styleAttr);
 
-    // Parse spacing
-    const spacing: { after?: number; line?: number; before?: number } = { after: 160 };
-    if (styleAttr.includes('line-height:')) {
-      const match = styleAttr.match(/line-height:\s*([\d.]+)/);
-      if (match) {
-        const lh = parseFloat(match[1]);
-        if (lh >= 1.0) {
-          spacing.line = Math.round(lh * 240);
-          spacing.after = 0; // Remove default paragraph spacing if line-height is forcing layout
-        }
-      }
+    if (inlineConfig) {
+      // Inline style carries baked tr-* properties (or AI-emitted equivalents);
+      // route through the same paragraph builder used for classed elements so
+      // alignment, indentation, spacing, font-size, and emphasis all transfer.
+      const config: TrStyleConfig = {
+        ...inlineConfig,
+        alignment: inlineConfig.alignment ?? AlignmentType.JUSTIFIED,
+        spacing: { after: 160, ...(inlineConfig.spacing ?? {}) },
+      };
+      return [buildTrStyledParagraph(node, config)];
     }
 
+    // No useful inline styling — fall back to a default justified paragraph.
+    const runs = buildTextRuns(children);
     return [
       new Paragraph({
         children: runs.length ? runs : [new TextRun({ text: '' })],
-        alignment,
-        spacing,
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { after: 160 },
       }),
     ];
   }

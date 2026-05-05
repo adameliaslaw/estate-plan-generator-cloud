@@ -49,10 +49,20 @@ export interface GeneratedDoc {
   promptVersion?: string;
   /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
   templateBaseline?: string;
-  /** Binary version of the document (for high-fidelity .docx generation) */
+  /** Binary version of the document (.docx fallback path). */
   _binaryBuffer?: Buffer;
   /** AI-extracted structured data (for debugging and review) */
   _extractedData?: Record<string, unknown>;
+  /** Generation pipeline mode that actually produced this content. Distinct
+   *  from the requested generationMode — e.g. when 'hybrid' was requested but
+   *  no template was found, this resolves to 'ai'. */
+  resolvedMode?: 'template' | 'hybrid' | 'ai' | 'flex';
+  /** Template ID used (if any). null when AI-only path produced the doc. */
+  resolvedTemplateId?: string | null;
+  /** Firestore collection the template was resolved from. */
+  resolvedTemplateSource?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | null;
+  /** softwareSource filter applied at resolution time. */
+  resolvedSoftwareSource?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +148,10 @@ function expandForMarriedCouple(
 export const generateDocuments = onCall(
   {
     timeoutSeconds: 540,
-    memory: '1GiB',
+    // Bumped 1GiB → 2GiB to handle hybrid mode's 100K-char KB context
+    // assembled per-doc (and batch generation processes multiple in
+    // sequence with shared preloadedContext).
+    memory: '2GiB',
     region: 'us-east1',
     secrets: ['VERTEX_AI_KEY'],
   },
@@ -223,28 +236,48 @@ export const generateDocuments = onCall(
     }
 
     // ------------------------------------------------------------------
-    // 4. Generate all documents concurrently
+    // 4. Generate documents with bounded concurrency
     // ------------------------------------------------------------------
+    // Cap simultaneous AI calls. Fortress packages with spouse expansion +
+    // per-property docs can generate 20+ documents per client, each making
+    // 1-2 AI calls; an unbounded fan-out hits provider rate limits, spikes
+    // cost, and produces noisy retry storms. CONCURRENCY_LIMIT is a hand-
+    // picked tradeoff between throughput and rate-limit headroom; tune as
+    // model-side limits change.
     const allResults: UnifiedGenerateResult[] = [];
+    const CONCURRENCY_LIMIT = 3;
 
-    const allPromises = documentsToGenerate.map(entry =>
-      generateDocumentWithPropertyExpansion({
-        firmId,
-        clientId,
-        docType: entry.docType,
-        generationMode,
-        softwareSource,
-        formattingPreset,
-        trustTypes,
-        createdBy: auth.uid,
-        triggerSource: 'batch',
-        modelOverride,
-        preloadedContext,
-        spouseRole: entry.spouseRole,
-      }),
+    const settled: PromiseSettledResult<UnifiedGenerateResult[]>[] = new Array(documentsToGenerate.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= documentsToGenerate.length) return;
+        const entry = documentsToGenerate[i];
+        try {
+          const result = await generateDocumentWithPropertyExpansion({
+            firmId,
+            clientId,
+            docType: entry.docType,
+            generationMode,
+            softwareSource,
+            formattingPreset,
+            trustTypes,
+            createdBy: auth.uid,
+            triggerSource: 'batch',
+            modelOverride,
+            preloadedContext,
+            spouseRole: entry.spouseRole,
+          });
+          settled[i] = { status: 'fulfilled', value: result };
+        } catch (err) {
+          settled[i] = { status: 'rejected', reason: err };
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY_LIMIT, documentsToGenerate.length) }, worker),
     );
-
-    const settled = await Promise.allSettled(allPromises);
 
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i];

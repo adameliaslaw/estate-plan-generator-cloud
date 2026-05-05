@@ -822,7 +822,8 @@ RULES:
               status: 'draft',
               createdBy: context.auth.uid,
               documentId: targetDocType,
-              generationMode: 'chat-draft',
+              generationMode: 'ai',
+              triggerSource: 'chat-draft',
               changeNotes: 'Generated via AI drafting conversation',
               tags: ['chat-draft'],
             });

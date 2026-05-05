@@ -24,6 +24,11 @@ interface AddressFieldProps {
   value: Record<string, unknown> | undefined;
   onChange: (value: Record<string, unknown>) => void;
   required?: boolean;
+  /** When provided AND parentPath isn't the client's own personalInfo path,
+   *  shows a "Same as my address" button that copies these values into this
+   *  fiduciary/spouse/child slot. Most household members share the testator's
+   *  address; this saves five fields of redundant typing. */
+  clientAddressSource?: Record<string, unknown>;
 }
 
 const NJ_COUNTY_OPTIONS = NJ_COUNTIES.map((c) => ({ label: c, value: c }));
@@ -43,10 +48,29 @@ function labelClass() {
   return 'block text-sm font-medium text-gray-700 mb-1.5';
 }
 
-export function AddressField({ value, onChange, required }: AddressFieldProps) {
+export function AddressField({ value, onChange, required, parentPath, clientAddressSource }: AddressFieldProps) {
   const current = value ?? {};
   const { userProfile } = useAuth();
   const { data: firmBranding } = useFirmBranding(userProfile?.firmId);
+
+  // "Same as my address" — only show when:
+  //   (a) the caller passed a source (fiduciary / spouse / child step), AND
+  //   (b) the source has a real street address to copy, AND
+  //   (c) we're not on the client's own personalInfo step (no self-copy).
+  const sourceAddress = clientAddressSource as Record<string, unknown> | undefined;
+  const sourceStreet = typeof sourceAddress?.address === 'string' ? sourceAddress.address.trim() : '';
+  const canCopy = !!sourceAddress && sourceStreet.length > 0 && parentPath !== 'personalInfo';
+  const handleCopyFromClient = () => {
+    if (!sourceAddress) return;
+    onChange({
+      ...current,
+      address: sourceAddress.address ?? '',
+      city: sourceAddress.city ?? '',
+      state: sourceAddress.state ?? 'NJ',
+      zip: sourceAddress.zip ?? '',
+      county: sourceAddress.county ?? '',
+    });
+  };
 
   // The state <select> visually defaults to 'NJ', but unless the user actively
   // interacts with it, Firestore never sees the value. Any other address-field
@@ -80,6 +104,17 @@ export function AddressField({ value, onChange, required }: AddressFieldProps) {
 
   return (
     <div className="w-full space-y-4">
+      {canCopy && (
+        <div>
+          <button
+            type="button"
+            onClick={handleCopyFromClient}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[#1a365d]/30 bg-[#1a365d]/5 px-3 py-1.5 text-xs font-medium text-[#1a365d] hover:bg-[#1a365d]/10 hover:border-[#1a365d]/50 transition-colors"
+          >
+            Same as my address
+          </button>
+        </div>
+      )}
       {/* Street address */}
       <div>
         <label className={labelClass()}>

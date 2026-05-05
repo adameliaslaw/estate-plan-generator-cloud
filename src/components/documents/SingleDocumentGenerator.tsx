@@ -27,6 +27,13 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { documentService } from '@/services/document-service';
+import { useDocument } from '@/hooks/useFirestore';
+import { COLLECTIONS } from '@/config/constants';
+import { SOFTWARE_SOURCES } from '@/config/software-sources';
+import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
+import type { Client } from '@/types';
+
+type GenerationMode = 'template' | 'ai' | 'hybrid';
 
 // ── Standard document types available for individual generation ───────────────
 
@@ -56,9 +63,33 @@ interface Props {
 export default function SingleDocumentGenerator({ firmId, clientId, open, onClose }: Props) {
   const [selectedDocType, setSelectedDocType] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
+  const [spouseRole, setSpouseRole] = useState<'client' | 'spouse'>('client');
+  // Match the batch dialog's defaults: hybrid mode + IL formatting. Hybrid
+  // is the only mode that pulls Knowledge Base context into the prompt
+  // (template-only skips KB; ai-only skips templates).
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('hybrid');
+  const [softwareSource, setSoftwareSource] = useState('interactivelegal');
+  const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Pull client + spouse so the spouse-role selector shows real names.
+  const clientPath = firmId && clientId ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}` : null;
+  const { data: client } = useDocument<Client>(clientPath);
+  const clientFullName = client
+    ? [client.personalInfo?.firstName, client.personalInfo?.lastName].filter(Boolean).join(' ').trim()
+    : '';
+  const spouseFullName = client?.spouseInfo
+    ? [client.spouseInfo.firstName, client.spouseInfo.lastName].filter(Boolean).join(' ').trim()
+    : '';
+  const isMarried = client?.personalInfo?.maritalStatus === 'Married'
+    || client?.personalInfo?.maritalStatus === 'Domestic Partnership'
+    || (!!spouseFullName && spouseFullName.length > 0);
+  // Per-spouse docs only make sense for personal docs (will/POA/HC/trust);
+  // skip for joint/property docs that don't have a per-testator variant.
+  const docTypeSupportsSpouseRole = ['will', 'pourOverWill', 'poa', 'livingWill', 'trust'].includes(selectedDocType);
+  const showSpouseRole = isMarried && docTypeSupportsSpouseRole && !!spouseFullName;
 
   const handleGenerate = async () => {
     if (!selectedDocType) return;
@@ -73,6 +104,10 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         clientId,
         docType: selectedDocType,
         customInstructions: customInstructions.trim() || undefined,
+        spouseRole: showSpouseRole ? spouseRole : undefined,
+        generationMode,
+        softwareSource: softwareSource === 'none' ? '' : softwareSource,
+        formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
 
       setSuccessMessage(`${result.title} has been saved to the Document Vault.`);
@@ -81,6 +116,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
       setTimeout(() => {
         setSelectedDocType('');
         setCustomInstructions('');
+        setSpouseRole('client');
         setSuccessMessage('');
         onClose();
       }, 1500);
@@ -95,6 +131,10 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     if (generating) return; // Don't close while generating
     setSelectedDocType('');
     setCustomInstructions('');
+    setSpouseRole('client');
+    setGenerationMode('hybrid');
+    setSoftwareSource('interactivelegal');
+    setFormattingPreset('interactivelegal');
     setError('');
     onClose();
   };
@@ -103,7 +143,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#1a365d]">
             <Wand2 className="h-5 w-5 text-[#2b6cb0]" />
@@ -137,6 +177,105 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
             {selectedDoc && (
               <p className="text-xs text-gray-500">{selectedDoc.description}</p>
             )}
+          </div>
+
+          {/* Spouse-role selector — only for personal docs when client is married */}
+          {showSpouseRole && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Whose document?</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSpouseRole('client')}
+                  className={
+                    'flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ' +
+                    (spouseRole === 'client'
+                      ? 'border-[#2b6cb0] bg-[#ebf4ff] text-[#1a365d] font-medium'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#2b6cb0]/50')
+                  }
+                >
+                  {clientFullName || 'Client'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpouseRole('spouse')}
+                  className={
+                    'flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ' +
+                    (spouseRole === 'spouse'
+                      ? 'border-[#2b6cb0] bg-[#ebf4ff] text-[#1a365d] font-medium'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#2b6cb0]/50')
+                  }
+                >
+                  {spouseFullName} (spouse)
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Each spouse needs their own will/POA/etc. The spouse version saves with a "_spouse" suffix.
+              </p>
+            </div>
+          )}
+
+          {/* Generation options — match the batch dialog so single-doc
+              regenerations can pick mode/source/preset explicitly. */}
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+            <div className="col-span-2 space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Generation Mode
+              </label>
+              <Select value={generationMode} onValueChange={(v) => setGenerationMode(v as GenerationMode)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">
+                    Template: Enhanced (Hybrid) — Recommended
+                  </SelectItem>
+                  <SelectItem value="template" className="text-xs">
+                    Template: Exact Fidelity
+                  </SelectItem>
+                  <SelectItem value="ai" className="text-xs">
+                    AI Drafting (From Scratch)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-gray-500">
+                Hybrid + AI use Knowledge Base context; Template skips it.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Template Source
+              </label>
+              <Select value={softwareSource} onValueChange={setSoftwareSource}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOFTWARE_SOURCES.map((s) => (
+                    <SelectItem key={s.value} value={s.value || 'none'} className="text-xs">
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Formatting Style
+              </label>
+              <Select value={formattingPreset} onValueChange={setFormattingPreset}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select format" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FORMATTING_PRESET_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value || 'none'} className="text-xs">
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Custom instructions (optional) */}
