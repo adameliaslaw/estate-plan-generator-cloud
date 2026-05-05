@@ -2,7 +2,8 @@
  * functions-backfill/src/kb-embeddings.ts
  *
  * Backfill-only embedding functions for Knowledge Base resources and templates.
- * Uses Gemini gemini-embedding-001 (768 dimensions) via direct HTTP fetch().
+ * Uses Vertex AI text-embedding-005 (768 dimensions) via Application Default
+ * Credentials — no per-firm API key needed.
  *
  * This file is a trimmed copy of functions/src/kb-embeddings.ts containing
  * only the backfill callables (no onWrite triggers — those stay in the main
@@ -11,12 +12,15 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { GoogleAuth } from 'google-auth-library';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const EMBEDDING_MODEL = 'gemini-embedding-001';
+const VERTEX_PROJECT       = 'estate-plan-generator';
+const VERTEX_LOCATION      = 'us-central1';
+const EMBEDDING_MODEL      = 'text-embedding-005';
 const EMBEDDING_DIMENSIONS = 768;
 
 /** Content shorter than this gets a single embedding on the document itself.
@@ -37,36 +41,29 @@ const BACKFILL_BATCH_SIZE = 2;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Retrieve the firm's Gemini API key.
- */
-async function getGeminiApiKey(firmId: string): Promise<string> {
-  const firmSnap = await admin.firestore().doc(`firms/${firmId}`).get();
-  const firmData = firmSnap.data() ?? {};
-  const apiKey =
-    firmData.geminiApiKey ??
-    firmData.settings?.geminiApiKey;
-
-  if (!apiKey) {
-    throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
+/** Singleton GoogleAuth client — created once per cold start. */
+let _auth: GoogleAuth | null = null;
+function getAuth(): GoogleAuth {
+  if (!_auth) {
+    _auth = new GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
   }
-
-  return apiKey;
+  return _auth;
 }
 
-/** Task type for Gemini embeddings — improves quality by specializing the vector. */
+/** Task type for embeddings — specializes the vector for retrieval direction. */
 type EmbeddingTaskType = 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
 
 /**
- * Generate an embedding vector for a text string using Gemini.
+ * Generate an embedding vector for a text string using Vertex AI.
+ * Authentication is via Application Default Credentials.
  */
 async function generateEmbedding(
   text: string,
-  geminiApiKey: string,
   taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[]> {
-  // Clean and truncate text — gemini-embedding-001 caps at 2048 input tokens
-  // (~8000 chars). Stay under that to avoid silent API rejections.
+  // text-embedding-005 caps inputs around 2048 tokens (~8000 chars).
   const cleanText = text
     .replace(/\s+/g, ' ')
     .trim()
@@ -76,35 +73,27 @@ async function generateEmbedding(
     throw new Error('Cannot generate embedding for empty text.');
   }
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`;
+  const client = await getAuth().getClient();
+  const url =
+    `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/` +
+    `${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}/publishers/google/models/` +
+    `${EMBEDDING_MODEL}:predict`;
 
-  const response = await fetch(endpoint, {
+  const response = await client.request<{
+    predictions?: Array<{ embeddings?: { values?: number[] } }>;
+  }>({
+    url,
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': geminiApiKey,
+    data: {
+      instances: [{ task_type: taskType, content: cleanText }],
+      parameters: { outputDimensionality: EMBEDDING_DIMENSIONS },
     },
-    body: JSON.stringify({
-      model: `models/${EMBEDDING_MODEL}`,
-      content: {
-        parts: [{ text: cleanText }],
-      },
-      taskType,
-      outputDimensionality: EMBEDDING_DIMENSIONS,
-    }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini Embedding API error: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const data = await response.json() as { embedding?: { values?: number[] } };
-  const values = data.embedding?.values;
+  const values = response.data.predictions?.[0]?.embeddings?.values;
   if (!values || values.length === 0) {
-    throw new Error('Gemini Embedding API returned empty embedding.');
+    throw new Error('Vertex AI returned empty embedding.');
   }
-
   return values;
 }
 
@@ -162,7 +151,6 @@ async function embedResource(
   firmId: string,
   resourceId: string,
   content: string,
-  geminiApiKey: string,
 ): Promise<{ embedded: boolean; chunks: number }> {
   const db = admin.firestore();
   const resourceRef = db.doc(`firms/${firmId}/knowledgeBase/${resourceId}`);
@@ -170,7 +158,7 @@ async function embedResource(
 
   if (content.length <= CHUNK_THRESHOLD) {
     // Short content: single embedding on the document
-    const embedding = await generateEmbedding(content, geminiApiKey);
+    const embedding = await generateEmbedding(content);
 
     await resourceRef.update({
       embedding: admin.firestore.FieldValue.vector(embedding),
@@ -204,7 +192,7 @@ async function embedResource(
 
   // Embed and write each chunk one at a time
   for (let i = 0; i < textChunks.length; i++) {
-    const embedding = await generateEmbedding(textChunks[i], geminiApiKey);
+    const embedding = await generateEmbedding(textChunks[i]);
     const chunkRef = chunksCol.doc(`chunk_${String(i).padStart(3, '0')}`);
     await chunkRef.set({
       parentResourceId: resourceId,
@@ -270,14 +258,13 @@ async function embedTemplate(
   firmId: string,
   templateId: string,
   cleanContent: string,
-  geminiApiKey: string,
 ): Promise<{ embedded: boolean; chunks: number }> {
   const db = admin.firestore();
   const templateRef = db.doc(`firms/${firmId}/documentTemplates/${templateId}`);
   const chunksCol = templateRef.collection('chunks');
 
   if (cleanContent.length <= CHUNK_THRESHOLD) {
-    const embedding = await generateEmbedding(cleanContent, geminiApiKey);
+    const embedding = await generateEmbedding(cleanContent);
 
     await templateRef.update({
       embedding: admin.firestore.FieldValue.vector(embedding),
@@ -309,7 +296,7 @@ async function embedTemplate(
   }
 
   for (let i = 0; i < textChunks.length; i++) {
-    const embedding = await generateEmbedding(textChunks[i], geminiApiKey);
+    const embedding = await generateEmbedding(textChunks[i]);
     await chunksCol.doc(`chunk_${String(i).padStart(3, '0')}`).set({
       parentTemplateId: templateId,
       firmId,
@@ -354,15 +341,6 @@ export const backfillEmbeddings = onCall(
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
-    // Get Gemini API key — fail early with a clear message
-    let apiKey: string;
-    try {
-      apiKey = await getGeminiApiKey(firmId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to get Gemini API key';
-      throw new HttpsError('failed-precondition', msg);
-    }
-
     const db = admin.firestore();
 
     // Fetch metadata for active resources — use a larger limit to find unembedded ones
@@ -394,10 +372,10 @@ export const backfillEmbeddings = onCall(
           continue; // Skip documents without meaningful content
         }
 
-        await embedResource(firmId, docSnap.id, data.content, apiKey);
+        await embedResource(firmId, docSnap.id, data.content);
         processed++;
 
-        // Rate limiting: ~3 requests per second to stay within Gemini limits
+        // Rate limiting: ~3 requests per second
         await new Promise((r) => setTimeout(r, 350));
       } catch (err) {
         console.error(`[backfillEmbeddings] Failed for ${docSnap.id}:`, err);
@@ -440,14 +418,6 @@ export const backfillTemplateEmbeddings = onCall(
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
-    let apiKey: string;
-    try {
-      apiKey = await getGeminiApiKey(firmId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to get Gemini API key';
-      throw new HttpsError('failed-precondition', msg);
-    }
-
     const db = admin.firestore();
 
     // Fetch metadata for active templates
@@ -479,7 +449,7 @@ export const backfillTemplateEmbeddings = onCall(
         const cleanContent = stripHandlebars(data.content);
         if (cleanContent.length < 50) continue;
 
-        await embedTemplate(firmId, docSnap.id, cleanContent, apiKey);
+        await embedTemplate(firmId, docSnap.id, cleanContent);
         processed++;
 
         await new Promise((r) => setTimeout(r, 350));
