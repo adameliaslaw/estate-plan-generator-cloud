@@ -248,6 +248,12 @@ export const processTemplateFile = onCall(
       throw new HttpsError('invalid-argument', 'Only .docx and .pdf files are supported.');
     }
 
+    // Prevent path traversal — storagePath must be scoped to this firm
+    const expectedPrefix = `firms/${firmId}/`;
+    if (!storagePath.startsWith(expectedPrefix) || storagePath.includes('..')) {
+      throw new HttpsError('permission-denied', 'Storage path is not within the expected firm directory.');
+    }
+
     // Download file from Firebase Storage
     const bucket = admin.storage().bucket();
     const file = bucket.file(storagePath);

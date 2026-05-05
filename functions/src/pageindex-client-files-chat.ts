@@ -30,6 +30,7 @@ const POLL_INTERVAL  = 1500;
 const POLL_TIMEOUT   = 90_000;
 const TOP_CITATIONS  = 5;
 const CONTEXT_CHUNKS = 8;
+const MAX_QUERY_LEN  = 5_000;
 
 const SYSTEM_PROMPT =
   'You are a confidential legal assistant for Adam Elias, a New Jersey estate planning attorney. ' +
@@ -143,6 +144,10 @@ export const pageIndexClientFilesChat = onRequest(
     const { query } = req.body as { query?: string };
     if (!query?.trim()) {
       res.status(400).json({ error: '`query` is required' });
+      return;
+    }
+    if (query.length > MAX_QUERY_LEN) {
+      res.status(400).json({ error: `\`query\` must be ${MAX_QUERY_LEN} characters or fewer` });
       return;
     }
 

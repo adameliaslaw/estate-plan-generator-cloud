@@ -37,6 +37,7 @@ const POLL_INTERVAL  = 1500;   // ms between poll cycles
 const POLL_TIMEOUT   = 90_000; // ms before giving up on a retrieval
 const TOP_CITATIONS  = 5;
 const CONTEXT_CHUNKS = 8;
+const MAX_QUERY_LEN  = 5_000;
 
 const RESEARCH_NAMESPACES = ['reference', 'work-product'] as const;
 
@@ -203,6 +204,10 @@ export const ragChat = onRequest(
 
     if (!query?.trim()) {
       res.status(400).json({ error: '`query` is required' });
+      return;
+    }
+    if (query.length > MAX_QUERY_LEN) {
+      res.status(400).json({ error: `\`query\` must be ${MAX_QUERY_LEN} characters or fewer` });
       return;
     }
     if (mode === 'draft' && !sourceDocId?.trim()) {
