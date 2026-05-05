@@ -61,30 +61,90 @@ Open any client dashboard for a client who has at least one fiduciary named on f
 
 ### Wills → PageIndex ingestion pipeline — started 2026-05-05
 
-**Branch:** `claude/review-wills-pipeline-aYxwD` | **PR:** #4 | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
+**PR:** #4 merged | **Runbook:** `/docs/RUNBOOK.md` (paste into session to resume)
 
-**Status: STOP GATE 2 — Phase 1 complete, Phase 2 next.**
+**Status: Phases 1–3 on main. Pre-flight required, then STOP GATE 3, then STOP GATE 4 before Phase 4.**
 
-Phase 1 shipped:
-- `functions/src/wills-schema.ts` — all TypeScript types (universal fields locked, type-specific DRAFT pending docx review)
-- `functions/src/wills-processor.ts` — Pub/Sub stub on topic `wills-document-processing`
-- `firestore.rules` — new rules for `wills_documents`, `pipeline_state`, `pipeline_audit_log`
-- `firestore.indexes.json` — 4 composite indexes on `wills_documents`
-- `functions/tsconfig.json` — pre-existing TS5107 deprecation error fixed
+Phases shipped (all on main):
+- **Phase 1** — `wills-schema.ts` (all types), Firestore rules/indexes, `functions/tsconfig.json` fix
+- **Phase 2** — Full 10-step Document Processor: kill switch → cost circuit breaker → Drive fetch → text extraction (mammoth/pdf-parse) → folder-path parser → Haiku 4.5 classify → Sonnet 4.6 extract → Firestore write → PageIndex upload → audit log
+- **Phase 3** — Drive watcher (`willsDriveWebhook`, `willsDriveWatchRenew`, `willsSetupDriveWatch`) + backfill orchestrator (`willsStartBackfill`)
 
-**Before next session starts Phase 2, confirm these pre-flight items:**
-- [ ] `ANTHROPIC_API_KEY` provisioned in Firebase Secret Manager (currently placeholder per item 3 in ⏱ Short-term)
+---
+
+#### Pre-flight checklist (one-time infrastructure — do before any deploy)
+
+- [ ] `ANTHROPIC_API_KEY` — replace Secret Manager placeholder with real key (see Short-term item 3)
+- [ ] `PAGEINDEX_API_KEY` — replace placeholder with real key
 - [ ] `gcloud pubsub topics create wills-document-processing --project=estate-plan-generator`
-- [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com`
-- [ ] Service account created (Drive Viewer + Pub/Sub Publisher + Firestore User roles)
-- [ ] Service account granted Viewer on Drive folder `1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j`
+- [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com --project=estate-plan-generator`
+- [ ] Create a service account with **Drive Viewer + Pub/Sub Publisher + Firestore User** roles
+- [ ] Share Drive folder `1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j` with the service account (Viewer)
+- [ ] Set `pipeline_state/control` in Firestore: `{ enabled: true, mode: "live", firmId: "<elias-counsel>", daily_spend_usd: 0 }`
 
-**Phase 2 (next) — Document Processor:**
-Build the full 10-step pipeline body in `wills-processor.ts`: kill switch check, cost circuit breaker, Drive file fetch, mammoth/.pdf-parse text extraction, folder-path parser, Haiku 4.5 classifier, Sonnet 4.6 extractor, schema validation + retry, Firestore write, PageIndex submission to `work-product` namespace, audit log append. Add `googleapis` to `functions/package.json`. Add `claude-haiku-4-5-20251001` to `KNOWN_MODELS` in `ai-client.ts`.
+---
 
-**Type-specific schema:** field groups are DRAFT — Adam to review `Wills_Metadata_Schema_v1.0.docx` and correct `wills-schema.ts` before Phase 5 backfill. Pilot (Phase 4) may proceed with the draft.
+#### STOP GATE 3 — Test the Document Processor (Phase 2) in isolation
 
-**Locked decisions (do not redesign):** PageIndex namespace = `work-product`. Classification model = `claude-haiku-4-5-20251001`. Extraction model = `claude-sonnet-4-6`. Full-document context (no chunking). Tool-use API for strict JSON output (not `callAI()`).
+**Do this before running the Drive watcher or backfill.** It confirms the 10-step pipeline works on a real file.
+
+1. Deploy the processor only:
+   ```
+   firebase deploy --only functions:willsProcessor --project=estate-plan-generator
+   ```
+2. Pick any `.docx` or `.pdf` already in the Drive folder. Note its file ID (visible in the URL when you open it in Drive: `https://drive.google.com/file/d/<FILE_ID>/view`).
+3. Publish a single test message via Cloud Console or gcloud:
+   ```
+   gcloud pubsub topics publish wills-document-processing \
+     --project=estate-plan-generator \
+     --message='{"drive_file_id":"<FILE_ID>","drive_path":"Smith, John","file_name":"TestWill.docx","mime_type":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","file_size_bytes":50000,"created_time":"2026-01-01T00:00:00Z","modified_time":"2026-01-01T00:00:00Z","event_type":"new","source":"backfill"}'
+   ```
+4. Watch logs: `firebase functions:log --only willsProcessor --project=estate-plan-generator`
+5. Confirm success in Firestore → `wills_documents/<FILE_ID>`:
+   - `processing_status` = `"indexed"`
+   - `document_type` looks correct for the file you chose
+   - `type_fields` populated with extracted metadata
+   - `pageindex_doc_id` is not null
+   - `pageindex_docs/work-product/files/<doc_id>` document exists
+
+If `processing_status` = `"error"`, check `processing_error` field and logs before proceeding.
+
+---
+
+#### STOP GATE 4 — End-to-end Drive watcher + backfill (Phase 3 validation)
+
+After STOP GATE 3 passes:
+
+1. Deploy all wills functions:
+   ```
+   firebase deploy --only functions:willsProcessor,functions:willsDriveWebhook,functions:willsDriveWatchRenew,functions:willsSetupDriveWatch,functions:willsStartBackfill --project=estate-plan-generator
+   ```
+2. Note the `willsDriveWebhook` HTTPS URL from the deploy output (looks like `https://us-east1-estate-plan-generator.cloudfunctions.net/willsDriveWebhook`).
+3. From an admin-role Firebase account, call:
+   ```js
+   willsSetupDriveWatch({ webhookUrl: "<willsDriveWebhook URL>" })
+   ```
+   Confirm `pipeline_state/drive_sync` in Firestore is populated with a channel ID and expiry.
+4. Drop a test `.docx` into the Drive folder. Within ~30 seconds, confirm `wills_documents/<file_id>` appears in Firestore.
+5. Call `willsStartBackfill()` from admin. Watch `pipeline_state/backfill_progress` tick up. Confirm all existing Drive files are queued and processed.
+
+---
+
+#### Phases remaining
+
+- **Phase 4** — 30-doc synchronous pilot harness with acceptance-criteria report (agent task; start new session after STOP GATE 4 passes)
+- **Phase 5** — Full backfill — **DO NOT START until:**
+  - [ ] Adam reviews type-specific interfaces in `wills-schema.ts` against `Wills_Metadata_Schema_v1.0.docx` (field groups are currently DRAFT)
+  - [ ] Few-shot PLACEHOLDER blocks in `wills-extractor.ts` (§8.3) replaced with real examples
+- **Phase 6** — Multi-user + paralegal access, audit log review UI
+
+#### Locked decisions (do not redesign)
+
+- PageIndex namespace = `work-product`
+- Classification model = `claude-haiku-4-5-20251001`
+- Extraction model = `claude-sonnet-4-6`
+- Full-document context (no chunking)
+- Tool-use API for strict JSON output (not `callAI()`)
 
 ---
 
