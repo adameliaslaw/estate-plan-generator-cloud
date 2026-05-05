@@ -1047,6 +1047,39 @@ export default function ClientDashboardPage() {
             </InfoCard>
           </div>
 
+          {/* Missing fiduciary addresses callout */}
+          {(() => {
+            const fid = (client.fiduciaries ?? {}) as Record<string, Record<string, Record<string, unknown> | undefined> | undefined>;
+            type Slot = { person: Record<string, unknown> | undefined; label: string };
+            const slots: Slot[] = [
+              { person: fid.executor?.primary,                label: 'Primary Executor' },
+              { person: fid.executor?.alternate,              label: 'Alternate Executor' },
+              { person: fid.trustee?.primary,                 label: 'Primary Trustee' },
+              { person: fid.trustee?.alternate,               label: 'Alternate Trustee' },
+              { person: fid.powerOfAttorney?.agent,           label: 'POA Agent' },
+              { person: fid.powerOfAttorney?.alternateAgent,  label: 'Alternate POA Agent' },
+              { person: fid.healthcareProxy?.agent,           label: 'Healthcare Representative' },
+              { person: fid.healthcareProxy?.alternateAgent,  label: 'Alternate Healthcare Rep' },
+            ];
+            // Only flag a slot if the person was named (so we know it's a real designation)
+            // but no address was captured. Empty/unnamed slots are intentional omissions.
+            const missingAddrFor = slots
+              .filter((s) => s.person && (s.person as { name?: string }).name && !(s.person as { address?: string }).address)
+              .map((s) => s.label);
+            return missingAddrFor.length > 0 ? (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-sm text-amber-800">
+                  <span className="font-semibold">Missing fiduciary addresses: </span>
+                  {missingAddrFor.join(', ')}
+                  <span className="ml-1 text-amber-700">
+                    — generated documents will leave these address lines blank. Re-send the questionnaire to collect them.
+                  </span>
+                </AlertDescription>
+              </Alert>
+            ) : null;
+          })()}
+
           {/* Special considerations callout */}
           {client.specialConsiderations && (
             (() => {

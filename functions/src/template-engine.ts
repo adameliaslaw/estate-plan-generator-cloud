@@ -543,7 +543,7 @@ const CRITICAL_LEGAL_FIELDS: { path: string[]; label: string }[] = [
   { path: ['trustee', 'primary', 'name'],          label: 'trustee name' },
   { path: ['trustee', 'alternate', 'name'],        label: 'alternate trustee name' },
   { path: ['powerOfAttorney', 'agent', 'name'],    label: 'POA agent name' },
-  { path: ['healthcareProxy', 'primary', 'name'],  label: 'healthcare proxy name' },
+  { path: ['healthcareProxy', 'agent', 'name'],    label: 'healthcare proxy name' },
   { path: ['guardian', 'primary', 'name'],         label: 'guardian name' },
 ];
 
@@ -566,7 +566,8 @@ function markMissingFiduciaries(
 
     // Skip alternate/successor if they aren't in the source data at all —
     // the attorney may legitimately omit them (single-level appointment).
-    const isAlternate = level === 'alternate';
+    // 'alternate' is used by executor/trustee/guardian; 'alternateAgent' by POA/healthcareProxy.
+    const isAlternate = level === 'alternate' || level === 'alternateAgent';
     if (isAlternate && !fiduciaries[role]) continue;
 
     const roleObj = (fiduciaries[role] ?? {}) as Record<string, unknown>;
@@ -574,8 +575,9 @@ function markMissingFiduciaries(
     const value = levelObj[field];
 
     if (value === null || value === undefined || value === '') {
-      // Only mark primary slots as mandatory; skip silently for optional ones
-      const isPrimary = level === 'primary';
+      // Only mark primary slots as mandatory; skip silently for optional ones.
+      // 'primary' is used by executor/trustee/guardian; 'agent' by POA/healthcareProxy.
+      const isPrimary = level === 'primary' || level === 'agent';
       if (!isPrimary) continue;
 
       // Clone the chain down to avoid mutating shared references
