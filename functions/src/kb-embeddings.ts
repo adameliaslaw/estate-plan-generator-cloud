@@ -21,7 +21,6 @@ import { GoogleAuth } from 'google-auth-library';
 // Constants
 // ---------------------------------------------------------------------------
 
-const VERTEX_PROJECT       = 'estate-plan-generator';
 const VERTEX_LOCATION      = 'us-central1';
 const EMBEDDING_MODEL      = 'text-embedding-005';
 const EMBEDDING_DIMENSIONS = 768;
@@ -84,10 +83,11 @@ export async function generateEmbedding(
     throw new Error('Cannot generate embedding for empty text.');
   }
 
-  const client = await getAuth().getClient();
+  const auth = getAuth();
+  const [client, projectId] = await Promise.all([auth.getClient(), auth.getProjectId()]);
   const url =
     `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/` +
-    `${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}/publishers/google/models/` +
+    `${projectId}/locations/${VERTEX_LOCATION}/publishers/google/models/` +
     `${EMBEDDING_MODEL}:predict`;
 
   const response = await client.request<{
