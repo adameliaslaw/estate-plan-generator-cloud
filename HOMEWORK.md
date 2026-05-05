@@ -4,6 +4,27 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🛠 Mid-term projects
+
+### RAG-chat graceful-degradation when Anthropic streaming fails — added 2026-05-05
+
+**Problem.** `functions/src/rag-chat.ts` and `functions/src/pageindex-client-files-chat.ts` both import the Anthropic SDK directly and use `messages.stream()` for SSE streaming to the browser. They bypass `functions/src/ai-client.ts`'s multi-provider fallback chain, because that helper (`callAI`) is request/response/JSON-mode and cannot stream. **Result:** during an Anthropic outage, RAG chat is fully unavailable for users — even though OpenAI and Vertex are configured and healthy.
+
+Document generation (the legal-output path) is unaffected — it routes through `callAI()` and fails over correctly. This gap only impacts the research/Q&A chat surface.
+
+**Why we accepted it for the security-hardening PR (#1, 2026-05-05).** Cross-provider streaming is genuinely non-trivial — Anthropic uses `content_block_delta` events, OpenAI uses `delta.content` chunks, Vertex/Gemini uses a different chunk shape entirely. Building a real `callAIStream()` adapter is ~2-3 days plus per-provider tests. Anthropic outages are rare (typically <1hr/month per status.anthropic.com). The PR shipped without this work.
+
+**Mid-term fix to do (~3-4 hours).** When the Anthropic stream errors, fall back to a non-streaming `callAI()` request via OpenAI/Vertex, deliver the response as a single chunk over the existing SSE channel. Implementation sketch:
+1. In both endpoints, wrap `for await (const event of stream)` in try/catch.
+2. On any error from the stream (5xx, timeout, content-filter), call `callAI(systemPrompt, userPrompt, firmData, { model: 'gpt-5.4', ... })` with the same prompt context.
+3. Send the full response as one SSE `chunk` event followed by `done`.
+4. User-visible: the response arrives all-at-once after a brief pause, instead of streaming incrementally. Acceptable degradation.
+5. Add a metric/log so we know how often degradation fires.
+
+**Long-term option (parked unless we see streaming-quality complaints).** Build `callAIStream()` in `ai-client.ts` that normalizes SSE events across all three providers. ~2-3 days plus tests for each provider's streaming quirks. Only worth it if (a) Anthropic outages become more frequent, or (b) we want true multi-provider streaming for cost/latency reasons.
+
+---
+
 ## 🅿️ Parked decisions (revisit on a trigger, not speculatively)
 
 ### Gemini Embedding 2 upgrade — parked 2026-04-28
