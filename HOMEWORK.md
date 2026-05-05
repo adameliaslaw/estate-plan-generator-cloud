@@ -20,15 +20,15 @@ These items surfaced during the post-merge production deploy of PR #1 (`04a2739`
 - Or: poll Firestore for the new document by `clientId` + `docType` + `status: 'draft'` instead of relying on the long-lived HTTP response.
 - Either way, surface a clear error if the function actually fails (vs. silent timeout).
 
-### 2. Gemini Embedding API 403 — restore access or migrate to Vertex
+### 2. ✅ Gemini Embedding API 403 — migrated to Vertex AI (closed 2026-05-05)
 
-**Problem.** Project-level access to `gemini-embedding-001` was revoked at some point before 2026-04-28. KB vector search throws `403 PERMISSION_DENIED` on every call; the codebase falls back gracefully to a flat Firestore KB query, but document drafts are getting less topically-relevant KB context as a result.
+**Resolution.** Migrated KB embeddings from `gemini-embedding-001` (firm-level API key, free tier) to Vertex AI `text-embedding-005` (service-account / ADC, paid tier ~$0.10–0.15 per 1M tokens). PR #5. Both `functions/` and `functions-backfill/` codebases redeployed in `us-east1`. All 54 KB resources and 11 templates re-embedded against the new model — vector search restored. The `[aggregateClientContext] Vector search failed, falling back to flat query` log line is gone.
 
-**Evidence.** Every recent generation log line: `[aggregateClientContext] Vector search failed, falling back to flat query: Error: Gemini Embedding API error: 403 Forbidden — "Your project has been denied access. Please contact support."`
+**Two follow-on fixes shipped in the same PR:**
+- Filter rewrite — backfill UI loops `backfillEmbeddings` until `processed === 0` but only passes `forceAll=true` on iter 1. Old filter (`!embeddedAt`) made iter 2+ see zero candidates because everything already had a stale Gemini timestamp. New filter (`embeddingModel !== 'text-embedding-005'`) drains the queue model-by-model.
+- Metadata fetch limit raised from 50 → 500 in the backfill codebase. Was silently capping firms with >50 resources at the first 50 (Adam's KB hit this — 54 of 50 = 4 stragglers).
 
-**Two fix options (pick one).**
-- **Restore current access.** Open https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com for project `estate-plan-generator`, check enabled status, contact Google Cloud support if the denial is account-level. ~30 min if access just needs re-enabling; potentially blocked entirely if the denial was policy-driven.
-- **Migrate to Vertex AI** (the parked decision below already sketches this — pull it forward if option A fails). Vertex uses service-account auth instead of an API key, costs ~$0.10–0.15 per 1M tokens, requires running `backfillEmbeddings` to repopulate vectors. ~4-6 hours including the backfill run.
+**Codex review note (also addressed in PR #5):** runtime project resolution via `GoogleAuth.getProjectId()` instead of hardcoded `VERTEX_PROJECT = 'estate-plan-generator'`, so the same code can run under sibling projects (staging/forks) without `PERMISSION_DENIED`.
 
 ### 3. PageIndex / Anthropic — replace placeholder secrets when accounts exist
 
