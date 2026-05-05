@@ -15,7 +15,7 @@
  *   onSuccess    — callback after successful generation
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   FileText,
   Sparkles,
@@ -65,55 +66,64 @@ const PACKAGE_BADGE: Record<string, string> = {
   fortress: 'bg-indigo-100 text-indigo-700',
 };
 
-// Ordered list of documents per package — shown in progress indicator
-// Must match getDocumentsForPackage() in generate-documents.ts
-const PACKAGE_DOCS: Record<string, string[]> = {
+// Definition for a doc within a package: human label + API docType + whether
+// it's generated separately for client and spouse when married.
+interface PackageDocDef {
+  label: string;
+  docType: string;
+  perSpouse: boolean;
+}
+
+// Ordered list of documents per package — must match getDocumentsForPackage()
+// in functions/src/generate-documents.ts.
+const PACKAGE_DOC_DEFS: Record<string, PackageDocDef[]> = {
   foundation: [
-    'Last Will and Testament',
-    'Durable Power of Attorney',
-    'Advance Health Care Directive',
-    'Estate Plan Summary',
+    { label: 'Last Will and Testament',     docType: 'will',              perSpouse: true },
+    { label: 'Durable Power of Attorney',   docType: 'poa',               perSpouse: true },
+    { label: 'Advance Health Care Directive', docType: 'livingWill',      perSpouse: true },
+    { label: 'Estate Plan Summary',         docType: 'estatePlanSummary', perSpouse: false },
   ],
   guardian: [
-    'Revocable Living Trust',
-    'Pour-Over Will',
-    'Durable Power of Attorney',
-    'Advance Health Care Directive',
-    'Estate Plan Summary',
+    { label: 'Revocable Living Trust',      docType: 'trust',             perSpouse: false },
+    { label: 'Pour-Over Will',              docType: 'pourOverWill',      perSpouse: true },
+    { label: 'Durable Power of Attorney',   docType: 'poa',               perSpouse: true },
+    { label: 'Advance Health Care Directive', docType: 'livingWill',      perSpouse: true },
+    { label: 'Estate Plan Summary',         docType: 'estatePlanSummary', perSpouse: false },
   ],
   fortress: [
-    'Revocable Living Trust',
-    'Pour-Over Will',
-    'Durable Power of Attorney',
-    'Advance Health Care Directive',
-    'Deed of Transfer',
-    'Affidavit of Consideration',
-    'GIT/REP-3 Form',
-    'Estate Plan Summary',
+    { label: 'Revocable Living Trust',      docType: 'trust',             perSpouse: false },
+    { label: 'Pour-Over Will',              docType: 'pourOverWill',      perSpouse: true },
+    { label: 'Durable Power of Attorney',   docType: 'poa',               perSpouse: true },
+    { label: 'Advance Health Care Directive', docType: 'livingWill',      perSpouse: true },
+    { label: 'Deed of Transfer',            docType: 'deed',              perSpouse: false },
+    { label: 'Affidavit of Consideration',  docType: 'affidavitOfConsideration', perSpouse: false },
+    { label: 'GIT/REP-3 Form',              docType: 'gitRep3',           perSpouse: false },
+    { label: 'Estate Plan Summary',         docType: 'estatePlanSummary', perSpouse: false },
   ],
 };
 
-// Per-spouse doc labels — these get duplicated for married couples
-const PER_SPOUSE_LABELS = new Set([
-  'Last Will and Testament',
-  'Durable Power of Attorney',
-  'Advance Health Care Directive',
-  'Pour-Over Will',
-]);
+// One row in the selectable list shown in the dialog.
+interface SelectableDoc {
+  /** Stable key for selection state (docType for non-spouse, docType:role for spouse). */
+  key: string;
+  label: string;
+  docType: string;
+  spouseRole: 'client' | 'spouse';
+}
 
-/** Expand progress list for married couples with Client/Spouse labels */
-function getExpandedDocs(baseDocs: string[], isMarried: boolean): string[] {
-  if (!isMarried) return baseDocs;
-  const expanded: string[] = [];
-  for (const doc of baseDocs) {
-    if (PER_SPOUSE_LABELS.has(doc)) {
-      expanded.push(`${doc} — Client`);
-      expanded.push(`${doc} — Spouse`);
+/** Expand a package definition into one selectable row per generated artifact. */
+function getSelectableDocs(packageType: string, isMarried: boolean): SelectableDoc[] {
+  const defs = PACKAGE_DOC_DEFS[packageType] ?? [];
+  const out: SelectableDoc[] = [];
+  for (const def of defs) {
+    if (isMarried && def.perSpouse) {
+      out.push({ key: `${def.docType}:client`, label: `${def.label} — Client`, docType: def.docType, spouseRole: 'client' });
+      out.push({ key: `${def.docType}:spouse`, label: `${def.label} — Spouse`, docType: def.docType, spouseRole: 'spouse' });
     } else {
-      expanded.push(doc);
+      out.push({ key: def.docType, label: def.label, docType: def.docType, spouseRole: 'client' });
     }
   }
-  return expanded;
+  return out;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -157,18 +167,45 @@ export default function GenerateDocumentsButton({
   const [generationMode, setGenerationMode] = useState('hybrid');
 
   const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
-  const baseDocs = PACKAGE_DOCS[packageType] ?? [];
-  const packageDocs = getExpandedDocs(baseDocs, isMarried);
+  const selectableDocs = getSelectableDocs(packageType, isMarried);
+  const packageDocs = selectableDocs.map((d) => d.label);
+
+  // Selection state — defaults to all docs selected. Re-initialized whenever
+  // the package or marital status changes (e.g. user re-opens the dialog
+  // after switching client).
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
+    () => new Set(selectableDocs.map((d) => d.key)),
+  );
+  useEffect(() => {
+    setSelectedKeys(new Set(selectableDocs.map((d) => d.key)));
+    // Intentionally re-run only when packageType / isMarried change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packageType, isMarried]);
+
+  const allSelected = selectedKeys.size === selectableDocs.length && selectableDocs.length > 0;
+  const noneSelected = selectedKeys.size === 0;
+
+  const toggleOne = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const selectAll = () => setSelectedKeys(new Set(selectableDocs.map((d) => d.key)));
+  const clearAll = () => setSelectedKeys(new Set());
 
   // ── Simulate incremental progress while Cloud Function runs ────────────────
-  const startProgressSimulation = () => {
+  const startProgressSimulation = (totalSteps: number, labels: string[]) => {
     let step = 0;
+    const denom = Math.max(totalSteps, 1);
     const interval = setInterval(() => {
       step += 1;
-      const pct = Math.min(Math.round((step / packageDocs.length) * 90), 90);
+      const pct = Math.min(Math.round((step / denom) * 90), 90);
       setProgress(pct);
-      if (step < packageDocs.length) {
-        setCurrentDoc(packageDocs[step - 1] ?? '');
+      if (step <= labels.length) {
+        setCurrentDoc(labels[step - 1] ?? '');
       }
     }, 1800);
     return () => clearInterval(interval);
@@ -176,22 +213,76 @@ export default function GenerateDocumentsButton({
 
   // ── Handle generate ────────────────────────────────────────────────────────
   const handleGenerate = async () => {
+    if (noneSelected) return;
+
     setPhase('generating');
     setProgress(5);
-    setCurrentDoc(packageDocs[0] ?? 'Documents');
 
-    const stopProgress = startProgressSimulation();
+    const selectedDocs = selectableDocs.filter((d) => selectedKeys.has(d.key));
+    setCurrentDoc(selectedDocs[0]?.label ?? 'Documents');
+
+    const stopProgress = startProgressSimulation(
+      selectedDocs.length,
+      selectedDocs.map((d) => d.label),
+    );
 
     try {
-      const response = await documentService.generateAll({
-        firmId,
-        clientId,
-        packageType,
-        trustTypes,
-        generationMode: generationMode as 'template' | 'ai' | 'hybrid',
-        softwareSource: softwareSource === 'none' ? '' : softwareSource,
-        formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
-      });
+      let response: GenerateDocumentsResponse;
+
+      if (allSelected) {
+        // Full package — single round trip via generateAll. The server-side
+        // generator handles per-property doc expansion (deeds for fortress)
+        // and any cross-doc context sharing.
+        response = await documentService.generateAll({
+          firmId,
+          clientId,
+          packageType,
+          trustTypes,
+          generationMode: generationMode as 'template' | 'ai' | 'hybrid',
+          softwareSource: softwareSource === 'none' ? '' : softwareSource,
+          formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
+        });
+      } else {
+        // Subset — call generateSingleDocument once per selected doc. Per-
+        // property docs (deed/affidavit/gitRep3) are generated against the
+        // first property only when invoked this way; for full per-property
+        // expansion the user should leave them all selected and route to
+        // generateAll above.
+        const docResults: GenerateDocumentsResponse['results'] = [];
+        let successCount = 0;
+        for (const sel of selectedDocs) {
+          setCurrentDoc(sel.label);
+          try {
+            const single = await documentService.generateSingleDocument({
+              firmId,
+              clientId,
+              docType: sel.docType,
+              spouseRole: sel.spouseRole,
+              generationMode: generationMode as 'template' | 'ai' | 'hybrid',
+              softwareSource: softwareSource === 'none' ? '' : softwareSource,
+              formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
+            });
+            docResults.push({
+              docType: sel.docType,
+              title: single.title,
+              status: single.status,
+            });
+            if (single.status !== 'error') successCount += 1;
+          } catch (innerErr) {
+            console.error('[GenerateDocumentsButton] subset doc failed', sel.docType, innerErr);
+            docResults.push({
+              docType: sel.docType,
+              title: sel.label,
+              status: 'error',
+            });
+          }
+        }
+        response = {
+          success: successCount === docResults.length,
+          documentsGenerated: successCount,
+          results: docResults,
+        };
+      }
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
         clientName,
@@ -294,25 +385,59 @@ export default function GenerateDocumentsButton({
               </div>
             </div>
 
-            {/* Document list preview */}
+            {/* Document selection list */}
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Documents to be generated ({packageDocs.length})
-              </p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Documents to generate ({selectedKeys.size} of {selectableDocs.length})
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={selectAll}
+                    disabled={allSelected}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[#2b6cb0] hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    disabled={noneSelected}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
               <ul className={cn(
                 'gap-x-4 gap-y-0.5',
-                packageDocs.length > 4 ? 'grid grid-cols-2' : 'space-y-1',
+                selectableDocs.length > 4 ? 'grid grid-cols-2' : 'space-y-1',
               )}>
-                {packageDocs.map((doc) => (
-                  <li key={doc} className="flex items-center gap-1.5 text-[13px] leading-tight text-gray-700">
-                    <FileText className="h-3 w-3 shrink-0 text-gray-400" />
-                    {doc}
-                  </li>
-                ))}
+                {selectableDocs.map((doc) => {
+                  const checked = selectedKeys.has(doc.key);
+                  return (
+                    <li key={doc.key} className="flex items-center gap-2 py-0.5 text-[13px] leading-tight text-gray-700">
+                      <Checkbox
+                        id={`gen-doc-${doc.key}`}
+                        checked={checked}
+                        onCheckedChange={() => toggleOne(doc.key)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <label
+                        htmlFor={`gen-doc-${doc.key}`}
+                        className="flex cursor-pointer items-center gap-1.5"
+                      >
+                        <FileText className="h-3 w-3 shrink-0 text-gray-400" />
+                        {doc.label}
+                      </label>
+                    </li>
+                  );
+                })}
                 {trustTypes && trustTypes.length > 0 && (
-                  <li className="flex items-center gap-1.5 text-[13px] leading-tight text-gray-500 italic">
+                  <li className="flex items-center gap-1.5 pl-[22px] text-[13px] leading-tight text-gray-500 italic">
                     <FileText className="h-3 w-3 shrink-0 text-gray-400" />
-                    + {trustTypes.length} trust agreement{trustTypes.length > 1 ? 's' : ''}
+                    + {trustTypes.length} trust agreement{trustTypes.length > 1 ? 's' : ''} (full package only)
                   </li>
                 )}
               </ul>
@@ -391,10 +516,15 @@ export default function GenerateDocumentsButton({
             </Button>
             <Button
               onClick={handleGenerate}
+              disabled={noneSelected}
               className="bg-[#1a365d] hover:bg-[#1e407a] text-white"
             >
               <Sparkles className="mr-2 h-4 w-4" />
-              Generate Documents
+              {noneSelected
+                ? 'Select at least one document'
+                : allSelected
+                ? 'Generate All Documents'
+                : `Generate ${selectedKeys.size} Document${selectedKeys.size === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
