@@ -6,7 +6,15 @@
  * generation pipeline as batch — this just controls scope (one document).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  Timestamp,
+} from 'firebase/firestore';
 import { FileText, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,15 +97,55 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   const [successMessage, setSuccessMessage] = useState('');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // Guards the success path against double-fire from both the httpsCallable
+  // promise resolution and the Firestore listener (whichever wins first).
+  const succeededRef = useRef(false);
+
   useEffect(() => {
     if (!generating) {
       setElapsedSeconds(0);
       return;
     }
+    succeededRef.current = false;
     setElapsedSeconds(0);
     const interval = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [generating]);
+
+  // Firestore polling fallback: detects the saved doc even if the long-running
+  // httpsCallable response is dropped silently by an intermediate proxy. Filters
+  // on `updatedAt >= startTime` so prior drafts with the same docType aren't
+  // matched, and so re-generations (which preserve createdAt) still trigger.
+  useEffect(() => {
+    if (!generating || !firmId || !clientId || !selectedDocType) return;
+    const startTime = Timestamp.now();
+    const q = query(
+      collection(getFirestore(), COLLECTIONS.DOCUMENTS(firmId, clientId)),
+      where('docType', '==', selectedDocType),
+      where('updatedAt', '>=', startTime),
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      if (snap.empty) return;
+      const data = snap.docs[0].data();
+      const title = (data.displayName as string) || (data.title as string) || selectedDocType;
+      markSuccess(title);
+    });
+    return () => unsub();
+  }, [generating, firmId, clientId, selectedDocType]);
+
+  const markSuccess = (title: string) => {
+    if (succeededRef.current) return;
+    succeededRef.current = true;
+    setSuccessMessage(`${title} has been saved to the Document Vault.`);
+    setGenerating(false);
+    setTimeout(() => {
+      setSelectedDocType('');
+      setCustomInstructions('');
+      setSpouseRole('client');
+      setSuccessMessage('');
+      onClose();
+    }, 1500);
+  };
 
   // Pull client + spouse so the spouse-role selector shows real names.
   const clientPath = firmId && clientId ? `${COLLECTIONS.CLIENTS(firmId)}/${clientId}` : null;
@@ -134,20 +182,13 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         softwareSource: softwareSource === 'none' ? '' : softwareSource,
         formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
-
-      setSuccessMessage(`${result.title} has been saved to the Document Vault.`);
-
-      // Auto-close after brief delay to show success
-      setTimeout(() => {
-        setSelectedDocType('');
-        setCustomInstructions('');
-        setSpouseRole('client');
-        setSuccessMessage('');
-        onClose();
-      }, 1500);
+      markSuccess(result.title);
     } catch (err) {
+      // If the Firestore listener already detected the saved doc, ignore the
+      // late-arriving rejection (the connection probably dropped after the
+      // server finished writing).
+      if (succeededRef.current) return;
       setError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
-    } finally {
       setGenerating(false);
     }
   };
