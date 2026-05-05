@@ -186,8 +186,12 @@ export const groundedReviewDocument = onCall(
     if (!firmId || !clientId || !documentId) {
       throw new HttpsError(
         'invalid-argument',
-        'Missing required fields: firmId, clientId, documentId.'
+        'Missing required fields: firmId, clientId, documentId.',
       );
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot review documents for a different firm.');
     }
 
     const db = admin.firestore();

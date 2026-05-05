@@ -75,7 +75,11 @@ export default function LoginPage() {
   const { signInWithEmail, signUp, signInWithGoogle, user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirect') ?? ROUTES.DASHBOARD;
+  const rawRedirect = searchParams.get('redirect') ?? '';
+  // Only allow same-origin relative paths — block open-redirect to external URLs
+  const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') && !rawRedirect.includes('://')
+    ? rawRedirect
+    : ROUTES.DASHBOARD;
 
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [showPassword, setShowPassword] = useState(false);
@@ -89,7 +93,7 @@ export default function LoginPage() {
 
       // If user is staff (admin/attorney/paralegal), go to dashboard (or requested route)
       if (userProfile.role !== 'client') {
-        navigate(decodeURIComponent(redirectTo), { replace: true });
+        navigate(redirectTo, { replace: true });
         return;
       }
 

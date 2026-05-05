@@ -333,6 +333,10 @@ export const sendQuestionnaireInvitation = onCall(
       );
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
+    }
+
     const firmData = await getFirmData(firmId);
     const apiKey = getSendGridKey(firmData);
     const branding = extractBranding(firmData);
@@ -430,6 +434,10 @@ export const sendQuestionnaireCompleteNotification = onCall(
       );
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
+    }
+
     const firmData = await getFirmData(firmId);
     const apiKey = getSendGridKey(firmData);
     const branding = extractBranding(firmData);
@@ -515,6 +523,10 @@ export const sendDocumentReadyNotification = onCall(
         'invalid-argument',
         'firmId, clientId, clientName, documentTypes, and recipientEmail are required.',
       );
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
     }
 
     const firmData = await getFirmData(firmId);
@@ -621,6 +633,10 @@ export const sendPaymentReceipt = onCall(
         'invalid-argument',
         'firmId, clientId, clientEmail, clientName, amount, and description are required.',
       );
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
     }
 
     const firmData = await getFirmData(firmId);
@@ -742,6 +758,10 @@ export const sendPaymentReceivedNotification = onCall(
       );
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
+    }
+
     const firmData = await getFirmData(firmId);
     const apiKey = getSendGridKey(firmData);
     const branding = extractBranding(firmData);
@@ -851,6 +871,10 @@ export const sendAppointmentReminder = onCall(
         'invalid-argument',
         'firmId, clientId, recipientEmail, recipientName, eventTitle, eventDate, and eventTime are required.',
       );
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
     }
 
     const firmData = await getFirmData(firmId);
@@ -991,6 +1015,10 @@ export const sendFollowUpReminder = onCall(
         'invalid-argument',
         'firmId, clientId, clientEmail, clientName, and daysSinceInvitation are required.',
       );
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
     }
 
     const db = admin.firestore();

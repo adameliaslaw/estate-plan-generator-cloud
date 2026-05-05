@@ -21,6 +21,13 @@ export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
         throw new HttpsError('invalid-argument', 'Missing firmId.');
     }
 
+    // If the user already has a firmId claim (already linked or is staff), they
+    // may not re-link to a different firm. New clients have no firmId yet.
+    const existingFirmId = request.auth.token.firmId as string | undefined;
+    if (existingFirmId && existingFirmId !== firmId) {
+        throw new HttpsError('permission-denied', 'Cannot link to a different firm.');
+    }
+
     const uid = request.auth.uid;
     const email = request.auth.token.email;
 

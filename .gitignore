@@ -6,6 +6,7 @@ functions/node_modules/
 dist/
 functions/lib/
 functions-backfill/lib/
+**/*.tsbuildinfo
 
 # Environment variables (any directory)
 **/.env

@@ -410,11 +410,10 @@ describe('extractTemplateVariables — poa-comprehensive.hbs', () => {
     expect(poaCompVars).toContain('fiduciaries.powerOfAttorney.selfDealingPower');
   });
 
-  it('extracts fillOrBlank helper arguments (agent address fields)', () => {
+  it('extracts fillOrBlank helper arguments (agent address)', () => {
+    // The questionnaire stores fiduciary addresses as a single string under
+    // .address (no split city/state/zip), so the template only references .address.
     expect(poaCompVars).toContain('fiduciaries.powerOfAttorney.agent.address');
-    expect(poaCompVars).toContain('fiduciaries.powerOfAttorney.agent.city');
-    expect(poaCompVars).toContain('fiduciaries.powerOfAttorney.agent.state');
-    expect(poaCompVars).toContain('fiduciaries.powerOfAttorney.agent.zip');
   });
 
   it('extracts alternate agent relationship', () => {
@@ -500,17 +499,19 @@ describe('validateTemplateData', () => {
 
   it('reports missing variables when context lacks data', () => {
     const ctx = mockIncompleteContext();
+    // markMissingFiduciaries now injects "[MISSING: ...]" markers for primary
+    // fiduciary names (including powerOfAttorney.agent.name), so the .agent
+    // object itself is no longer undefined when the slot is unfilled. spouseInfo
+    // is genuinely missing.
     const vars = [
       'clientFullName',
-      'fiduciaries.powerOfAttorney.agent',
       'spouseInfo.firstName',
     ];
     const result = validateTemplateData(vars, ctx);
 
     expect(result.valid).toBe(false);
     expect(result.missing.length).toBeGreaterThan(0);
-    // fiduciaries.powerOfAttorney.agent should be missing
-    expect(result.missing.some((m) => m.variable === 'fiduciaries.powerOfAttorney.agent')).toBe(true);
+    expect(result.missing.some((m) => m.variable === 'spouseInfo.firstName')).toBe(true);
   });
 
   it('reports available with correct values', () => {

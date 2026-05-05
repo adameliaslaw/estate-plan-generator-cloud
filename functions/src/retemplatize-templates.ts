@@ -146,6 +146,10 @@ export const retemplatizeTemplates = onCall(
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot retemplatize for a different firm.');
+    }
+
     const db = admin.firestore();
     const col = db.collection(`firms/${firmId}/documentTemplates`);
 

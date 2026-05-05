@@ -314,6 +314,10 @@ export const backfillEmbeddings = onCall(
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot backfill embeddings for a different firm.');
+    }
+
     // Get Gemini API key — fail early with a clear message
     let apiKey: string;
     try {
@@ -577,6 +581,9 @@ export const backfillTemplateEmbeddings = onCall(
     const { firmId, forceAll } = request.data as { firmId: string; forceAll?: boolean };
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
+    }
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot backfill embeddings for a different firm.');
     }
 
     let apiKey: string;

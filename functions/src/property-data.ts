@@ -216,8 +216,12 @@ export const lookupPropertyData = onCall(
     if (!firmId || !address || !city || !state || !zip) {
       throw new HttpsError(
         'invalid-argument',
-        'Missing required fields: firmId, address, city, state, zip.'
+        'Missing required fields: firmId, address, city, state, zip.',
       );
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot look up property data for a different firm.');
     }
 
     console.log(`[lookupPropertyData] Looking up: ${address}, ${city}, ${state} ${zip}`);

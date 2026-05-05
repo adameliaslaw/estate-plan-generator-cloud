@@ -384,6 +384,10 @@ export const pushEventToGoogleCalendar = functions
       throw new functions.https.HttpsError('invalid-argument', 'firmId and eventId are required.');
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot sync calendar for a different firm.');
+    }
+
     console.log(
       `[pushEventToGoogleCalendar] START firmId=${firmId} eventId=${eventId}`,
     );
@@ -570,6 +574,10 @@ export const pullGoogleCalendarEvents = functions
 
     if (!firmId || !clientName?.trim()) {
       throw new functions.https.HttpsError('invalid-argument', 'firmId and clientName are required.');
+    }
+
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot pull calendar events for a different firm.');
     }
 
     console.log(

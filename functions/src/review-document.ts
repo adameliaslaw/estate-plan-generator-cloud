@@ -301,11 +301,9 @@ export const reviewDocument = onCall(
     // ------------------------------------------------------------------
     // 2. Verify firm access
     // ------------------------------------------------------------------
-    if (role !== 'admin') {
-      const callerFirmId = auth.token.firmId as string | undefined;
-      if (callerFirmId && callerFirmId !== firmId) {
-        throw new HttpsError('permission-denied', 'Cross-firm document review is not permitted.');
-      }
+    const callerFirmId = auth.token.firmId as string | undefined;
+    if (!callerFirmId || callerFirmId !== firmId) {
+      throw new HttpsError('permission-denied', 'Cross-firm document review is not permitted.');
     }
 
     // ------------------------------------------------------------------

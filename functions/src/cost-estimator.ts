@@ -194,6 +194,10 @@ export const estimateGenerationCost = functions
         );
       }
 
+      if ((context.auth.token.firmId as string | undefined) !== firmId) {
+        throw new functions.https.HttpsError('permission-denied', 'Cannot estimate costs for a different firm.');
+      }
+
       const db = admin.firestore();
 
       // Fetch firm and client data (lightweight — only what we need for estimation)

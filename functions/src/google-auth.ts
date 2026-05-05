@@ -29,6 +29,10 @@ export const exchangeGoogleAuthCode = onCall(
             throw new HttpsError('invalid-argument', 'Authorization code and firmId are required.');
         }
 
+        if (request.auth.token['firmId'] !== firmId) {
+            throw new HttpsError('permission-denied', 'Cannot update Google credentials for a different firm.');
+        }
+
         const clientId = process.env.GOOGLE_CLIENT_ID;
         const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 

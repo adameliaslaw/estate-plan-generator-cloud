@@ -1162,6 +1162,10 @@ export const exportDocumentDocx = functions
       );
     }
 
+    if ((context.auth.token.firmId as string | undefined) !== firmId) {
+      throw new functions.https.HttpsError('permission-denied', 'Cannot export documents for a different firm.');
+    }
+
     // ── 3. Fetch document from Firestore ─────────────────────────────────────
     const db = admin.firestore();
     const docRef = db.doc(

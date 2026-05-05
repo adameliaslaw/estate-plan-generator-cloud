@@ -150,10 +150,8 @@ export const logAccess = onCall(
       );
     }
 
-    // Basic cross-firm guard: non-admins may only log access for their own firm.
-    const callerRole = (request.auth.token.role as string) ?? '';
-    const callerFirmId = (request.auth.token.firmId as string) ?? '';
-    if (callerRole !== 'admin' && callerFirmId && callerFirmId !== firmId) {
+    const callerFirmId = request.auth.token.firmId as string | undefined;
+    if (!callerFirmId || callerFirmId !== firmId) {
       throw new HttpsError('permission-denied', 'Cross-firm access logging is not permitted.');
     }
 
@@ -162,7 +160,7 @@ export const logAccess = onCall(
       eventType: 'client_accessed',
       userId: request.auth.uid,
       userEmail: request.auth.token.email ?? '',
-      userRole: callerRole || 'unknown',
+      userRole: (request.auth.token.role as string | undefined) || 'unknown',
       clientId,
       clientName,
       details: `${action} — ${clientName}`,

@@ -54,11 +54,9 @@ function assertFirmAccess(auth: NonNullable<CallableRequest['auth']>, firmId: st
   if (!role || !['admin', 'attorney', 'paralegal'].includes(role)) {
     throw new HttpsError('permission-denied', 'Only staff members can manage the knowledge base.');
   }
-  if (role !== 'admin') {
-    const callerFirmId = auth.token.firmId as string | undefined;
-    if (callerFirmId && callerFirmId !== firmId) {
-      throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
-    }
+  const callerFirmId = auth.token.firmId as string | undefined;
+  if (!callerFirmId || callerFirmId !== firmId) {
+    throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
   }
 }
 

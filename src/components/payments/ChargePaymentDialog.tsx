@@ -227,6 +227,7 @@ export function ChargePaymentDialog({
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   // References
@@ -355,6 +356,7 @@ export function ChargePaymentDialog({
     setAmountStr('');
     setPaymentType('card');
     setSelectedClientId(fixedClientId ?? '');
+    setShowConfirm(false);
     setShowSuccess(false);
     setSdkReady(false);
     setSdkError(null);
@@ -369,15 +371,13 @@ export function ChargePaymentDialog({
     onClose();
   }, [fixedClientId, onClose]);
 
-  // ── Submit handler ────────────────────────────────────────────────────
+  // ── Review handler — validates and shows confirmation screen ─────────
 
-  const handleSubmit = useCallback(async () => {
+  const handleReview = useCallback(() => {
     if (!hostedFieldsRef.current) {
       toast.error('Payment form not ready yet. Please wait.');
       return;
     }
-
-    // Validate
     if (!effectiveClientId) {
       toast.error('Please select a client.');
       return;
@@ -386,6 +386,30 @@ export function ChargePaymentDialog({
       toast.error('Please enter a description.');
       return;
     }
+    const cents = Math.round(parseFloat(amountStr) * 100);
+    if (isNaN(cents) || cents <= 0) {
+      toast.error('Please enter a valid amount.');
+      return;
+    }
+    if (paymentType === 'card' && (!expMonth || !expYear)) {
+      toast.error('Please enter the card expiration date.');
+      return;
+    }
+    if (paymentType === 'card' && !billingZip.trim()) {
+      toast.error('Please enter the billing ZIP code for the card.');
+      return;
+    }
+    setShowConfirm(true);
+  }, [hostedFieldsRef, effectiveClientId, description, amountStr, paymentType, expMonth, expYear, billingZip]);
+
+  // ── Confirm handler — actually processes the charge ───────────────────
+
+  const handleSubmit = useCallback(async () => {
+    if (!hostedFieldsRef.current) {
+      toast.error('Payment form not ready yet. Please wait.');
+      return;
+    }
+
     const amountCents = Math.round(parseFloat(amountStr) * 100);
     if (isNaN(amountCents) || amountCents <= 0) {
       toast.error('Please enter a valid amount.');
@@ -514,6 +538,65 @@ export function ChargePaymentDialog({
           <DialogFooter>
             <Button variant="outline" onClick={handleClose}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Confirmation step
+  if (showConfirm) {
+    const displayAmount = (parseFloat(amountStr) || 0).toFixed(2);
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#1a365d]">Confirm Payment</DialogTitle>
+            <DialogDescription>
+              Please review the details before charging the client.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Client</span>
+                <span className="font-medium text-[#1a365d]">{effectiveClientName || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount</span>
+                <span className="font-semibold text-[#1a365d] text-base">${displayAmount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Description</span>
+                <span className="font-medium text-[#1a365d] text-right max-w-[60%]">{description}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Method</span>
+                <span className="font-medium text-[#1a365d]">{paymentType === 'card' ? 'Credit Card' : 'eCheck / ACH'}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowConfirm(false)} disabled={processing}>
+              Back
+            </Button>
+            <Button
+              className="bg-[#2b6cb0] hover:bg-[#1a365d]"
+              onClick={handleSubmit}
+              disabled={processing}
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing…
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Confirm — Charge ${displayAmount}
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -791,27 +874,16 @@ export function ChargePaymentDialog({
           </Button>
           <Button
             className="bg-[#2b6cb0] hover:bg-[#1a365d]"
-            onClick={handleSubmit}
+            onClick={handleReview}
             disabled={
-              processing ||
               !sdkReady ||
               !effectiveClientId ||
               !description.trim() ||
               !amountStr
             }
           >
-            {processing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing…
-              </>
-            ) : (
-              <>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Charge $
-                {(parseFloat(amountStr) || 0).toFixed(2)}
-              </>
-            )}
+            <CreditCard className="mr-2 h-4 w-4" />
+            Review Charge
           </Button>
         </DialogFooter>
       </DialogContent>

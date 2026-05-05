@@ -57,3 +57,9 @@ export { groundedReviewDocument } from './grounded-review';
 export { estimateGenerationCost } from './cost-estimator';
 export { cleanupTemplates } from './cleanup-templates';
 export { sendWeeklyDigest } from './weekly-digest';
+
+// RAG Chat — PageIndex + Claude streaming
+export { ragChat } from './rag-chat';
+export { ingestDocument } from './ingest-document';
+export { pageIndexClientFilesChat } from './pageindex-client-files-chat';
+export { backfillPageIndexFirmId } from './backfill-pageindex-firmid';

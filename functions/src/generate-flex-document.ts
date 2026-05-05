@@ -83,11 +83,9 @@ export const generateFlexDocument = onCall(
     }
 
     // Verify firm access
-    if (role !== 'admin') {
-      const callerFirmId = auth.token.firmId as string | undefined;
-      if (callerFirmId && callerFirmId !== firmId) {
-        throw new HttpsError('permission-denied', 'Cross-firm generation is not permitted.');
-      }
+    const callerFirmId = auth.token.firmId as string | undefined;
+    if (!callerFirmId || callerFirmId !== firmId) {
+      throw new HttpsError('permission-denied', 'Cross-firm generation is not permitted.');
     }
 
     console.log(`[generateFlexDocument] docType=${docType} client=${clientId}`);

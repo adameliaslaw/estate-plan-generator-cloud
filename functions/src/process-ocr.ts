@@ -19,6 +19,10 @@ export const processQuestionnaireScan = functions
             throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and imagePaths are required.');
         }
 
+        if ((context.auth.token.firmId as string | undefined) !== firmId) {
+            throw new functions.https.HttpsError('permission-denied', 'Cannot process OCR for a different firm.');
+        }
+
         const db = admin.firestore();
         const storage = admin.storage();
         const bucket = storage.bucket();
