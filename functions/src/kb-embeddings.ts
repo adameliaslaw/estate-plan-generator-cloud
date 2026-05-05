@@ -560,6 +560,9 @@ export const backfillTemplateEmbeddings = onCall(
     if (!firmId) {
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot backfill embeddings for a different firm.');
+    }
 
     let apiKey: string;
     try {
