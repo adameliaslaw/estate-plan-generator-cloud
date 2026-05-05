@@ -133,6 +133,12 @@ After STOP GATE 3 passes:
 
 ---
 
+### RAG vs PageIndex pricing — revisit with screenshot (deferred 2026-05-05)
+
+Adam sent a screenshot of PageIndex pricing during the session but it was skipped before context compaction. **Next session: paste the screenshot and reconcile against the cost estimates given** (~$0.005–0.015/call for PageIndex vs ~$0.0000035/Vertex embed). If the actual pricing tier is materially different, update the cost note in item 3 above and re-evaluate whether the two-stack architecture is justified.
+
+---
+
 ### RAG-chat graceful-degradation when Anthropic streaming fails — added 2026-05-05
 
 **Problem.** `functions/src/rag-chat.ts` and `functions/src/pageindex-client-files-chat.ts` both import the Anthropic SDK directly and use `messages.stream()` for SSE streaming to the browser. They bypass `functions/src/ai-client.ts`'s multi-provider fallback chain, because that helper (`callAI`) is request/response/JSON-mode and cannot stream. **Result:** during an Anthropic outage, RAG chat is fully unavailable for users — even though OpenAI and Vertex are configured and healthy.
