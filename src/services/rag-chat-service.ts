@@ -57,7 +57,7 @@ async function streamSse(
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  const idToken = await user.getIdToken();
+  const idToken = await user.getIdToken(true);
 
   const response = await fetch(url, {
     method: 'POST',

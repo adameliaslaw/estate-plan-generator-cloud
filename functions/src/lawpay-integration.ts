@@ -251,7 +251,7 @@ export const createPaymentRequest = functions
     }
     
     // Check firm access
-    if (context.auth.token.firmId !== firmId && context.auth.token.role !== 'admin') {
+    if (!context.auth.token.firmId || context.auth.token.firmId !== firmId) {
       throw new functions.https.HttpsError('permission-denied', 'You do not have access to this firm.');
     }
 
@@ -714,7 +714,7 @@ export const processDirectCharge = functions
     }
 
     // Check firm access
-    if (context.auth.token.firmId !== firmId && context.auth.token.role !== 'admin') {
+    if (!context.auth.token.firmId || context.auth.token.firmId !== firmId) {
       throw new functions.https.HttpsError('permission-denied', 'You do not have access to this firm.');
     }
 

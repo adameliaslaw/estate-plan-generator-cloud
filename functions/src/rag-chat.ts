@@ -336,9 +336,8 @@ export const ragChat = onRequest(
 
       sse(res, { type: 'done' });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Internal server error';
       console.error('[ragChat] error:', err);
-      sse(res, { type: 'error', message });
+      sse(res, { type: 'error', message: 'An error occurred while processing your request.' });
     } finally {
       res.end();
     }
