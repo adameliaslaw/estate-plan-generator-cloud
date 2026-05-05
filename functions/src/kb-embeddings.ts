@@ -317,7 +317,7 @@ export const backfillEmbeddings = onCall(
 
     // Filter to those needing embedding, then take up to BACKFILL_BATCH_SIZE
     const needsEmbedding = snap.docs
-      .filter((doc) => forceAll || !doc.data().embeddedAt)
+      .filter((doc) => forceAll || doc.data().embeddingModel !== EMBEDDING_MODEL)
       .slice(0, BACKFILL_BATCH_SIZE);
 
     let processed = 0;
@@ -573,7 +573,7 @@ export const backfillTemplateEmbeddings = onCall(
       .get();
 
     const needsEmbedding = snap.docs
-      .filter((doc) => forceAll || !doc.data().embeddedAt)
+      .filter((doc) => forceAll || doc.data().embeddingModel !== EMBEDDING_MODEL)
       .slice(0, BACKFILL_BATCH_SIZE);
 
     let processed = 0;
