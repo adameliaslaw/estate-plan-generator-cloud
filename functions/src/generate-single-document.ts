@@ -82,11 +82,9 @@ export const generateSingleDocument = onCall(
     }
 
     // Verify caller is in the same firm
-    if (role !== 'admin') {
-      const callerFirmId = auth.token.firmId as string | undefined;
-      if (callerFirmId && callerFirmId !== firmId) {
-        throw new HttpsError('permission-denied', 'Cross-firm document generation is not permitted.');
-      }
+    const callerFirmId = auth.token.firmId as string | undefined;
+    if (!callerFirmId || callerFirmId !== firmId) {
+      throw new HttpsError('permission-denied', 'Cross-firm document generation is not permitted.');
     }
 
     console.log(

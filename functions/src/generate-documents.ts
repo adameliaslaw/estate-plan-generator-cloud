@@ -168,15 +168,13 @@ export const generateDocuments = onCall(
       );
     }
 
-    // Verify caller belongs to this firm (unless admin)
-    if (role !== 'admin') {
-      const callerFirmId = auth.token.firmId as string | undefined;
-      if (callerFirmId && callerFirmId !== firmId) {
-        throw new HttpsError(
-          'permission-denied',
-          'You can only generate documents for clients in your own firm.',
-        );
-      }
+    // Verify caller belongs to this firm
+    const callerFirmId = auth.token.firmId as string | undefined;
+    if (!callerFirmId || callerFirmId !== firmId) {
+      throw new HttpsError(
+        'permission-denied',
+        'You can only generate documents for clients in your own firm.',
+      );
     }
 
     // ------------------------------------------------------------------

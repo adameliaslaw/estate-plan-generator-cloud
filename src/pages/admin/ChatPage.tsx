@@ -167,8 +167,8 @@ export default function ChatPage() {
       onCitations: (data) => setClientFilesCitations(data),
       onChunk: () => {},
       onDone: () => {},
-      onError: (msg) => console.warn('[clientFilesChat]', msg),
-    });
+      onError: (msg) => console.warn('[clientFilesChat] citation fetch failed:', msg),
+    }).catch((err) => console.warn('[clientFilesChat] stream error:', err));
 
     // Research stream drives the main chat UI
     try {
