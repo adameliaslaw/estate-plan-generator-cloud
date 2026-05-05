@@ -1049,7 +1049,7 @@ export default function ClientDashboardPage() {
 
           {/* Missing fiduciary addresses callout */}
           {(() => {
-            const fid = (client.fiduciaries ?? {}) as Record<string, Record<string, Record<string, unknown> | undefined> | undefined>;
+            const fid = (client.fiduciaries ?? {}) as unknown as Record<string, Record<string, Record<string, unknown> | undefined> | undefined>;
             type Slot = { person: Record<string, unknown> | undefined; label: string };
             const slots: Slot[] = [
               { person: fid.executor?.primary,                label: 'Primary Executor' },
