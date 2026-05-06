@@ -21,12 +21,14 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Anthropic from '@anthropic-ai/sdk';
+import { callAI, type FirmData } from './ai-client';
 
 // ---------------------------------------------------------------------------
 // Secrets
 // ---------------------------------------------------------------------------
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const PAGEINDEX_API_KEY = defineSecret('PAGEINDEX_API_KEY');
+const OPENAI_API_KEY    = defineSecret('OPENAI_API_KEY');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -159,7 +161,7 @@ async function runRetrievals(docs: DocSpec[], query: string, apiKey: string): Pr
 export const ragChat = onRequest(
   {
     region: 'us-east1',
-    secrets: [ANTHROPIC_API_KEY, PAGEINDEX_API_KEY],
+    secrets: [ANTHROPIC_API_KEY, PAGEINDEX_API_KEY, OPENAI_API_KEY],
     timeoutSeconds: 300,
     memory: '512MiB',
     cors: true,
@@ -324,22 +326,57 @@ export const ragChat = onRequest(
           `<question>${query}</question>`;
       }
 
-      // ── Stream Claude ─────────────────────────────────────────────────────
-      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-      const stream = anthropic.messages.stream({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      });
+      // ── Stream Claude (with non-streaming OpenAI fallback) ────────────────
+      // If Anthropic streaming fails before any chunk is emitted, fall back to
+      // a non-streaming callAI() request via OpenAI and deliver the answer as
+      // a single SSE chunk. Mid-stream failures (chunk already sent) bubble to
+      // the outer catch — we can't un-send what's already on the wire.
+      let chunksEmitted = 0;
+      try {
+        const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+        const stream = anthropic.messages.stream({
+          model: MODEL,
+          max_tokens: MAX_TOKENS,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+        });
 
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          sse(res, { type: 'chunk', text: event.delta.text });
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            sse(res, { type: 'chunk', text: event.delta.text });
+            chunksEmitted++;
+          }
         }
-      }
 
-      sse(res, { type: 'done' });
+        sse(res, { type: 'done' });
+      } catch (streamErr) {
+        if (chunksEmitted > 0) {
+          // Mid-stream — current behavior: surface as error
+          throw streamErr;
+        }
+        const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+        console.warn(
+          `[ragChat-degradation] Anthropic stream failed pre-chunk; falling back to OpenAI. ` +
+          `firmId=${callerFirmId} mode=${mode} err=${errMsg.slice(0, 200)}`,
+        );
+        const firmSnap = await db.collection('firms').doc(callerFirmId).get();
+        const firmData: FirmData = {
+          ...((firmSnap.data() ?? {}) as FirmData),
+        };
+        firmData.openAiApiKey =
+          firmData.openAiApiKey ?? firmData.settings?.openAiApiKey ?? OPENAI_API_KEY.value();
+
+        const fallbackText = await callAI(systemPrompt, userMessage, firmData, {
+          model: 'gpt-5.4',
+          maxTokens: MAX_TOKENS,
+        });
+        sse(res, { type: 'chunk', text: fallbackText });
+        sse(res, { type: 'done' });
+        console.info(
+          `[ragChat-degradation] OpenAI fallback succeeded firmId=${callerFirmId} ` +
+          `chars=${fallbackText.length}`,
+        );
+      }
     } catch (err) {
       console.error('[ragChat] error:', err);
       sse(res, { type: 'error', message: 'An error occurred while processing your request.' });

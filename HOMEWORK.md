@@ -26,6 +26,32 @@ These items surfaced during the post-merge production deploy of PR #1 (`04a2739`
 
 **Architecture note:** Vertex vector search (KB aggregation for doc generation) and PageIndex (interactive chat over client files) serve different roles and coexist intentionally. Vertex is batch/generation-time; PageIndex is user-facing/interactive. Cost delta is 1000-5000× per call in absolute terms but negligible at law-firm scale (~$0.005-0.015/PageIndex call vs ~$0.0000035/Vertex embed call).
 
+### 3. PageIndex secret — still a placeholder (corrects the now-deleted "both keys rotated" claim)
+
+**Anthropic half closed 2026-05-06.** Real `ANTHROPIC_API_KEY` set in Secret Manager (after **two** rotation cycles — original was leaked in cleartext via `firebase functions:secrets:access` during status confirmation, then a second time during pre-deploy verification of `OPENAI_API_KEY`. **Both keys rotated and the leaked versions revoked.** Memory entry `feedback_never_print_secrets.md` added so this stops happening.) `ragChat` and `pageIndexClientFilesChat` redeployed; KB-side chat smoke-tested at `/chat` with a complete streamed answer. ✅
+
+**PageIndex half still open.** `PAGEINDEX_API_KEY` is the literal placeholder `d75c0bbf****3e337025` (the asterisks are real characters, not a Secret Manager mask — verified 2026-05-06). The pre-flight checklist in this doc was previously marked as "done 2026-05-05" but that claim was incorrect; the placeholder was never replaced. `ingestDocument` and `backfillPageIndexFirmId` are deployed but non-functional until a real key is set. Client-Files citation panel in the admin chat will be empty until then; this is also a hard prerequisite for the Wills → PageIndex pipeline (mid-term project below).
+
+**To do when PageIndex account exists.**
+1. Sign up at PageIndex, mint an API key.
+2. `firebase functions:secrets:set PAGEINDEX_API_KEY --project estate-plan-generator` — use the file-based variant if PowerShell's interactive prompt swallows the paste:
+   ```powershell
+   $key = Read-Host "Enter PAGEINDEX_API_KEY" -AsSecureString
+   $plain = [System.Net.NetworkCredential]::new("", $key).Password
+   $tmp = [System.IO.Path]::GetTempFileName()
+   [System.IO.File]::WriteAllBytes($tmp, [System.Text.Encoding]::ASCII.GetBytes($plain))
+   firebase functions:secrets:set PAGEINDEX_API_KEY --data-file $tmp --project estate-plan-generator
+   Remove-Item $tmp -Force; Clear-Variable plain, key
+   ```
+3. Redeploy the 4 PageIndex-consuming functions:
+   ```powershell
+   firebase deploy --only "functions:default:ragChat,functions:default:ingestDocument,functions:default:pageIndexClientFilesChat,functions:default:backfillPageIndexFirmId" --project estate-plan-generator
+   ```
+   (Codebase qualifier `default:` is required because `firebase.json` declares two codebases — `default` and `backfill`.)
+4. Smoke-test admin chat — Client Files section in the right-panel citations should now populate after a question that hits indexed client files.
+
+**`ingestDocument` region migration closed 2026-05-06.** Was deployed in `us-central1` while the frontend (`src/config/firebase.ts:88`) calls `getFunctions(app, 'us-east1')` — meaning **the upload path was effectively broken in production**. Added `.region('us-east1')` to `functions/src/ingest-document.ts`, deleted the orphaned `us-central1` instance, and redeployed to `us-east1`. All 4 RAG functions now confirmed in `us-east1`. ✅
+
 ### 3b. ✅ Generation UX improvements — deployed as PRs #7, #8, #9 (2026-05-05)
 
 - **PR #7** — NJ POA `ACKNOWLEDGMENT` block now recognized as a valid Notary Block by the structural validator. Patterns: `acknowledg.*oath`, `) ss:`, `commission expires`. Prevents false-positive `needs_review` status on NJ POAs.
@@ -59,8 +85,8 @@ Phases shipped (all on main):
 
 #### Pre-flight checklist (one-time infrastructure — do before any deploy)
 
-- [x] `ANTHROPIC_API_KEY` — real key in Secret Manager (done 2026-05-05, see item 3)
-- [x] `PAGEINDEX_API_KEY` — real key in Secret Manager (done 2026-05-05, see item 3)
+- [x] `ANTHROPIC_API_KEY` — real key in Secret Manager (rotated 2026-05-06, see item 3)
+- [ ] `PAGEINDEX_API_KEY` — replace placeholder with real key (still pending — see item 3)
 - [ ] `gcloud pubsub topics create wills-document-processing --project=estate-plan-generator`
 - [ ] `gcloud services enable pubsub.googleapis.com cloudscheduler.googleapis.com drive.googleapis.com --project=estate-plan-generator`
 - [ ] Create a service account with **Drive Viewer + Pub/Sub Publisher + Firestore User** roles
@@ -139,22 +165,16 @@ Adam sent a screenshot of PageIndex pricing during the session but it was skippe
 
 ---
 
-### RAG-chat graceful-degradation when Anthropic streaming fails — added 2026-05-05
+### ✅ RAG-chat graceful-degradation when Anthropic streaming fails — closed 2026-05-06
 
-**Problem.** `functions/src/rag-chat.ts` and `functions/src/pageindex-client-files-chat.ts` both import the Anthropic SDK directly and use `messages.stream()` for SSE streaming to the browser. They bypass `functions/src/ai-client.ts`'s multi-provider fallback chain, because that helper (`callAI`) is request/response/JSON-mode and cannot stream. **Result:** during an Anthropic outage, RAG chat is fully unavailable for users — even though OpenAI and Vertex are configured and healthy.
+**Resolution.** Both `rag-chat.ts` and `pageindex-client-files-chat.ts` now wrap the Anthropic `messages.stream()` block in a try/catch and fall back to non-streaming `callAI()` (forced OpenAI via `model: 'gpt-5.4'`) when the stream throws **before any chunk has been emitted**. Mid-stream failures still bubble to the outer error path, since previously-flushed SSE chunks can't be unsent.
 
-Document generation (the legal-output path) is unaffected — it routes through `callAI()` and fails over correctly. This gap only impacts the research/Q&A chat surface.
+- New secret binding `OPENAI_API_KEY` added to both function configs; service account auto-granted `secretAccessor` on first deploy.
+- `firmData` loaded from Firestore (`firms/{firmId}`) on fallback; `OPENAI_API_KEY.value()` is layered in as a default if the firm hasn't configured its own OpenAI key.
+- Degradation events log as structured one-liners — search Cloud Logging for `[ragChat-degradation]` or `[clientFilesChat-degradation]` to count fallback frequency.
+- 589/589 root tests still pass; functions tsc clean. Both functions redeployed to `us-east1`.
 
-**Why we accepted it for the security-hardening PR (#1, 2026-05-05).** Cross-provider streaming is genuinely non-trivial — Anthropic uses `content_block_delta` events, OpenAI uses `delta.content` chunks, Vertex/Gemini uses a different chunk shape entirely. Building a real `callAIStream()` adapter is ~2-3 days plus per-provider tests. Anthropic outages are rare (typically <1hr/month per status.anthropic.com). The PR shipped without this work.
-
-**Mid-term fix to do (~3-4 hours).** When the Anthropic stream errors, fall back to a non-streaming `callAI()` request via OpenAI/Vertex, deliver the response as a single chunk over the existing SSE channel. Implementation sketch:
-1. In both endpoints, wrap `for await (const event of stream)` in try/catch.
-2. On any error from the stream (5xx, timeout, content-filter), call `callAI(systemPrompt, userPrompt, firmData, { model: 'gpt-5.4', ... })` with the same prompt context.
-3. Send the full response as one SSE `chunk` event followed by `done`.
-4. User-visible: the response arrives all-at-once after a brief pause, instead of streaming incrementally. Acceptable degradation.
-5. Add a metric/log so we know how often degradation fires.
-
-**Long-term option (parked unless we see streaming-quality complaints).** Build `callAIStream()` in `ai-client.ts` that normalizes SSE events across all three providers. ~2-3 days plus tests for each provider's streaming quirks. Only worth it if (a) Anthropic outages become more frequent, or (b) we want true multi-provider streaming for cost/latency reasons.
+**Long-term option (still parked).** Building a true `callAIStream()` adapter in `ai-client.ts` that normalizes streaming across providers is ~2-3 days. Only worth it if Anthropic outages become frequent enough that the all-at-once fallback feels slow, or we want streaming for cost/latency reasons.
 
 ---
 

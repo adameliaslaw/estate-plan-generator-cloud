@@ -52,6 +52,7 @@ interface PageIndexDocResponse {
 // Cloud Function
 // ---------------------------------------------------------------------------
 export const ingestDocument = functions
+  .region('us-east1')
   .runWith({ secrets: ['PAGEINDEX_API_KEY'], timeoutSeconds: 120, memory: '512MB' })
   .https.onCall(async (data: IngestRequest, context) => {
     // ── Auth & role ─────────────────────────────────────────────────────────
