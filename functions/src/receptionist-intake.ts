@@ -242,10 +242,17 @@ export const receptionistWebhook = onRequest(
       return;
     }
 
-    // Validate Twilio webhook signature
+    // Validate Twilio webhook signature.
+    // When TWILIO_AUTH_TOKEN is set, both the presence and correctness of
+    // x-twilio-signature are required — missing header is rejected, not bypassed.
     const authToken = TWILIO_AUTH_TOKEN.value();
-    const twilioSig = req.headers['x-twilio-signature'] as string | undefined;
-    if (authToken && twilioSig) {
+    if (authToken) {
+      const twilioSig = req.headers['x-twilio-signature'] as string | undefined;
+      if (!twilioSig) {
+        logger.warn('Missing x-twilio-signature header', { callSid });
+        res.status(403).send('Forbidden');
+        return;
+      }
       const fullUrl = `https://${req.headers['host'] as string}${req.originalUrl}`;
       if (!validateTwilioSignature(authToken, fullUrl, body, twilioSig)) {
         logger.warn('Invalid Twilio signature', { callSid });
@@ -402,12 +409,29 @@ export const receptionistStatus = onRequest(
     timeoutSeconds: 30,
   },
   async (req, res) => {
-    // Respond immediately — Twilio doesn't wait on status callbacks
-    res.status(200).send('ok');
-
     const body = req.body as Record<string, string>;
     const callSid = body.CallSid ?? '';
     const callStatus = body.CallStatus ?? '';
+
+    // Validate signature before any writes — same rules as receptionistWebhook.
+    const authToken = TWILIO_AUTH_TOKEN.value();
+    if (authToken) {
+      const twilioSig = req.headers['x-twilio-signature'] as string | undefined;
+      if (!twilioSig) {
+        logger.warn('Missing x-twilio-signature in status callback', { callSid });
+        res.status(403).send('Forbidden');
+        return;
+      }
+      const fullUrl = `https://${req.headers['host'] as string}${req.originalUrl}`;
+      if (!validateTwilioSignature(authToken, fullUrl, body, twilioSig)) {
+        logger.warn('Invalid Twilio signature in status callback', { callSid });
+        res.status(403).send('Forbidden');
+        return;
+      }
+    }
+
+    // Respond after validation — Twilio doesn't need the response body
+    res.status(200).send('ok');
 
     if (!callSid) return;
 
