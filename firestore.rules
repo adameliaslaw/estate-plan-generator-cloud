@@ -575,6 +575,29 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /firms/{firmId}/intakes/{intakeId}
+    // AI Receptionist intake records — written by Cloud Functions (Admin SDK)
+    // when Carmela completes a call. Staff may read and update status.
+    // Clients have no access.
+    // ==========================================================
+    match /firms/{firmId}/intakes/{intakeId} {
+      allow read: if isAdmin()
+               || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      allow update: if isAdmin()
+                 || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      allow create, delete: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // ==========================================================
+    // /receptionistSessions/{callSid}
+    // Ephemeral Twilio call state — written and read only by Cloud Functions.
+    // No client access.
+    // ==========================================================
+    match /receptionistSessions/{callSid} {
+      allow read, write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
     // This is Firestore's built-in behaviour, but calling it out

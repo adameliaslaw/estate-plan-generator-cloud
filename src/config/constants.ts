@@ -451,6 +451,7 @@ export const ROUTES = {
   CLIENT_PORTAL: (firmId: string, clientId: string) =>
     `/portal/${firmId}/${clientId}`,
   CHAT: '/chat',
+  RECEPTIONIST: '/receptionist',
 } as const;
 
 // ---------------------------------------------------------------------------

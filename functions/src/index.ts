@@ -68,3 +68,6 @@ export { backfillPageIndexFirmId } from './backfill-pageindex-firmid';
 export { willsProcessor } from './wills-processor';
 export { willsDriveWebhook, willsDriveWatchRenew, willsSetupDriveWatch } from './wills-drive-watcher';
 export { willsStartBackfill } from './wills-backfill';
+
+// AI Receptionist — "Carmela" intake & screening
+export { receptionistWebhook, receptionistStatus } from './receptionist-intake';
