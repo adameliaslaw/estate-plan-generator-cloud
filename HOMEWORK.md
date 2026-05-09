@@ -4,6 +4,37 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 Session left off here — 2026-05-06 (last touched 2026-05-08)
+
+### 🔴 Open user actions (do these first, in order)
+
+1. **🚨 Rotate `OPENAI_API_KEY` (still leaked).** During the 2026-05-06 session, the cleartext OpenAI key (`sk-proj-52Mdei2rh2WJ…`) was leaked into the conversation log via `firebase functions:secrets:access`. Rotation commands were drafted for the user but **no confirmation was received** that the rotation completed. **Verify before doing anything else** — visit https://platform.openai.com/api-keys and confirm `sk-proj-52Mdei2rh2WJ…` is revoked. If not revoked, run the Step 1-4 flow drafted in the closing message of that session (revoke → `firebase functions:secrets:set OPENAI_API_KEY` → redeploy `ragChat` and `pageIndexClientFilesChat`). The Anthropic key was already rotated mid-session after a parallel leak.
+
+2. **Hosting redeploy from laptop** — `npm run build && firebase deploy --only hosting` (project `estate-plan-generator`). PR #9 (per-doc selection in Generate Estate Plan dialog) is merged on the backend but the frontend bundle has never been rebuilt; the new UI is not yet live. See item 3b for context.
+
+3. **Sign up at PageIndex and replace the `PAGEINDEX_API_KEY` placeholder** (item 3 below). The placeholder `d75c0bbf****3e337025` is still active. Until the real key lands, the Client-Files chat panel returns nothing useful and the Wills → PageIndex pipeline cannot move past pre-flight. Rotation flow is in item 3.
+
+4. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+
+### ✅ Closed during the 2026-05-06 session
+
+- **Item 1** (browser hang UX) — verified closed against PR #6 commits.
+- **Item 3 — Anthropic half** — `ANTHROPIC_API_KEY` rotated (twice — initial real key leaked, immediately re-rotated). KB-side admin chat smoke-tested and returned a complete answer.
+- **Item 3 — `ingestDocument` region** — migrated `us-central1` → `us-east1`. The frontend was hardcoded to `us-east1` so the upload path was effectively broken in production before this fix.
+- **Mid-term: RAG-chat graceful-degradation** — shipped in commit `91c51f6`. Both `rag-chat.ts` and `pageindex-client-files-chat.ts` now fall back to non-streaming `callAI()` (forced OpenAI gpt-5.4) when the Anthropic stream throws before any chunk has been emitted. Search Cloud Logging for `[ragChat-degradation]` / `[clientFilesChat-degradation]` to count fallback hits.
+
+### 🟡 What's blocked vs. what's agent-codeable now
+
+- **Blocked on user action #3** (PageIndex key): the entire Wills → PageIndex pipeline mid-term project. Once the real key lands and pre-flight is complete, an agent can drive STOP GATE 3 → STOP GATE 4 → Phase 4 (30-doc pilot harness).
+- **Agent-codeable without user blockers:** none of consequence right now. Item 4 + item 5 are user verification tasks. The Wills pipeline schema/few-shot follow-on (Phase 5 prerequisites) is still listed as "Adam reviews" not agent work.
+- **Optional verification an agent could run** (only if user wants assurance): smoke-test the new RAG fallback by temporarily setting `ANTHROPIC_API_KEY` to a bogus value, asking a chat question, and confirming the all-at-once OpenAI answer + a `[ragChat-degradation]` log line. Would require setting and then restoring a secret — not free.
+
+### 🧠 Memory added this session
+
+`feedback_never_print_secrets.md` — guards future sessions from running `firebase functions:secrets:access` (which always returns cleartext). Use `gcloud secrets describe` or `gcloud secrets versions list` for existence/version checks.
+
+---
+
 ## ⏱ Short-term (queued 2026-05-05 production deploy)
 
 These items surfaced during the post-merge production deploy of PR #1 (`04a2739`). All non-blocking — production is live and validated. Knock these out in roughly the order listed.
