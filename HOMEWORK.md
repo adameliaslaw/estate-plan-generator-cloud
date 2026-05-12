@@ -9,8 +9,23 @@ Items requiring human action or decisions before the next agent session can proc
 ### 🔴 Open user actions
 
 1. **Verify the new content-integrity checker.** Regenerate any client's package (or just one doc) — `generateDocuments` / `generateSingleDocument` are deployed with the new pass. Inspect the saved doc in Firestore: a new `validationFindings` array now includes content-integrity items (Unresolved Handlebars, Empty fiduciary slot, Client name missing, etc.) alongside the existing structural items. Confirm no false positives on a known-good doc. (Karen's regen on 2026-05-12 had no content-integrity issues per inspection — should still pass.)
-2. **Populate `reference` KB with NJ statutes / IL template source material** (highest soul-impact item agent-codeable but blocked on your source PDFs). Once you have a folder of statute PDFs, drop them into `/chat` → Upload Document → pick `reference`. After that, the template engine's retrieval has authoritative content to ground on instead of an empty corpus.
+2. ~~**Populate `reference` KB with NJ statutes**~~ — **shipped 2026-05-13 via Firecrawl scrape of Justia + direct Firestore ingest**. See "NJ Title 3B ingestion" entry below. KB now has 97 NJ Title 3B sections grounded for template engine retrieval. Open follow-on: upload IL template source material (your firm's templates as PDFs) into `work-product` via the upload modal when you have them ready.
 3. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+
+### ✅ 2026-05-13 — NJ Title 3B ingested into KB (97 statutes)
+
+- **Scraped** `https://law.justia.com/codes/new-jersey/title-3b/` via Firecrawl CLI (firecrawl map → batch scrape with `--only-main-content --format markdown`). 97 of 98 sections retrieved after three retry passes; one section (`3B:31-40`) hit a Justia captcha and was skipped — manual upload if needed.
+- **Parser** `functions/scripts/ingest-nj-title-3b.cjs` parses each markdown file (heading + universal citation + statute body, strips Justia chrome) and writes to `firms/elias-counsel/knowledgeBase/{deterministic-id}` as `category: 'statute'` with:
+  - `title`: e.g. "N.J.S.A. 3B:1-2 - Definitions I to Z"
+  - `citation`: `N.J.S.A. 3B:1-2`
+  - `content`: cleaned statute body
+  - `jurisdiction: 'NJ'`, `source: 'Justia'`, `sourceUrl`
+  - `docTypes`: heuristic mapping by section range (3B:3-* → will, 3B:11-* → trust, etc.)
+  - `tags: ['title-3b', 'NJ', 'statute', 'estate-administration']`
+- **Deterministic doc IDs** (`nj-title-3b-1-2`) so re-runs upsert rather than duplicate.
+- **Auto-embedding**: the existing `onKnowledgeResourceWritten` trigger fires on each insert, generating Vertex `text-embedding-005` vectors automatically. No manual backfill needed.
+- **Impact:** the template engine's `searchKnowledgeBase` call during doc generation now has 97 grounded NJ statutes to retrieve from instead of an empty corpus. Direct soul-impact for accuracy/reliability of AI-augmented and hybrid generations.
+- **Cost:** ~150 Firecrawl credits used (scrape + retries). 752 of 1000 remaining in May 2026 billing cycle. Vertex embeddings under $0.01 total.
 
 ### ✅ 2026-05-13 AM — Content-integrity checker (soul-direct generation defender)
 
