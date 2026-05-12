@@ -8,14 +8,25 @@ Items requiring human action or decisions before the next agent session can proc
 
 ### 🔴 Open user actions (do these first, in order)
 
-1. **Hosting redeploy from laptop** — `npm run build && firebase deploy --only hosting` (project `estate-plan-generator`). PR #9 (per-doc selection in Generate Estate Plan dialog) is merged on the backend but the frontend bundle has never been rebuilt; the new UI is not yet live. See item 3b for context.
+1. **Sign up at PageIndex and replace the `PAGEINDEX_API_KEY` placeholder** (item 3 below). The placeholder `d75c0bbf****3e337025` is still active. Until the real key lands, the Client-Files chat panel returns nothing useful and the Wills → PageIndex pipeline cannot move past pre-flight. Rotation flow is in item 3.
 
-2. **Sign up at PageIndex and replace the `PAGEINDEX_API_KEY` placeholder** (item 3 below). The placeholder `d75c0bbf****3e337025` is still active. Until the real key lands, the Client-Files chat panel returns nothing useful and the Wills → PageIndex pipeline cannot move past pre-flight. Rotation flow is in item 3.
+2. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
 
-3. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+### 🐛 Bugs surfaced during 2026-05-12 hosting smoke test on Karen+Adam regen
+
+All three are pre-existing fiduciary/spouse-swap bugs unrelated to PR #9 (which was a UI-only change). Logs from `generateDocuments` showed `Marking missing critical field` lines for all the affected slots, so the data layer is detecting the gaps correctly — issues live in template rendering or the swap remap.
+
+- **A. In-law relationship translation missing on spouse-swap.** Adam's Will and POA both label Roger Kondos as "Brother" — but Roger is Karen's brother, so on Adam's docs he should appear as "Brother-in-Law". The spouse-fiduciary remap in `unified-generator.ts` only inverts household-set relationships (Spouse/Husband/Wife/Partner). Need a separate in-law translation table for Brother → Brother-in-Law, Sister → Sister-in-Law, Mother → Mother-in-Law, Father → Father-in-Law, Son → Stepson?, Daughter → Stepdaughter? (the parent/child case is dicier and worth a one-question scoping ask before patching).
+- **B. Adam's address missing on his Healthcare Directive.** Session 2's `1bc0666` backfill copies missing address/city/state/zip/county/lastName from Karen's `personalInfo` to Adam's swapped testator slot. Either the backfill isn't running on the HC path or the HC template reads the principal address from a different field (e.g. `healthcareProxy.principal.*` instead of `personalInfo.*`). Will + POA appear to render Adam's address fine, so the diff between docTypes is the entry point.
+- **C. Successor 2/3 Executor + Trustee slots missing from each Will.** The engine logs `Marking missing critical field: fiduciaries.executor.successor.name` / `.secondSuccessor.name` etc — so the data layer flags them. But the rendered Will doesn't show the `[MISSING: …]` placeholders from session 3's `cleanEmptyListSlots`. Either the IL Will template doesn't have a paragraph that references those tiers, or the cleanup regexes don't match the variant. Same for trustee primary.
+
+### 🟡 PR #9 subset-filter backend path still unverified (2026-05-12)
+
+Hosting bundle is live and the dialog UI matches spec, but during the smoke test Karen's Living Will checkbox was re-checked before generating, so all 7 docs ran. The new `docTypes` filter on the backend was never exercised. Quick follow-up: regenerate any client with one box deliberately unchecked, confirm the vault gets all-but-that-one.
 
 ### ✅ Closed during the 2026-05-06 + 2026-05-12 sessions
 
+- **Hosting redeploy (closed 2026-05-12)** — `npm run build` clean (Vite v7.3.1, 7.36s); `firebase deploy --only hosting --project estate-plan-generator` uploaded 65 files and released. PR #9's per-doc checkbox UI in the Generate Estate Plan dialog is now live at https://estate-plan-generator.web.app. Browser smoke-test still pending — see open item 3.
 - **OPENAI_API_KEY rotation (closed 2026-05-12)** — old leaked key (`sk-proj-52Mdei2rh2WJ…`) revoked on platform.openai.com; new key minted and set as version 2 via the file-based `firebase functions:secrets:set` flow (no cleartext in shell history). `ragChat` and `pageIndexClientFilesChat` redeployed against v2. Version 1 explicitly destroyed in Secret Manager (`gcloud secrets versions destroy 1`). `transcribe-audio` and `process-ocr` reference `process.env.OPENAI_API_KEY` but don't bind it, so they're unaffected. Verified: `gcloud secrets versions list OPENAI_API_KEY` shows v2 enabled, v1 destroyed.
 - **Item 1** (browser hang UX) — verified closed against PR #6 commits.
 - **Item 3 — Anthropic half** — `ANTHROPIC_API_KEY` rotated (twice — initial real key leaked, immediately re-rotated). KB-side admin chat smoke-tested and returned a complete answer.
