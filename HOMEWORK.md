@@ -4,19 +4,31 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-13 AM (PageIndex chat-completion migration — code shipped, deploy + smoke pending)
+## 📍 Session left off here — 2026-05-13 AM (PageIndex chat-completion migration — verified end-to-end)
 
-### 🔴 Open user actions (do these first, in order)
+### 🔴 Open user actions
 
-1. **Deploy + smoke-test the PageIndex chat-completion migration.** Code is on `main`; tsc clean on both packages. Run:
-   ```powershell
-   firebase deploy --only "functions:default:ragChat,functions:default:pageIndexClientFilesChat" --project estate-plan-generator
-   ```
-   Then visit https://estate-plan-generator.web.app/chat and ask a question that hits an indexed client file (two docs are already in `pageindex_docs/client-files/files`: `pi-cmp2ivr4l02g601p7iqv37znl`, `pi-cmp2iz3t002g901p722d6r10t`). Verify: (a) answer streams in, (b) right-panel Client Files section populates citations with doc + page (section/excerpt fields are intentionally blank — chat-completion API doesn't surface those), (c) no `[ragChat] PageIndex chat failed` errors in Cloud Logging.
+1. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
 
-2. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+### ✅ 2026-05-13 AM — PageIndex retrieval → chat-completion migration (verified end-to-end)
 
-### ✅ 2026-05-13 AM — PageIndex retrieval → chat-completion migration (code shipped)
+- **End-to-end verified.** Asked "Who are Karen Elias's executors?" on `/chat` — emerald "From Client Files" bubble returned the full executor chain (Adam J. Elias → Roger Kondos → [MISSING] → [MISSING]) with markdown table, drew citations from `Last_Will_and_Testament_of_Karen_K_Elias_1778581009681.pdf` pages 3+4, citation panel populated. PageIndex chat round-trip ~14s.
+- **Discovery during smoke-test:** PageIndex's chat-completion response contains BOTH inline `<doc=...;page=N>` markers AND a structured top-level `citations: [{document, page}]` array. We now use the structured array for SSE citation events (more reliable) and strip the inline markers from the visible content. Originally I only read the inline-tag format from the docs; the structured field came out of the actual response body during diagnosis.
+- **Streaming temporarily disabled.** PageIndex `stream: true` works but its SSE chunks interleave tool-use blocks (`block_metadata.type === 'tool_use'`) with assistant content — a naive OpenAI-shape parser misreads the tool-call JSON as user-visible text. Switched to non-streaming (`stream: false`) which returns the assembled answer in one round trip. Re-enable streaming later by filtering on `block_metadata.type` for assistant content only.
+- **New UX: "From Client Files" message bubble.** Pre-migration the `/chat` page intentionally discarded the `pageIndexClientFilesChat` text response (`onChunk: () => {}` — "RPC 1.6 isolated"), only surfacing citations to the right panel. With citations now populating, the missing answer became conspicuous. Wired the client-files answer into a separate emerald-tinted assistant bubble labeled "From Client Files" — keeps the attorney-client privilege boundary visually explicit (matches the backend's separate-function isolation). `ChatPage.tsx`: `Message.source?: 'research' | 'client-files'`, `AssistantBubble({ source })` tints + labels accordingly, `clientFilesStreaming` state shows a loading bubble during the ~15s round trip.
+- **ChatPage subtitle updated.** Was "Powered by PageIndex · CourtListener · Claude". Claude removed — the LLM call lives inside PageIndex now for both ragChat and pageIndexClientFilesChat (Claude is still used elsewhere in the app, just not on `/chat`).
+- **3 backend files migrated** (NOT 4 — `wills-processor.ts` only calls `/doc/` upload which the deprecation doesn't touch). All three deployed and clean. **tsc clean** on both packages.
+
+### 📚 Namespace primer (recorded here so future sessions don't need to re-derive)
+
+Three PageIndex namespaces under `pageindex_docs/{ns}/files`:
+- **`reference`** — published authority (statutes, case law, treatises). Queried by `ragChat` (gray "Research Assistant" bubble). Currently 0 docs for `elias-counsel`.
+- **`work-product`** — firm-internal work (prior memos, briefs, templates). Queried by `ragChat`. Currently 0 docs for `elias-counsel`.
+- **`client-files`** — individual client docs (privileged). firmId-scoped. Queried EXCLUSIVELY by `pageIndexClientFilesChat` (RPC 1.6 isolated function, emerald "From Client Files" bubble). Currently 2 docs for `elias-counsel` (both are uploads of the same Karen will PDF).
+
+The upload modal at `/chat` → Upload Document lets the user pick a namespace; defaults to `reference`. Until something gets uploaded to `reference` or `work-product`, the gray bubble will always return "No documents have been indexed yet" — that's the correct early-return.
+
+### ✅ Previously-tracked: code-shipped state (kept for history)
 
 - **3 files rewritten** (NOT 4 — `wills-processor.ts` only calls the upload endpoint `/doc/`, which is NOT deprecated; original HOMEWORK was over-inclusive):
   - `pageindex-retrieval.ts` — new `streamPageIndexChat(docs, userMessage, apiKey, onCitation)` async generator + rewritten `fetchPageIndexContext` (signature preserved for `chat-ai.ts`). Old `runPageIndexRetrievals`/`submitRetrieval`/`pollRetrieval` deleted.

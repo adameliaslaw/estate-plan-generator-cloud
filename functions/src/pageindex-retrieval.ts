@@ -6,19 +6,26 @@
  * Migrated 2026-05-13: PageIndex deprecated the `/retrieval/` endpoints
  * (they now return empty `retrieved_nodes` with a deprecation notice).
  * Replacement is `POST /chat/completions`, which performs retrieval +
- * synthesis in one call and emits inline `<doc=file;page=N>` citation
- * markers. We strip those markers from the visible text and surface them
- * as structured citation objects via the same SSE event shape the
- * frontend already understands.
+ * synthesis in one call and returns BOTH a structured `citations` array
+ * AND inline `<doc=file;page=N>` markers in the assistant content.
+ * We use the structured array for citation surfaces and strip the inline
+ * markers from the visible text.
  *
  * Two exports:
- *   - streamPageIndexChat   — async generator for SSE handlers (rag-chat,
- *                              pageindex-client-files-chat). Yields text
- *                              chunks; citations come via onCitation cb.
- *   - fetchPageIndexContext — non-streaming wrapper that returns a
- *                              synthesized context string + sources, for
- *                              callers (chat-ai.ts) that inject firm-doc
- *                              context into a downstream prompt.
+ *   - streamPageIndexChat   — async generator (single-shot today; the
+ *                              generator shape is kept so re-enabling
+ *                              streaming later doesn't change callers).
+ *                              Used by rag-chat and pageindex-client-files-chat.
+ *   - fetchPageIndexContext — non-streaming wrapper returning a synthesized
+ *                              context string + sources. Used by chat-ai.ts
+ *                              to inject firm-doc context into Perplexity.
+ *
+ * Note on streaming: the chat API does support `stream: true`, but its SSE
+ * format includes tool-use chunks (`block_metadata.type === 'tool_use'`)
+ * intermixed with assistant content, which a naive OpenAI-shape SSE parser
+ * misreads. Non-streaming gives us the assembled answer + citations in one
+ * 14–30s round trip per query. Acceptable for the chat UI; revisit if
+ * latency becomes a problem.
  */
 
 // ---------------------------------------------------------------------------
@@ -44,51 +51,70 @@ export interface StreamChunk {
   text?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Internal: citation tag parser
-// ---------------------------------------------------------------------------
-// Tag shape per PageIndex docs: `<doc=file.pdf;page=1>`.
-const CITATION_TAG_RE = /<doc=([^;>]+);page=(\d+)>/g;
-
-interface ExtractResult {
-  cleanText: string;
-  citations: Array<{ docName: string; page: number }>;
-  remaining: string;
+interface ChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+  citations?: Array<{ document?: string; page?: number }>;
 }
 
-/**
- * Scan a streamed-text buffer for complete `<doc=...;page=N>` tags. Returns:
- *   - cleanText: text with complete tags removed, safe to emit downstream
- *   - citations: each complete tag found, in order
- *   - remaining: trailing fragment that might still be growing into a tag
- *                (caller must prepend on the next chunk)
- *
- * The split point is the position of the last unclosed `<` if such a `<` is
- * recent enough to plausibly be the start of a citation tag. This keeps us
- * from emitting half-tags into the user-visible stream.
- */
-function extractCitations(text: string): ExtractResult {
-  const lastOpen = text.lastIndexOf('<');
-  const lastClose = text.lastIndexOf('>');
+// Inline citation marker shape per PageIndex docs: `<doc=file.pdf;page=1>`.
+const INLINE_TAG_RE = /<doc=[^;>]+;page=\d+>/g;
 
-  // If there's an unclosed `<` after the last `>` and its tail length is
-  // short enough to plausibly be a growing tag, hold from that point.
-  let scanEnd = text.length;
-  if (lastOpen > lastClose) {
-    const tailLen = text.length - lastOpen;
-    if (tailLen < 80) scanEnd = lastOpen;
-  }
-
-  const scannable = text.slice(0, scanEnd);
-  const remaining = text.slice(scanEnd);
-
-  const citations: Array<{ docName: string; page: number }> = [];
-  const cleanText = scannable.replace(CITATION_TAG_RE, (_match, docName: string, pageStr: string) => {
-    citations.push({ docName, page: parseInt(pageStr, 10) });
-    return '';
+// ---------------------------------------------------------------------------
+// Internal request
+// ---------------------------------------------------------------------------
+async function callPageIndexChat(
+  docs: DocSpec[],
+  userMessage: string,
+  apiKey: string,
+): Promise<ChatResponse> {
+  const response = await fetch('https://api.pageindex.ai/chat/completions', {
+    method: 'POST',
+    headers: { api_key: apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      doc_id: docs.map((d) => d.docId),
+      messages: [{ role: 'user', content: userMessage }],
+      stream: false,
+      enable_citations: true,
+    }),
   });
 
-  return { cleanText, citations, remaining };
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`PageIndex chat ${response.status}: ${errBody.slice(0, 500)}`);
+  }
+  return (await response.json()) as ChatResponse;
+}
+
+function extractContent(res: ChatResponse): string {
+  const content = res.choices?.[0]?.message?.content;
+  return typeof content === 'string' ? content : '';
+}
+
+function mapCitations(res: ChatResponse, docs: DocSpec[]): PageIndexSource[] {
+  if (!Array.isArray(res.citations) || res.citations.length === 0) return [];
+
+  const fileMap = new Map<string, DocSpec>();
+  for (const d of docs) fileMap.set(d.fileName, d);
+
+  const seen = new Set<string>();
+  const out: PageIndexSource[] = [];
+  for (const c of res.citations) {
+    if (!c.document || typeof c.page !== 'number') continue;
+    const key = `${c.document}::${c.page}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const spec = fileMap.get(c.document);
+    if (!spec) continue;
+    out.push({
+      namespace: spec.namespace,
+      documentName: spec.fileName,
+      section: '',
+      pageNumber: c.page,
+      excerpt: '',
+      nodeId: '',
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,14 +122,13 @@ function extractCitations(text: string): ExtractResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Stream a PageIndex chat completion. Yields text chunks with citation tags
- * already stripped; structured citations are delivered via `onCitation` as
- * they're parsed. Throws on PageIndex API failure — caller decides how to
- * surface errors over SSE.
+ * Run a PageIndex chat completion and yield the assistant response as
+ * SSE-friendly chunks. Citations are reported via `onCitation` before any
+ * chunk is yielded. Throws on PageIndex API failure — caller decides how to
+ * surface errors to the client.
  *
- * Sources are not isolated per-namespace by PageIndex — the caller must
- * pre-filter `docs` to the namespaces the calling endpoint is allowed to
- * access (e.g. client-files chat passes only client-files docs).
+ * Generator shape preserved for forward compatibility: when we re-enable
+ * true streaming, callers won't have to change.
  */
 export async function* streamPageIndexChat(
   docs: DocSpec[],
@@ -116,102 +141,14 @@ export async function* streamPageIndexChat(
     return;
   }
 
-  const docMap = new Map<string, DocSpec>();
-  for (const d of docs) docMap.set(d.fileName, d);
+  const res = await callPageIndexChat(docs, userMessage, apiKey);
 
-  const response = await fetch('https://api.pageindex.ai/chat/completions', {
-    method: 'POST',
-    headers: { api_key: apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      doc_id: docs.map((d) => d.docId),
-      messages: [{ role: 'user', content: userMessage }],
-      stream: true,
-      enable_citations: true,
-    }),
-  });
+  for (const c of mapCitations(res, docs)) onCitation(c);
 
-  if (!response.ok) {
-    throw new Error(`PageIndex chat ${response.status}: ${await response.text()}`);
-  }
-  if (!response.body) {
-    throw new Error('PageIndex chat returned no response body');
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const seen = new Set<string>();
-  let sseBuffer = '';
-  let textBuffer = '';
-
-  const emitCitation = (docName: string, page: number): void => {
-    const key = `${docName}::${page}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    const spec = docMap.get(docName);
-    if (!spec) return;
-    onCitation({
-      namespace: spec.namespace,
-      documentName: spec.fileName,
-      section: '',
-      pageNumber: page,
-      excerpt: '',
-      nodeId: '',
-    });
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    sseBuffer += decoder.decode(value, { stream: true });
-
-    let blank: number;
-    while ((blank = sseBuffer.indexOf('\n\n')) >= 0) {
-      const rawEvent = sseBuffer.slice(0, blank);
-      sseBuffer = sseBuffer.slice(blank + 2);
-
-      for (const line of rawEvent.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') continue;
-
-        let json: unknown;
-        try {
-          json = JSON.parse(payload);
-        } catch {
-          continue;
-        }
-
-        const delta = extractDelta(json);
-        if (!delta) continue;
-
-        textBuffer += delta;
-        const { cleanText, citations, remaining } = extractCitations(textBuffer);
-        textBuffer = remaining;
-        for (const c of citations) emitCitation(c.docName, c.page);
-        if (cleanText) yield { type: 'chunk', text: cleanText };
-      }
-    }
-  }
-
-  // Flush any trailing buffer (no more chunks → no more tag growth possible)
-  if (textBuffer) {
-    const flushed = textBuffer.replace(CITATION_TAG_RE, (_m, docName: string, pageStr: string) => {
-      emitCitation(docName, parseInt(pageStr, 10));
-      return '';
-    });
-    if (flushed) yield { type: 'chunk', text: flushed };
-  }
-
+  const content = extractContent(res);
+  const cleanText = content.replace(INLINE_TAG_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  if (cleanText) yield { type: 'chunk', text: cleanText };
   yield { type: 'done' };
-}
-
-function extractDelta(json: unknown): string | null {
-  if (!json || typeof json !== 'object') return null;
-  const choices = (json as { choices?: unknown }).choices;
-  if (!Array.isArray(choices) || choices.length === 0) return null;
-  const first = choices[0] as { delta?: { content?: unknown }; message?: { content?: unknown } };
-  const content = first.delta?.content ?? first.message?.content;
-  return typeof content === 'string' ? content : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,64 +191,24 @@ export async function fetchPageIndexContext(
   const docs: DocSpec[] = namespaceDocs.flat();
   if (docs.length === 0) return { contextString: '', sources: [] };
 
-  const docMap = new Map<string, DocSpec>();
-  for (const d of docs) docMap.set(d.fileName, d);
-
   const userMessage =
     `Summarize the relevant firm-document content for the question below. ` +
     `Quote or paraphrase the operative language. Cite each source inline. ` +
     `If the firm documents do not address the question, say so briefly.\n\n` +
     `Question: ${query}`;
 
-  let response: Response;
+  let res: ChatResponse;
   try {
-    response = await fetch('https://api.pageindex.ai/chat/completions', {
-      method: 'POST',
-      headers: { api_key: apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        doc_id: docs.map((d) => d.docId),
-        messages: [{ role: 'user', content: userMessage }],
-        stream: false,
-        enable_citations: true,
-      }),
-    });
+    res = await callPageIndexChat(docs, userMessage, apiKey);
   } catch (err) {
-    console.warn('[pageindex] fetchPageIndexContext request failed:', err);
-    return { contextString: '', sources: [] };
-  }
-  if (!response.ok) {
-    console.warn(`[pageindex] fetchPageIndexContext ${response.status}: ${await response.text()}`);
+    console.warn('[pageindex] fetchPageIndexContext failed:', err);
     return { contextString: '', sources: [] };
   }
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const rawContent = data.choices?.[0]?.message?.content ?? '';
-  if (!rawContent) return { contextString: '', sources: [] };
+  const content = extractContent(res);
+  if (!content) return { contextString: '', sources: [] };
 
-  // Strip citation tags from the prose; collect them as structured sources.
-  const sources: PageIndexSource[] = [];
-  const seen = new Set<string>();
-  const contextString = rawContent.replace(CITATION_TAG_RE, (_m, docName: string, pageStr: string) => {
-    const page = parseInt(pageStr, 10);
-    const key = `${docName}::${page}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      const spec = docMap.get(docName);
-      if (spec) {
-        sources.push({
-          namespace: spec.namespace,
-          documentName: spec.fileName,
-          section: '',
-          pageNumber: page,
-          excerpt: '',
-          nodeId: '',
-        });
-      }
-    }
-    return '';
-  });
-
-  return { contextString: contextString.trim(), sources };
+  const contextString = content.replace(INLINE_TAG_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  const sources = mapCitations(res, docs);
+  return { contextString, sources };
 }

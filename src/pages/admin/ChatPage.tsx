@@ -24,6 +24,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  source?: 'research' | 'client-files';
 }
 
 // ---------------------------------------------------------------------------
@@ -56,13 +57,39 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function AssistantBubble({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+function AssistantBubble({
+  content,
+  isStreaming,
+  source = 'research',
+}: {
+  content: string;
+  isStreaming?: boolean;
+  source?: 'research' | 'client-files';
+}) {
+  const isClientFiles = source === 'client-files';
   return (
     <div className="flex justify-start gap-3">
-      <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 ring-1 ring-gray-200">
+      <div
+        className={cn(
+          'mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1',
+          isClientFiles
+            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+            : 'bg-gray-100 text-gray-600 ring-gray-200',
+        )}
+      >
         <Bot className="h-3.5 w-3.5" />
       </div>
-      <div className="max-w-[78%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm">
+      <div
+        className={cn(
+          'max-w-[78%] rounded-2xl rounded-tl-sm border px-4 py-3 text-sm text-gray-900 shadow-sm',
+          isClientFiles ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white',
+        )}
+      >
+        {isClientFiles && (
+          <div className="mb-2 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+            From Client Files
+          </div>
+        )}
         {content ? (
           <div className="prose prose-sm prose-gray max-w-none leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
@@ -126,6 +153,7 @@ export default function ChatPage() {
   const [streamingContent, setStreamingContent] = useState('');
   const [citations, setCitations]               = useState<Citation[]>([]);
   const [clientFilesCitations, setClientFilesCitations] = useState<Citation[]>([]);
+  const [clientFilesStreaming, setClientFilesStreaming] = useState(false);
   const [input, setInput]                       = useState('');
   const [isStreaming, setIsStreaming]           = useState(false);
   const [error, setError]                       = useState<string | null>(null);
@@ -162,13 +190,38 @@ export default function ChatPage() {
 
     let accumulated = '';
 
-    // Fire client-files stream in background — only captures citations (RPC 1.6)
+    // Fire client-files stream in background. RPC 1.6 isolation: the answer
+    // is rendered as a SEPARATE assistant bubble labeled "From Client Files"
+    // so the privilege boundary stays visually explicit.
+    let clientFilesAccumulated = '';
+    setClientFilesStreaming(true);
     void streamClientFilesChat(query, {
       onCitations: (data) => setClientFilesCitations(data),
-      onChunk: () => {},
-      onDone: () => {},
-      onError: (msg) => console.warn('[clientFilesChat] citation fetch failed:', msg),
-    }).catch((err) => console.warn('[clientFilesChat] stream error:', err));
+      onChunk: (text) => {
+        clientFilesAccumulated += text;
+      },
+      onDone: () => {
+        if (clientFilesAccumulated.trim()) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              content: clientFilesAccumulated,
+              source: 'client-files',
+            },
+          ]);
+        }
+        setClientFilesStreaming(false);
+      },
+      onError: (msg) => {
+        console.warn('[clientFilesChat] failed:', msg);
+        setClientFilesStreaming(false);
+      },
+    }).catch((err) => {
+      console.warn('[clientFilesChat] stream error:', err);
+      setClientFilesStreaming(false);
+    });
 
     // Research stream drives the main chat UI
     try {
@@ -226,7 +279,7 @@ export default function ChatPage() {
             </div>
             <div className="flex-1">
               <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
-              <p className="text-[11px] text-gray-500">Powered by PageIndex · CourtListener · Claude</p>
+              <p className="text-[11px] text-gray-500">Powered by PageIndex · CourtListener</p>
             </div>
             <button
               onClick={() => setUploadOpen(true)}
@@ -277,11 +330,15 @@ export default function ChatPage() {
                   msg.role === 'user' ? (
                     <UserBubble key={msg.id} content={msg.content} />
                   ) : (
-                    <AssistantBubble key={msg.id} content={msg.content} />
+                    <AssistantBubble key={msg.id} content={msg.content} source={msg.source} />
                   ),
                 )}
 
                 {isStreaming && <AssistantBubble content={streamingContent} isStreaming />}
+
+                {clientFilesStreaming && (
+                  <AssistantBubble content="" source="client-files" isStreaming />
+                )}
 
                 {error && (
                   <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
