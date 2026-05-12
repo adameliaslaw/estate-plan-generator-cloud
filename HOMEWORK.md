@@ -4,22 +4,28 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-12 PM (PageIndex API key set + deprecation discovered)
+## 📍 Session left off here — 2026-05-13 AM (PageIndex chat-completion migration — code shipped, deploy + smoke pending)
 
 ### 🔴 Open user actions (do these first, in order)
 
-1. **(NEW BLOCKER)** **PageIndex retrieval API is deprecated — migrate to chat-completion API.** The real `PAGEINDEX_API_KEY` was minted and set this session (v7, 32 bytes, verified working — Upload + Firestore writes + PageIndex auth all confirmed end-to-end). But PageIndex now returns this on every retrieval poll:
+1. **Deploy + smoke-test the PageIndex chat-completion migration.** Code is on `main`; tsc clean on both packages. Run:
+   ```powershell
+   firebase deploy --only "functions:default:ragChat,functions:default:pageIndexClientFilesChat" --project estate-plan-generator
    ```
-   "retrieved_nodes": [],
-   "doc_id": null,
-   "deprecation": {
-     "deprecated": true,
-     "message": "Retrieval endpoints are deprecated. Use the chat-completion API: https://docs.pageindex.ai/endpoints#-pageindex-chat-api-beta"
-   }
-   ```
-   So every retrieval call silently returns empty. There's also a field-name change (`retrieved_nodes` vs our `nodes`) suggesting the response shape evolved too. Until migration, the Research chat right-panel Client Files section will stay empty even though uploads succeed and docs index correctly in PageIndex. **Affected files (all under `functions/src/`):** `pageindex-retrieval.ts`, `pageindex-client-files-chat.ts`, `rag-chat.ts`, `wills-processor.ts`. This is a real migration — non-trivial; needs the PageIndex chat-completion docs read and the request/response shape rewritten across the 4 files. **The Wills → PageIndex pipeline (Phase 4+) is also blocked on this.**
+   Then visit https://estate-plan-generator.web.app/chat and ask a question that hits an indexed client file (two docs are already in `pageindex_docs/client-files/files`: `pi-cmp2ivr4l02g601p7iqv37znl`, `pi-cmp2iz3t002g901p722d6r10t`). Verify: (a) answer streams in, (b) right-panel Client Files section populates citations with doc + page (section/excerpt fields are intentionally blank — chat-completion API doesn't surface those), (c) no `[ragChat] PageIndex chat failed` errors in Cloud Logging.
 
 2. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+
+### ✅ 2026-05-13 AM — PageIndex retrieval → chat-completion migration (code shipped)
+
+- **3 files rewritten** (NOT 4 — `wills-processor.ts` only calls the upload endpoint `/doc/`, which is NOT deprecated; original HOMEWORK was over-inclusive):
+  - `pageindex-retrieval.ts` — new `streamPageIndexChat(docs, userMessage, apiKey, onCitation)` async generator + rewritten `fetchPageIndexContext` (signature preserved for `chat-ai.ts`). Old `runPageIndexRetrievals`/`submitRetrieval`/`pollRetrieval` deleted.
+  - `rag-chat.ts` — dropped Anthropic SDK + OpenAI fallback chain (PageIndex chat does both retrieval + synthesis now). Persona moved from `system` role to instruction prefix in the user message because the chat API doesn't accept `system` role. PageIndex chat failure → SSE error event (no document-less OpenAI fallback — confirmed with user that a hallucinated answer with no citations is worse than no answer for a legal-research tool).
+  - `pageindex-client-files-chat.ts` — same migration shape, preserved firmId-scoped client-files isolation.
+- **Architecture change:** PageIndex now handles BOTH retrieval AND LLM synthesis. The prior Anthropic-stream → OpenAI-fallback graceful-degradation chain (from commit `91c51f6`, 2026-05-06) is gone — the LLM call lives inside PageIndex. If PageIndex chat goes down, both functions surface SSE `{type: 'error'}`. The Anthropic key 401 issue mentioned in the prior session's follow-ups is now moot for these two functions (they no longer call Anthropic).
+- **Citation shape regression:** PageIndex chat returns inline `<doc=file.pdf;page=N>` tags only — no `section`/`excerpt`/`nodeId`. Frontend `Citation` type kept; those three fields are empty strings now. The `CitationCard` in `ChatPage.tsx` renders them conditionally on truthiness, so they gracefully omit.
+- **`chat-ai.ts` untouched.** Its `fetchPageIndexContext` consumer keeps the same `{ contextString, sources }` return shape — but the `contextString` is now LLM-synthesized prose ("here's what your firm docs say about X") rather than raw retrieval excerpts. Acceptable for downstream Perplexity injection.
+- **tsc clean** on both `functions/` and root (`tsc -b --noEmit` EXIT=0 for both).
 
 ### ✅ 2026-05-12 PM — PageIndex key set + functions redeployed (then code reverted)
 
@@ -58,9 +64,9 @@ Items requiring human action or decisions before the next agent session can proc
 
 ### 🟡 What's blocked vs. what's agent-codeable now
 
-- **Blocked on PageIndex API migration** (NEW): the entire Wills → PageIndex pipeline mid-term project AND the Research chat right-panel citations. PageIndex retrieval API is deprecated as of 2026-05-12; migrating to their chat-completion API is the next agent task. The key itself is set and authenticating correctly.
-- **Agent-codeable without user blockers:** the PageIndex migration is itself agent work — read PageIndex chat-completion docs (https://docs.pageindex.ai/endpoints#-pageindex-chat-api-beta), rewrite the request/response handling across 4 functions, redeploy, re-test. Item 4 + item 5 are still user verification tasks.
-- **Anthropic key re-rotation** is also agent-codeable if user wants it run (mint key on console.anthropic.com → file-based `firebase functions:secrets:set` → redeploy).
+- **Blocked on deploy + smoke-test of the chat-completion migration** (open item 1). Code is on `main`; running `firebase deploy --only` on the two functions unblocks the Research chat right-panel citations end-to-end. Wills → PageIndex pipeline (mid-term) is no longer blocked on retrieval — upload path always worked; the deprecation only affected retrieval, which the wills-processor doesn't touch.
+- **Agent-codeable without user blockers:** item 4 + item 5 are still user verification tasks. The `/chat` page layout bug (boxes popping out) is agent-codeable once a repro/screenshot lands.
+- **Anthropic key re-rotation** is still agent-codeable if user wants it run, BUT it now only affects `chatAi` (research mode) — `ragChat` and `pageIndexClientFilesChat` no longer call Anthropic after the migration.
 
 ### 🧠 Memory added this session
 
