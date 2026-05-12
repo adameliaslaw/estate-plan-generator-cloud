@@ -545,6 +545,19 @@ export async function generateDocument(
     // fiduciary's name with the now-spouse's full name and inverts the
     // relationship label to match the new testator's perspective.
     const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+    // Kinship terms that flip to "in-law" on the spouse-swap view. The original
+    // primary's blood relatives become the new testator's relatives-by-marriage.
+    // Scope intentionally limited to siblings + parents (the unambiguous cases)
+    // — Son/Daughter is left alone because the child could be a joint biological
+    // child (still "Son"/"Daughter" on the spouse's view) or a stepchild from a
+    // prior relationship (would be "Stepson"/"Stepdaughter"), and the data
+    // model can't distinguish those.
+    const IN_LAW_TRANSLATION = new Map<string, string>([
+      ['brother', 'Brother-in-Law'],
+      ['sister', 'Sister-in-Law'],
+      ['mother', 'Mother-in-Law'],
+      ['father', 'Father-in-Law'],
+    ]);
     const newSpouseFullName = [originalPersonal.firstName, originalPersonal.middleName, originalPersonal.lastName].filter(Boolean).join(' ').trim();
     const newSpouseRelationship = (() => {
       const og = typeof originalPersonal.gender === 'string' ? (originalPersonal.gender as string).trim().toLowerCase() : '';
@@ -562,21 +575,30 @@ export async function generateDocument(
           if (!tierVal || typeof tierVal !== 'object') continue;
           const t = tierVal as Record<string, unknown>;
           const rel = typeof t.relationship === 'string' ? (t.relationship as string).trim().toLowerCase() : '';
-          if (!HOUSEHOLD_REL.has(rel)) continue;
-          // Re-target this slot at the now-spouse (the original primary).
-          nextRole[tier] = {
-            ...t,
-            name: newSpouseFullName || t.name,
-            relationship: newSpouseRelationship,
-            // Address fields auto-fill via the template-engine pass; clear
-            // any stale ones tied to the previous person so the auto-fill
-            // re-populates with the new testator's household address.
-            address: '',
-            city: '',
-            state: '',
-            zip: '',
-            county: '',
-          };
+          if (HOUSEHOLD_REL.has(rel)) {
+            // Re-target this slot at the now-spouse (the original primary).
+            nextRole[tier] = {
+              ...t,
+              name: newSpouseFullName || t.name,
+              relationship: newSpouseRelationship,
+              // Address fields auto-fill via the template-engine pass; clear
+              // any stale ones tied to the previous person so the auto-fill
+              // re-populates with the new testator's household address.
+              address: '',
+              city: '',
+              state: '',
+              zip: '',
+              county: '',
+            };
+          } else if (IN_LAW_TRANSLATION.has(rel)) {
+            // Translate the kinship term to its in-law equivalent — the
+            // fiduciary stays the same person, only their relationship label
+            // changes from the new testator's perspective.
+            nextRole[tier] = {
+              ...t,
+              relationship: IN_LAW_TRANSLATION.get(rel),
+            };
+          }
         }
         out[role] = nextRole;
       }

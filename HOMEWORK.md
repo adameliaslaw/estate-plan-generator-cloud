@@ -12,17 +12,16 @@ Items requiring human action or decisions before the next agent session can proc
 
 2. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
 
-### 🐛 Bugs surfaced during 2026-05-12 hosting smoke test on Karen+Adam regen
+### ✅ 2026-05-12 hosting smoke-test bugs — all closed same day
 
-All three are pre-existing fiduciary/spouse-swap bugs unrelated to PR #9 (which was a UI-only change). Logs from `generateDocuments` showed `Marking missing critical field` lines for all the affected slots, so the data layer is detecting the gaps correctly — issues live in template rendering or the swap remap.
-
-- **A. In-law relationship translation missing on spouse-swap.** Adam's Will and POA both label Roger Kondos as "Brother" — but Roger is Karen's brother, so on Adam's docs he should appear as "Brother-in-Law". The spouse-fiduciary remap in `unified-generator.ts` only inverts household-set relationships (Spouse/Husband/Wife/Partner). Need a separate in-law translation table for Brother → Brother-in-Law, Sister → Sister-in-Law, Mother → Mother-in-Law, Father → Father-in-Law, Son → Stepson?, Daughter → Stepdaughter? (the parent/child case is dicier and worth a one-question scoping ask before patching).
-- **B. Adam's address missing on his Healthcare Directive.** Session 2's `1bc0666` backfill copies missing address/city/state/zip/county/lastName from Karen's `personalInfo` to Adam's swapped testator slot. Either the backfill isn't running on the HC path or the HC template reads the principal address from a different field (e.g. `healthcareProxy.principal.*` instead of `personalInfo.*`). Will + POA appear to render Adam's address fine, so the diff between docTypes is the entry point.
-- **C. Successor 2/3 Executor + Trustee slots missing from each Will.** The engine logs `Marking missing critical field: fiduciaries.executor.successor.name` / `.secondSuccessor.name` etc — so the data layer flags them. But the rendered Will doesn't show the `[MISSING: …]` placeholders from session 3's `cleanEmptyListSlots`. Either the IL Will template doesn't have a paragraph that references those tiers, or the cleanup regexes don't match the variant. Same for trustee primary.
-
-### 🟡 PR #9 subset-filter backend path still unverified (2026-05-12)
-
-Hosting bundle is live and the dialog UI matches spec, but during the smoke test Karen's Living Will checkbox was re-checked before generating, so all 7 docs ran. The new `docTypes` filter on the backend was never exercised. Quick follow-up: regenerate any client with one box deliberately unchecked, confirm the vault gets all-but-that-one.
+- **A. In-law relationship translation** — added `IN_LAW_TRANSLATION` map in `unified-generator.ts` `swapFiduciaries`. Brother/Sister/Mother/Father → -in-Law on the spouse-swap view; preserves name + address, only the kinship label flips. Son/Daughter intentionally left alone (data can't distinguish joint biological from stepchild). Verified: Adam's docs now label Roger Kondos as Brother-in-Law; Karen's docs still show him as Brother.
+- **B. Adam's address missing on HC Directive** — turned out to be TWO root causes:
+  1. **`spouseInfo.address` was empty** — IL HC template renders the primary HC rep using `{{spouseInfo.address}}, .city, .state` (not `{{healthcareProxy.agent.address}}`). The questionnaire's spouse step never captures address. Added `autoFillSpouseInfoAddress` in `template-engine.ts` that defaults `spouseInfo.{address,city,state,zip,county}` to `personalInfo.*` when client is married and `spouseInfo.address` is blank (mirrors the existing `autoFillSpouseFiduciaryAddresses`).
+  2. **Editor was showing stale `editorContent`** — `DocumentEditor.tsx` prefers `editorContent` over `content` when it has any text, but `document-save-helper.ts` only wrote `content` on regen. So every regenerate silently stranded the editor on the previous version. Fix: also write `editorContent: params.content` on every save.
+- **C. Successor 2/3 Executor + Trustee slots "missing" from each Will** — NOT a rendering bug. `[MISSING: …]` markers ARE present (verified by inspecting `content` field of Karen's regen — 7-8 markers including second/third successor executor, trustee, guardian). User was observing the missing-data state correctly; the system is flagging it. Optional future enhancement: give `markMissingFiduciaries` markers the same orange inline styling that unresolved Handlebars vars get (template-engine.ts:2016) to make them visually prominent.
+- **D. PR #9 subset-filter backend path** — verified working. Backend logs show exactly 6 `generateSingleDocument` invocations when 6 boxes were checked (no `estatePlanSummary` call). Two minor side-findings worth logging separately:
+  - **Progress modal lists all docs as "in generation" regardless of checkbox state** — display-only UI bug, not data integrity.
+  - **PR #9 dispatches per-doc serially** via `generateSingleDocument`, replacing the prior bulk path's 3-worker concurrent queue. All-checked case is now ~6× slower (each doc 30-60s sequentially). Worth a perf revisit.
 
 ### ✅ Closed during the 2026-05-06 + 2026-05-12 sessions
 

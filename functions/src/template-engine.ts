@@ -1670,6 +1670,48 @@ function autoFillSpouseFiduciaryAddresses(
   return mutated;
 }
 
+/**
+ * IL templates that reference the spouse — most notably the Healthcare
+ * Directive's primary HC rep paragraph — interpolate
+ * `{{spouseInfo.address}}, {{spouseInfo.city}}, {{spouseInfo.state}}` directly
+ * rather than going through `fiduciaries.healthcareProxy.agent.address`. The
+ * questionnaire's spouse step captures name/DOB/SSN/email/phone but does NOT
+ * ask for a separate spouse address (the household-shared assumption is baked
+ * in everywhere else). Result: married clients render their spouse with no
+ * address on the HC directive even though the Will + POA fill correctly via
+ * `autoFillSpouseFiduciaryAddresses`. Mirror that household auto-fill here so
+ * spouseInfo carries the testator's address into any template that reads it.
+ */
+function autoFillSpouseInfoAddress(
+  spouseInfo: Record<string, unknown> | undefined,
+  personalInfo: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!spouseInfo || !personalInfo) return spouseInfo;
+
+  const maritalStatus = typeof personalInfo.maritalStatus === 'string'
+    ? (personalInfo.maritalStatus as string).toLowerCase().trim()
+    : '';
+  if (maritalStatus !== 'married') return spouseInfo;
+
+  const spouseHasAddress = typeof spouseInfo.address === 'string'
+    && (spouseInfo.address as string).trim().length > 0;
+  if (spouseHasAddress) return spouseInfo;
+
+  const piAddress = typeof personalInfo.address === 'string'
+    ? (personalInfo.address as string)
+    : '';
+  if (piAddress.trim().length === 0) return spouseInfo;
+
+  return {
+    ...spouseInfo,
+    address: piAddress,
+    city: spouseInfo.city ?? personalInfo.city ?? '',
+    state: spouseInfo.state ?? personalInfo.state ?? '',
+    zip: spouseInfo.zip ?? personalInfo.zip ?? '',
+    county: spouseInfo.county ?? personalInfo.county ?? '',
+  };
+}
+
 function markMissingFiduciaries(
   fiduciaries: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -1747,6 +1789,10 @@ export function buildTemplateData(
     (ctx.client.fiduciaries ?? {}) as Record<string, unknown>,
     ctx.client.personalInfo as Record<string, unknown> | undefined,
   );
+  const spouseInfoFilled = autoFillSpouseInfoAddress(
+    ctx.client.spouseInfo as Record<string, unknown> | undefined,
+    ctx.client.personalInfo as Record<string, unknown> | undefined,
+  );
 
   // Filter empty / partial children entries before render. The questionnaire
   // can persist trailing blank entries (e.g. user added a 4th child slot but
@@ -1764,7 +1810,7 @@ export function buildTemplateData(
     // Client data (full)
     client: ctx.client,
     personalInfo: ctx.client.personalInfo ?? {},
-    spouseInfo: ctx.client.spouseInfo,
+    spouseInfo: spouseInfoFilled,
     children,
     assets: ctx.client.assets ?? {},
     liabilities: ctx.client.liabilities ?? {},
