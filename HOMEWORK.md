@@ -4,13 +4,37 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-06 (last touched 2026-05-12)
+## 📍 Session left off here — 2026-05-12 PM (PageIndex API key set + deprecation discovered)
 
 ### 🔴 Open user actions (do these first, in order)
 
-1. **Sign up at PageIndex and replace the `PAGEINDEX_API_KEY` placeholder** (item 3 below). The placeholder `d75c0bbf****3e337025` is still active. Until the real key lands, the Client-Files chat panel returns nothing useful and the Wills → PageIndex pipeline cannot move past pre-flight. Rotation flow is in item 3.
+1. **(NEW BLOCKER)** **PageIndex retrieval API is deprecated — migrate to chat-completion API.** The real `PAGEINDEX_API_KEY` was minted and set this session (v7, 32 bytes, verified working — Upload + Firestore writes + PageIndex auth all confirmed end-to-end). But PageIndex now returns this on every retrieval poll:
+   ```
+   "retrieved_nodes": [],
+   "doc_id": null,
+   "deprecation": {
+     "deprecated": true,
+     "message": "Retrieval endpoints are deprecated. Use the chat-completion API: https://docs.pageindex.ai/endpoints#-pageindex-chat-api-beta"
+   }
+   ```
+   So every retrieval call silently returns empty. There's also a field-name change (`retrieved_nodes` vs our `nodes`) suggesting the response shape evolved too. Until migration, the Research chat right-panel Client Files section will stay empty even though uploads succeed and docs index correctly in PageIndex. **Affected files (all under `functions/src/`):** `pageindex-retrieval.ts`, `pageindex-client-files-chat.ts`, `rag-chat.ts`, `wills-processor.ts`. This is a real migration — non-trivial; needs the PageIndex chat-completion docs read and the request/response shape rewritten across the 4 files. **The Wills → PageIndex pipeline (Phase 4+) is also blocked on this.**
 
 2. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+
+### ✅ 2026-05-12 PM — PageIndex key set + functions redeployed (then code reverted)
+
+- **Real `PAGEINDEX_API_KEY` minted** on PageIndex dashboard. Critical learning: the dashboard masks existing keys (the `d75c0bbf****3e337025` string in HOMEWORK was the MASKED display of a real key whose unmasked value was lost — NEVER a placeholder per se; the `****` are literal display chars). The unmasked key is only visible **once in the creation dialog**, can never be recovered afterwards. After multiple failed paste cycles (clipboard captured Ctrl+V control char as a 1-byte secret; Get-Clipboard captured fragments of script text), the working flow was: paste into Notepad → Save As `pgkey.txt` (Text Documents, UTF-8) → `firebase functions:secrets:set --data-file pgkey.txt`. v7 confirmed: 32 bytes, first byte 'f' (0x66), last byte 'b' (0x62), zero non-printable bytes.
+- **Versions 1–6 destroyed.** v3, v4, v5, v6 all stored bad values during the diagnostic-and-retry cycle (Ctrl+V char, 9-char fragment, 4-byte something, etc.). All explicitly destroyed by Firebase's automatic stale-version cleanup when v7 was set + functions redeployed.
+- **4 PageIndex consumers redeployed against v7**: `ingestDocument`, `chatAi`, `ragChat`, `pageIndexClientFilesChat`. `willsProcessor` not yet deployed (Phase 2 / STOP GATE 3 still pending — will pick up v7 on first deploy).
+- **HOMEWORK was wrong about `backfillPageIndexFirmId`** — it does NOT bind `PAGEINDEX_API_KEY` (it's a Firestore-only firmId backfill, doesn't talk to PageIndex). Was previously listed in the redeploy list.
+- **End-to-end ingest path verified working**: upload a PDF → `ingestDocument` 200 OK in 2.2s → PageIndex stores doc → Firestore writes `pageindex_docs/client-files/files/<doc_id>` with `firmId: elias-counsel`. Two docs successfully indexed (one earlier upload + Karen's Will, doc IDs `pi-cmp2ivr4l02g601p7iqv37znl` + `pi-cmp2iz3t002g901p722d6r10t`).
+- **Retrieval path BLOCKED on deprecated API** — see open item 1 above. Function plumbing is correct (Firestore lookup, firmId match, retrieval submission, polling all confirmed); the deprecated PageIndex endpoint just returns empty.
+- **All diagnostic code reverted** at session close (per user request, since the migration will rewrite this code anyway). Reverted files: `ingest-document.ts` (cause-logging + key diagnostic + trim), `rag-chat.ts` (trim), `pageindex-client-files-chat.ts` (trim + pipeline-counts log + raw-body log), `wills-processor.ts` (trim), `pageindex-retrieval.ts` (raw-body log). **Cloud functions still have the temp code until next deploy** — benign for tonight but should be cleaned up in the next deploy cycle.
+
+### 🆕 New follow-ups from this session
+
+- **Anthropic API key is 401-ing.** `pageIndexClientFilesChat` + `ragChat` logs repeatedly show `Anthropic stream failed pre-chunk; falling back to OpenAI. err=401 invalid x-api-key`. Graceful-degradation (shipped 2026-05-06 in commit `91c51f6`) is doing its job — OpenAI substitutes successfully so user-facing chat still answers — but the Anthropic key needs re-rotation. HOMEWORK previously said it was rotated 2026-05-06; something has happened to it since. Run `gcloud secrets versions list ANTHROPIC_API_KEY --project=estate-plan-generator` to see current state, then mint a new key on console.anthropic.com if needed.
+- **Research chat page layout bug.** User reported "all boxes popping out of main box" on `/chat`. Not investigated this session. Probably a CSS flex/overflow issue in `ChatPage.tsx`; the 70/30 split panel may break at certain viewport widths or under certain DOM states.
 
 ### ✅ 2026-05-12 hosting smoke-test bugs — all closed same day
 
@@ -34,9 +58,9 @@ Items requiring human action or decisions before the next agent session can proc
 
 ### 🟡 What's blocked vs. what's agent-codeable now
 
-- **Blocked on user action #3** (PageIndex key): the entire Wills → PageIndex pipeline mid-term project. Once the real key lands and pre-flight is complete, an agent can drive STOP GATE 3 → STOP GATE 4 → Phase 4 (30-doc pilot harness).
-- **Agent-codeable without user blockers:** none of consequence right now. Item 4 + item 5 are user verification tasks. The Wills pipeline schema/few-shot follow-on (Phase 5 prerequisites) is still listed as "Adam reviews" not agent work.
-- **Optional verification an agent could run** (only if user wants assurance): smoke-test the new RAG fallback by temporarily setting `ANTHROPIC_API_KEY` to a bogus value, asking a chat question, and confirming the all-at-once OpenAI answer + a `[ragChat-degradation]` log line. Would require setting and then restoring a secret — not free.
+- **Blocked on PageIndex API migration** (NEW): the entire Wills → PageIndex pipeline mid-term project AND the Research chat right-panel citations. PageIndex retrieval API is deprecated as of 2026-05-12; migrating to their chat-completion API is the next agent task. The key itself is set and authenticating correctly.
+- **Agent-codeable without user blockers:** the PageIndex migration is itself agent work — read PageIndex chat-completion docs (https://docs.pageindex.ai/endpoints#-pageindex-chat-api-beta), rewrite the request/response handling across 4 functions, redeploy, re-test. Item 4 + item 5 are still user verification tasks.
+- **Anthropic key re-rotation** is also agent-codeable if user wants it run (mint key on console.anthropic.com → file-based `firebase functions:secrets:set` → redeploy).
 
 ### 🧠 Memory added this session
 
