@@ -10,6 +10,7 @@ import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
+import { checkContentIntegrity } from './doc-content-integrity-checker';
 import { buildEstatePlanSummaryTemplateData } from './generators/summary-docs-generator';
 
 
@@ -956,6 +957,30 @@ export async function generateDocument(
       } else {
         validationFindings = structureResult.missing;
       }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 3c. Post-generation CONTENT integrity check (all modes, including template)
+  // ------------------------------------------------------------------
+  // Catches symptoms that template mode can still produce: unresolved
+  // Handlebars, empty fiduciary slots, missing client name, double-period
+  // typos. Findings merge with structural ones; same Firestore field, same
+  // status semantics. Does NOT trigger retries — these are mostly
+  // post-processing/data issues, not AI-output issues.
+  if (generatedDoc.status !== 'error' && generatedDoc.content) {
+    const integrity = checkContentIntegrity(generatedDoc.content, docType, clientContext);
+    if (integrity.findings.length > 0) {
+      console.warn(
+        `[unifiedGenerator] CONTENT INTEGRITY for ${docType}: ` +
+          integrity.findings
+            .map((f) => `[${f.severity}] ${f.name}${f.detail ? ` — ${f.detail}` : ''}`)
+            .join('; '),
+      );
+      validationFindings = [
+        ...validationFindings,
+        ...integrity.findings.map((f) => ({ name: f.name, severity: f.severity })),
+      ];
     }
   }
 

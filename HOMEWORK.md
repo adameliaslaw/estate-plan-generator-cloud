@@ -8,7 +8,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ### 🔴 Open user actions
 
-1. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+1. **Verify the new content-integrity checker.** Regenerate any client's package (or just one doc) — `generateDocuments` / `generateSingleDocument` are deployed with the new pass. Inspect the saved doc in Firestore: a new `validationFindings` array now includes content-integrity items (Unresolved Handlebars, Empty fiduciary slot, Client name missing, etc.) alongside the existing structural items. Confirm no false positives on a known-good doc. (Karen's regen on 2026-05-12 had no content-integrity issues per inspection — should still pass.)
+2. **Populate `reference` KB with NJ statutes / IL template source material** (highest soul-impact item agent-codeable but blocked on your source PDFs). Once you have a folder of statute PDFs, drop them into `/chat` → Upload Document → pick `reference`. After that, the template engine's retrieval has authoritative content to ground on instead of an empty corpus.
+3. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+
+### ✅ 2026-05-13 AM — Content-integrity checker (soul-direct generation defender)
+
+- **New module `functions/src/doc-content-integrity-checker.ts`.** Runs after structural validation in `unified-generator.ts`, on EVERY generation mode (template, hybrid, ai, flex — the structural validator skips template mode; integrity check does not, because content symptoms can leak through any path).
+- **Rules (v1):** unresolved Handlebars `{{...}}`, empty fiduciary slot pattern `", , ,"`, empty appointment clause `"appoint my , ,"`, trailing Oxford-list fragment `", and ."`, double-period typo `JR..`, empty `<strong></strong>` / `<em></em>` shells, missing space after parenthesis `)Word`. Plus client-data presence: client full name appears in the doc (error), spouse name appears for married clients (warning).
+- **Wiring:** findings merge into the existing `validationFindings` array on the saved doc. Same Firestore schema, same `needs_review` status semantics — vault UI badges already light up on errors. No new save schema; no migration.
+- **Non-blocking by design.** Findings flag, don't refuse. Attorney sees what's wrong but the doc still saves so it's reviewable in the editor.
+- **Tests:** 14 new unit tests in `tests/unit/doc-content-integrity-checker.test.ts`. Full suite 603/603 pass.
+- **Deployed:** `generateDocuments` + `generateSingleDocument` redeployed against new code. Both clean.
+- **Soul-direct.** This catches the exact failure modes the prior session batches (April 27 → May 12) were chasing one-by-one in the template engine — unresolved vars, empty slots, missing names, typography drift. Going forward, regressions surface on the saved doc as visible warnings rather than silently shipping into the vault.
 
 ### ✅ 2026-05-13 AM — PageIndex retrieval → chat-completion migration (verified end-to-end)
 
