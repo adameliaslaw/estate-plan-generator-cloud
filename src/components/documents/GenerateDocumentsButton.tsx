@@ -556,33 +556,40 @@ export default function GenerateDocumentsButton({
               <span>{progress}%</span>
             </div>
 
-            {/* Progress steps */}
+            {/* Progress steps — only the docs the user actually selected.
+                Pre-PR-#9 the list was hardcoded to the full package; now we
+                derive from selectedKeys so unchecked rows don't appear as
+                "to be generated". selectedKeys is frozen while phase ===
+                'generating' (the confirmation dialog is closed), so this
+                filter is stable through the run. */}
             <div className="space-y-1.5">
-              {packageDocs.map((doc, i) => {
-                const stepPct = Math.round((i / packageDocs.length) * 90);
-                const isDone = progress > stepPct + 10;
-                const isActive = progress > stepPct && !isDone;
-                return (
-                  <div key={doc} className="flex items-center gap-2.5 text-sm">
-                    {isDone ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                    ) : isActive ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#2b6cb0]" />
-                    ) : (
-                      <div className="h-4 w-4 shrink-0 rounded-full border-2 border-gray-200" />
-                    )}
-                    <span
-                      className={cn(
-                        isDone && 'text-gray-400 line-through',
-                        isActive && 'font-medium text-[#1a365d]',
-                        !isDone && !isActive && 'text-gray-400',
+              {selectableDocs
+                .filter((d) => selectedKeys.has(d.key))
+                .map((doc, i, arr) => {
+                  const stepPct = Math.round((i / arr.length) * 90);
+                  const isDone = progress > stepPct + 10;
+                  const isActive = progress > stepPct && !isDone;
+                  return (
+                    <div key={doc.key} className="flex items-center gap-2.5 text-sm">
+                      {isDone ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                      ) : isActive ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#2b6cb0]" />
+                      ) : (
+                        <div className="h-4 w-4 shrink-0 rounded-full border-2 border-gray-200" />
                       )}
-                    >
-                      {doc}
-                    </span>
-                  </div>
-                );
-              })}
+                      <span
+                        className={cn(
+                          isDone && 'text-gray-400 line-through',
+                          isActive && 'font-medium text-[#1a365d]',
+                          !isDone && !isActive && 'text-gray-400',
+                        )}
+                      >
+                        {doc.label}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </DialogContent>
