@@ -4,20 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-06 (last touched 2026-05-08)
+## 📍 Session left off here — 2026-05-06 (last touched 2026-05-12)
 
 ### 🔴 Open user actions (do these first, in order)
 
-1. **🚨 Rotate `OPENAI_API_KEY` (still leaked).** During the 2026-05-06 session, the cleartext OpenAI key (`sk-proj-52Mdei2rh2WJ…`) was leaked into the conversation log via `firebase functions:secrets:access`. Rotation commands were drafted for the user but **no confirmation was received** that the rotation completed. **Verify before doing anything else** — visit https://platform.openai.com/api-keys and confirm `sk-proj-52Mdei2rh2WJ…` is revoked. If not revoked, run the Step 1-4 flow drafted in the closing message of that session (revoke → `firebase functions:secrets:set OPENAI_API_KEY` → redeploy `ragChat` and `pageIndexClientFilesChat`). The Anthropic key was already rotated mid-session after a parallel leak.
+1. **Hosting redeploy from laptop** — `npm run build && firebase deploy --only hosting` (project `estate-plan-generator`). PR #9 (per-doc selection in Generate Estate Plan dialog) is merged on the backend but the frontend bundle has never been rebuilt; the new UI is not yet live. See item 3b for context.
 
-2. **Hosting redeploy from laptop** — `npm run build && firebase deploy --only hosting` (project `estate-plan-generator`). PR #9 (per-doc selection in Generate Estate Plan dialog) is merged on the backend but the frontend bundle has never been rebuilt; the new UI is not yet live. See item 3b for context.
+2. **Sign up at PageIndex and replace the `PAGEINDEX_API_KEY` placeholder** (item 3 below). The placeholder `d75c0bbf****3e337025` is still active. Until the real key lands, the Client-Files chat panel returns nothing useful and the Wills → PageIndex pipeline cannot move past pre-flight. Rotation flow is in item 3.
 
-3. **Sign up at PageIndex and replace the `PAGEINDEX_API_KEY` placeholder** (item 3 below). The placeholder `d75c0bbf****3e337025` is still active. Until the real key lands, the Client-Files chat panel returns nothing useful and the Wills → PageIndex pipeline cannot move past pre-flight. Rotation flow is in item 3.
+3. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
 
-4. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
+### ✅ Closed during the 2026-05-06 + 2026-05-12 sessions
 
-### ✅ Closed during the 2026-05-06 session
-
+- **OPENAI_API_KEY rotation (closed 2026-05-12)** — old leaked key (`sk-proj-52Mdei2rh2WJ…`) revoked on platform.openai.com; new key minted and set as version 2 via the file-based `firebase functions:secrets:set` flow (no cleartext in shell history). `ragChat` and `pageIndexClientFilesChat` redeployed against v2. Version 1 explicitly destroyed in Secret Manager (`gcloud secrets versions destroy 1`). `transcribe-audio` and `process-ocr` reference `process.env.OPENAI_API_KEY` but don't bind it, so they're unaffected. Verified: `gcloud secrets versions list OPENAI_API_KEY` shows v2 enabled, v1 destroyed.
 - **Item 1** (browser hang UX) — verified closed against PR #6 commits.
 - **Item 3 — Anthropic half** — `ANTHROPIC_API_KEY` rotated (twice — initial real key leaked, immediately re-rotated). KB-side admin chat smoke-tested and returned a complete answer.
 - **Item 3 — `ingestDocument` region** — migrated `us-central1` → `us-east1`. The frontend was hardcoded to `us-east1` so the upload path was effectively broken in production before this fix.
