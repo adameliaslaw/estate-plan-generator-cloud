@@ -312,7 +312,7 @@ export const bulkImportKnowledgeResources = onCall(
 
 
 export const analyzeKnowledgeContent = onCall(
-  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30 },
+  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30, secrets: ['MERCURY_API_KEY'] },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { text } = request.data as { text: string };
@@ -337,7 +337,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
 
     // Use the firm's preferred AI provider or default
     const raw = await callAI(systemPrompt, userPrompt, {}, {
-      model: 'gpt-5-mini',
+      model: 'mercury-coder-small',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,
