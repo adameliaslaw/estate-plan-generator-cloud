@@ -165,7 +165,13 @@ These items surfaced during the post-merge production deploy of PR #1 (`04a2739`
 
 - **PR #7** — NJ POA `ACKNOWLEDGMENT` block now recognized as a valid Notary Block by the structural validator. Patterns: `acknowledg.*oath`, `) ss:`, `commission expires`. Prevents false-positive `needs_review` status on NJ POAs.
 - **PR #8** — Hybrid template augmentation switched from `claude-sonnet-4-6` → `claude-haiku-4-5-20251001`. ~2.5× faster for the structure-preservation step (the step that matters most for latency UX). Quality is maintained since the task is structure/bracket-preservation, not creative drafting.
-- **PR #9** — "Generate Estate Plan Documents" dialog now shows a checkbox list; attorney can select a subset to generate without regenerating the whole package. Defaults to all-checked (unchanged behavior). Married-couple pairs expand to per-role rows. **Requires hosting redeploy from laptop** (`npm run build && firebase deploy --only hosting`) — PR #9 is merged on the backend but the frontend bundle hasn't been rebuilt yet.
+- **PR #9** — "Generate Estate Plan Documents" dialog now shows a checkbox list; attorney can select a subset to generate without regenerating the whole package. Defaults to all-checked (unchanged behavior). Married-couple pairs expand to per-role rows. **Hosting redeployed 2026-05-05** (laptop build + `firebase deploy --only hosting`).
+
+### 3c. ✅ Dependency vulnerability sweep — closed 2026-05-05 (commit `b80509d`)
+
+`npm audit fix` (semver-safe, no `--force`) brought us from 13 vulnerabilities (7 moderate, 5 high, 1 critical) → 2 non-exploitable moderate. Patched: `dompurify`, `vite`, `postcss`, `protobufjs` (critical RCE), `@xmldom/xmldom`, `hono`, `@hono/node-server`, `path-to-regexp`, `picomatch`, `brace-expansion`, `flatted`. Tests: 589/589 still passing. Build clean.
+
+Remaining 2 moderate: `uuid <14` direct + transitive via `gaxios`. Advisory only triggers when caller passes a `buf` argument to `uuid.v3/v5/v6` — we don't, anywhere. `--force` upgrade would bump `gaxios`/`firebase-admin` majors for zero real exposure; left as-is.
 
 ### 4. POA smoke test (deferred from 2026-05-05)
 
