@@ -475,7 +475,7 @@ function buildResearchUserPrompt(
 // ---------------------------------------------------------------------------
 
 export const chatAi = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ['PAGEINDEX_API_KEY'] })
+  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ['PAGEINDEX_API_KEY', 'MERCURY_API_KEY'] })
   .region('us-east1')
   .https.onCall(
   async (data: ChatAiRequest, context: functions.https.CallableContext) => {
