@@ -56,9 +56,10 @@ Firecrawled Reddit and legal community forums (r/legaltech 276-upvote threads, r
 
 #### App 2 — **Client Follow-Up Engine** (Grievance #7)
 **One-liner:** Auto-chase clients for outstanding documents, unsigned retainers, and payments without lifting a finger.
-**Flow:** Attorney configures triggers (e.g., "If retainer unsigned after 48h, send SMS + email") → agent monitors Firestore client status → fires `sendFollowUpReminder` (already exists!) → stops when status changes.
-**Why now:** Solo attorneys lose 5+ hrs/week to manual follow-up. `sendFollowUpReminder` is already deployed — just needs a configuration UI and trigger engine.
+**Flow:** Attorney configures triggers (e.g., "If retainer unsigned after 48h, send SMS + email") → agent monitors Firestore client status → sends follow-up email → stops when status changes.
+**Why now:** Solo attorneys lose 5+ hrs/week to manual follow-up.
 **Build scope:** New "Automations" page + Firestore `automationRules` collection + scheduled function polling.
+**⚠ Auth constraint:** The existing `sendFollowUpReminder` onCall function (email-notifications.ts:1006) enforces `request.auth` and `request.auth.token.firmId === firmId` — a scheduler has no user auth context and will fail. Pattern to use instead: extract the core email logic into a shared internal helper (e.g., `_sendFollowUpEmailInternal(firmId, clientId, ...)`) callable from both the existing onCall wrapper AND the new scheduled function running under Admin SDK. Do NOT call the onCall function directly from a scheduler.
 
 #### App 3 — **AI Brief Analyzer** (Grievance #9)
 **One-liner:** Upload opposing counsel's brief; get a structured opposition prep report.
