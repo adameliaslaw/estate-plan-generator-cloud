@@ -68,3 +68,4 @@ export { backfillPageIndexFirmId } from './backfill-pageindex-firmid';
 export { willsProcessor } from './wills-processor';
 export { willsDriveWebhook, willsDriveWatchRenew, willsSetupDriveWatch } from './wills-drive-watcher';
 export { willsStartBackfill } from './wills-backfill';
+export { willsPilotRun } from './wills-pilot';
