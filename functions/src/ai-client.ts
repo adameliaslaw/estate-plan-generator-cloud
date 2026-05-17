@@ -752,7 +752,14 @@ export async function callAIWithVision(
   }
 
   const data = await response.json() as GeminiGenerateResponse;
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    console.error(
+      `[callAIWithVision] Gemini returned no text. finishReason=${data.candidates?.[0]?.finishReason ?? 'none'} ` +
+      `candidates=${data.candidates?.length ?? 0}`,
+    );
+  }
+  return text ?? '';
 }
 
 // ---------------------------------------------------------------------------

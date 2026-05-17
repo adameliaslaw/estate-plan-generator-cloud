@@ -405,8 +405,8 @@ ${REVIEW_OUTPUT_FORMAT}`;
       ? `\nFOCUS AREAS: ${focusAreas.map(f => sanitizeForPrompt(f)).join(', ')}\n`
       : '';
 
-    // Truncate document content to avoid token limits (review the first 15,000 chars)
-    const truncatedContent = sanitizeForPrompt(documentContent).slice(0, 15000);
+    // Truncate document content to avoid token limits (review the first 30,000 chars)
+    const truncatedContent = sanitizeForPrompt(documentContent).slice(0, 30000);
 
     const userPrompt = `
 Review this ${docType} document for NJ compliance and drafting quality.
@@ -422,7 +422,7 @@ Identify all issues by severity. Be specific about location (article/section nam
 
     const aiStart = Date.now();
     const raw = await callAI(systemPrompt, userPrompt, firmData, {
-      model: 'gpt-5.4',
+      model: firmData?.documentDraftingModel as string | undefined ?? undefined,
       temperature: 0.1,
       maxTokens: 4096,
       jsonMode: true,
