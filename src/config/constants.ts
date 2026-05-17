@@ -452,6 +452,7 @@ export const ROUTES = {
     `/portal/${firmId}/${clientId}`,
   CHAT: '/chat',
   CITATION_VERIFIER: '/citation-verifier',
+  AUTOMATIONS: '/automations',
 } as const;
 
 // ---------------------------------------------------------------------------

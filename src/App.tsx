@@ -31,6 +31,7 @@ const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 const ChatPage = lazy(() => import('@/pages/admin/ChatPage'));
 const CitationVerifierPage = lazy(() => import('@/pages/admin/CitationVerifierPage'));
+const AutomationsPage = lazy(() => import('@/pages/admin/AutomationsPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 
 
@@ -196,6 +197,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <CitationVerifierPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.AUTOMATIONS}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <AutomationsPage />
                 </AppLayout>
               }
             />

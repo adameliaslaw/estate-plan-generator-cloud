@@ -9,6 +9,7 @@ import {
   Scale,
   BookOpen,
   MessageSquareText,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +28,7 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.KNOWLEDGE_BASE]: () => { import('@/pages/admin/KnowledgeBasePage'); },
   [ROUTES.CHAT]: () => { import('@/pages/admin/ChatPage'); },
   [ROUTES.CITATION_VERIFIER]: () => { import('@/pages/admin/CitationVerifierPage'); },
+  [ROUTES.AUTOMATIONS]: () => { import('@/pages/admin/AutomationsPage'); },
 };
 
 interface NavItem {
@@ -44,6 +46,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
   { label: 'Research Chat', href: ROUTES.CHAT, icon: MessageSquareText },
   { label: 'Citation Verifier', href: ROUTES.CITATION_VERIFIER, icon: Scale },
+  { label: 'Automations', href: ROUTES.AUTOMATIONS, icon: Zap },
 ];
 
 interface AppSidebarProps {
