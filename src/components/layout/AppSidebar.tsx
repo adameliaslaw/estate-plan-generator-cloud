@@ -26,6 +26,7 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.PAYMENTS]: () => { import('@/pages/admin/PaymentsPage'); },
   [ROUTES.KNOWLEDGE_BASE]: () => { import('@/pages/admin/KnowledgeBasePage'); },
   [ROUTES.CHAT]: () => { import('@/pages/admin/ChatPage'); },
+  [ROUTES.CITATION_VERIFIER]: () => { import('@/pages/admin/CitationVerifierPage'); },
 };
 
 interface NavItem {
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Payments', href: ROUTES.PAYMENTS, icon: DollarSign },
   { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
   { label: 'Research Chat', href: ROUTES.CHAT, icon: MessageSquareText },
+  { label: 'Citation Verifier', href: ROUTES.CITATION_VERIFIER, icon: Scale },
 ];
 
 interface AppSidebarProps {
