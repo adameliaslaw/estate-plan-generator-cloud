@@ -32,6 +32,7 @@ const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 const ChatPage = lazy(() => import('@/pages/admin/ChatPage'));
 const CitationVerifierPage = lazy(() => import('@/pages/admin/CitationVerifierPage'));
 const AutomationsPage = lazy(() => import('@/pages/admin/AutomationsPage'));
+const BriefAnalyzerPage = lazy(() => import('@/pages/admin/BriefAnalyzerPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 
 
@@ -205,6 +206,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <AutomationsPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.BRIEF_ANALYZER}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <BriefAnalyzerPage />
                 </AppLayout>
               }
             />

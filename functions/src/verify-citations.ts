@@ -62,7 +62,7 @@ interface CLOpinion {
   absolute_url?: string;
 }
 
-async function lookupCitation(
+export async function lookupCitation(
   citation: string,
   apiKey: string,
 ): Promise<CitationResult> {

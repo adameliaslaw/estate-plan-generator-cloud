@@ -453,6 +453,7 @@ export const ROUTES = {
   CHAT: '/chat',
   CITATION_VERIFIER: '/citation-verifier',
   AUTOMATIONS: '/automations',
+  BRIEF_ANALYZER: '/brief-analyzer',
 } as const;
 
 // ---------------------------------------------------------------------------

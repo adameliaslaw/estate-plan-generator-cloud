@@ -10,6 +10,7 @@ import {
   BookOpen,
   MessageSquareText,
   Zap,
+  Swords,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,6 +30,7 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.CHAT]: () => { import('@/pages/admin/ChatPage'); },
   [ROUTES.CITATION_VERIFIER]: () => { import('@/pages/admin/CitationVerifierPage'); },
   [ROUTES.AUTOMATIONS]: () => { import('@/pages/admin/AutomationsPage'); },
+  [ROUTES.BRIEF_ANALYZER]: () => { import('@/pages/admin/BriefAnalyzerPage'); },
 };
 
 interface NavItem {
@@ -47,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Research Chat', href: ROUTES.CHAT, icon: MessageSquareText },
   { label: 'Citation Verifier', href: ROUTES.CITATION_VERIFIER, icon: Scale },
   { label: 'Automations', href: ROUTES.AUTOMATIONS, icon: Zap },
+  { label: 'Brief Analyzer', href: ROUTES.BRIEF_ANALYZER, icon: Swords },
 ];
 
 interface AppSidebarProps {
