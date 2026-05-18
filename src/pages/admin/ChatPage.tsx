@@ -42,9 +42,11 @@ function nsBadge(ns: string): string {
   return NS_COLOURS[ns] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
 }
 
-// Detects common US reporter abbreviations — used to skip API call when
-// the response contains no legal citations at all.
-const QUICK_CITATION_RE = /\b\d{1,4}\s+(?:F\.|U\.S\.|S\.\s*Ct\.|N\.J\.|A\.\d|P\.\d|B\.R\.)/i;
+// Mirrors the reporter families recognized by the backend's CITATION_RE
+// (verify-citations.ts) — used as a fast precheck to skip the API call when
+// the response clearly contains no legal citations. Must stay in sync with
+// the server regex so we don't silently drop valid citations.
+const QUICK_CITATION_RE = /\b\d{1,4}\s+(?:F\.|U\.S\.|S\.\s*Ct\.|L\.\s*Ed\.|N\.J\.|N\.Y\.|A\.\d|P\.\d|B\.R\.|Cal\.|Tex\.)/i;
 
 // ---------------------------------------------------------------------------
 // Sub-components

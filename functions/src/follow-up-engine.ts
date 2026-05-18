@@ -20,6 +20,15 @@ import { getFirmData, getSendGridKey, extractBranding, buildEmailHtml, ctaButton
 
 export type AutomationTriggerType = 'questionnaire_incomplete' | 'payment_outstanding';
 
+const VALID_TRIGGER_TYPES: readonly AutomationTriggerType[] = [
+  'questionnaire_incomplete',
+  'payment_outstanding',
+];
+
+function isValidTriggerType(v: unknown): v is AutomationTriggerType {
+  return typeof v === 'string' && (VALID_TRIGGER_TYPES as readonly string[]).includes(v);
+}
+
 export interface AutomationRule {
   id: string;
   triggerType: AutomationTriggerType;
@@ -57,7 +66,12 @@ export const manageAutomationRule = onCall(
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     if (action === 'create') {
-      if (!rule?.triggerType) throw new HttpsError('invalid-argument', 'triggerType is required.');
+      if (!isValidTriggerType(rule?.triggerType)) {
+        throw new HttpsError(
+          'invalid-argument',
+          `triggerType must be one of: ${VALID_TRIGGER_TYPES.join(', ')}`,
+        );
+      }
       const ref = await col.add({
         triggerType: rule.triggerType,
         delayDays: rule.delayDays ?? 7,
@@ -73,7 +87,15 @@ export const manageAutomationRule = onCall(
     if (action === 'update') {
       if (!ruleId) throw new HttpsError('invalid-argument', 'ruleId is required for update.');
       const updates: Record<string, unknown> = { updatedAt: now };
-      if (rule?.triggerType !== undefined) updates['triggerType'] = rule.triggerType;
+      if (rule?.triggerType !== undefined) {
+        if (!isValidTriggerType(rule.triggerType)) {
+          throw new HttpsError(
+            'invalid-argument',
+            `triggerType must be one of: ${VALID_TRIGGER_TYPES.join(', ')}`,
+          );
+        }
+        updates['triggerType'] = rule.triggerType;
+      }
       if (rule?.delayDays !== undefined) updates['delayDays'] = rule.delayDays;
       if (rule?.repeatEveryDays !== undefined) updates['repeatEveryDays'] = rule.repeatEveryDays;
       if (rule?.enabled !== undefined) updates['enabled'] = rule.enabled;
@@ -173,14 +195,21 @@ async function processRule(
   for (const clientDoc of clientsSnap.docs) {
     const client = clientDoc.data();
 
+    // Defensive: an unknown trigger type slipped past validation must not
+    // fall through to a send. Skip silently and log for visibility.
     if (rule.triggerType === 'questionnaire_incomplete') {
       const status = (client['questionnaireProgress'] as Record<string, unknown> | undefined)?.['status'];
       if (status === 'completed') continue;
-    }
-
-    if (rule.triggerType === 'payment_outstanding') {
+    } else if (rule.triggerType === 'payment_outstanding') {
       const balanceDue = (client['packageDetails'] as Record<string, unknown> | undefined)?.['balanceDue'];
       if (!balanceDue || (balanceDue as number) <= 0) continue;
+    } else {
+      logger.warn('[scheduledFollowUps] Unknown triggerType — skipping', {
+        firmId,
+        ruleId: rule.id,
+        triggerType: rule.triggerType,
+      });
+      return;
     }
 
     const personalInfo = client['personalInfo'] as Record<string, unknown> | undefined;
@@ -191,31 +220,53 @@ async function processRule(
 
     if (!clientEmail || !clientName) continue;
 
-    // Deduplication — check automationLog to avoid repeat sends within cadence
-    const logRef = db.doc(`firms/${firmId}/automationLog/${clientDoc.id}_${rule.triggerType}`);
-    const logSnap = await logRef.get();
-    if (logSnap.exists) {
-      const lastSent = logSnap.data()!['lastSentAt'] as admin.firestore.Timestamp;
-      if (rule.repeatEveryDays === 0) continue; // one-shot already sent
-      const nextSendAt = admin.firestore.Timestamp.fromMillis(
-        lastSent.toMillis() + rule.repeatEveryDays * 24 * 60 * 60 * 1000,
-      );
-      if (now.toMillis() < nextSendAt.toMillis()) continue;
+    // Per-rule dedup key — rules with the same triggerType but different
+    // cadences must not share a log entry.
+    const logRef = db.doc(`firms/${firmId}/automationLog/${clientDoc.id}_${rule.id}`);
+
+    // Atomically reserve the send slot before dispatching. Cloud Scheduler is
+    // at-least-once; two overlapping invocations could otherwise both observe
+    // no recent log and both send. Reserving inside a transaction makes the
+    // check-then-write atomic so only one wins.
+    let reserved = false;
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(logRef);
+        if (snap.exists) {
+          const lastSent = snap.data()!['lastSentAt'] as admin.firestore.Timestamp;
+          if (rule.repeatEveryDays === 0) throw new Error('__one_shot_done');
+          const nextSendMs = lastSent.toMillis() + rule.repeatEveryDays * 24 * 60 * 60 * 1000;
+          if (now.toMillis() < nextSendMs) throw new Error('__too_soon');
+        }
+        tx.set(logRef, {
+          lastSentAt: now,
+          triggerType: rule.triggerType,
+          ruleId: rule.id,
+        });
+      });
+      reserved = true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg === '__one_shot_done' || msg === '__too_soon') continue;
+      logger.error('[scheduledFollowUps] Reservation failed', { firmId, clientId: clientDoc.id, ruleId: rule.id, err });
+      continue;
     }
+    if (!reserved) continue;
 
     const clientCreatedAt = client['createdAt'] as admin.firestore.Timestamp | undefined;
     const daysSince = clientCreatedAt
       ? Math.floor((now.toMillis() - clientCreatedAt.toMillis()) / (24 * 60 * 60 * 1000))
       : rule.delayDays;
 
+    // We've reserved the slot. If the send fails, we accept missing this
+    // cycle's email rather than rolling back and risking duplicate sends on
+    // the next overlapping invocation.
     try {
       if (rule.triggerType === 'questionnaire_incomplete') {
         await _sendFollowUpEmailInternal(firmId, clientDoc.id, clientEmail, clientName, daysSince);
-      } else {
+      } else if (rule.triggerType === 'payment_outstanding') {
         await _sendPaymentReminderInternal(firmId, clientEmail, clientName, daysSince);
       }
-
-      await logRef.set({ lastSentAt: now, triggerType: rule.triggerType });
 
       await logAuditEvent({
         firmId,
@@ -229,9 +280,9 @@ async function processRule(
         metadata: { emailType: rule.triggerType, recipientEmail: clientEmail, daysSince, ruleId: rule.id },
       });
 
-      logger.info('[scheduledFollowUps] Sent', { firmId, clientId: clientDoc.id, triggerType: rule.triggerType });
+      logger.info('[scheduledFollowUps] Sent', { firmId, clientId: clientDoc.id, ruleId: rule.id, triggerType: rule.triggerType });
     } catch (err) {
-      logger.error('[scheduledFollowUps] Send failed', { firmId, clientId: clientDoc.id, err });
+      logger.error('[scheduledFollowUps] Send failed after reservation', { firmId, clientId: clientDoc.id, ruleId: rule.id, err });
     }
   }
 }
