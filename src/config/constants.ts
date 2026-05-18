@@ -455,6 +455,7 @@ export const ROUTES = {
   AUTOMATIONS: '/automations',
   BRIEF_ANALYZER: '/brief-analyzer',
   BILLING_CALCULATOR: '/billing-calculator',
+  INTEGRATIONS: '/integrations',
 } as const;
 
 // ---------------------------------------------------------------------------

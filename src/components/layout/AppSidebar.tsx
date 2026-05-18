@@ -12,6 +12,7 @@ import {
   Zap,
   Swords,
   Calculator,
+  Cable,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,6 +34,7 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.AUTOMATIONS]: () => { import('@/pages/admin/AutomationsPage'); },
   [ROUTES.BRIEF_ANALYZER]: () => { import('@/pages/admin/BriefAnalyzerPage'); },
   [ROUTES.BILLING_CALCULATOR]: () => { import('@/pages/admin/BillingCalculatorPage'); },
+  [ROUTES.INTEGRATIONS]: () => { import('@/pages/admin/IntegrationsHubPage'); },
 };
 
 interface NavItem {
@@ -53,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Automations', href: ROUTES.AUTOMATIONS, icon: Zap },
   { label: 'Brief Analyzer', href: ROUTES.BRIEF_ANALYZER, icon: Swords },
   { label: 'Value Billing', href: ROUTES.BILLING_CALCULATOR, icon: Calculator },
+  { label: 'Integrations', href: ROUTES.INTEGRATIONS, icon: Cable },
 ];
 
 interface AppSidebarProps {
