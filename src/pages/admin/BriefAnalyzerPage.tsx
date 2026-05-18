@@ -14,7 +14,6 @@ import {
   Loader2,
   AlertTriangle,
   ShieldCheck,
-  HelpCircle,
   ExternalLink,
   Target,
   ListChecks,
@@ -27,27 +26,13 @@ import {
   type BriefAnalysisResult,
 } from '@/services/brief-analyzer-service';
 import type { CitationResult } from '@/services/citation-verifier-service';
+import { CitationStatusBadge } from '@/components/citations/CitationStatusBadge';
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
 function CitationRow({ result }: { result: CitationResult }) {
-  const badge =
-    result.status === 'verified' ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 shrink-0">
-        <ShieldCheck className="h-2.5 w-2.5" /> Verified
-      </span>
-    ) : result.status === 'not_found' ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-200 shrink-0">
-        <AlertTriangle className="h-2.5 w-2.5" /> Not found
-      </span>
-    ) : (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200 shrink-0">
-        <HelpCircle className="h-2.5 w-2.5" /> Check
-      </span>
-    );
-
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2">
       <div className="min-w-0 flex-1">
@@ -66,7 +51,7 @@ function CitationRow({ result }: { result: CitationResult }) {
           </a>
         )}
       </div>
-      {badge}
+      <CitationStatusBadge status={result.status} size="sm" />
     </div>
   );
 }

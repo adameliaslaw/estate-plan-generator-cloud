@@ -262,17 +262,8 @@ export default function AutomationsPage() {
   useEffect(() => { void load(); }, [load]);
 
   async function handleCreate(rule: Parameters<typeof createAutomationRule>[1]) {
-    const id = await createAutomationRule(firmId, rule);
-    setRules((prev) => [
-      ...prev,
-      {
-        id,
-        ...rule,
-        createdAt: null as unknown as AutomationRule['createdAt'],
-        updatedAt: null as unknown as AutomationRule['updatedAt'],
-        createdBy: userProfile?.uid ?? '',
-      },
-    ]);
+    await createAutomationRule(firmId, rule);
+    await load();
     setShowForm(false);
   }
 

@@ -18,6 +18,8 @@ import { getFirmData, getSendGridKey, extractBranding, buildEmailHtml, ctaButton
 // Types
 // ---------------------------------------------------------------------------
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export type AutomationTriggerType = 'questionnaire_incomplete' | 'payment_outstanding';
 
 const VALID_TRIGGER_TYPES: readonly AutomationTriggerType[] = [
@@ -190,7 +192,7 @@ async function processRule(
   now: admin.firestore.Timestamp,
 ): Promise<void> {
   const cutoff = admin.firestore.Timestamp.fromMillis(
-    now.toMillis() - rule.delayDays * 24 * 60 * 60 * 1000,
+    now.toMillis() - rule.delayDays * MS_PER_DAY,
   );
 
   // Single inequality on createdAt; status/balance filtered in memory to avoid
@@ -243,7 +245,7 @@ async function processRule(
         if (snap.exists) {
           const lastSent = snap.data()!['lastSentAt'] as admin.firestore.Timestamp;
           if (rule.repeatEveryDays === 0) throw new Error('__one_shot_done');
-          const nextSendMs = lastSent.toMillis() + rule.repeatEveryDays * 24 * 60 * 60 * 1000;
+          const nextSendMs = lastSent.toMillis() + rule.repeatEveryDays * MS_PER_DAY;
           if (now.toMillis() < nextSendMs) throw new Error('__too_soon');
         }
         tx.set(logRef, {
@@ -263,7 +265,7 @@ async function processRule(
 
     const clientCreatedAt = client['createdAt'] as admin.firestore.Timestamp | undefined;
     const daysSince = clientCreatedAt
-      ? Math.floor((now.toMillis() - clientCreatedAt.toMillis()) / (24 * 60 * 60 * 1000))
+      ? Math.floor((now.toMillis() - clientCreatedAt.toMillis()) / MS_PER_DAY)
       : rule.delayDays;
 
     // We've reserved the slot. If the send fails, we accept missing this

@@ -5,6 +5,7 @@
 import { functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
 import type { CitationResult } from './citation-verifier-service';
+import { fileToBase64 } from '@/utils/file-helpers';
 
 export interface BriefArgument {
   title: string;
@@ -44,16 +45,3 @@ export async function analyzeBrief(
   return result.data;
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // strip the "data:application/pdf;base64," prefix
-      const base64 = result.split(',')[1] ?? '';
-      resolve(base64);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error('File read failed'));
-    reader.readAsDataURL(file);
-  });
-}

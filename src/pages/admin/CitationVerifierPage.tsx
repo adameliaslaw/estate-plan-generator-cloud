@@ -6,36 +6,15 @@
  */
 
 import { useState, useCallback } from 'react';
-import { ShieldCheck, AlertTriangle, HelpCircle, ExternalLink, Loader2, Scale } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, ExternalLink, Loader2, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { verifyCitations, type CitationResult } from '@/services/citation-verifier-service';
+import { CitationStatusBadge } from '@/components/citations/CitationStatusBadge';
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function StatusBadge({ status }: { status: CitationResult['status'] }) {
-  if (status === 'verified') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-        <ShieldCheck className="h-3 w-3" /> Verified
-      </span>
-    );
-  }
-  if (status === 'not_found') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 ring-1 ring-red-200">
-        <AlertTriangle className="h-3 w-3" /> Not found
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-      <HelpCircle className="h-3 w-3" /> Check manually
-    </span>
-  );
-}
 
 function CitationCard({ result, rank }: { result: CitationResult; rank: number }) {
   return (
@@ -56,7 +35,7 @@ function CitationCard({ result, rank }: { result: CitationResult; rank: number }
             {result.raw}
           </code>
         </div>
-        <StatusBadge status={result.status} />
+        <CitationStatusBadge status={result.status} />
       </div>
 
       {result.status === 'verified' && result.caseName && (

@@ -12,10 +12,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen, Upload, ShieldCheck, AlertTriangle, HelpCircle, Loader2 } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload, ShieldCheck, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamRagChat, streamClientFilesChat, type Citation } from '@/services/rag-chat-service';
 import { verifyCitations, type CitationResult } from '@/services/citation-verifier-service';
+import { CitationStatusBadge } from '@/components/citations/CitationStatusBadge';
 import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -53,21 +54,6 @@ const QUICK_CITATION_RE = /\b\d{1,4}\s+(?:F\.|U\.S\.|S\.\s*Ct\.|L\.\s*Ed\.|N\.J\
 // ---------------------------------------------------------------------------
 
 function LegalCitationBadge({ result }: { result: CitationResult }) {
-  const statusEl =
-    result.status === 'verified' ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 shrink-0">
-        <ShieldCheck className="h-2.5 w-2.5" /> Verified
-      </span>
-    ) : result.status === 'not_found' ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-200 shrink-0">
-        <AlertTriangle className="h-2.5 w-2.5" /> Not found
-      </span>
-    ) : (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200 shrink-0">
-        <HelpCircle className="h-2.5 w-2.5" /> Check
-      </span>
-    );
-
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
       <div className="min-w-0">
@@ -76,7 +62,7 @@ function LegalCitationBadge({ result }: { result: CitationResult }) {
           <p className="truncate text-[10px] text-gray-400 mt-0.5">{result.caseName}</p>
         )}
       </div>
-      {statusEl}
+      <CitationStatusBadge status={result.status} size="sm" />
     </div>
   );
 }

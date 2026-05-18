@@ -229,57 +229,58 @@ function StatusBadge({ status }: { status: ConnectionStatus }) {
   );
 }
 
-function IntegrationCard({ integration }: { integration: Integration }) {
-  const Icon = integration.icon;
-  const disabled = integration.status === 'coming_soon';
-
-  const ActionEl = (() => {
-    if (disabled) {
-      return (
-        <button
-          disabled
-          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-400 cursor-not-allowed"
-        >
-          Coming soon
-        </button>
-      );
-    }
-    if (integration.configRoute) {
-      return (
-        <Link
-          to={integration.configRoute}
-          className={cn(
-            'inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors',
-            integration.status === 'connected'
-              ? 'border border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-              : 'bg-[#1a365d] text-white hover:bg-[#2b6cb0]',
-          )}
-        >
-          {integration.status === 'connected' ? 'Manage' : 'Connect'}
-        </Link>
-      );
-    }
-    if (integration.externalLink) {
-      return (
-        <a
-          href={integration.externalLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:border-gray-300"
-        >
-          Open <ExternalLink className="h-2.5 w-2.5" />
-        </a>
-      );
-    }
+function IntegrationAction({ integration }: { integration: Integration }) {
+  if (integration.status === 'coming_soon') {
     return (
       <button
         disabled
         className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-400 cursor-not-allowed"
       >
-        Built-in
+        Coming soon
       </button>
     );
-  })();
+  }
+  if (integration.configRoute) {
+    const connected = integration.status === 'connected';
+    return (
+      <Link
+        to={integration.configRoute}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors',
+          connected
+            ? 'border border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+            : 'bg-[#1a365d] text-white hover:bg-[#2b6cb0]',
+        )}
+      >
+        {connected ? 'Manage' : 'Connect'}
+      </Link>
+    );
+  }
+  if (integration.externalLink) {
+    return (
+      <a
+        href={integration.externalLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:border-gray-300"
+      >
+        Open <ExternalLink className="h-2.5 w-2.5" />
+      </a>
+    );
+  }
+  return (
+    <button
+      disabled
+      className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-400 cursor-not-allowed"
+    >
+      Built-in
+    </button>
+  );
+}
+
+function IntegrationCard({ integration }: { integration: Integration }) {
+  const Icon = integration.icon;
+  const disabled = integration.status === 'coming_soon';
 
   return (
     <div
@@ -308,7 +309,9 @@ function IntegrationCard({ integration }: { integration: Integration }) {
             <p className="mt-0.5 text-[11px] text-gray-500 leading-relaxed">{integration.description}</p>
           </div>
         </div>
-        <div className="shrink-0">{ActionEl}</div>
+        <div className="shrink-0">
+          <IntegrationAction integration={integration} />
+        </div>
       </div>
     </div>
   );

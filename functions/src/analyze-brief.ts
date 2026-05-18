@@ -107,7 +107,6 @@ export const analyzeBrief = onCall(
       'courtlistenerApiKey'
     ] as string | undefined ?? '';
 
-    // Step 1 — OCR the PDF
     logger.info('[analyzeBrief] OCR start', { firmId, fileName, size: fileBase64.length });
     const ocrText = await callAIWithVision(fileBase64, 'application/pdf', OCR_PROMPT, firmData, {
       maxTokens: 32000,
@@ -117,26 +116,25 @@ export const analyzeBrief = onCall(
     }
     logger.info('[analyzeBrief] OCR complete', { firmId, chars: ocrText.length });
 
-    // Step 2 — structured argument extraction in parallel with citation extraction
     const trimmed = ocrText.slice(0, 60_000); // cap analysis input to keep tokens sane
     const userPrompt = `<brief>\n${trimmed}\n</brief>`;
+    const citationStrings = extractCitations(ocrText);
 
-    const [analysisRaw, citationStrings] = await Promise.all([
-      callAI(ANALYSIS_SYSTEM, userPrompt, firmData, { jsonMode: true, temperature: 0.2 }),
-      Promise.resolve(extractCitations(ocrText)),
-    ]);
+    const analysisRaw = await callAI(ANALYSIS_SYSTEM, userPrompt, firmData, {
+      jsonMode: true,
+      temperature: 0.2,
+    });
 
     let analysis: ExtractedAnalysis;
     try {
       analysis = parseAIJson<ExtractedAnalysis>(analysisRaw);
     } catch (err) {
-      // Intentionally do NOT log the raw AI response — it may contain
-      // PII or work-product extracted from the brief.
+      // Do NOT log the raw AI response — it may contain PII or work-product
+      // extracted from the brief.
       logger.error('[analyzeBrief] parse failed', { err, rawLength: analysisRaw.length });
       throw new HttpsError('internal', 'Failed to parse AI analysis.');
     }
 
-    // Step 3 — verify each citation against CourtListener (cap at 20)
     const toVerify = citationStrings.slice(0, 20);
     const citationResults = await Promise.all(
       toVerify.map((c) => lookupCitation(c, courtListenerKey)),
