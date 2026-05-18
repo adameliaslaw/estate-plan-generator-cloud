@@ -142,7 +142,15 @@ export const listAutomationRules = onCall(
 // ---------------------------------------------------------------------------
 
 export const scheduledFollowUps = onSchedule(
-  { schedule: 'every 60 minutes', region: 'us-east1', timeZone: 'America/New_York' },
+  {
+    schedule: 'every 60 minutes',
+    region: 'us-east1',
+    timeZone: 'America/New_York',
+    // Raised above the v2 default (60s): one firm × many overdue clients ×
+    // per-client transaction can exceed the default. 540s is the v2 cap.
+    timeoutSeconds: 540,
+    memory: '512MiB',
+  },
   async (_event) => {
     const db = admin.firestore();
     const now = admin.firestore.Timestamp.now();
