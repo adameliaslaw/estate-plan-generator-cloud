@@ -12,10 +12,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen, Upload } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload, ShieldCheck, AlertTriangle, HelpCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamRagChat, streamClientFilesChat, type Citation } from '@/services/rag-chat-service';
+import { verifyCitations, type CitationResult } from '@/services/citation-verifier-service';
 import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
+import { useAuth } from '@/hooks/useAuth';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,9 +42,42 @@ function nsBadge(ns: string): string {
   return NS_COLOURS[ns] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
 }
 
+// Detects common US reporter abbreviations — used to skip API call when
+// the response contains no legal citations at all.
+const QUICK_CITATION_RE = /\b\d{1,4}\s+(?:F\.|U\.S\.|S\.\s*Ct\.|N\.J\.|A\.\d|P\.\d|B\.R\.)/i;
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function LegalCitationBadge({ result }: { result: CitationResult }) {
+  const statusEl =
+    result.status === 'verified' ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 shrink-0">
+        <ShieldCheck className="h-2.5 w-2.5" /> Verified
+      </span>
+    ) : result.status === 'not_found' ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-200 shrink-0">
+        <AlertTriangle className="h-2.5 w-2.5" /> Not found
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200 shrink-0">
+        <HelpCircle className="h-2.5 w-2.5" /> Check
+      </span>
+    );
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
+      <div className="min-w-0">
+        <code className="block truncate text-[11px] font-mono text-gray-700">{result.raw}</code>
+        {result.status === 'verified' && result.caseName && (
+          <p className="truncate text-[10px] text-gray-400 mt-0.5">{result.caseName}</p>
+        )}
+      </div>
+      {statusEl}
+    </div>
+  );
+}
 
 function UserBubble({ content }: { content: string }) {
   return (
@@ -149,6 +184,9 @@ function CitationCard({ citation, rank }: { citation: Citation; rank: number }) 
 // Main page
 // ---------------------------------------------------------------------------
 export default function ChatPage() {
+  const { userProfile } = useAuth();
+  const firmId = userProfile?.firmId ?? '';
+
   const [messages, setMessages]                 = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [citations, setCitations]               = useState<Citation[]>([]);
@@ -158,6 +196,8 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming]           = useState(false);
   const [error, setError]                       = useState<string | null>(null);
   const [uploadOpen, setUploadOpen]             = useState(false);
+  const [legalCitationResults, setLegalCitationResults] = useState<CitationResult[] | null>(null);
+  const [legalCitationsChecking, setLegalCitationsChecking] = useState(false);
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -183,6 +223,8 @@ export default function ChatPage() {
     setIsStreaming(true);
     setStreamingContent('');
     setClientFilesCitations([]);
+    setLegalCitationResults(null);
+    setLegalCitationsChecking(false);
     abortRef.current = false;
 
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: query };
@@ -240,6 +282,13 @@ export default function ChatPage() {
           ]);
           setStreamingContent('');
           setIsStreaming(false);
+          if (firmId && QUICK_CITATION_RE.test(accumulated)) {
+            setLegalCitationsChecking(true);
+            verifyCitations(firmId, accumulated)
+              .then((r) => setLegalCitationResults(r.citations))
+              .catch(() => {})
+              .finally(() => setLegalCitationsChecking(false));
+          }
         },
         onError: (message) => {
           setError(message);
@@ -253,7 +302,7 @@ export default function ChatPage() {
       setIsStreaming(false);
       setStreamingContent('');
     }
-  }, [input, isStreaming]);
+  }, [input, isStreaming, firmId]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -435,6 +484,32 @@ export default function ChatPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* Legal citation health — auto-verified after each research response */}
+            {(legalCitationsChecking || (legalCitationResults !== null && legalCitationResults.length > 0)) && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-px flex-1 bg-gray-100" />
+                  <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                    <ShieldCheck className="h-3 w-3" />
+                    Citation Health
+                  </span>
+                  <div className="h-px flex-1 bg-gray-100" />
+                </div>
+                {legalCitationsChecking ? (
+                  <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Checking citations against CourtListener…
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {legalCitationResults!.map((result, i) => (
+                      <LegalCitationBadge key={i} result={result} />
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
