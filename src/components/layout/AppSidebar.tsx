@@ -11,6 +11,7 @@ import {
   MessageSquareText,
   Zap,
   Swords,
+  Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,6 +32,7 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.CITATION_VERIFIER]: () => { import('@/pages/admin/CitationVerifierPage'); },
   [ROUTES.AUTOMATIONS]: () => { import('@/pages/admin/AutomationsPage'); },
   [ROUTES.BRIEF_ANALYZER]: () => { import('@/pages/admin/BriefAnalyzerPage'); },
+  [ROUTES.BILLING_CALCULATOR]: () => { import('@/pages/admin/BillingCalculatorPage'); },
 };
 
 interface NavItem {
@@ -50,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Citation Verifier', href: ROUTES.CITATION_VERIFIER, icon: Scale },
   { label: 'Automations', href: ROUTES.AUTOMATIONS, icon: Zap },
   { label: 'Brief Analyzer', href: ROUTES.BRIEF_ANALYZER, icon: Swords },
+  { label: 'Value Billing', href: ROUTES.BILLING_CALCULATOR, icon: Calculator },
 ];
 
 interface AppSidebarProps {
