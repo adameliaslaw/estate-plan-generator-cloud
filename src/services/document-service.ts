@@ -387,6 +387,15 @@ export const documentService = {
     return result.data;
   },
 
+  async testSendGridConnection(firmId: string): Promise<{ success: boolean }> {
+    const fn = httpsCallable<{ firmId: string }, { success: boolean }>(
+      functions,
+      'testSendGridConnection',
+    );
+    const result = await fn({ firmId });
+    return result.data;
+  },
+
   async sendQuestionnaireCompleteNotification(params: {
     firmId: string;
     clientId: string;
