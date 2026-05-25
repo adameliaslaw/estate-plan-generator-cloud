@@ -548,11 +548,21 @@ export default function SettingsPage() {
   const handleTestConnection = useCallback(
     async (service: string, setTesting: (v: boolean) => void) => {
       setTesting(true);
-      await new Promise((r) => setTimeout(r, 800));
-      setTesting(false);
-      toast.success(`${service} connection test successful.`);
+      try {
+        if (service === 'SendGrid') {
+          await documentService.testSendGridConnection(firmId);
+          toast.success('SendGrid connection verified — API key is valid.');
+        } else {
+          await new Promise((r) => setTimeout(r, 800));
+          toast.success(`${service} connection test successful.`);
+        }
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : `${service} connection test failed.`);
+      } finally {
+        setTesting(false);
+      }
     },
-    [],
+    [firmId],
   );
 
   const handleSaveLawPay = useCallback(async () => {

@@ -29,6 +29,7 @@ export {
   sendAppointmentReminder,
   sendFollowUpReminder,
   onClientCreatedSendEmail,
+  testSendGridConnection,
 } from './email-notifications';
 export { logAccess, onDocumentStatusChanged, onPaymentCreated } from './audit-trail';
 export { chatAi, listAiConversations, saveMessageAsNote } from './chat-ai';

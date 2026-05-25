@@ -248,6 +248,12 @@ export async function sendViaSendGrid(
       status: response.status,
       body: errorBody.slice(0, 500),
     });
+    if (response.status === 401 || response.status === 403) {
+      throw new HttpsError(
+        'failed-precondition',
+        'SendGrid API key is invalid or lacks Mail Send permission. Please update it in Settings → Integrations.',
+      );
+    }
     throw new HttpsError(
       'internal',
       `SendGrid returned ${response.status}: ${response.statusText}`,
@@ -1254,4 +1260,51 @@ export const onClientCreatedSendEmail = onDocumentCreated(
       logger.error('[onClientCreatedSendEmail] Failed to process template', error);
     }
   }
+);
+
+// ---------------------------------------------------------------------------
+// 9. testSendGridConnection
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that the firm's stored SendGrid API key is authorised.
+ * Calls GET /v3/scopes (read-only) — no email is sent.
+ */
+export const testSendGridConnection = onCall(
+  { region: 'us-east1', invoker: 'public', cors: true },
+  async (request: CallableRequest<unknown>) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'You must be logged in.');
+    }
+
+    const { firmId } = request.data as { firmId?: string };
+    if (!firmId) {
+      throw new HttpsError('invalid-argument', 'firmId is required.');
+    }
+
+    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot test connection for a different firm.');
+    }
+
+    const firmData = await getFirmData(firmId);
+    const apiKey = getSendGridKey(firmData);
+
+    const response = await fetch('https://api.sendgrid.com/v3/scopes', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      throw new HttpsError(
+        'failed-precondition',
+        'SendGrid API key is invalid or has been revoked. Please generate a new key at app.sendgrid.com/settings/api_keys and save it in Settings → Integrations.',
+      );
+    }
+
+    if (!response.ok) {
+      throw new HttpsError('internal', `SendGrid returned ${response.status}: ${response.statusText}`);
+    }
+
+    return { success: true };
+  },
 );
