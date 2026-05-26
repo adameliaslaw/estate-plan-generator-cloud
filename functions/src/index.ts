@@ -69,3 +69,8 @@ export { willsProcessor } from './wills-processor';
 export { willsDriveWebhook, willsDriveWatchRenew, willsSetupDriveWatch } from './wills-drive-watcher';
 export { willsStartBackfill } from './wills-backfill';
 export { willsPilotRun } from './wills-pilot';
+
+// AI Chambers
+export { verifyCitations } from './verify-citations';
+export { manageAutomationRule, listAutomationRules, scheduledFollowUps } from './follow-up-engine';
+export { analyzeBrief } from './analyze-brief';

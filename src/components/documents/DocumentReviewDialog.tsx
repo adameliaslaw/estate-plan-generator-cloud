@@ -36,6 +36,8 @@ import {
   AlertCircle,
   ShieldCheck,
   Lightbulb,
+  DollarSign,
+  Clock,
 } from 'lucide-react';
 import { type ReviewDocumentResponse, type ReviewIssue } from '@/services/document-service';
 import { cn } from '@/lib/utils';
@@ -177,6 +179,47 @@ export default function DocumentReviewDialog({
                 {result.overallAssessment}
               </div>
             </div>
+
+            {/* Billable value */}
+            {result.billableValue && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+                <div className="mb-3 flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4 text-emerald-700" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+                    Billable Value
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-emerald-700">
+                      <Sparkles className="h-3 w-3" /> AI review
+                    </p>
+                    <p className="mt-0.5 text-lg font-semibold text-emerald-900">
+                      {result.billableValue.aiSeconds}s
+                    </p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-emerald-700">
+                      <Clock className="h-3 w-3" /> Manual equiv.
+                    </p>
+                    <p className="mt-0.5 text-lg font-semibold text-emerald-900">
+                      ~{result.billableValue.manualMinutes} min
+                    </p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-emerald-700">
+                      <DollarSign className="h-3 w-3" /> Suggested flat fee
+                    </p>
+                    <p className="mt-0.5 text-lg font-semibold text-emerald-900">
+                      ${result.billableValue.suggestedFlatFee.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-[11px] italic text-emerald-700">
+                  At ${result.billableValue.hourlyRate}/hr. Stop undercharging for work AI did in seconds.
+                </p>
+              </div>
+            )}
 
             {/* Issue summary badges */}
             <div className="flex flex-wrap gap-2">
