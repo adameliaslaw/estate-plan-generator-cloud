@@ -48,6 +48,16 @@ firebase deploy --only hosting
 
 `functions/src/email-notifications.ts` now exports `_sendFollowUpEmailInternal` and `_sendPaymentReminderInternal` so the scheduler can dispatch under Admin SDK (the original `sendFollowUpReminder` onCall hard-fails without auth context).
 
+### 🟡 Activate Mercury 2 (Inception Labs) in production — surfaced 2026-05-26 from `audit-fixes-2026-05` branch
+
+Mercury is fully wired in `ai-client.ts` and piloted on `ai-memory`, `knowledge-base`, `bulk-knowledge-import`, `transcribe-audio`. **Without `MERCURY_API_KEY` set every Mercury call silently throws and falls back to the primary provider** — pilot does nothing in prod until this lands:
+
+```powershell
+firebase functions:secrets:set MERCURY_API_KEY --project estate-plan-generator
+# Paste key from https://app.inceptionlabs.ai → API Keys
+firebase deploy --only functions    # picks up the new secret binding
+```
+
 ### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
 
 Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-content-integrity-checker.ts`. The PR #16 `firebase deploy --only functions` step above picks it up — no extra deploy needed. (Or deploy just the pair: `firebase deploy --only functions:generateSingleDocument,functions:generateDocuments`.)
