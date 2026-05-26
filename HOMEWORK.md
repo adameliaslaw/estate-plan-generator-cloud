@@ -20,7 +20,13 @@ PR #16's content was ported to adamelias.ai's `incoming-ai-chambers` branch (pus
 
 ### 🔴 Open user actions
 
-1. **Verify the revert.** Run `npm run build` + `cd functions && npm run build` once locally to confirm nothing in `main` references the removed AI Chambers files. (tsc clean on both packages as of the revert commit.)
+1. **One-time CI bootstrap (5 min) — unblocks every future deploy.** `.github/workflows/firebase-hosting-deploy.yml` + `firebase-functions-deploy.yml` are now on main. To activate them:
+   - Firebase Console → Project Settings → Service Accounts → **Generate new private key**. Download the JSON.
+   - GitHub repo Settings → Secrets and variables → Actions → **New repository secret**:
+     - Name: `FIREBASE_SERVICE_ACCOUNT_EPG`
+     - Value: paste the JSON
+   - Once added, the workflows fire automatically on every push to `main` that touches `src/` (hosting) or `functions/` (functions). No more `firebase deploy` CLI calls. Manual trigger also available via Actions UI.
+   - First auto-deploy after secret-add will ship: SendGrid Test Connection backend + import fix, content-integrity false-positive fix, maritalStatus case-fix.
 2. **Merge `incoming-ai-chambers` in adamelias.ai** when you're ready to finish the port. See `src/tools/README-AI-CHAMBERS-PORT.md` on that branch for the rollup of remaining rewiring work.
 
 ### 🟡 Activate Mercury 2 (Inception Labs) in production — still pending
@@ -28,9 +34,11 @@ PR #16's content was ported to adamelias.ai's `incoming-ai-chambers` branch (pus
 Mercury is fully wired in `ai-client.ts` and piloted on `ai-memory`, `knowledge-base`, `bulk-knowledge-import`, `transcribe-audio`. **Without `MERCURY_API_KEY` set every Mercury call silently throws and falls back to the primary provider** — pilot does nothing in prod until this lands:
 
 ```powershell
+# Run once locally to set the secret (still needs your account):
 firebase functions:secrets:set MERCURY_API_KEY --project estate-plan-generator
 # Paste key from https://app.inceptionlabs.ai → API Keys
-firebase deploy --only functions    # picks up the new secret binding
+# Then trigger the functions CI workflow manually OR push any functions/ change:
+gh workflow run firebase-functions-deploy.yml --repo adameliaslaw/estate-plan-generator-cloud
 ```
 
 ### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
