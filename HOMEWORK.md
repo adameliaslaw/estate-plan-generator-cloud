@@ -59,10 +59,10 @@ Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-
   + const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   ```
 - **Result.** Flag rate 33% → 6.3% (16 → 3). False positives cleared; real findings preserved. The existing unit test on `(050422014)Attorney for the firm.` inside a single `<p>...</p>` still trips the rule. 14/14 unit tests pass; tsc clean on both packages.
-- **Real bugs the cleaned-up dry-run surfaced** (separate work — regen when convenient):
-  - `4Shw3Wp3Pf0kzozGAxGX/will/unlKatUHBvVSzBdLUxxz` — 98 unresolved `{{...}}` Handlebars across 47 unique vars. Template engine bailed pre-render.
-  - `B6t17ajHjjNOddKz81td/livingWill` — empty appointment clause "appoint my , , of , as HealthCare Representative" + empty `<strong></strong>` shell.
-  - `B6t17ajHjjNOddKz81td/poa` — empty `<strong></strong>` shell + missing name in prose.
+- **Real bugs the cleaned-up dry-run surfaced** (2026-05-26 AM diagnosis — all three turned out to be stale artifacts predating known fixes; decide cleanup when convenient):
+  - `firms/elias-counsel/clients/4Shw3Wp3Pf0kzozGAxGX/documents/unlKatUHBvVSzBdLUxxz` — **raw `.docx` template upload from project genesis (2026-03-16).** Tagged `uploaded-draft`, `changeNotes: "Uploaded existing draft"`, `editorContent length: 33`, `0 versions`. The 98 unresolved Handlebars across 47 unique vars are by design — this slot stores the source template, never rendered. **Recommended action:** delete the document (or move it out of the `/documents/` collection into a templates store) — it's polluting the vault as a fake "draft will".
+  - `firms/elias-counsel/clients/B6t17ajHjjNOddKz81td/documents/livingWill` (2026-04-15, `promptVersion: 951230f72536`) and `.../poa` (2026-04-15, `promptVersion: 8786226e19aa`) — AI-generated under pre-fix prompt versions. The empty `<strong></strong>` + "appoint my , , of , as HealthCare Representative" symptoms match exactly the bug fixed in **commit `1609b31` on 2026-04-28: "`markMissingFiduciaries` — accumulator clobber bug"** (explanatory comment still lives at `template-engine.ts:1736-1740`). **Recommended action:** regenerate both docs from the UI; the current code path produces clean output. (Note: client `B6t17a...` also looks like genesis-day test data — `personalInfo.fullName: undefined`, placeholder Newark address — may be deletable wholesale.)
+- **Bonus finding for next batch:** content-integrity checker's spouse-name check tests `maritalStatus === 'married'` (lowercase) but observed real client data uses `'Married'` (capital M). One-line `.toLowerCase()` fix on the marital-status comparison would catch the case-mismatch silently dropping warnings. Not urgent — no false positives, just missed true positives.
 
 ### 🔵 Still carried from 2026-05-13 — smoke tests pending from 2026-05-05
 
