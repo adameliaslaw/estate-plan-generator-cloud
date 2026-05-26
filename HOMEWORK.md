@@ -53,9 +53,9 @@ firebase deploy --only functions:generateSingleDocument,functions:generateDocume
   - `firms/elias-counsel/clients/B6t17ajHjjNOddKz81td/documents/livingWill` (2026-04-15, `promptVersion: 951230f72536`) and `.../poa` (2026-04-15, `promptVersion: 8786226e19aa`) — AI-generated under pre-fix prompt versions. The empty `<strong></strong>` + "appoint my , , of , as HealthCare Representative" symptoms match exactly the bug fixed in **commit `1609b31` on 2026-04-28: "`markMissingFiduciaries` — accumulator clobber bug"** (explanatory comment still lives at `template-engine.ts:1736-1740`). **Recommended action:** regenerate both docs from the UI; the current code path produces clean output. (Note: client `B6t17a...` also looks like genesis-day test data — `personalInfo.fullName: undefined`, placeholder Newark address — may be deletable wholesale.)
 - **Bonus finding for next batch:** content-integrity checker's spouse-name check tests `maritalStatus === 'married'` (lowercase) but observed real client data uses `'Married'` (capital M). One-line `.toLowerCase()` fix on the marital-status comparison would catch the case-mismatch silently dropping warnings. Not urgent — no false positives, just missed true positives.
 
-### 🔵 Still carried from 2026-05-13 — smoke tests pending from 2026-05-05
+### ✅ 2026-05-26 — Smoke tests 3a + 3b closed
 
-POA address rendering (~2 min) and missing-address admin banner (~1 min). Both unblocked; need a few minutes in the UI when you have it.
+POA address rendering: **pass** (single-string composite address renders cleanly, no phantom blanks). Missing-address admin banner: **pass** (amber banner appears with the missing-slot list on clients with named fiduciaries but no address). Originally deferred from 2026-05-05, finally closed 2026-05-26.
 
 ---
 
