@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { documentService } from '@/services/document-service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { Button } from '@/components/ui/button';
