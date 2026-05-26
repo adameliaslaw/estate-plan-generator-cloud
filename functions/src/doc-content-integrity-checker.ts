@@ -150,7 +150,7 @@ function clientDataChecks(
     }
   }
 
-  const maritalStatus = typeof personalInfo?.maritalStatus === 'string' ? personalInfo.maritalStatus : '';
+  const maritalStatus = typeof personalInfo?.maritalStatus === 'string' ? personalInfo.maritalStatus.toLowerCase() : '';
   if (maritalStatus === 'married') {
     const spouseInfo = (ctx as unknown as { spouseInfo?: Record<string, unknown> }).spouseInfo;
     const spouseName = typeof spouseInfo?.fullName === 'string' ? spouseInfo.fullName.trim() : '';

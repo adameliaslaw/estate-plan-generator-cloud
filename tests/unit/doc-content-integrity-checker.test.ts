@@ -112,6 +112,20 @@ describe('checkContentIntegrity — client-data rules', () => {
     expect(result.findings.some(f => f.name === 'Spouse name missing' && f.severity === 'warning')).toBe(true);
   });
 
+  it('flags missing spouse name when maritalStatus is "Married" (capital M)', () => {
+    // Real client data uses "Married" (capital M). Checker normalizes via
+    // toLowerCase() before comparing, so capital-M still triggers the spouse
+    // check. Without normalization, two of three real clients in the vault
+    // silently dropped the warning.
+    const capitalMCtx = {
+      personalInfo: { fullName: 'Karen K. Elias', maritalStatus: 'Married' },
+      spouseInfo: { fullName: 'Adam J. Elias' },
+    } as unknown as Parameters<typeof checkContentIntegrity>[2];
+    const html = `<p>I, KAREN K. ELIAS, of Monroe Township, hereby declare.</p>`;
+    const result = checkContentIntegrity(html, 'will', capitalMCtx);
+    expect(result.findings.some(f => f.name === 'Spouse name missing')).toBe(true);
+  });
+
   it('passes when both client and spouse names appear', () => {
     const html = `
       <p>I, <strong>KAREN K. ELIAS</strong>, of Monroe Township, hereby declare.</p>
