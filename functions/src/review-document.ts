@@ -38,6 +38,17 @@ interface ReviewIssue {
   suggestion: string;
 }
 
+interface BillableValue {
+  /** Wall-clock seconds the AI review actually took */
+  aiSeconds: number;
+  /** Typical minutes an attorney would spend reviewing this doc type by hand */
+  manualMinutes: number;
+  /** Hourly rate used in the suggestion (USD) */
+  hourlyRate: number;
+  /** Suggested flat fee for this review (USD, rounded to $25) */
+  suggestedFlatFee: number;
+}
+
 interface DocumentReview {
   issues: ReviewIssue[];
   suggestions: string[];
@@ -47,6 +58,40 @@ interface DocumentReview {
   criticalCount: number;
   majorCount: number;
   minorCount: number;
+  billableValue: BillableValue;
+}
+
+/**
+ * Typical attorney review time by docType, in minutes. Sources: NJSBA Solo &
+ * Small Firm benchmarks (2024–25), used by the Value Billing Calculator's
+ * matter comparables. Reviewing a draft is ~30% of full drafting time.
+ */
+const MANUAL_REVIEW_MINUTES: Record<string, number> = {
+  will: 45,
+  pourOverWill: 30,
+  poa: 20,
+  livingWill: 25,
+  trust: 90,
+  deed: 30,
+};
+
+const DEFAULT_HOURLY_RATE = 350;
+
+function computeBillableValue(
+  docType: string,
+  aiMs: number,
+  hourlyRate: number,
+): BillableValue {
+  const manualMinutes = MANUAL_REVIEW_MINUTES[docType] ?? 30;
+  const rate = hourlyRate > 0 ? hourlyRate : DEFAULT_HOURLY_RATE;
+  const raw = (manualMinutes / 60) * rate;
+  const suggestedFlatFee = Math.round(raw / 25) * 25;
+  return {
+    aiSeconds: Math.round(aiMs / 1000),
+    manualMinutes,
+    hourlyRate: rate,
+    suggestedFlatFee,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -375,6 +420,7 @@ Identify all issues by severity. Be specific about location (article/section nam
 
     console.log(`[reviewDocument] Reviewing ${docType} (${documentId}) for client ${clientId}`);
 
+    const aiStart = Date.now();
     const raw = await callAI(systemPrompt, userPrompt, firmData, {
       model: 'gpt-5.4',
       temperature: 0.1,
@@ -382,10 +428,17 @@ Identify all issues by severity. Be specific about location (article/section nam
       jsonMode: true,
       jsonSchema: DOCUMENT_REVIEW_SCHEMA,
     });
+    const aiMs = Date.now() - aiStart;
+
+    const firmHourlyRate = Number(
+      (firmData as admin.firestore.DocumentData)?.settings?.defaultHourlyRate,
+    );
 
     let review: DocumentReview;
     try {
-      const parsed = parseAIJson<Omit<DocumentReview, 'passedReview' | 'criticalCount' | 'majorCount' | 'minorCount'>>(raw);
+      const parsed = parseAIJson<
+        Omit<DocumentReview, 'passedReview' | 'criticalCount' | 'majorCount' | 'minorCount' | 'billableValue'>
+      >(raw);
 
       const criticalCount = parsed.issues.filter(i => i.severity === 'critical').length;
       const majorCount = parsed.issues.filter(i => i.severity === 'major').length;
@@ -397,6 +450,7 @@ Identify all issues by severity. Be specific about location (article/section nam
         criticalCount,
         majorCount,
         minorCount,
+        billableValue: computeBillableValue(docType, aiMs, firmHourlyRate),
       };
     } catch (err) {
       console.error('[reviewDocument] Failed to parse AI review response:', err);
