@@ -1,0 +1,70 @@
+name: Firebase Functions deploy
+
+# Auto-deploys Cloud Functions to `estate-plan-generator` every time main
+# is pushed with functions changes. Replaces the manual
+# `firebase deploy --only functions` step that requires
+# adam@adameliaslaw.com locally (info@adamelias.ai lacks
+# `iam.serviceAccounts.ActAs`).
+#
+# Uses the SAME GitHub secret as the hosting workflow
+# (FIREBASE_SERVICE_ACCOUNT_EPG) — no extra setup needed if hosting CI
+# is already wired up.
+#
+# Firebase will pick up Secret Manager values automatically at deploy
+# time (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, PERPLEXITY_API_KEY,
+# PAGEINDEX_API_KEY, SENDGRID_API_KEY, MERCURY_API_KEY, etc.). The CI
+# service account needs `roles/secretmanager.secretAccessor` — Firebase's
+# default-generated key includes this via `roles/firebase.admin`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/firebase-functions-deploy.yml'
+  # Manual trigger for ad-hoc deploys (e.g. after rotating a secret)
+  workflow_dispatch:
+
+# Cancel in-flight deploys when a newer commit arrives
+concurrency:
+  group: functions-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies (frozen lockfile)
+        working-directory: functions
+        run: npm ci
+
+      - name: Type-check + build
+        working-directory: functions
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPG }}
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools@latest
+
+      - name: Deploy functions
+        # `google-github-actions/auth@v2` sets GOOGLE_APPLICATION_CREDENTIALS
+        # automatically for subsequent steps; firebase-tools picks it up.
+        run: firebase deploy --only functions --project estate-plan-generator --non-interactive --force

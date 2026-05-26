@@ -1,0 +1,70 @@
+name: Firebase Hosting deploy
+
+# Auto-deploys the frontend to https://estate-plan-generator.web.app
+# every time main is pushed. Replaces the manual
+# `npm run build && firebase deploy --only hosting` step that requires
+# adam@adameliaslaw.com locally.
+#
+# ONE-TIME SETUP (do this once, then never again):
+#   1. Firebase Console → Project Settings → Service Accounts → Generate
+#      new private key. Download the JSON.
+#   2. GitHub repo → Settings → Secrets and variables → Actions →
+#      New repository secret:
+#        Name:  FIREBASE_SERVICE_ACCOUNT_EPG
+#        Value: paste the JSON (entire file contents, single line or
+#               multi-line both work)
+#   3. The next push to main triggers the first auto-deploy.
+#
+# After that, this workflow handles every hosting deploy on every merge
+# to main with zero local CLI calls.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Only run when frontend or hosting config actually changes
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/firebase-hosting-deploy.yml'
+  # Manual trigger via Actions UI for ad-hoc deploys
+  workflow_dispatch:
+
+# Cancel in-flight deploys when a newer commit arrives
+concurrency:
+  group: hosting-deploy
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (frozen lockfile)
+        run: npm ci
+
+      - name: Type-check + build
+        run: npm run build
+
+      - name: Deploy to Firebase Hosting (live channel)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPG }}
+          projectId: estate-plan-generator
+          channelId: live
