@@ -4,7 +4,53 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-13 AM (PageIndex chat-completion migration — verified end-to-end)
+## 📍 Session left off here — 2026-05-26 (AI Chambers grievance build merged; deploy pending)
+
+### 🔴 Run these commands in order to ship PR #16
+
+PR #16 merged to `main` as squash commit `a0f2b75`. Local branch `claude/legal-ai-grievances-research-0tXYD` is now dead — first thing the next CLI session does is sync to main, then run the deploy stack. **The `firestore:indexes` step MUST land before the `functions` step** or `scheduledFollowUps` will throw `FAILED_PRECONDITION` on its first fire.
+
+```bash
+git checkout main && git pull
+firebase deploy --only firestore:indexes   # ← must be first
+firebase deploy --only functions
+firebase deploy --only hosting
+```
+
+### 🟡 One-time GCP / Firestore config
+
+- **Enable Cloud Scheduler API** in the GCP console for the `estate-plan-generator` project. The `scheduledFollowUps` function uses `onSchedule('every 60 minutes')` which requires this API; without it the function deploys but never fires.
+- **`firm.settings.defaultHourlyRate`** (optional) — set this on your firm doc in Firestore (`firms/elias-counsel`) to a number. Used by the new "Billable Value" panel in Document Review to compute the suggested flat fee. Falls back to $350 if absent.
+- **`firm.geminiApiKey`** (required for Brief Analyzer) — must be set; the Brief Analyzer uses Gemini Vision for PDF OCR.
+- **`firm.courtlistenerApiKey`** (optional) — set to bump CourtListener rate limits used by Citation Verifier + Research Chat citation health + Brief Analyzer. Unauthenticated requests work but are throttled.
+
+### ✅ Smoke tests after deploy (in this order)
+
+1. **Citation Verifier** (`/citation-verifier`) — paste `Roe v. Wade, 410 U.S. 113 (1973)` → expect `verified` badge with CourtListener link. Paste a fabricated cite like `Fake v. Bar, 999 F.3d 999 (5th Cir. 2099)` → expect `not_found`.
+2. **Automations** (`/automations`) — create a `questionnaire_incomplete` rule with 7-day delay; toggle off/on; delete. Confirm "no errors" and that the rule list reloads after create. Then wait for the next 60-min tick and check Cloud Logging for `[scheduledFollowUps] Sent` lines.
+3. **Brief Analyzer** (`/brief-analyzer`) — upload a small (≤5 page) opposing-counsel PDF. Expect arguments + weaknesses + talking points in the right panel within ~90s, plus citation badges.
+4. **Billing Calculator** (`/billing-calculator`) — pick "Basic Estate Plan" + 6h logged + select Document Generator + Research Chat. Expect a suggested flat fee within $250 of $1,500.
+5. **Integrations Hub** (`/integrations`) — confirm SendGrid / LawPay / each AI provider card flips to "Connected" if its key is set, "Not Connected" otherwise. Clio / MyCase / Calendly show as "Coming Soon".
+6. **Research Chat anonymize** (`/chat`) — toggle "Anonymize ON", send a message containing `My client at 123 Main St owes $1234.56`. Expect placeholders `[ADDRESS-1]` and `[AMOUNT-1]` in your own bubble. Then toggle off, send `Roe v. Wade, 410 U.S. 113` → confirm the right-panel "Citation Health" populates after the response streams in.
+7. **Document Review billable value** — open any client's document vault, run Review on any doc. Expect a new emerald "Billable Value" panel showing AI seconds + manual-equivalent minutes + suggested flat fee.
+8. **Knowledge Base template drift** (`/knowledge-base` → Templates tab) — if any template has `updatedAt > 365 days`, expect an amber banner with stale count + "Show only needs review" toggle, and a `NEEDS REVIEW` badge on each stale card. If none are stale, this is invisible — fine, no action.
+
+### 🔵 Reference: what shipped in PR #16
+
+6 new admin pages + 5 new Cloud Functions + 1 scheduled function + 1 Firestore composite index:
+
+- `/citation-verifier` — `verifyCitations` (CourtListener-backed extraction + lookup)
+- `/automations` — `manageAutomationRule`, `listAutomationRules`, `scheduledFollowUps` (every 60 min)
+- `/brief-analyzer` — `analyzeBrief` (Gemini Vision OCR + analysis + citation reuse)
+- `/billing-calculator` — pure frontend math anchored to 11 NJ matter comparables
+- `/integrations` — read-only connection status dashboard
+- Enhancements: Research Chat citation badges, Document Review Billable Value, Knowledge Base template drift, Chat anonymize toggle
+
+`functions/src/email-notifications.ts` now exports `_sendFollowUpEmailInternal` and `_sendPaymentReminderInternal` so the scheduler can dispatch under Admin SDK (the original `sendFollowUpReminder` onCall hard-fails without auth context).
+
+---
+
+## 📍 Prior session — 2026-05-13 AM (PageIndex chat-completion migration — verified end-to-end)
 
 ### 🔴 Open user actions
 
