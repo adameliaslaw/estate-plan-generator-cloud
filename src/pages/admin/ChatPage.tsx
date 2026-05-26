@@ -12,13 +12,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen, Upload, ShieldCheck, Loader2 } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload, ShieldCheck, Loader2, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamRagChat, streamClientFilesChat, type Citation } from '@/services/rag-chat-service';
 import { verifyCitations, type CitationResult } from '@/services/citation-verifier-service';
 import { CitationStatusBadge } from '@/components/citations/CitationStatusBadge';
 import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
 import { useAuth } from '@/hooks/useAuth';
+import { redactPii } from '@/utils/redact-pii';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,6 +187,7 @@ export default function ChatPage() {
   const [uploadOpen, setUploadOpen]             = useState(false);
   const [legalCitationResults, setLegalCitationResults] = useState<CitationResult[] | null>(null);
   const [legalCitationsChecking, setLegalCitationsChecking] = useState(false);
+  const [anonymize, setAnonymize] = useState(false);
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -215,7 +217,12 @@ export default function ChatPage() {
     setLegalCitationsChecking(false);
     abortRef.current = false;
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: query };
+    // If anonymization is on, strip structured PII before the prompt leaves
+    // the browser. The redacted message is what the user sees in their own
+    // bubble too — so they know exactly what the model received.
+    const wirePayload = anonymize ? redactPii(query).redacted : query;
+
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: wirePayload };
     setMessages((prev) => [...prev, userMsg]);
 
     let accumulated = '';
@@ -225,7 +232,7 @@ export default function ChatPage() {
     // so the privilege boundary stays visually explicit.
     let clientFilesAccumulated = '';
     setClientFilesStreaming(true);
-    void streamClientFilesChat(query, {
+    void streamClientFilesChat(wirePayload, {
       onCitations: (data) => setClientFilesCitations(data),
       onChunk: (text) => {
         clientFilesAccumulated += text;
@@ -255,7 +262,7 @@ export default function ChatPage() {
 
     // Research stream drives the main chat UI
     try {
-      await streamRagChat(query, {
+      await streamRagChat(wirePayload, {
         onCitations: (data) => setCitations(data),
         onChunk: (text) => {
           if (abortRef.current) return;
@@ -290,7 +297,7 @@ export default function ChatPage() {
       setIsStreaming(false);
       setStreamingContent('');
     }
-  }, [input, isStreaming, firmId]);
+  }, [input, isStreaming, firmId, anonymize]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -318,6 +325,19 @@ export default function ChatPage() {
               <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
               <p className="text-[11px] text-gray-500">Powered by PageIndex · CourtListener</p>
             </div>
+            <button
+              onClick={() => setAnonymize((v) => !v)}
+              title="Strip SSNs, EINs, phone numbers, emails, dollar amounts, dates, and addresses from your prompt before sending it to the LLM."
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors',
+                anonymize
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-[#2b6cb0] hover:text-[#1a365d]',
+              )}
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Anonymize {anonymize ? 'ON' : 'OFF'}
+            </button>
             <button
               onClick={() => setUploadOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
@@ -389,6 +409,15 @@ export default function ChatPage() {
 
               {/* Input bar */}
               <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+                {anonymize && (
+                  <div className="mb-2 flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800 ring-1 ring-emerald-200">
+                    <Lock className="h-3 w-3" />
+                    <span>
+                      Anonymize is on — SSNs, EINs, phones, emails, $ amounts, dates, and street
+                      addresses are stripped before sending. Names are not auto-detected.
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-end gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm focus-within:border-[#2b6cb0] focus-within:ring-1 focus-within:ring-[#2b6cb0] transition-shadow">
                   <textarea
                     ref={textareaRef}
