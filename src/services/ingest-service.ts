@@ -7,7 +7,6 @@
 
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
-import { fileToBase64 } from '@/utils/file-helpers';
 
 export type IngestNamespace = 'reference' | 'work-product' | 'client-files';
 
@@ -49,3 +48,14 @@ export async function ingestDocument(
   return result.data;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      resolve(dataUrl.split(',')[1]);
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}

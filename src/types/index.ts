@@ -228,10 +228,6 @@ export interface FirmSettings {
   lawPayPublicKey?: string;
   sendGridApiKey?: string;
   lawPayMerchantId?: string;
-  /** Default hourly billing rate (USD) used to compute the suggested flat fee
-   *  for AI-assisted work in the Value Billing Calculator and the
-   *  "Billable Value" estimate after document review. Falls back to $350. */
-  defaultHourlyRate?: number;
 }
 
 export interface Firm {

@@ -29,20 +29,6 @@
       ]
     },
     {
-      "collectionGroup": "clients",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "documents",
       "queryScope": "COLLECTION",
       "fields": [

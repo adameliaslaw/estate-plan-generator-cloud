@@ -650,7 +650,7 @@ export const sendPaymentReceipt = onCall(
     const branding = extractBranding(firmData);
 
     const formattedAmount = formatCurrency(amount);
-    const subject = `Payment Receipt — ${branding.firmName}`;
+    let subject = `Payment Receipt — ${branding.firmName}`;
     const receiptDate = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -658,7 +658,7 @@ export const sendPaymentReceipt = onCall(
       day: 'numeric',
     });
 
-    const bodyHtml = `
+    let bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Payment Receipt</h2>
 <p style="margin:0 0 16px;">
   Dear ${clientName}, thank you for your payment. Please retain this receipt for your records.
@@ -1003,74 +1003,6 @@ interface FollowUpReminderRequest {
 }
 
 /**
- * Core email-build + send logic, no auth context. Safe to call from both the
- * onCall wrapper below and the scheduled follow-up engine (Admin SDK, no JWT).
- */
-export async function _sendFollowUpEmailInternal(
-  firmId: string,
-  clientId: string,
-  clientEmail: string,
-  clientName: string,
-  daysSince: number,
-): Promise<void> {
-  const db = admin.firestore();
-  const clientSnap = await db.doc(`firms/${firmId}/clients/${clientId}`).get();
-  if (!clientSnap.exists) return; // client deleted — skip silently
-  const clientData = clientSnap.data()!;
-  const questionnaireUrl = (clientData['questionnaireUrl'] as string) || '';
-
-  const firmData = await getFirmData(firmId);
-  const apiKey = getSendGridKey(firmData);
-  const branding = extractBranding(firmData);
-
-  const subject = 'Reminder: Please complete your estate planning questionnaire';
-  const daysPhrase = daysSince === 1 ? '1 day' : `${daysSince} days`;
-
-  const ctaBlock = questionnaireUrl
-    ? ctaButton('Complete My Questionnaire', questionnaireUrl, branding.primaryColor)
-    : '';
-
-  const urlLine = questionnaireUrl
-    ? `<p style="margin:16px 0 0;font-size:13px;color:#718096;">
-         If the button does not work, copy and paste this link:<br />
-         <a href="${questionnaireUrl}" style="color:${branding.primaryColor};word-break:break-all;">${questionnaireUrl}</a>
-       </p>`
-    : '';
-
-  const bodyHtml = `
-<h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">A Quick Reminder</h2>
-<p style="margin:0 0 12px;">
-  Dear ${clientName}, we noticed that your estate planning questionnaire has been waiting
-  for <strong>${daysPhrase}</strong>. We wanted to follow up and make sure everything is all right.
-</p>
-<p style="margin:0 0 12px;">
-  Completing the questionnaire is the essential first step to preparing your personalised
-  estate plan. It only takes <strong>15–20 minutes</strong> and you can save your progress
-  and return whenever it is convenient.
-</p>
-${ctaBlock}
-${urlLine}
-<p style="margin:16px 0 0;font-size:13px;color:#718096;">
-  If you have any questions or need assistance, please do not hesitate to reach out to us at
-  ${branding.firmEmail || branding.firmPhone || 'our office'}.
-</p>`;
-
-  const html = buildEmailHtml(
-    bodyHtml,
-    branding,
-    `Friendly reminder to complete your estate planning questionnaire (${daysPhrase} since creation).`,
-  );
-
-  await sendViaSendGrid(apiKey, {
-    personalizations: [{ to: [{ email: clientEmail, name: clientName }], subject }],
-    from: { email: branding.firmEmail || 'noreply@estateplan.app', name: branding.firmName },
-    content: [{ type: 'text/html', value: html }],
-  });
-
-  logger.info('[_sendFollowUpEmailInternal] Sent', { firmId, clientId, clientEmail, daysSince });
-}
-
-/**
  * Send an automated follow-up to a client who has not yet completed their
  * questionnaire. Typically triggered after 7 days of inactivity.
  */
@@ -1095,7 +1027,74 @@ export const sendFollowUpReminder = onCall(
       throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
     }
 
-    await _sendFollowUpEmailInternal(firmId, clientId, clientEmail, clientName, daysSinceInvitation);
+    const db = admin.firestore();
+
+    // Fetch client doc to get the questionnaire URL (stored as questionnaireUrl on client record)
+    const clientSnap = await db.doc(`firms/${firmId}/clients/${clientId}`).get();
+    if (!clientSnap.exists) {
+      throw new HttpsError('not-found', `Client ${clientId} not found.`);
+    }
+    const clientData = clientSnap.data()!;
+    const questionnaireUrl = (clientData.questionnaireUrl as string) || '';
+
+    const firmData = await getFirmData(firmId);
+    const apiKey = getSendGridKey(firmData);
+    const branding = extractBranding(firmData);
+
+    const subject = 'Reminder: Please complete your estate planning questionnaire';
+
+    const daysPhrase =
+      daysSinceInvitation === 1
+        ? '1 day'
+        : `${daysSinceInvitation} days`;
+
+    const ctaBlock = questionnaireUrl
+      ? ctaButton('Complete My Questionnaire', questionnaireUrl, branding.primaryColor)
+      : '';
+
+    const urlLine = questionnaireUrl
+      ? `<p style="margin:16px 0 0;font-size:13px;color:#718096;">
+           If the button does not work, copy and paste this link:<br />
+           <a href="${questionnaireUrl}" style="color:${branding.primaryColor};word-break:break-all;">${questionnaireUrl}</a>
+         </p>`
+      : '';
+
+    const bodyHtml = `
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">A Quick Reminder</h2>
+<p style="margin:0 0 12px;">
+  Dear ${clientName}, we noticed that your estate planning questionnaire has been waiting
+  for <strong>${daysPhrase}</strong>. We wanted to follow up and make sure everything is all right.
+</p>
+<p style="margin:0 0 12px;">
+  Completing the questionnaire is the essential first step to preparing your personalised
+  estate plan. It only takes <strong>15–20 minutes</strong> and you can save your progress
+  and return whenever it is convenient.
+</p>
+${ctaBlock}
+${urlLine}
+<p style="margin:16px 0 0;font-size:13px;color:#718096;">
+  If you have any questions or need assistance, please do not hesitate to reach out to us at
+  ${branding.firmEmail || branding.firmPhone || 'our office'}.
+</p>`;
+
+    const html = buildEmailHtml(
+      bodyHtml,
+      branding,
+      `Friendly reminder to complete your estate planning questionnaire (${daysPhrase} since invitation).`,
+    );
+
+    await sendViaSendGrid(apiKey, {
+      personalizations: [{ to: [{ email: clientEmail, name: clientName }], subject }],
+      from: { email: branding.firmEmail || 'noreply@estateplan.app', name: branding.firmName },
+      content: [{ type: 'text/html', value: html }],
+    });
+
+    logger.info('[sendFollowUpReminder] Sent', {
+      firmId,
+      clientId,
+      clientEmail,
+      daysSinceInvitation,
+    });
 
     await logAuditEvent({
       firmId,
@@ -1105,7 +1104,7 @@ export const sendFollowUpReminder = onCall(
       userRole: (request.auth.token.role as string) ?? 'unknown',
       clientId,
       clientName,
-      details: `Follow-up reminder sent to ${clientEmail} (${daysSinceInvitation === 1 ? '1 day' : `${daysSinceInvitation} days`} since invitation)`,
+      details: `Follow-up reminder sent to ${clientEmail} (${daysPhrase} since invitation)`,
       metadata: {
         emailType: 'follow_up_reminder',
         recipientEmail: clientEmail,

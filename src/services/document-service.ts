@@ -67,13 +67,6 @@ export interface ReviewIssue {
   suggestion: string;
 }
 
-export interface BillableValue {
-  aiSeconds: number;
-  manualMinutes: number;
-  hourlyRate: number;
-  suggestedFlatFee: number;
-}
-
 export interface ReviewDocumentResponse {
   success: boolean;
   overallAssessment: string;
@@ -81,7 +74,6 @@ export interface ReviewDocumentResponse {
   suggestions: string[];
   complianceNotes: string[];
   reviewedAt: string;
-  billableValue?: BillableValue;
 }
 
 export interface GenerateFlexDocumentRequest {

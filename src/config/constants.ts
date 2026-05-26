@@ -452,11 +452,6 @@ export const ROUTES = {
     `/portal/${firmId}/${clientId}`,
   CHAT: '/chat',
   RECEPTIONIST: '/receptionist',
-  CITATION_VERIFIER: '/citation-verifier',
-  AUTOMATIONS: '/automations',
-  BRIEF_ANALYZER: '/brief-analyzer',
-  BILLING_CALCULATOR: '/billing-calculator',
-  INTEGRATIONS: '/integrations',
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -4,51 +4,26 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-26 (AI Chambers grievance build merged; deploy pending)
+## 📍 Session left off here — 2026-05-26 PM (PR #16 AI Chambers reverted — misfiled here; ported to adamelias.ai)
 
-### 🔴 Run these commands in order to ship PR #16
+### 🔄 What changed
 
-PR #16 merged to `main` as squash commit `a0f2b75`. Local branch `claude/legal-ai-grievances-research-0tXYD` is now dead — first thing the next CLI session does is sync to main, then run the deploy stack. **The `firestore:indexes` step MUST land before the `functions` step** or `scheduledFollowUps` will throw `FAILED_PRECONDITION` on its first fire.
+PR #16 ("AI Chambers — 6-app build from solo-lawyer grievance research") was determined to be misfiled in `estate-plan-generator`. The research brief that drove it explicitly intended adamelias.ai — confirmed by adamelias.ai already having a `/chambers/<tool>` route convention. The squash commit `a0f2b75` has been reverted from `main`.
 
-```bash
-git checkout main && git pull
-firebase deploy --only firestore:indexes   # ← must be first
-firebase deploy --only functions
-firebase deploy --only hosting
-```
+PR #16's content was ported to adamelias.ai's `incoming-ai-chambers` branch (push pending merge):
+- ✅ `billing-calculator/` — fully converted to adamelias.ai conventions, routed at `/chambers/billing-calculator`
+- 🔶 `integrations-hub/`, `brief-analyzer/`, `automations/` — source files staged with per-tool rewiring READMEs (~30-90 min each to wire up)
 
-### 🟡 One-time GCP / Firestore config
+**Not ported** (intentionally): Citation Verifier (adamelias.ai already has two better verifiers — `legal-verification-checklist` + `citation-verifier`). Enhancements to existing estate-plan-generator features that were bundled into PR #16 (Doc Review Billable Value, KB template drift, Research Chat anonymize + citation badges) were reverted with the rest — if any of these were desirable on their own merits, they can be re-implemented in a future PR scoped to estate-plan-generator alone.
 
-- **Enable Cloud Scheduler API** in the GCP console for the `estate-plan-generator` project. The `scheduledFollowUps` function uses `onSchedule('every 60 minutes')` which requires this API; without it the function deploys but never fires.
-- **`firm.settings.defaultHourlyRate`** (optional) — set this on your firm doc in Firestore (`firms/elias-counsel`) to a number. Used by the new "Billable Value" panel in Document Review to compute the suggested flat fee. Falls back to $350 if absent.
-- **`firm.geminiApiKey`** (required for Brief Analyzer) — must be set; the Brief Analyzer uses Gemini Vision for PDF OCR.
-- **`firm.courtlistenerApiKey`** (optional) — set to bump CourtListener rate limits used by Citation Verifier + Research Chat citation health + Brief Analyzer. Unauthenticated requests work but are throttled.
+**Permanent record:** the full untouched PR #16 squash lives on the `ai-chambers-export` branch in this repo (commit `a0f2b75`). Do not delete that branch.
 
-### ✅ Smoke tests after deploy (in this order)
+### 🔴 Open user actions
 
-1. **Citation Verifier** (`/citation-verifier`) — paste `Roe v. Wade, 410 U.S. 113 (1973)` → expect `verified` badge with CourtListener link. Paste a fabricated cite like `Fake v. Bar, 999 F.3d 999 (5th Cir. 2099)` → expect `not_found`.
-2. **Automations** (`/automations`) — create a `questionnaire_incomplete` rule with 7-day delay; toggle off/on; delete. Confirm "no errors" and that the rule list reloads after create. Then wait for the next 60-min tick and check Cloud Logging for `[scheduledFollowUps] Sent` lines.
-3. **Brief Analyzer** (`/brief-analyzer`) — upload a small (≤5 page) opposing-counsel PDF. Expect arguments + weaknesses + talking points in the right panel within ~90s, plus citation badges.
-4. **Billing Calculator** (`/billing-calculator`) — pick "Basic Estate Plan" + 6h logged + select Document Generator + Research Chat. Expect a suggested flat fee within $250 of $1,500.
-5. **Integrations Hub** (`/integrations`) — confirm SendGrid / LawPay / each AI provider card flips to "Connected" if its key is set, "Not Connected" otherwise. Clio / MyCase / Calendly show as "Coming Soon".
-6. **Research Chat anonymize** (`/chat`) — toggle "Anonymize ON", send a message containing `My client at 123 Main St owes $1234.56`. Expect placeholders `[ADDRESS-1]` and `[AMOUNT-1]` in your own bubble. Then toggle off, send `Roe v. Wade, 410 U.S. 113` → confirm the right-panel "Citation Health" populates after the response streams in.
-7. **Document Review billable value** — open any client's document vault, run Review on any doc. Expect a new emerald "Billable Value" panel showing AI seconds + manual-equivalent minutes + suggested flat fee.
-8. **Knowledge Base template drift** (`/knowledge-base` → Templates tab) — if any template has `updatedAt > 365 days`, expect an amber banner with stale count + "Show only needs review" toggle, and a `NEEDS REVIEW` badge on each stale card. If none are stale, this is invisible — fine, no action.
+1. **Verify the revert.** Run `npm run build` + `cd functions && npm run build` once locally to confirm nothing in `main` references the removed AI Chambers files. (tsc clean on both packages as of the revert commit.)
+2. **Merge `incoming-ai-chambers` in adamelias.ai** when you're ready to finish the port. See `src/tools/README-AI-CHAMBERS-PORT.md` on that branch for the rollup of remaining rewiring work.
 
-### 🔵 Reference: what shipped in PR #16
-
-6 new admin pages + 5 new Cloud Functions + 1 scheduled function + 1 Firestore composite index:
-
-- `/citation-verifier` — `verifyCitations` (CourtListener-backed extraction + lookup)
-- `/automations` — `manageAutomationRule`, `listAutomationRules`, `scheduledFollowUps` (every 60 min)
-- `/brief-analyzer` — `analyzeBrief` (Gemini Vision OCR + analysis + citation reuse)
-- `/billing-calculator` — pure frontend math anchored to 11 NJ matter comparables
-- `/integrations` — read-only connection status dashboard
-- Enhancements: Research Chat citation badges, Document Review Billable Value, Knowledge Base template drift, Chat anonymize toggle
-
-`functions/src/email-notifications.ts` now exports `_sendFollowUpEmailInternal` and `_sendPaymentReminderInternal` so the scheduler can dispatch under Admin SDK (the original `sendFollowUpReminder` onCall hard-fails without auth context).
-
-### 🟡 Activate Mercury 2 (Inception Labs) in production — surfaced 2026-05-26 from `audit-fixes-2026-05` branch
+### 🟡 Activate Mercury 2 (Inception Labs) in production — still pending
 
 Mercury is fully wired in `ai-client.ts` and piloted on `ai-memory`, `knowledge-base`, `bulk-knowledge-import`, `transcribe-audio`. **Without `MERCURY_API_KEY` set every Mercury call silently throws and falls back to the primary provider** — pilot does nothing in prod until this lands:
 
@@ -60,7 +35,11 @@ firebase deploy --only functions    # picks up the new secret binding
 
 ### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
 
-Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-content-integrity-checker.ts`. The PR #16 `firebase deploy --only functions` step above picks it up — no extra deploy needed. (Or deploy just the pair: `firebase deploy --only functions:generateSingleDocument,functions:generateDocuments`.)
+Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-content-integrity-checker.ts`. Deploy the affected pair when convenient:
+
+```powershell
+firebase deploy --only functions:generateSingleDocument,functions:generateDocuments --project estate-plan-generator
+```
 
 - **Why.** Verified the checker against all 48 vault docs via `tmp/dryrun-integrity-checker.cjs` (read-only, no regen). The "Missing space after parenthesis" warning was firing on **16/48 docs (33%)**, almost entirely false positives from naive HTML stripping (`</p><p>` collapsed to nothing, so `(050422014)</p><p>Attorney at Law` looked like `(050422014)Attorney at Law` and tripped `PAREN_NO_SPACE`).
 - **Fix.** Replace tags with a space, then collapse whitespace:

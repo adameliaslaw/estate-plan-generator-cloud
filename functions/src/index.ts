@@ -71,10 +71,5 @@ export { willsDriveWebhook, willsDriveWatchRenew, willsSetupDriveWatch } from '.
 export { willsStartBackfill } from './wills-backfill';
 export { willsPilotRun } from './wills-pilot';
 
-// AI Chambers
-export { verifyCitations } from './verify-citations';
-export { manageAutomationRule, listAutomationRules, scheduledFollowUps } from './follow-up-engine';
-export { analyzeBrief } from './analyze-brief';
-
 // AI Receptionist — "Carmela" intake & screening
 export { receptionistWebhook, receptionistStatus } from './receptionist-intake';

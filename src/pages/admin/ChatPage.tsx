@@ -12,14 +12,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, AlertCircle, BookOpen, Upload, ShieldCheck, Loader2, Lock } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, BookOpen, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { streamRagChat, streamClientFilesChat, type Citation } from '@/services/rag-chat-service';
-import { verifyCitations, type CitationResult } from '@/services/citation-verifier-service';
-import { CitationStatusBadge } from '@/components/citations/CitationStatusBadge';
 import { UploadDocumentModal } from '@/components/chat/UploadDocumentModal';
-import { useAuth } from '@/hooks/useAuth';
-import { redactPii } from '@/utils/redact-pii';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,29 +40,9 @@ function nsBadge(ns: string): string {
   return NS_COLOURS[ns] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
 }
 
-// Mirrors the reporter families recognized by the backend's CITATION_RE
-// (verify-citations.ts) — used as a fast precheck to skip the API call when
-// the response clearly contains no legal citations. Must stay in sync with
-// the server regex so we don't silently drop valid citations.
-const QUICK_CITATION_RE = /\b\d{1,4}\s+(?:F\.|U\.S\.|S\.\s*Ct\.|L\.\s*Ed\.|N\.J\.|N\.Y\.|A\.\d|P\.\d|B\.R\.|Cal\.|Tex\.)/i;
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function LegalCitationBadge({ result }: { result: CitationResult }) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
-      <div className="min-w-0">
-        <code className="block truncate text-[11px] font-mono text-gray-700">{result.raw}</code>
-        {result.status === 'verified' && result.caseName && (
-          <p className="truncate text-[10px] text-gray-400 mt-0.5">{result.caseName}</p>
-        )}
-      </div>
-      <CitationStatusBadge status={result.status} size="sm" />
-    </div>
-  );
-}
 
 function UserBubble({ content }: { content: string }) {
   return (
@@ -173,9 +149,6 @@ function CitationCard({ citation, rank }: { citation: Citation; rank: number }) 
 // Main page
 // ---------------------------------------------------------------------------
 export default function ChatPage() {
-  const { userProfile } = useAuth();
-  const firmId = userProfile?.firmId ?? '';
-
   const [messages, setMessages]                 = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [citations, setCitations]               = useState<Citation[]>([]);
@@ -185,9 +158,6 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming]           = useState(false);
   const [error, setError]                       = useState<string | null>(null);
   const [uploadOpen, setUploadOpen]             = useState(false);
-  const [legalCitationResults, setLegalCitationResults] = useState<CitationResult[] | null>(null);
-  const [legalCitationsChecking, setLegalCitationsChecking] = useState(false);
-  const [anonymize, setAnonymize] = useState(false);
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -213,16 +183,9 @@ export default function ChatPage() {
     setIsStreaming(true);
     setStreamingContent('');
     setClientFilesCitations([]);
-    setLegalCitationResults(null);
-    setLegalCitationsChecking(false);
     abortRef.current = false;
 
-    // If anonymization is on, strip structured PII before the prompt leaves
-    // the browser. The redacted message is what the user sees in their own
-    // bubble too — so they know exactly what the model received.
-    const wirePayload = anonymize ? redactPii(query).redacted : query;
-
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: wirePayload };
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: query };
     setMessages((prev) => [...prev, userMsg]);
 
     let accumulated = '';
@@ -232,7 +195,7 @@ export default function ChatPage() {
     // so the privilege boundary stays visually explicit.
     let clientFilesAccumulated = '';
     setClientFilesStreaming(true);
-    void streamClientFilesChat(wirePayload, {
+    void streamClientFilesChat(query, {
       onCitations: (data) => setClientFilesCitations(data),
       onChunk: (text) => {
         clientFilesAccumulated += text;
@@ -262,7 +225,7 @@ export default function ChatPage() {
 
     // Research stream drives the main chat UI
     try {
-      await streamRagChat(wirePayload, {
+      await streamRagChat(query, {
         onCitations: (data) => setCitations(data),
         onChunk: (text) => {
           if (abortRef.current) return;
@@ -277,13 +240,6 @@ export default function ChatPage() {
           ]);
           setStreamingContent('');
           setIsStreaming(false);
-          if (firmId && QUICK_CITATION_RE.test(accumulated)) {
-            setLegalCitationsChecking(true);
-            verifyCitations(firmId, accumulated)
-              .then((r) => setLegalCitationResults(r.citations))
-              .catch(() => {})
-              .finally(() => setLegalCitationsChecking(false));
-          }
         },
         onError: (message) => {
           setError(message);
@@ -297,7 +253,7 @@ export default function ChatPage() {
       setIsStreaming(false);
       setStreamingContent('');
     }
-  }, [input, isStreaming, firmId, anonymize]);
+  }, [input, isStreaming]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -325,19 +281,6 @@ export default function ChatPage() {
               <h1 className="text-sm font-semibold text-gray-900">Research Assistant</h1>
               <p className="text-[11px] text-gray-500">Powered by PageIndex · CourtListener</p>
             </div>
-            <button
-              onClick={() => setAnonymize((v) => !v)}
-              title="Strip SSNs, EINs, phone numbers, emails, dollar amounts, dates, and addresses from your prompt before sending it to the LLM."
-              className={cn(
-                'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors',
-                anonymize
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-[#2b6cb0] hover:text-[#1a365d]',
-              )}
-            >
-              <Lock className="h-3.5 w-3.5" />
-              Anonymize {anonymize ? 'ON' : 'OFF'}
-            </button>
             <button
               onClick={() => setUploadOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:border-[#2b6cb0] hover:text-[#1a365d] transition-colors"
@@ -409,15 +352,6 @@ export default function ChatPage() {
 
               {/* Input bar */}
               <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
-                {anonymize && (
-                  <div className="mb-2 flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800 ring-1 ring-emerald-200">
-                    <Lock className="h-3 w-3" />
-                    <span>
-                      Anonymize is on — SSNs, EINs, phones, emails, $ amounts, dates, and street
-                      addresses are stripped before sending. Names are not auto-detected.
-                    </span>
-                  </div>
-                )}
                 <div className="flex items-end gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm focus-within:border-[#2b6cb0] focus-within:ring-1 focus-within:ring-[#2b6cb0] transition-shadow">
                   <textarea
                     ref={textareaRef}
@@ -501,32 +435,6 @@ export default function ChatPage() {
                   </div>
                 )}
               </>
-            )}
-
-            {/* Legal citation health — auto-verified after each research response */}
-            {(legalCitationsChecking || (legalCitationResults !== null && legalCitationResults.length > 0)) && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-px flex-1 bg-gray-100" />
-                  <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                    <ShieldCheck className="h-3 w-3" />
-                    Citation Health
-                  </span>
-                  <div className="h-px flex-1 bg-gray-100" />
-                </div>
-                {legalCitationsChecking ? (
-                  <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Checking citations against CourtListener…
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {legalCitationResults!.map((result, i) => (
-                      <LegalCitationBadge key={i} result={result} />
-                    ))}
-                  </div>
-                )}
-              </div>
             )}
           </div>
 

@@ -28,7 +28,6 @@ import {
   Zap,
   Sparkles,
   Loader2,
-  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -119,41 +118,6 @@ const TEMPLATE_TAGS: { category: string; tags: { value: string; label: string; c
 
 const ALL_TAGS = TEMPLATE_TAGS.flatMap((g) => g.tags);
 
-// ---------------------------------------------------------------------------
-// Template drift detection — flag templates whose source statutes may have
-// changed since they were last updated. Anchors at 12 months because NJ
-// statutes get amended every legislative session.
-// ---------------------------------------------------------------------------
-
-const STALE_DAYS = 365;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/**
- * Extract a JS millisecond timestamp from the polymorphic `updatedAt` field
- * Firebase callable functions deliver: Firestore Timestamps serialize as
- * `{ _seconds, _nanoseconds }`, but older docs may carry an ISO string or be
- * absent entirely.
- */
-function getUpdatedAtMs(updatedAt: unknown): number | null {
-  if (!updatedAt) return null;
-  if (typeof updatedAt === 'string') {
-    const ms = Date.parse(updatedAt);
-    return Number.isFinite(ms) ? ms : null;
-  }
-  if (typeof updatedAt === 'object' && updatedAt !== null) {
-    const obj = updatedAt as { _seconds?: number; seconds?: number };
-    const seconds = obj._seconds ?? obj.seconds;
-    if (typeof seconds === 'number') return seconds * 1000;
-  }
-  return null;
-}
-
-function templateNeedsReview(t: TemplateVariant): boolean {
-  const ms = getUpdatedAtMs(t.updatedAt);
-  if (ms === null) return false;
-  return Date.now() - ms > STALE_DAYS * MS_PER_DAY;
-}
-
 
 // ---------------------------------------------------------------------------
 // Main Component
@@ -170,7 +134,6 @@ export default function KnowledgeBasePage() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [activeTemplateTag, setActiveTemplateTag] = useState<string | null>(null);
   const [activeSoftwareSource, setActiveSoftwareSource] = useState<string | null>(null);
-  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
 
   // Data
   const [resources, setResources] = useState<KnowledgeResource[]>([]);
@@ -240,11 +203,8 @@ export default function KnowledgeBasePage() {
       (t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.docType.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (!activeTemplateTag || (t.tags ?? []).includes(activeTemplateTag)) &&
-      (!activeSoftwareSource || t.softwareSource === activeSoftwareSource) &&
-      (!needsReviewOnly || templateNeedsReview(t)),
+      (!activeSoftwareSource || t.softwareSource === activeSoftwareSource),
   ).sort((a, b) => a.name.localeCompare(b.name));
-
-  const staleTemplateCount = templates.filter(templateNeedsReview).length;
 
   // Handlers
   const handleDeleteResource = async (id: string) => {
@@ -754,30 +714,6 @@ export default function KnowledgeBasePage() {
             ))}
           </div>
 
-          {/* Drift detection: needs-review filter */}
-          {staleTemplateCount > 0 && (
-            <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-              <div className="flex items-center gap-2 text-xs text-amber-800">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                <span>
-                  <strong>{staleTemplateCount}</strong>{' '}
-                  {staleTemplateCount === 1 ? 'template' : 'templates'} not updated in 12+ months —
-                  statute references may be stale.
-                </span>
-              </div>
-              <button
-                onClick={() => setNeedsReviewOnly((v) => !v)}
-                className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
-                  needsReviewOnly
-                    ? 'bg-amber-600 text-white hover:bg-amber-700'
-                    : 'bg-white text-amber-800 ring-1 ring-amber-300 hover:bg-amber-100'
-                }`}
-              >
-                {needsReviewOnly ? 'Show all' : 'Show only needs review'}
-              </button>
-            </div>
-          )}
-
           {/* Software Source Filter Pills */}
           <div className="mb-4 flex flex-wrap gap-2 items-center">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mr-1">Software:</span>
@@ -829,22 +765,11 @@ export default function KnowledgeBasePage() {
                         <p className="text-xs text-gray-500">{t.docType}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {t.isDefault && (
-                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                          DEFAULT
-                        </span>
-                      )}
-                      {templateNeedsReview(t) && (
-                        <span
-                          className="flex items-center gap-0.5 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
-                          title="Not updated in over 12 months — verify statute references are current."
-                        >
-                          <AlertTriangle className="h-2.5 w-2.5" />
-                          NEEDS REVIEW
-                        </span>
-                      )}
-                    </div>
+                    {t.isDefault && (
+                      <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        DEFAULT
+                      </span>
+                    )}
                   </div>
                   <p className="mt-3 text-xs text-gray-500 line-clamp-2">{t.description || t.contentPreview?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}</p>
                   {/* Tags */}
