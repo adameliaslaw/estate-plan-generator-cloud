@@ -50,7 +50,11 @@ const PAREN_NO_SPACE = /\)[A-Z][a-z]/;
 
 function universalChecks(html: string): ContentIntegrityFinding[] {
   const findings: ContentIntegrityFinding[] = [];
-  const stripped = html.replace(/<[^>]+>/g, '');
+  // Replace tags with spaces (not nothing) so block-element boundaries don't
+  // concatenate adjacent text. Without this, `</p><p>` collapsing made
+  // `(050422014)Attorney` (legitimate two-paragraph render) trip the
+  // PAREN_NO_SPACE rule.
+  const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
   const hbs = html.match(UNRESOLVED_HBS);
   if (hbs && hbs.length > 0) {

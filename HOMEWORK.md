@@ -48,15 +48,29 @@ firebase deploy --only hosting
 
 `functions/src/email-notifications.ts` now exports `_sendFollowUpEmailInternal` and `_sendPaymentReminderInternal` so the scheduler can dispatch under Admin SDK (the original `sendFollowUpReminder` onCall hard-fails without auth context).
 
+### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
+
+Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-content-integrity-checker.ts`. The PR #16 `firebase deploy --only functions` step above picks it up — no extra deploy needed. (Or deploy just the pair: `firebase deploy --only functions:generateSingleDocument,functions:generateDocuments`.)
+
+- **Why.** Verified the checker against all 48 vault docs via `tmp/dryrun-integrity-checker.cjs` (read-only, no regen). The "Missing space after parenthesis" warning was firing on **16/48 docs (33%)**, almost entirely false positives from naive HTML stripping (`</p><p>` collapsed to nothing, so `(050422014)</p><p>Attorney at Law` looked like `(050422014)Attorney at Law` and tripped `PAREN_NO_SPACE`).
+- **Fix.** Replace tags with a space, then collapse whitespace:
+  ```diff
+  - const stripped = html.replace(/<[^>]+>/g, '');
+  + const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  ```
+- **Result.** Flag rate 33% → 6.3% (16 → 3). False positives cleared; real findings preserved. The existing unit test on `(050422014)Attorney for the firm.` inside a single `<p>...</p>` still trips the rule. 14/14 unit tests pass; tsc clean on both packages.
+- **Real bugs the cleaned-up dry-run surfaced** (separate work — regen when convenient):
+  - `4Shw3Wp3Pf0kzozGAxGX/will/unlKatUHBvVSzBdLUxxz` — 98 unresolved `{{...}}` Handlebars across 47 unique vars. Template engine bailed pre-render.
+  - `B6t17ajHjjNOddKz81td/livingWill` — empty appointment clause "appoint my , , of , as HealthCare Representative" + empty `<strong></strong>` shell.
+  - `B6t17ajHjjNOddKz81td/poa` — empty `<strong></strong>` shell + missing name in prose.
+
+### 🔵 Still carried from 2026-05-13 — smoke tests pending from 2026-05-05
+
+POA address rendering (~2 min) and missing-address admin banner (~1 min). Both unblocked; need a few minutes in the UI when you have it.
+
 ---
 
 ## 📍 Prior session — 2026-05-13 AM (PageIndex chat-completion migration — verified end-to-end)
-
-### 🔴 Open user actions
-
-1. **Verify the new content-integrity checker.** Regenerate any client's package (or just one doc) — `generateDocuments` / `generateSingleDocument` are deployed with the new pass. Inspect the saved doc in Firestore: a new `validationFindings` array now includes content-integrity items (Unresolved Handlebars, Empty fiduciary slot, Client name missing, etc.) alongside the existing structural items. Confirm no false positives on a known-good doc. (Karen's regen on 2026-05-12 had no content-integrity issues per inspection — should still pass.)
-2. ~~**Populate `reference` KB with NJ statutes**~~ — **shipped 2026-05-13 via Firecrawl scrape of Justia + direct Firestore ingest**. See "NJ Title 3B ingestion" entry below. KB now has 97 NJ Title 3B sections grounded for template engine retrieval. Open follow-on: upload IL template source material (your firm's templates as PDFs) into `work-product` via the upload modal when you have them ready.
-3. **Smoke tests still pending from 2026-05-05** — POA address rendering (item 4, ~2 min), missing-address admin banner (item 5, ~1 min). Both unblocked, just need a few minutes in the UI.
 
 ### ✅ 2026-05-13 — NJ Title 3B ingested into KB (97 statutes)
 
