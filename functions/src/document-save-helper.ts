@@ -178,6 +178,11 @@ export async function saveDocumentToVault(
     displayName: params.displayName,
     status: params.status ?? 'draft',
     content: params.content,
+    // DocumentEditor.tsx prefers `editorContent` over `content` when it has
+    // any text — so leaving the old editor copy in place would silently strand
+    // the user on the previous generation after every regenerate. Sync them
+    // on save: the version subcollection retains the prior content for recovery.
+    editorContent: params.content,
     storagePath: '',
     fileName: `${docId}.html`,
     mimeType: 'text/html',

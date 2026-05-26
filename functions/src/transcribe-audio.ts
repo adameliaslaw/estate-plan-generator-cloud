@@ -318,6 +318,7 @@ export const summarizeTranscription = functions
   .runWith({
     timeoutSeconds: 120,
     memory: '256MB',
+    secrets: ['MERCURY_API_KEY'],
   })
   .region('us-east1')
   .https.onCall(async (data, context) => {
@@ -385,17 +386,17 @@ export const summarizeTranscription = functions
     const userPrompt =
       `Please summarize the following transcription:\n\n---\n${transcription.slice(0, 30000)}\n---`;
 
-    console.log(`[summarizeTranscription] Calling GPT-5.4 — transcription length=${transcription.length}`);
+    console.log(`[summarizeTranscription] Calling Mercury — transcription length=${transcription.length}`);
 
     let aiSummary: string;
     try {
       aiSummary = await callAI(systemPrompt, userPrompt, firmData, {
-        model: 'gpt-5.4',
+        model: 'mercury-coder-small',
         temperature: 0.2,
         maxTokens: 1024,
       });
     } catch (error) {
-      console.error('[summarizeTranscription] GPT-5.4 error:', error);
+      console.error('[summarizeTranscription] Mercury error:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Summary generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

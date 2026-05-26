@@ -4,6 +4,175 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 Session left off here — 2026-05-26 (AI Chambers grievance build merged; deploy pending)
+
+### 🔴 Run these commands in order to ship PR #16
+
+PR #16 merged to `main` as squash commit `a0f2b75`. Local branch `claude/legal-ai-grievances-research-0tXYD` is now dead — first thing the next CLI session does is sync to main, then run the deploy stack. **The `firestore:indexes` step MUST land before the `functions` step** or `scheduledFollowUps` will throw `FAILED_PRECONDITION` on its first fire.
+
+```bash
+git checkout main && git pull
+firebase deploy --only firestore:indexes   # ← must be first
+firebase deploy --only functions
+firebase deploy --only hosting
+```
+
+### 🟡 One-time GCP / Firestore config
+
+- **Enable Cloud Scheduler API** in the GCP console for the `estate-plan-generator` project. The `scheduledFollowUps` function uses `onSchedule('every 60 minutes')` which requires this API; without it the function deploys but never fires.
+- **`firm.settings.defaultHourlyRate`** (optional) — set this on your firm doc in Firestore (`firms/elias-counsel`) to a number. Used by the new "Billable Value" panel in Document Review to compute the suggested flat fee. Falls back to $350 if absent.
+- **`firm.geminiApiKey`** (required for Brief Analyzer) — must be set; the Brief Analyzer uses Gemini Vision for PDF OCR.
+- **`firm.courtlistenerApiKey`** (optional) — set to bump CourtListener rate limits used by Citation Verifier + Research Chat citation health + Brief Analyzer. Unauthenticated requests work but are throttled.
+
+### ✅ Smoke tests after deploy (in this order)
+
+1. **Citation Verifier** (`/citation-verifier`) — paste `Roe v. Wade, 410 U.S. 113 (1973)` → expect `verified` badge with CourtListener link. Paste a fabricated cite like `Fake v. Bar, 999 F.3d 999 (5th Cir. 2099)` → expect `not_found`.
+2. **Automations** (`/automations`) — create a `questionnaire_incomplete` rule with 7-day delay; toggle off/on; delete. Confirm "no errors" and that the rule list reloads after create. Then wait for the next 60-min tick and check Cloud Logging for `[scheduledFollowUps] Sent` lines.
+3. **Brief Analyzer** (`/brief-analyzer`) — upload a small (≤5 page) opposing-counsel PDF. Expect arguments + weaknesses + talking points in the right panel within ~90s, plus citation badges.
+4. **Billing Calculator** (`/billing-calculator`) — pick "Basic Estate Plan" + 6h logged + select Document Generator + Research Chat. Expect a suggested flat fee within $250 of $1,500.
+5. **Integrations Hub** (`/integrations`) — confirm SendGrid / LawPay / each AI provider card flips to "Connected" if its key is set, "Not Connected" otherwise. Clio / MyCase / Calendly show as "Coming Soon".
+6. **Research Chat anonymize** (`/chat`) — toggle "Anonymize ON", send a message containing `My client at 123 Main St owes $1234.56`. Expect placeholders `[ADDRESS-1]` and `[AMOUNT-1]` in your own bubble. Then toggle off, send `Roe v. Wade, 410 U.S. 113` → confirm the right-panel "Citation Health" populates after the response streams in.
+7. **Document Review billable value** — open any client's document vault, run Review on any doc. Expect a new emerald "Billable Value" panel showing AI seconds + manual-equivalent minutes + suggested flat fee.
+8. **Knowledge Base template drift** (`/knowledge-base` → Templates tab) — if any template has `updatedAt > 365 days`, expect an amber banner with stale count + "Show only needs review" toggle, and a `NEEDS REVIEW` badge on each stale card. If none are stale, this is invisible — fine, no action.
+
+### 🔵 Reference: what shipped in PR #16
+
+6 new admin pages + 5 new Cloud Functions + 1 scheduled function + 1 Firestore composite index:
+
+- `/citation-verifier` — `verifyCitations` (CourtListener-backed extraction + lookup)
+- `/automations` — `manageAutomationRule`, `listAutomationRules`, `scheduledFollowUps` (every 60 min)
+- `/brief-analyzer` — `analyzeBrief` (Gemini Vision OCR + analysis + citation reuse)
+- `/billing-calculator` — pure frontend math anchored to 11 NJ matter comparables
+- `/integrations` — read-only connection status dashboard
+- Enhancements: Research Chat citation badges, Document Review Billable Value, Knowledge Base template drift, Chat anonymize toggle
+
+`functions/src/email-notifications.ts` now exports `_sendFollowUpEmailInternal` and `_sendPaymentReminderInternal` so the scheduler can dispatch under Admin SDK (the original `sendFollowUpReminder` onCall hard-fails without auth context).
+
+### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
+
+Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-content-integrity-checker.ts`. The PR #16 `firebase deploy --only functions` step above picks it up — no extra deploy needed. (Or deploy just the pair: `firebase deploy --only functions:generateSingleDocument,functions:generateDocuments`.)
+
+- **Why.** Verified the checker against all 48 vault docs via `tmp/dryrun-integrity-checker.cjs` (read-only, no regen). The "Missing space after parenthesis" warning was firing on **16/48 docs (33%)**, almost entirely false positives from naive HTML stripping (`</p><p>` collapsed to nothing, so `(050422014)</p><p>Attorney at Law` looked like `(050422014)Attorney at Law` and tripped `PAREN_NO_SPACE`).
+- **Fix.** Replace tags with a space, then collapse whitespace:
+  ```diff
+  - const stripped = html.replace(/<[^>]+>/g, '');
+  + const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  ```
+- **Result.** Flag rate 33% → 6.3% (16 → 3). False positives cleared; real findings preserved. The existing unit test on `(050422014)Attorney for the firm.` inside a single `<p>...</p>` still trips the rule. 14/14 unit tests pass; tsc clean on both packages.
+- **Real bugs the cleaned-up dry-run surfaced** (separate work — regen when convenient):
+  - `4Shw3Wp3Pf0kzozGAxGX/will/unlKatUHBvVSzBdLUxxz` — 98 unresolved `{{...}}` Handlebars across 47 unique vars. Template engine bailed pre-render.
+  - `B6t17ajHjjNOddKz81td/livingWill` — empty appointment clause "appoint my , , of , as HealthCare Representative" + empty `<strong></strong>` shell.
+  - `B6t17ajHjjNOddKz81td/poa` — empty `<strong></strong>` shell + missing name in prose.
+
+### 🔵 Still carried from 2026-05-13 — smoke tests pending from 2026-05-05
+
+POA address rendering (~2 min) and missing-address admin banner (~1 min). Both unblocked; need a few minutes in the UI when you have it.
+
+---
+
+## 📍 Prior session — 2026-05-13 AM (PageIndex chat-completion migration — verified end-to-end)
+
+### ✅ 2026-05-13 — NJ Title 3B ingested into KB (97 statutes)
+
+- **Scraped** `https://law.justia.com/codes/new-jersey/title-3b/` via Firecrawl CLI (firecrawl map → batch scrape with `--only-main-content --format markdown`). 97 of 98 sections retrieved after three retry passes; one section (`3B:31-40`) hit a Justia captcha and was skipped — manual upload if needed.
+- **Parser** `functions/scripts/ingest-nj-title-3b.cjs` parses each markdown file (heading + universal citation + statute body, strips Justia chrome) and writes to `firms/elias-counsel/knowledgeBase/{deterministic-id}` as `category: 'statute'` with:
+  - `title`: e.g. "N.J.S.A. 3B:1-2 - Definitions I to Z"
+  - `citation`: `N.J.S.A. 3B:1-2`
+  - `content`: cleaned statute body
+  - `jurisdiction: 'NJ'`, `source: 'Justia'`, `sourceUrl`
+  - `docTypes`: heuristic mapping by section range (3B:3-* → will, 3B:11-* → trust, etc.)
+  - `tags: ['title-3b', 'NJ', 'statute', 'estate-administration']`
+- **Deterministic doc IDs** (`nj-title-3b-1-2`) so re-runs upsert rather than duplicate.
+- **Auto-embedding**: the existing `onKnowledgeResourceWritten` trigger fires on each insert, generating Vertex `text-embedding-005` vectors automatically. No manual backfill needed.
+- **Impact:** the template engine's `searchKnowledgeBase` call during doc generation now has 97 grounded NJ statutes to retrieve from instead of an empty corpus. Direct soul-impact for accuracy/reliability of AI-augmented and hybrid generations.
+- **Cost:** ~150 Firecrawl credits used (scrape + retries). 752 of 1000 remaining in May 2026 billing cycle. Vertex embeddings under $0.01 total.
+
+### ✅ 2026-05-13 AM — Content-integrity checker (soul-direct generation defender)
+
+- **New module `functions/src/doc-content-integrity-checker.ts`.** Runs after structural validation in `unified-generator.ts`, on EVERY generation mode (template, hybrid, ai, flex — the structural validator skips template mode; integrity check does not, because content symptoms can leak through any path).
+- **Rules (v1):** unresolved Handlebars `{{...}}`, empty fiduciary slot pattern `", , ,"`, empty appointment clause `"appoint my , ,"`, trailing Oxford-list fragment `", and ."`, double-period typo `JR..`, empty `<strong></strong>` / `<em></em>` shells, missing space after parenthesis `)Word`. Plus client-data presence: client full name appears in the doc (error), spouse name appears for married clients (warning).
+- **Wiring:** findings merge into the existing `validationFindings` array on the saved doc. Same Firestore schema, same `needs_review` status semantics — vault UI badges already light up on errors. No new save schema; no migration.
+- **Non-blocking by design.** Findings flag, don't refuse. Attorney sees what's wrong but the doc still saves so it's reviewable in the editor.
+- **Tests:** 14 new unit tests in `tests/unit/doc-content-integrity-checker.test.ts`. Full suite 603/603 pass.
+- **Deployed:** `generateDocuments` + `generateSingleDocument` redeployed against new code. Both clean.
+- **Soul-direct.** This catches the exact failure modes the prior session batches (April 27 → May 12) were chasing one-by-one in the template engine — unresolved vars, empty slots, missing names, typography drift. Going forward, regressions surface on the saved doc as visible warnings rather than silently shipping into the vault.
+
+### ✅ 2026-05-13 AM — PageIndex retrieval → chat-completion migration (verified end-to-end)
+
+- **End-to-end verified.** Asked "Who are Karen Elias's executors?" on `/chat` — emerald "From Client Files" bubble returned the full executor chain (Adam J. Elias → Roger Kondos → [MISSING] → [MISSING]) with markdown table, drew citations from `Last_Will_and_Testament_of_Karen_K_Elias_1778581009681.pdf` pages 3+4, citation panel populated. PageIndex chat round-trip ~14s.
+- **Discovery during smoke-test:** PageIndex's chat-completion response contains BOTH inline `<doc=...;page=N>` markers AND a structured top-level `citations: [{document, page}]` array. We now use the structured array for SSE citation events (more reliable) and strip the inline markers from the visible content. Originally I only read the inline-tag format from the docs; the structured field came out of the actual response body during diagnosis.
+- **Streaming temporarily disabled.** PageIndex `stream: true` works but its SSE chunks interleave tool-use blocks (`block_metadata.type === 'tool_use'`) with assistant content — a naive OpenAI-shape parser misreads the tool-call JSON as user-visible text. Switched to non-streaming (`stream: false`) which returns the assembled answer in one round trip. Re-enable streaming later by filtering on `block_metadata.type` for assistant content only.
+- **New UX: "From Client Files" message bubble.** Pre-migration the `/chat` page intentionally discarded the `pageIndexClientFilesChat` text response (`onChunk: () => {}` — "RPC 1.6 isolated"), only surfacing citations to the right panel. With citations now populating, the missing answer became conspicuous. Wired the client-files answer into a separate emerald-tinted assistant bubble labeled "From Client Files" — keeps the attorney-client privilege boundary visually explicit (matches the backend's separate-function isolation). `ChatPage.tsx`: `Message.source?: 'research' | 'client-files'`, `AssistantBubble({ source })` tints + labels accordingly, `clientFilesStreaming` state shows a loading bubble during the ~15s round trip.
+- **ChatPage subtitle updated.** Was "Powered by PageIndex · CourtListener · Claude". Claude removed — the LLM call lives inside PageIndex now for both ragChat and pageIndexClientFilesChat (Claude is still used elsewhere in the app, just not on `/chat`).
+- **3 backend files migrated** (NOT 4 — `wills-processor.ts` only calls `/doc/` upload which the deprecation doesn't touch). All three deployed and clean. **tsc clean** on both packages.
+
+### 📚 Namespace primer (recorded here so future sessions don't need to re-derive)
+
+Three PageIndex namespaces under `pageindex_docs/{ns}/files`:
+- **`reference`** — published authority (statutes, case law, treatises). Queried by `ragChat` (gray "Research Assistant" bubble). Currently 0 docs for `elias-counsel`.
+- **`work-product`** — firm-internal work (prior memos, briefs, templates). Queried by `ragChat`. Currently 0 docs for `elias-counsel`.
+- **`client-files`** — individual client docs (privileged). firmId-scoped. Queried EXCLUSIVELY by `pageIndexClientFilesChat` (RPC 1.6 isolated function, emerald "From Client Files" bubble). Currently 2 docs for `elias-counsel` (both are uploads of the same Karen will PDF).
+
+The upload modal at `/chat` → Upload Document lets the user pick a namespace; defaults to `reference`. Until something gets uploaded to `reference` or `work-product`, the gray bubble will always return "No documents have been indexed yet" — that's the correct early-return.
+
+### ✅ Previously-tracked: code-shipped state (kept for history)
+
+- **3 files rewritten** (NOT 4 — `wills-processor.ts` only calls the upload endpoint `/doc/`, which is NOT deprecated; original HOMEWORK was over-inclusive):
+  - `pageindex-retrieval.ts` — new `streamPageIndexChat(docs, userMessage, apiKey, onCitation)` async generator + rewritten `fetchPageIndexContext` (signature preserved for `chat-ai.ts`). Old `runPageIndexRetrievals`/`submitRetrieval`/`pollRetrieval` deleted.
+  - `rag-chat.ts` — dropped Anthropic SDK + OpenAI fallback chain (PageIndex chat does both retrieval + synthesis now). Persona moved from `system` role to instruction prefix in the user message because the chat API doesn't accept `system` role. PageIndex chat failure → SSE error event (no document-less OpenAI fallback — confirmed with user that a hallucinated answer with no citations is worse than no answer for a legal-research tool).
+  - `pageindex-client-files-chat.ts` — same migration shape, preserved firmId-scoped client-files isolation.
+- **Architecture change:** PageIndex now handles BOTH retrieval AND LLM synthesis. The prior Anthropic-stream → OpenAI-fallback graceful-degradation chain (from commit `91c51f6`, 2026-05-06) is gone — the LLM call lives inside PageIndex. If PageIndex chat goes down, both functions surface SSE `{type: 'error'}`. The Anthropic key 401 issue mentioned in the prior session's follow-ups is now moot for these two functions (they no longer call Anthropic).
+- **Citation shape regression:** PageIndex chat returns inline `<doc=file.pdf;page=N>` tags only — no `section`/`excerpt`/`nodeId`. Frontend `Citation` type kept; those three fields are empty strings now. The `CitationCard` in `ChatPage.tsx` renders them conditionally on truthiness, so they gracefully omit.
+- **`chat-ai.ts` untouched.** Its `fetchPageIndexContext` consumer keeps the same `{ contextString, sources }` return shape — but the `contextString` is now LLM-synthesized prose ("here's what your firm docs say about X") rather than raw retrieval excerpts. Acceptable for downstream Perplexity injection.
+- **tsc clean** on both `functions/` and root (`tsc -b --noEmit` EXIT=0 for both).
+
+### ✅ 2026-05-12 PM — PageIndex key set + functions redeployed (then code reverted)
+
+- **Real `PAGEINDEX_API_KEY` minted** on PageIndex dashboard. Critical learning: the dashboard masks existing keys (the `d75c0bbf****3e337025` string in HOMEWORK was the MASKED display of a real key whose unmasked value was lost — NEVER a placeholder per se; the `****` are literal display chars). The unmasked key is only visible **once in the creation dialog**, can never be recovered afterwards. After multiple failed paste cycles (clipboard captured Ctrl+V control char as a 1-byte secret; Get-Clipboard captured fragments of script text), the working flow was: paste into Notepad → Save As `pgkey.txt` (Text Documents, UTF-8) → `firebase functions:secrets:set --data-file pgkey.txt`. v7 confirmed: 32 bytes, first byte 'f' (0x66), last byte 'b' (0x62), zero non-printable bytes.
+- **Versions 1–6 destroyed.** v3, v4, v5, v6 all stored bad values during the diagnostic-and-retry cycle (Ctrl+V char, 9-char fragment, 4-byte something, etc.). All explicitly destroyed by Firebase's automatic stale-version cleanup when v7 was set + functions redeployed.
+- **4 PageIndex consumers redeployed against v7**: `ingestDocument`, `chatAi`, `ragChat`, `pageIndexClientFilesChat`. `willsProcessor` not yet deployed (Phase 2 / STOP GATE 3 still pending — will pick up v7 on first deploy).
+- **HOMEWORK was wrong about `backfillPageIndexFirmId`** — it does NOT bind `PAGEINDEX_API_KEY` (it's a Firestore-only firmId backfill, doesn't talk to PageIndex). Was previously listed in the redeploy list.
+- **End-to-end ingest path verified working**: upload a PDF → `ingestDocument` 200 OK in 2.2s → PageIndex stores doc → Firestore writes `pageindex_docs/client-files/files/<doc_id>` with `firmId: elias-counsel`. Two docs successfully indexed (one earlier upload + Karen's Will, doc IDs `pi-cmp2ivr4l02g601p7iqv37znl` + `pi-cmp2iz3t002g901p722d6r10t`).
+- **Retrieval path BLOCKED on deprecated API** — see open item 1 above. Function plumbing is correct (Firestore lookup, firmId match, retrieval submission, polling all confirmed); the deprecated PageIndex endpoint just returns empty.
+- **All diagnostic code reverted** at session close (per user request, since the migration will rewrite this code anyway). Reverted files: `ingest-document.ts` (cause-logging + key diagnostic + trim), `rag-chat.ts` (trim), `pageindex-client-files-chat.ts` (trim + pipeline-counts log + raw-body log), `wills-processor.ts` (trim), `pageindex-retrieval.ts` (raw-body log). **Cloud functions still have the temp code until next deploy** — benign for tonight but should be cleaned up in the next deploy cycle.
+
+### 🆕 New follow-ups from this session
+
+- **Anthropic API key is 401-ing.** `pageIndexClientFilesChat` + `ragChat` logs repeatedly show `Anthropic stream failed pre-chunk; falling back to OpenAI. err=401 invalid x-api-key`. Graceful-degradation (shipped 2026-05-06 in commit `91c51f6`) is doing its job — OpenAI substitutes successfully so user-facing chat still answers — but the Anthropic key needs re-rotation. HOMEWORK previously said it was rotated 2026-05-06; something has happened to it since. Run `gcloud secrets versions list ANTHROPIC_API_KEY --project=estate-plan-generator` to see current state, then mint a new key on console.anthropic.com if needed.
+- **Research chat page layout bug.** User reported "all boxes popping out of main box" on `/chat`. Not investigated this session. Probably a CSS flex/overflow issue in `ChatPage.tsx`; the 70/30 split panel may break at certain viewport widths or under certain DOM states.
+
+### ✅ 2026-05-12 hosting smoke-test bugs — all closed same day
+
+- **A. In-law relationship translation** — added `IN_LAW_TRANSLATION` map in `unified-generator.ts` `swapFiduciaries`. Brother/Sister/Mother/Father → -in-Law on the spouse-swap view; preserves name + address, only the kinship label flips. Son/Daughter intentionally left alone (data can't distinguish joint biological from stepchild). Verified: Adam's docs now label Roger Kondos as Brother-in-Law; Karen's docs still show him as Brother.
+- **B. Adam's address missing on HC Directive** — turned out to be TWO root causes:
+  1. **`spouseInfo.address` was empty** — IL HC template renders the primary HC rep using `{{spouseInfo.address}}, .city, .state` (not `{{healthcareProxy.agent.address}}`). The questionnaire's spouse step never captures address. Added `autoFillSpouseInfoAddress` in `template-engine.ts` that defaults `spouseInfo.{address,city,state,zip,county}` to `personalInfo.*` when client is married and `spouseInfo.address` is blank (mirrors the existing `autoFillSpouseFiduciaryAddresses`).
+  2. **Editor was showing stale `editorContent`** — `DocumentEditor.tsx` prefers `editorContent` over `content` when it has any text, but `document-save-helper.ts` only wrote `content` on regen. So every regenerate silently stranded the editor on the previous version. Fix: also write `editorContent: params.content` on every save.
+- **C. Successor 2/3 Executor + Trustee slots "missing" from each Will** — NOT a rendering bug. `[MISSING: …]` markers ARE present (verified by inspecting `content` field of Karen's regen — 7-8 markers including second/third successor executor, trustee, guardian). User was observing the missing-data state correctly; the system is flagging it. Optional future enhancement: give `markMissingFiduciaries` markers the same orange inline styling that unresolved Handlebars vars get (template-engine.ts:2016) to make them visually prominent.
+- **D. PR #9 subset-filter backend path** — verified working. Backend logs show exactly 6 `generateSingleDocument` invocations when 6 boxes were checked (no `estatePlanSummary` call). One side-finding closed same day; one logged for later:
+  - ✅ **Progress modal lists all docs as "in generation" regardless of checkbox state** — closed 2026-05-12. `GenerateDocumentsButton.tsx:561` was iterating `packageDocs` (full list) instead of the selected subset. Switched to `selectableDocs.filter(d => selectedKeys.has(d.key))`. Hosting redeployed.
+  - 🟡 **PR #9 dispatches per-doc serially** via `generateSingleDocument`, replacing the prior bulk path's 3-worker concurrent queue. All-checked case is now ~6× slower (each doc 30-60s sequentially). Worth a perf revisit.
+
+### ✅ Closed during the 2026-05-06 + 2026-05-12 sessions
+
+- **Hosting redeploy (closed 2026-05-12)** — `npm run build` clean (Vite v7.3.1, 7.36s); `firebase deploy --only hosting --project estate-plan-generator` uploaded 65 files and released. PR #9's per-doc checkbox UI in the Generate Estate Plan dialog is now live at https://estate-plan-generator.web.app. Browser smoke-test still pending — see open item 3.
+- **OPENAI_API_KEY rotation (closed 2026-05-12)** — old leaked key (`sk-proj-52Mdei2rh2WJ…`) revoked on platform.openai.com; new key minted and set as version 2 via the file-based `firebase functions:secrets:set` flow (no cleartext in shell history). `ragChat` and `pageIndexClientFilesChat` redeployed against v2. Version 1 explicitly destroyed in Secret Manager (`gcloud secrets versions destroy 1`). `transcribe-audio` and `process-ocr` reference `process.env.OPENAI_API_KEY` but don't bind it, so they're unaffected. Verified: `gcloud secrets versions list OPENAI_API_KEY` shows v2 enabled, v1 destroyed.
+- **Item 1** (browser hang UX) — verified closed against PR #6 commits.
+- **Item 3 — Anthropic half** — `ANTHROPIC_API_KEY` rotated (twice — initial real key leaked, immediately re-rotated). KB-side admin chat smoke-tested and returned a complete answer.
+- **Item 3 — `ingestDocument` region** — migrated `us-central1` → `us-east1`. The frontend was hardcoded to `us-east1` so the upload path was effectively broken in production before this fix.
+- **Mid-term: RAG-chat graceful-degradation** — shipped in commit `91c51f6`. Both `rag-chat.ts` and `pageindex-client-files-chat.ts` now fall back to non-streaming `callAI()` (forced OpenAI gpt-5.4) when the Anthropic stream throws before any chunk has been emitted. Search Cloud Logging for `[ragChat-degradation]` / `[clientFilesChat-degradation]` to count fallback hits.
+
+### 🟡 What's blocked vs. what's agent-codeable now
+
+- **Blocked on deploy + smoke-test of the chat-completion migration** (open item 1). Code is on `main`; running `firebase deploy --only` on the two functions unblocks the Research chat right-panel citations end-to-end. Wills → PageIndex pipeline (mid-term) is no longer blocked on retrieval — upload path always worked; the deprecation only affected retrieval, which the wills-processor doesn't touch.
+- **Agent-codeable without user blockers:** item 4 + item 5 are still user verification tasks. The `/chat` page layout bug (boxes popping out) is agent-codeable once a repro/screenshot lands.
+- **Anthropic key re-rotation** is still agent-codeable if user wants it run, BUT it now only affects `chatAi` (research mode) — `ragChat` and `pageIndexClientFilesChat` no longer call Anthropic after the migration.
+
+### 🧠 Memory added this session
+
+`feedback_never_print_secrets.md` — guards future sessions from running `firebase functions:secrets:access` (which always returns cleartext). Use `gcloud secrets describe` or `gcloud secrets versions list` for existence/version checks.
+
+---
+
 ## ⏱ Short-term (queued 2026-05-05 production deploy)
 
 These items surfaced during the post-merge production deploy of PR #1 (`04a2739`). All non-blocking — production is live and validated. Knock these out in roughly the order listed.
@@ -56,7 +225,13 @@ These items surfaced during the post-merge production deploy of PR #1 (`04a2739`
 
 - **PR #7** — NJ POA `ACKNOWLEDGMENT` block now recognized as a valid Notary Block by the structural validator. Patterns: `acknowledg.*oath`, `) ss:`, `commission expires`. Prevents false-positive `needs_review` status on NJ POAs.
 - **PR #8** — Hybrid template augmentation switched from `claude-sonnet-4-6` → `claude-haiku-4-5-20251001`. ~2.5× faster for the structure-preservation step (the step that matters most for latency UX). Quality is maintained since the task is structure/bracket-preservation, not creative drafting.
-- **PR #9** — "Generate Estate Plan Documents" dialog now shows a checkbox list; attorney can select a subset to generate without regenerating the whole package. Defaults to all-checked (unchanged behavior). Married-couple pairs expand to per-role rows. **Requires hosting redeploy from laptop** (`npm run build && firebase deploy --only hosting`) — PR #9 is merged on the backend but the frontend bundle hasn't been rebuilt yet.
+- **PR #9** — "Generate Estate Plan Documents" dialog now shows a checkbox list; attorney can select a subset to generate without regenerating the whole package. Defaults to all-checked (unchanged behavior). Married-couple pairs expand to per-role rows. **Hosting redeployed 2026-05-05** (laptop build + `firebase deploy --only hosting`).
+
+### 3c. ✅ Dependency vulnerability sweep — closed 2026-05-05 (commit `b80509d`)
+
+`npm audit fix` (semver-safe, no `--force`) brought us from 13 vulnerabilities (7 moderate, 5 high, 1 critical) → 2 non-exploitable moderate. Patched: `dompurify`, `vite`, `postcss`, `protobufjs` (critical RCE), `@xmldom/xmldom`, `hono`, `@hono/node-server`, `path-to-regexp`, `picomatch`, `brace-expansion`, `flatted`. Tests: 589/589 still passing. Build clean.
+
+Remaining 2 moderate: `uuid <14` direct + transitive via `gaxios`. Advisory only triggers when caller passes a `buf` argument to `uuid.v3/v5/v6` — we don't, anywhere. `--force` upgrade would bump `gaxios`/`firebase-admin` majors for zero real exposure; left as-is.
 
 ### 4. POA smoke test (deferred from 2026-05-05)
 

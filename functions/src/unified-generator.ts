@@ -10,6 +10,7 @@ import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
+import { checkContentIntegrity } from './doc-content-integrity-checker';
 import { buildEstatePlanSummaryTemplateData } from './generators/summary-docs-generator';
 
 
@@ -545,6 +546,19 @@ export async function generateDocument(
     // fiduciary's name with the now-spouse's full name and inverts the
     // relationship label to match the new testator's perspective.
     const HOUSEHOLD_REL = new Set(['spouse', 'husband', 'wife', 'partner', 'domestic partner']);
+    // Kinship terms that flip to "in-law" on the spouse-swap view. The original
+    // primary's blood relatives become the new testator's relatives-by-marriage.
+    // Scope intentionally limited to siblings + parents (the unambiguous cases)
+    // — Son/Daughter is left alone because the child could be a joint biological
+    // child (still "Son"/"Daughter" on the spouse's view) or a stepchild from a
+    // prior relationship (would be "Stepson"/"Stepdaughter"), and the data
+    // model can't distinguish those.
+    const IN_LAW_TRANSLATION = new Map<string, string>([
+      ['brother', 'Brother-in-Law'],
+      ['sister', 'Sister-in-Law'],
+      ['mother', 'Mother-in-Law'],
+      ['father', 'Father-in-Law'],
+    ]);
     const newSpouseFullName = [originalPersonal.firstName, originalPersonal.middleName, originalPersonal.lastName].filter(Boolean).join(' ').trim();
     const newSpouseRelationship = (() => {
       const og = typeof originalPersonal.gender === 'string' ? (originalPersonal.gender as string).trim().toLowerCase() : '';
@@ -562,21 +576,30 @@ export async function generateDocument(
           if (!tierVal || typeof tierVal !== 'object') continue;
           const t = tierVal as Record<string, unknown>;
           const rel = typeof t.relationship === 'string' ? (t.relationship as string).trim().toLowerCase() : '';
-          if (!HOUSEHOLD_REL.has(rel)) continue;
-          // Re-target this slot at the now-spouse (the original primary).
-          nextRole[tier] = {
-            ...t,
-            name: newSpouseFullName || t.name,
-            relationship: newSpouseRelationship,
-            // Address fields auto-fill via the template-engine pass; clear
-            // any stale ones tied to the previous person so the auto-fill
-            // re-populates with the new testator's household address.
-            address: '',
-            city: '',
-            state: '',
-            zip: '',
-            county: '',
-          };
+          if (HOUSEHOLD_REL.has(rel)) {
+            // Re-target this slot at the now-spouse (the original primary).
+            nextRole[tier] = {
+              ...t,
+              name: newSpouseFullName || t.name,
+              relationship: newSpouseRelationship,
+              // Address fields auto-fill via the template-engine pass; clear
+              // any stale ones tied to the previous person so the auto-fill
+              // re-populates with the new testator's household address.
+              address: '',
+              city: '',
+              state: '',
+              zip: '',
+              county: '',
+            };
+          } else if (IN_LAW_TRANSLATION.has(rel)) {
+            // Translate the kinship term to its in-law equivalent — the
+            // fiduciary stays the same person, only their relationship label
+            // changes from the new testator's perspective.
+            nextRole[tier] = {
+              ...t,
+              relationship: IN_LAW_TRANSLATION.get(rel),
+            };
+          }
         }
         out[role] = nextRole;
       }
@@ -934,6 +957,30 @@ export async function generateDocument(
       } else {
         validationFindings = structureResult.missing;
       }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 3c. Post-generation CONTENT integrity check (all modes, including template)
+  // ------------------------------------------------------------------
+  // Catches symptoms that template mode can still produce: unresolved
+  // Handlebars, empty fiduciary slots, missing client name, double-period
+  // typos. Findings merge with structural ones; same Firestore field, same
+  // status semantics. Does NOT trigger retries — these are mostly
+  // post-processing/data issues, not AI-output issues.
+  if (generatedDoc.status !== 'error' && generatedDoc.content) {
+    const integrity = checkContentIntegrity(generatedDoc.content, docType, clientContext);
+    if (integrity.findings.length > 0) {
+      console.warn(
+        `[unifiedGenerator] CONTENT INTEGRITY for ${docType}: ` +
+          integrity.findings
+            .map((f) => `[${f.severity}] ${f.name}${f.detail ? ` — ${f.detail}` : ''}`)
+            .join('; '),
+      );
+      validationFindings = [
+        ...validationFindings,
+        ...integrity.findings.map((f) => ({ name: f.name, severity: f.severity })),
+      ];
     }
   }
 

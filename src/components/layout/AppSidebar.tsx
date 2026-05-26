@@ -9,6 +9,10 @@ import {
   Scale,
   BookOpen,
   MessageSquareText,
+  Zap,
+  Swords,
+  Calculator,
+  Cable,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,6 +30,11 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.PAYMENTS]: () => { import('@/pages/admin/PaymentsPage'); },
   [ROUTES.KNOWLEDGE_BASE]: () => { import('@/pages/admin/KnowledgeBasePage'); },
   [ROUTES.CHAT]: () => { import('@/pages/admin/ChatPage'); },
+  [ROUTES.CITATION_VERIFIER]: () => { import('@/pages/admin/CitationVerifierPage'); },
+  [ROUTES.AUTOMATIONS]: () => { import('@/pages/admin/AutomationsPage'); },
+  [ROUTES.BRIEF_ANALYZER]: () => { import('@/pages/admin/BriefAnalyzerPage'); },
+  [ROUTES.BILLING_CALCULATOR]: () => { import('@/pages/admin/BillingCalculatorPage'); },
+  [ROUTES.INTEGRATIONS]: () => { import('@/pages/admin/IntegrationsHubPage'); },
 };
 
 interface NavItem {
@@ -42,6 +51,11 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Payments', href: ROUTES.PAYMENTS, icon: DollarSign },
   { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
   { label: 'Research Chat', href: ROUTES.CHAT, icon: MessageSquareText },
+  { label: 'Citation Verifier', href: ROUTES.CITATION_VERIFIER, icon: Scale },
+  { label: 'Automations', href: ROUTES.AUTOMATIONS, icon: Zap },
+  { label: 'Brief Analyzer', href: ROUTES.BRIEF_ANALYZER, icon: Swords },
+  { label: 'Value Billing', href: ROUTES.BILLING_CALCULATOR, icon: Calculator },
+  { label: 'Integrations', href: ROUTES.INTEGRATIONS, icon: Cable },
 ];
 
 interface AppSidebarProps {

@@ -183,9 +183,8 @@ Respond with ONLY the JSON object, no markdown fences.`;
   const userPrompt = `Analyze this text and extract metadata:\n\n${analysisText}`;
 
   try {
-    // Force Anthropic for enrichment
-    const raw = await callAI(systemPrompt, userPrompt, { ...firmData, activeAiProvider: 'anthropic' }, {
-      model: 'claude-sonnet-4-6',
+    const raw = await callAI(systemPrompt, userPrompt, firmData, {
+      model: 'mercury-coder-small',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,
@@ -228,7 +227,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
 // ---------------------------------------------------------------------------
 
 export const bulkProcessKnowledgeFiles = onCall(
-  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 540 },
+  { region: 'us-east1', memory: '2GiB', timeoutSeconds: 540, secrets: ['MERCURY_API_KEY'] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 

@@ -475,7 +475,7 @@ function buildResearchUserPrompt(
 // ---------------------------------------------------------------------------
 
 export const chatAi = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ['PAGEINDEX_API_KEY'] })
+  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ['PAGEINDEX_API_KEY', 'MERCURY_API_KEY'] })
   .region('us-east1')
   .https.onCall(
   async (data: ChatAiRequest, context: functions.https.CallableContext) => {
@@ -855,8 +855,12 @@ RULES:
 
         // Extract key facts (fire-and-forget)
         if (clientId && allMessages.length >= 4) {
-          extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch(console.error);
-          extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch(console.error);
+          extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch((err) =>
+            console.error('[chatAi] extractAndSaveKeyFacts failed', { firmId, clientId, convId }, err),
+          );
+          extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch((err) =>
+            console.error('[chatAi] extractAndSaveCorrections failed', { firmId, convId }, err),
+          );
         }
 
         return result;
@@ -876,8 +880,12 @@ RULES:
 
       // Extract key facts (fire-and-forget)
       if (clientId && allMessages.length >= 4) {
-        extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch(console.error);
-        extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch(console.error);
+        extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch((err) =>
+          console.error('[chatAi] extractAndSaveKeyFacts failed', { firmId, clientId, convId }, err),
+        );
+        extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch((err) =>
+          console.error('[chatAi] extractAndSaveCorrections failed', { firmId, convId }, err),
+        );
       }
 
       return { reply: raw, conversationId: convId };

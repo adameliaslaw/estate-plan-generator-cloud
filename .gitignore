@@ -28,6 +28,9 @@ firebase-debug.log
 firebase-debug.*.log
 ui-debug.log
 
+# Local scraping output (rebuildable via functions/scripts/ingest-nj-title-3b.cjs)
+.firecrawl/
+
 # IDE
 .vscode/
 .idea/
