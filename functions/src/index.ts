@@ -74,3 +74,6 @@ export { willsPilotRun } from './wills-pilot';
 export { verifyCitations } from './verify-citations';
 export { manageAutomationRule, listAutomationRules, scheduledFollowUps } from './follow-up-engine';
 export { analyzeBrief } from './analyze-brief';
+
+// AI Receptionist — "Carmela" intake & screening
+export { receptionistWebhook, receptionistStatus } from './receptionist-intake';

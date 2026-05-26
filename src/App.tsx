@@ -36,6 +36,7 @@ const BriefAnalyzerPage = lazy(() => import('@/pages/admin/BriefAnalyzerPage'));
 const BillingCalculatorPage = lazy(() => import('@/pages/admin/BillingCalculatorPage'));
 const IntegrationsHubPage = lazy(() => import('@/pages/admin/IntegrationsHubPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
+const ReceptionistPage = lazy(() => import('@/pages/admin/ReceptionistPage'));
 
 
 
@@ -192,6 +193,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <ChatPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.RECEPTIONIST}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <ReceptionistPage />
                 </AppLayout>
               }
             />
