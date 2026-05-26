@@ -41,7 +41,8 @@ const SUPPORTED_MIME_TYPES = new Set([
   'application/msword',
 ]);
 
-const TERMINAL_STATUSES = new Set<ProcessingStatus>(['indexed', 'error', 'skipped']);
+// 'classified' is terminal for Correspondence/Other/OCR docs that skip extraction.
+const TERMINAL_STATUSES = new Set<ProcessingStatus>(['classified', 'indexed', 'error', 'skipped']);
 
 const DEFAULT_SAMPLE_SIZE   = 30;
 const DEFAULT_POLL_TIMEOUT  = 480_000;  // 8 min — leaves 60s headroom in a 540s function
@@ -239,10 +240,22 @@ async function fetchExplicitFiles(fileIds: string[]): Promise<SampledFile[]> {
   return out;
 }
 
+/**
+ * Returns true only if the document reached a terminal status during this pilot
+ * run (i.e. last_processed_at is at or after startedAt). Stale records from
+ * previous runs are ignored so they can't produce false positives.
+ */
+function isTerminalForRun(doc: WillsDocument, startedAt: string): boolean {
+  if (!TERMINAL_STATUSES.has(doc.processing_status)) return false;
+  if (!doc.last_processed_at) return false;
+  return doc.last_processed_at >= startedAt;
+}
+
 async function pollUntilTerminal(
   fileIds: string[],
   timeoutMs: number,
   intervalMs: number,
+  startedAt: string,
   db: admin.firestore.Firestore,
 ): Promise<Map<string, WillsDocument | null>> {
   const results = new Map<string, WillsDocument | null>();
@@ -251,7 +264,7 @@ async function pollUntilTerminal(
   while (Date.now() < deadline) {
     const pending = fileIds.filter(id => {
       const doc = results.get(id);
-      return !doc || !TERMINAL_STATUSES.has(doc.processing_status);
+      return !doc || !isTerminalForRun(doc, startedAt);
     });
     if (pending.length === 0) break;
 
@@ -265,7 +278,7 @@ async function pollUntilTerminal(
 
     if (pending.every(id => {
       const doc = results.get(id);
-      return doc && TERMINAL_STATUSES.has(doc.processing_status);
+      return doc && isTerminalForRun(doc, startedAt);
     })) break;
 
     await new Promise(r => setTimeout(r, intervalMs));
@@ -496,7 +509,7 @@ export const willsPilotRun = onCall(
 
     // ── Poll for terminal status ────────────────────────────────────────────
     const fileIds = sample.map(s => s.drive_file_id);
-    const results = await pollUntilTerminal(fileIds, pollTimeoutMs, pollInterval, db);
+    const results = await pollUntilTerminal(fileIds, pollTimeoutMs, pollInterval, startedAt, db);
 
     // ── Build + persist report ──────────────────────────────────────────────
     const completedAt = new Date().toISOString();

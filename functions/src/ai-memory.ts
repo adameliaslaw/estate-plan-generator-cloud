@@ -381,31 +381,37 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
     // ── Embed key facts into chatInsights for cross-client semantic search ──
     try {
       const insightsCol = db().collection(`firms/${firmId}/chatInsights`);
+
+      // Generate all embeddings in parallel — faster than sequential 200ms-gapped calls.
+      const embeddingResults = await Promise.allSettled(
+        deduped.map(async (fact) => {
+          const embedding = await generateEmbedding(`[${fact.category}] ${fact.fact}`);
+          return { fact, embedding };
+        }),
+      );
+
       const batch = db().batch();
       let embeddedCount = 0;
 
-      for (const fact of deduped) {
-        try {
-          const embeddingText = `[${fact.category}] ${fact.fact}`;
-          const embedding = await generateEmbedding(embeddingText);
-          const insightRef = insightsCol.doc();
-          batch.set(insightRef, {
-            fact: fact.fact,
-            category: fact.category,
-            confidence: fact.confidence,
-            clientId,
-            conversationId,
-            firmId,
-            embedding: admin.firestore.FieldValue.vector(embedding),
-            isActive: true,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          embeddedCount++;
-          // Rate limit: small delay between embedding calls
-          await new Promise((r) => setTimeout(r, 200));
-        } catch (embedErr) {
-          console.warn(`[ai-memory] Failed to embed fact "${fact.fact.slice(0, 50)}...":`, embedErr);
+      for (const result of embeddingResults) {
+        if (result.status === 'rejected') {
+          console.warn('[ai-memory] Failed to embed fact:', result.reason);
+          continue;
         }
+        const { fact, embedding } = result.value;
+        const insightRef = insightsCol.doc();
+        batch.set(insightRef, {
+          fact: fact.fact,
+          category: fact.category,
+          confidence: fact.confidence,
+          clientId,
+          conversationId,
+          firmId,
+          embedding: admin.firestore.FieldValue.vector(embedding),
+          isActive: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        embeddedCount++;
       }
 
       if (embeddedCount > 0) {

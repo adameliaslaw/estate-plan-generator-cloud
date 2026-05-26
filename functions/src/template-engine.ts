@@ -2254,7 +2254,7 @@ Return the complete HTML with substitutions applied. Do NOT include <style> bloc
 
   if (rawTemplateHtml.length > 50000) {
     console.warn(
-      `[template-engine] Large template for ${docType}: ${rawTemplateHtml.length} chars (~${Math.round(rawTemplateHtml.length / 4)} tokens). ` +
+      `[template-engine] Large template for ${docType}: ${rawTemplateHtml.length} chars (~${Math.round(rawTemplateHtml.length / 3.5)} tokens). ` +
       `Output quality may degrade for extremely long templates.`,
     );
   }
