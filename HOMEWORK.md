@@ -41,6 +41,54 @@ firebase functions:secrets:set MERCURY_API_KEY --project estate-plan-generator
 gh workflow run firebase-functions-deploy.yml --repo adameliaslaw/estate-plan-generator-cloud
 ```
 
+### 🟡 NEXT DELIBERATE SESSION — IL Template marital-status binding sweep + dedup
+
+**Surfaced 2026-05-26 PM** when Lucas Polo (widowed) regenerated his livingWill + POA. The 2026-04-28 `markMissingFiduciaries` accumulator-clobber fix (commit `1609b31`) cleared the empty-`<strong></strong>` and empty-appointment symptoms (verified clean — see ✅ entries above). But the regenerated HC directive's primary HC Rep slot still shows `[MISSING: primary healthcare proxy name and address]` even though Lucas's `fiduciaries.healthcareProxy.agent.name = "Ibrahim Polo"`. Diagnosis: IL HC template binds `{{spouseFullName}}` + `{{spouseInfo.address}}` directly. For married clients this works (the spouse IS the HC rep by default). For widowed/single/divorced clients, the binding falls through to empty and the post-render regex injects MISSING markers.
+
+The 2026-05-12 fix `autoFillSpouseInfoAddress` (template-engine.ts:1685) only handles **married** clients. The full sweep is bigger than that function — it's a template-design issue spanning 15 of the firm's 16 Firestore-stored templates.
+
+**Inventory (16 templates total, hashes in `tmp/template-inventory.cjs`):**
+
+| docType | templates with `{{spouseInfo.*}}` bindings | templates with `{{spouseFullName}}` | templates with `{{spouseTitle}}` |
+|---|---|---|---|
+| livingWill (3) | 2 buggy (`aPLknv...` Deepak HC, `zNXZnZNN...` Jessica HC newer) + 1 clean (`QU978ikc...` Jessica HC older) | all 3 | all 3 |
+| poa (3) | 2 of 3 (the 2 "Jessica Byrnes POA" copies) | 2 of 3 | 3 of 3 |
+| will (2) | 0 | 2 of 2 | 2 of 2 |
+| pourOverWill (3) | 0 | 3 of 3 | 3 of 3 |
+| trust (4) | 3 of 4 (lastName-only) + 1 clean ("Terry Trust" — zero spouse bindings) | 3 of 4 | 0 of 4 |
+
+**Bug taxonomy (do NOT lump these together):**
+
+1. **Fiduciary-appointment paragraphs** ("I appoint my husband, X, as Executor / Trustee / HC Rep / POA Agent") — **REAL BUG for non-married.** Fix with Handlebars conditional that falls back to the appropriate `fiduciaries.<role>.<level>.*` path. Affects livingWill (HC Rep), poa (POA agent), and probably some will/trust executor paragraphs.
+2. **Family-information paragraphs** ("I am married to X" / "I leave to my spouse Y" / "If my spouse predeceases me") — **NOT a binding bug.** These reference the actual spouse for legitimate family-history reasons. For widowed clients, prose may need to change ("I was married to X, who predeceased me on DATE"), but substituting the HC proxy here would corrupt the document. Leave these alone OR provide separate widowed/single template variants.
+3. **Trust naming** (`{{personalInfo.lastName}} {{spouseInfo.lastName}}` → "Smith Polo Family Trust") — **NOT a binding bug.** For single/widowed, the trust name might want a different formulation, but that's prose design, not a code fix.
+
+**Duplicate templates (4 pairs — needs content diff per pair before deletion):**
+
+- `QU978ikcinUlcKuMCqyg` (len 11921, hash 2a4a027430fd) vs `zNXZnZNN1YqGqSGWIEOe` (len 12782, hash 475fa5697c2f) — both "Jessica Byrnes HC 11.3.25". The first has 0 spouseInfo bindings, the second has 3. Likely the first is the legacy/cleaner version; the second got a re-import that introduced the buggy pattern. **Verify which paragraph layout is current attorney-approved.**
+- `SUJUQRIjiTTxjdKJO79o` (len 24420) vs `fN5MXom5iYsVkdUAZd6l` (len 23690) — both "Jessica Byrnes POA 11.3.25". Both buggy.
+- `7HbUWAD8ofeHYYtq6tNZ` (len 82185, 2 spouseInfo bindings) vs `mcrsbJBXr8zBeZamjXbJ` (len 63029, 3 spouseInfo bindings) — both "Rizzo Living Trust". The smaller may be an incomplete export.
+- `CCepgSwMNusH1jsWPRf8` (len 32250) vs `nGH7jfJINVP08BK1mc7A` (len 29493) — both "Jessica Byrnes LW&T 11.3.25". Neither has spouseInfo bindings; differ only in spouseFullName count.
+
+**Recommended approach for next session (2-3 hours):**
+
+1. **Dedup first** — diff each pair, decide canonical version with attorney (you), delete the loser. Removes 4 templates; remaining 12 to sweep.
+2. **Identify fiduciary-appointment paragraphs** in each of the 12 by searching for "appoint" / "designate" patterns adjacent to spouseFullName/spouseInfo bindings.
+3. **Apply Handlebars conditional surgically** to each appointment paragraph:
+   ```hbs
+   I appoint my {{#if spouseFullName}}{{spouseTitle}}, <strong>{{spouseFullName}}</strong>, of {{spouseInfo.address}}, {{spouseInfo.city}}, {{spouseInfo.state}}{{else}}{{fiduciaries.<role>.<level>.relationship}}, <strong>{{fiduciaries.<role>.<level>.name}}</strong>, of {{fiduciaries.<role>.<level>.address}}, {{fiduciaries.<role>.<level>.city}}, {{fiduciaries.<role>.<level>.state}}{{/if}}, as my {{role-noun}}
+   ```
+4. **Leave family-info paragraphs untouched.**
+5. **Validate via regen pair**: Karen Elias (married) — every doc should render identically pre/post. Lucas Polo (widowed) — primary HC Rep, POA agent, Executor should now render Ibrahim's name + address (modulo Lucas's missing fiduciary addresses, see below).
+6. **Backstop**: also update `autoFillSpouseInfoAddress` to log a warning when widowed/single client has empty `fiduciaries.<role>.<level>.address` — surfaces data gaps loudly.
+
+**Independent data gap (separate task):** Ibrahim Polo + Jose Polo Sr. have `fields: name, relationship, phone, email` only — **no `address/city/state/zip`** for ANY of Lucas's 4 fiduciary roles. Even after the binding fix, addresses will still render as MISSING markers until you enter them. Either: ask Lucas, or fill via admin UI on his client page.
+
+**Risk guardrails for the sweep session:**
+- Per template change, store the BEFORE content (e.g., `templateBaseline_pre_marital_sweep` field) so revert is possible.
+- Touch templates one at a time; regen-validate Karen + Lucas after each.
+- Don't run the sweep in parallel with active client work.
+
 ### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
 
 Commit `1290c9e` lands a one-line strip-then-collapse fix in `functions/src/doc-content-integrity-checker.ts`. Deploy the affected pair when convenient:
