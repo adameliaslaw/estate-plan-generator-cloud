@@ -4,7 +4,53 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-27 PM (functions deploy + Mercury 2 activation + warn-fires verified)
+## 📍 Session left off here — 2026-05-27 evening (PersonPicker + AddressField fixes; name-split refactor queued)
+
+### 🔄 What changed (2026-05-27 evening, after the PM functions deploy below)
+
+- **CSP fix shipped** (commit `ea130aa`). Added `https://maps.gstatic.com` to `img-src` so Google Places autocomplete dropdown sprites (powered-by-google badge + autocomplete-icons) load instead of being blocked. Cosmetic fix but eliminated console noise.
+- **AddressField keystroke-drop bug (React 19 + Maps Autocomplete) — fixed** (`4c2c814` + `d4c2630`). `google.maps.places.Autocomplete` attaches native listeners that suppress React 19's controlled-input event flow across the entire address sub-form. Converted all 5 inputs (street, city, state, zip, county) to uncontrolled `defaultValue + onChange + ref sync` pattern. `useEffect` syncs each ref when canonical state changes externally (initial load, "Same as my address", autocomplete fill).
+- **RepeaterField stale-closure clobber — fixed** (`bb97201`). When AddressField fires a multi-field address update inside a RepeaterField item (children section), the InnerField loops `onFieldChange` 5 times. Each call read `items` from the closure at render time; sequential dispatches each REPLACED the children array with a version that had only ONE field set, so only the last (county) survived. Fix: `itemsRef` updated optimistically before each `onChange` so successive same-tick updates build on each other.
+- **PersonPicker shipped** (`761cb14`). New dropdown at the top of every fiduciary slot (10 slots total: executor primary+alt, trustee primary+alt, POA agent+alternateAgent, HC agent+alternateAgent, guardian primary+alt). Aggregates people already in the questionnaire — spouse (if `hasSpouse`), children, other-dependents, and anyone previously named in another fiduciary slot. One-click selection fires a single multi-path `updateFields` dispatch that auto-fills name + relationship + gender + phone + email + full address composite. Storage = copy-at-selection (no live link). Renders null when the pool is empty so first-time questionnaires are unaffected.
+
+### 🔴 Open user actions (carried, still pending)
+
+1. **Fill Ibrahim Polo + Jose Polo Sr. addresses via admin UI** — Lucas's 4 fiduciary roles all point at one of them with `{ name, relationship, phone, email }` only. After the fixes today, you should now be able to type/autocomplete/copy successfully. Once filled, regenerate POA + HC for Lucas to confirm `[MISSING: <role> address]` markers clear.
+2. **UI smoke-test the marital-status sweep** — regen Karen (married, should be byte-identical) + Lucas (widowed, should now show Ibrahim by name).
+3. **One-time CI bootstrap** (`FIREBASE_SERVICE_ACCOUNT_EPG` GitHub secret) — less urgent now that today's manual deploy shipped.
+4. **Activate Carmela** (when ready) — set `TWILIO_AUTH_TOKEN` + redeploy receptionist functions + configure Twilio phone number.
+5. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
+
+### 🟡 NEXT DELIBERATE SESSION — Split fiduciary + repeater names into firstName/middleName/lastName/suffix
+
+**Triggered 2026-05-27 evening** during PersonPicker review. Today's schema is asymmetric: client (`personalInfo`) and spouse (`spouseInfo`) have separate `firstName` / `middleName` / `lastName` / `suffix` fields, joined into computed `clientFullName` / `spouseFullName`. Everywhere else — `children`, `grandchildren`, `otherDependents`, all 10 fiduciary slots — uses a single "Full Name" string field. Templates bind to `{{fiduciaries.X.Y.name}}` directly for fiduciaries and `{{children.[N].name}}` for children; only client and spouse use computed joined names.
+
+Attorney's call: the single-name string is more error-prone in steady-state (no structural validation; dedup falls apart on typos; templates can't extract parts for formal address; cross-slot consistency issues invisible at data layer). The one-time migration risk (splitting "John A. Smith Jr." correctly) is bounded by an admin-review UI that previews each split before committing.
+
+**Scope (~2–3 hours):**
+
+1. **Schema additions.** Add `firstName`, `middleName`, `lastName`, `suffix` to each fiduciary slot (executor/trustee/powerOfAttorney/healthcareProxy primary+alt, guardian primary+alt at top-level paths) AND to each repeater item type (`children[*]`, `grandchildren[*]`, `otherDependents[*]`). Keep the existing `name` field as a derived alias for backwards-compat until templates migrate (see step 4).
+2. **Computed full-name helper.** In `client-context-aggregator.ts` (or `client-data-serializer.ts`), add per-slot computed full-names (e.g. `fiduciaries.executor.primary.fullName`) joined the same way `clientFullName` is. For backwards-compat, also write back to `.name` so existing templates continue to render until migration.
+3. **Migration script.** `functions/scripts/split-names.cjs` — one-pass scan of every client doc's fiduciaries + repeater items, propose a split via a basic heuristic (`first token = firstName`, `last token = lastName` modulo Jr/Sr/III/IV suffix detection, middle tokens = `middleName`), and write the proposal into a `_pendingNameSplit` field on each entry. NO production reads change until step 5.
+4. **Admin review UI.** New `/admin/name-splits` page showing every proposed split per client: editable firstName/middle/last/suffix vs. the original `name`. Bulk-approve workflow with "Skip" and "Edit" per row. On approve, write the splits into the canonical fields and clear `_pendingNameSplit`. Surfaces edge cases (compound surnames, missing middle, suffixes the heuristic missed) for human review before any data commits.
+5. **Template migration.** After all client docs are reviewed + approved, update IL template bindings from `{{fiduciaries.X.Y.name}}` → `{{fiduciaries.X.Y.fullName}}` (or keep `.name` as derived alias — even less template churn). Same for `{{children.[N].name}}`. Re-validate against Karen + Lucas regens.
+6. **PersonPicker upgrade.** Fills `firstName`/`middleName`/`lastName`/`suffix` individually instead of `name`. Dedup logic upgrades from "lowercase full-string equality" to "firstName + lastName match (case-insensitive)" so typos in middle names or suffixes don't fragment the same person across slots.
+
+**Risk guardrails for that session:**
+- Don't change template bindings until ALL client docs are reviewed + approved. The derived-alias `.name` keeps templates rendering correctly during the transition.
+- Per-client review queue — never auto-commit splits without human approval.
+- Test against Karen (married, no fiduciary uses separate parts today) and Lucas (widowed, Ibrahim Polo is straightforward; Jose Polo Sr. has a suffix that the heuristic must handle).
+- Run regen pair before declaring done.
+
+**Why this matters going forward:**
+- Better validation (enforce non-empty first + last).
+- PersonPicker dedup catches typos ("Ibrhim" vs "Ibrahim") via firstName+lastName comparison.
+- Templates gain the ability to render formal address ("Mr. Polo") and sorted lists.
+- Cross-slot consistency becomes data-visible (a name in two slots either matches at the part level or doesn't).
+
+---
+
+## 📍 Earlier in 2026-05-27 PM — functions deploy + Mercury 2 activation + warn-fires verified
 
 ### 🔄 What changed (2026-05-27 PM)
 
@@ -16,18 +62,7 @@ Items requiring human action or decisions before the next agent session can proc
   - Primary HC Rep renders **`I appoint my Son, IBRAHIM POLO, of [MISSING: healthcare proxy address]`** (was `[MISSING: primary healthcare proxy name and address]` pre-fix). The `{{#if hasSpouse}}` conditional works end-to-end in production code.
   - `[MISSING: healthcare proxy address]` marker will resolve once Ibrahim's address is entered.
 
-### 🔴 Open user actions (still pending)
-
-1. **Fill Ibrahim Polo + Jose Polo Sr. addresses via admin UI.** Lucas's 4 fiduciary roles all point at one of them with `{ name, relationship, phone, email }` only — no address fields. Until filled, primary appointment paragraphs render `[MISSING: <role> address]` markers in his regenerated docs.
-2. **UI smoke-test the marital-status sweep** (~5 min): regen Karen (married — should be byte-identical to pre-fix) + Lucas (widowed — should now show Ibrahim by name). The local test confirmed engine behavior; the UI test confirms the production callable + auth + save pipeline.
-3. **One-time CI bootstrap (5 min) — long-term unblock.** `.github/workflows/firebase-hosting-deploy.yml` + `firebase-functions-deploy.yml` are already on main. Less urgent now that today's manual deploy shipped — but still worth setting up so future deploys are automatic:
-   - Firebase Console → Project Settings → Service Accounts → Generate new private key. Download the JSON.
-   - GitHub repo Settings → Secrets and variables → Actions → New repository secret:
-     - Name: `FIREBASE_SERVICE_ACCOUNT_EPG`
-     - Value: paste the JSON
-   - After secret-add, workflows fire on every push to `main` touching `src/` (hosting) or `functions/` (functions).
-4. **Activate Carmela** (when ready): set `TWILIO_AUTH_TOKEN` secret + redeploy receptionist functions + configure Twilio phone number to POST to `receptionistWebhook?firmId=elias-counsel`.
-5. **Merge `incoming-ai-chambers` in adamelias.ai** when you're ready to finish the AI Chambers port. See `src/tools/README-AI-CHAMBERS-PORT.md` on that branch.
+_(Open user actions for this session are listed in the evening session block above — see top.)_
 
 ---
 
