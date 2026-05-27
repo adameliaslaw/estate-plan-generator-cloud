@@ -43,39 +43,58 @@ personalInfo.state, personalInfo.zip, personalInfo.county, personalInfo.email
 personalInfo.phone, personalInfo.maritalStatus, personalInfo.citizenship
 personalInfo.occupation, personalInfo.employer
 
-spouseInfo.firstName, spouseInfo.middleName, spouseInfo.lastName
+spouseInfo.firstName, spouseInfo.middleName, spouseInfo.lastName, spouseInfo.suffix
 spouseInfo.dob, spouseInfo.email, spouseInfo.phone
 spouseInfo.address, spouseInfo.city, spouseInfo.state, spouseInfo.zip
 
-children[] — array of: { name, dob, isMinor, relationship, specialNeeds, guardian, alternateGuardian }
+children[] — array of: { firstName, middleName, lastName, suffix, name (legacy joined), dob, isMinor, relationship, specialNeeds, guardian, alternateGuardian }
+grandchildren[] — array of: { firstName, middleName, lastName, suffix, name, dob, parentName, gender, specialNeeds, specialNeedsDetails }
+otherDependents[] — array of: { firstName, middleName, lastName, suffix, name, relationship, notes }
 
-fiduciaries.executor.primary.name, fiduciaries.executor.primary.relationship, fiduciaries.executor.primary.address
-fiduciaries.executor.alternate.name, fiduciaries.executor.alternate.relationship, fiduciaries.executor.alternate.address
-fiduciaries.executor.successor.name, fiduciaries.executor.successor.relationship, fiduciaries.executor.successor.address
-fiduciaries.executor.secondSuccessor.name, fiduciaries.executor.secondSuccessor.relationship, fiduciaries.executor.secondSuccessor.address
-fiduciaries.executor.thirdSuccessor.name, fiduciaries.executor.thirdSuccessor.relationship, fiduciaries.executor.thirdSuccessor.address
+Every fiduciary slot AND every repeater item carries firstName / middleName / lastName / suffix as the canonical split-name fields. The legacy joined .name is derived from those parts at generation time (client-context-aggregator.deriveName) and written back so old {{...name}} bindings keep rendering. Prefer the split parts when you need formal address ("Mr. Polo") or surname-only references; use {{...name}} when you want the full joined string.
+
+fiduciaries.executor.primary.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.executor.primary.relationship, fiduciaries.executor.primary.address
+fiduciaries.executor.alternate.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.executor.alternate.relationship, fiduciaries.executor.alternate.address
+fiduciaries.executor.successor.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.executor.successor.relationship, fiduciaries.executor.successor.address
+fiduciaries.executor.secondSuccessor.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.executor.secondSuccessor.relationship, fiduciaries.executor.secondSuccessor.address
+fiduciaries.executor.thirdSuccessor.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.executor.thirdSuccessor.relationship, fiduciaries.executor.thirdSuccessor.address
 fiduciaries.executor.bondRequired, fiduciaries.executor.compensation
 
-fiduciaries.trustee.primary.name, fiduciaries.trustee.primary.relationship, fiduciaries.trustee.primary.address
-fiduciaries.trustee.alternate.name, fiduciaries.trustee.alternate.relationship, fiduciaries.trustee.alternate.address
-fiduciaries.trustee.successor.name, fiduciaries.trustee.successor.relationship, fiduciaries.trustee.successor.address
+fiduciaries.trustee.primary.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.trustee.primary.relationship, fiduciaries.trustee.primary.address
+fiduciaries.trustee.alternate.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.trustee.alternate.relationship, fiduciaries.trustee.alternate.address
+fiduciaries.trustee.successor.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.trustee.successor.relationship, fiduciaries.trustee.successor.address
 
-fiduciaries.powerOfAttorney.agent.name, fiduciaries.powerOfAttorney.agent.relationship
-fiduciaries.powerOfAttorney.agent.address, fiduciaries.powerOfAttorney.agent.city, fiduciaries.powerOfAttorney.agent.state, fiduciaries.powerOfAttorney.agent.zip
-fiduciaries.powerOfAttorney.alternateAgent.name, fiduciaries.powerOfAttorney.alternateAgent.relationship
+fiduciaries.powerOfAttorney.agent.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.powerOfAttorney.agent.relationship, fiduciaries.powerOfAttorney.agent.address
+fiduciaries.powerOfAttorney.agent.city, fiduciaries.powerOfAttorney.agent.state, fiduciaries.powerOfAttorney.agent.zip
+fiduciaries.powerOfAttorney.alternateAgent.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.powerOfAttorney.alternateAgent.relationship
 fiduciaries.powerOfAttorney.effectiveDate, fiduciaries.powerOfAttorney.giftingAuthority
 fiduciaries.powerOfAttorney.powers[]
 
-fiduciaries.healthcareProxy.agent.name, fiduciaries.healthcareProxy.agent.relationship
-fiduciaries.healthcareProxy.agent.address, fiduciaries.healthcareProxy.agent.city, fiduciaries.healthcareProxy.agent.state, fiduciaries.healthcareProxy.agent.zip
-fiduciaries.healthcareProxy.alternateAgent.name, fiduciaries.healthcareProxy.alternateAgent.relationship
-fiduciaries.healthcareProxy.alternateAgent.address, fiduciaries.healthcareProxy.alternateAgent.city, fiduciaries.healthcareProxy.alternateAgent.state, fiduciaries.healthcareProxy.alternateAgent.zip
+fiduciaries.healthcareProxy.agent.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.healthcareProxy.agent.relationship, fiduciaries.healthcareProxy.agent.address
+fiduciaries.healthcareProxy.agent.city, fiduciaries.healthcareProxy.agent.state, fiduciaries.healthcareProxy.agent.zip
+fiduciaries.healthcareProxy.alternateAgent.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.healthcareProxy.alternateAgent.relationship, fiduciaries.healthcareProxy.alternateAgent.address
+fiduciaries.healthcareProxy.alternateAgent.city, fiduciaries.healthcareProxy.alternateAgent.state, fiduciaries.healthcareProxy.alternateAgent.zip
 fiduciaries.healthcareProxy.lifeSupport, fiduciaries.healthcareProxy.nutrition
 fiduciaries.healthcareProxy.painManagement, fiduciaries.healthcareProxy.organDonation
 
-fiduciaries.guardian.primary.name, fiduciaries.guardian.primary.relationship, fiduciaries.guardian.primary.address
-fiduciaries.guardian.alternate.name, fiduciaries.guardian.alternate.relationship, fiduciaries.guardian.alternate.address
-fiduciaries.guardian.successor.name, fiduciaries.guardian.successor.relationship, fiduciaries.guardian.successor.address
+fiduciaries.guardian.primary.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.guardian.primary.relationship, fiduciaries.guardian.primary.address
+fiduciaries.guardian.alternate.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.guardian.alternate.relationship, fiduciaries.guardian.alternate.address
+fiduciaries.guardian.successor.firstName / .middleName / .lastName / .suffix / .name
+fiduciaries.guardian.successor.relationship, fiduciaries.guardian.successor.address
 
 distribution.residualDistributions[] — { recipient, recipientRelationship, percentage, perStirpes, alternateRecipient }
 distribution.specificBequests[] — { description, recipient, condition, alternateRecipient }
