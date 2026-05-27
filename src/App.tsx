@@ -32,6 +32,7 @@ const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 const ChatPage = lazy(() => import('@/pages/admin/ChatPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 const ReceptionistPage = lazy(() => import('@/pages/admin/ReceptionistPage'));
+const NameSplitsReview = lazy(() => import('@/pages/admin/NameSplitsReview'));
 
 
 
@@ -196,6 +197,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <ReceptionistPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.ADMIN_NAME_SPLITS}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <NameSplitsReview />
                 </AppLayout>
               }
             />

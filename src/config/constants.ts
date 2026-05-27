@@ -452,6 +452,7 @@ export const ROUTES = {
     `/portal/${firmId}/${clientId}`,
   CHAT: '/chat',
   RECEPTIONIST: '/receptionist',
+  ADMIN_NAME_SPLITS: '/admin/name-splits',
 } as const;
 
 // ---------------------------------------------------------------------------
