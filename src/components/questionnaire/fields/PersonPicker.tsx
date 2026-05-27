@@ -57,9 +57,17 @@ export function PersonPicker({ targetPath, label = 'Pick someone already in the 
     const person = people.find((p) => p.id === id);
     if (!person) return;
 
-    // Single multi-path dispatch — fills 10 fields at once.
+    // Single multi-path dispatch — fills name parts + contact fields at once.
+    // We write BOTH the split parts and the joined .name so legacy templates
+    // bound to {{...name}} keep rendering. The aggregator's deriveName step
+    // will recompute .name from parts at generation time, but pre-filling it
+    // here keeps the questionnaire UI consistent if the user inspects it.
     const updates: Record<string, unknown> = {};
     updates[`${targetPath}.name`] = person.data.name;
+    if (person.data.firstName !== undefined) updates[`${targetPath}.firstName`] = person.data.firstName;
+    if (person.data.middleName !== undefined) updates[`${targetPath}.middleName`] = person.data.middleName;
+    if (person.data.lastName !== undefined) updates[`${targetPath}.lastName`] = person.data.lastName;
+    if (person.data.suffix !== undefined) updates[`${targetPath}.suffix`] = person.data.suffix;
     if (person.data.relationship !== undefined) updates[`${targetPath}.relationship`] = person.data.relationship;
     if (person.data.gender !== undefined) updates[`${targetPath}.gender`] = person.data.gender;
     if (person.data.phone !== undefined) updates[`${targetPath}.phone`] = person.data.phone;

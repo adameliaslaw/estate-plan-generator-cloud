@@ -347,7 +347,13 @@ export interface SpouseInfo extends PersonalInfo {
 
 export interface Child {
   id: string;                   // client-side UUID
+  // Legacy joined name — derived from firstName/middleName/lastName/suffix
+  // at aggregation time and written back for template back-compat.
   name: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
   dob: string;                  // ISO 8601 date string
   gender: 'male' | 'female';   // for gendered relationship titles (son/daughter)
   sameAddress?: boolean;         // auto-fill from client address
@@ -362,6 +368,12 @@ export interface Child {
   alternateGuardian?: string;
   isMinor: boolean;
   guardianshipNotes?: string;
+  _pendingNameSplit?: {
+    firstName: string;
+    middleName: string;
+    lastName: string;
+    suffix: string;
+  };
 }
 
 // ============================================================================
@@ -531,7 +543,16 @@ export interface Liabilities {
 // ============================================================================
 
 export interface FiduciaryPerson {
+  // Legacy joined name. After the 2026-05-27 name-split refactor, this is
+  // derived from firstName/middleName/lastName/suffix at aggregation time
+  // (client-context-aggregator.deriveName) and written back here so Firestore
+  // templates that bind {{fiduciaries.X.Y.name}} keep rendering. New entries
+  // captured via the questionnaire fill the split fields directly.
   name: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
   relationship: string;
   /** Optional explicit gender — used to render correct pronouns in generated
    * documents when the relationship word is ambiguous (Parent/Child/Sibling/
@@ -545,6 +566,15 @@ export interface FiduciaryPerson {
   zip?: string;
   phone?: string;
   email?: string;
+  /** Migration-time staging field — populated by split-names.cjs, cleared
+   * after admin review via /admin/name-splits. Never read by the template
+   * engine. */
+  _pendingNameSplit?: {
+    firstName: string;
+    middleName: string;
+    lastName: string;
+    suffix: string;
+  };
 }
 
 export interface Executor {
@@ -796,10 +826,20 @@ export interface Client {
   children: Child[];
   otherDependents?: Array<{
     name: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
     relationship: string;
     dob?: string;
     specialNeeds: boolean;
     specialNeedsDetails?: string;
+    _pendingNameSplit?: {
+      firstName: string;
+      middleName: string;
+      lastName: string;
+      suffix: string;
+    };
   }>;
 
   // Finances

@@ -163,9 +163,30 @@ export interface QuestionnaireData {
   numberOfChildren?: number;
   children: Partial<Child>[];
   hasGrandchildren?: boolean;
-  grandchildren?: Array<{ name: string; dob?: string; parentName?: string; gender?: string; specialNeeds?: boolean; specialNeedsDetails?: string }>;
+  grandchildren?: Array<{
+    name: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+    dob?: string;
+    parentName?: string;
+    gender?: string;
+    specialNeeds?: boolean;
+    specialNeedsDetails?: string;
+    _pendingNameSplit?: { firstName: string; middleName: string; lastName: string; suffix: string };
+  }>;
   hasOtherDependents: boolean;
-  otherDependents: Array<{ name: string; relationship: string; notes?: string }>;
+  otherDependents: Array<{
+    name: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+    relationship: string;
+    notes?: string;
+    _pendingNameSplit?: { firstName: string; middleName: string; lastName: string; suffix: string };
+  }>;
   guardianPrimary?: Partial<FiduciaryPerson>;
   guardianAlternate?: Partial<FiduciaryPerson>;
 
@@ -675,12 +696,42 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
         innerFields: [
           {
-            name: 'name',
-            label: 'Full Name',
+            name: 'firstName',
+            label: 'First Name',
             type: 'text',
-            placeholder: "Child's full legal name",
+            placeholder: 'First name',
             required: true,
             width: 'half',
+          },
+          {
+            name: 'middleName',
+            label: 'Middle Name',
+            type: 'text',
+            placeholder: 'Middle name (optional)',
+            width: 'half',
+          },
+          {
+            name: 'lastName',
+            label: 'Last Name',
+            type: 'text',
+            placeholder: 'Last name',
+            required: true,
+            width: 'half',
+          },
+          {
+            name: 'suffix',
+            label: 'Suffix',
+            type: 'select',
+            placeholder: 'Jr., Sr., III…',
+            width: 'third',
+            options: [
+              { label: 'Jr.', value: 'Jr.' },
+              { label: 'Sr.', value: 'Sr.' },
+              { label: 'II', value: 'II' },
+              { label: 'III', value: 'III' },
+              { label: 'IV', value: 'IV' },
+              { label: 'Esq.', value: 'Esq.' },
+            ],
           },
           {
             name: 'dob',
@@ -772,12 +823,42 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
         innerFields: [
           {
-            name: 'name',
-            label: 'Full Name',
+            name: 'firstName',
+            label: 'First Name',
             type: 'text',
-            placeholder: "Grandchild's full legal name",
+            placeholder: 'First name',
             required: true,
             width: 'half',
+          },
+          {
+            name: 'middleName',
+            label: 'Middle Name',
+            type: 'text',
+            placeholder: 'Middle name (optional)',
+            width: 'half',
+          },
+          {
+            name: 'lastName',
+            label: 'Last Name',
+            type: 'text',
+            placeholder: 'Last name',
+            required: true,
+            width: 'half',
+          },
+          {
+            name: 'suffix',
+            label: 'Suffix',
+            type: 'select',
+            placeholder: 'Jr., Sr., III…',
+            width: 'third',
+            options: [
+              { label: 'Jr.', value: 'Jr.' },
+              { label: 'Sr.', value: 'Sr.' },
+              { label: 'II', value: 'II' },
+              { label: 'III', value: 'III' },
+              { label: 'IV', value: 'IV' },
+              { label: 'Esq.', value: 'Esq.' },
+            ],
           },
           {
             name: 'dob',
@@ -853,11 +934,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'guardianPrimary.name',
-        label: 'Full Name',
+        name: 'guardianPrimary.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Guardian's full name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'guardianPrimary.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'guardianPrimary.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'guardianPrimary.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'guardianPrimary.relationship',
@@ -941,11 +1051,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'guardianAlternate.name',
-        label: 'Full Name',
+        name: 'guardianAlternate.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Alternate guardian's full name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'guardianAlternate.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'guardianAlternate.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'guardianAlternate.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'guardianAlternate.relationship',
@@ -1027,11 +1166,42 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         condition: { field: 'hasOtherDependents', operator: 'equals', value: true },
         innerFields: [
           {
-            name: 'name',
-            label: 'Full Name',
+            name: 'firstName',
+            label: 'First Name',
             type: 'text',
+            placeholder: 'First name',
             required: true,
             width: 'half',
+          },
+          {
+            name: 'middleName',
+            label: 'Middle Name',
+            type: 'text',
+            placeholder: 'Middle name (optional)',
+            width: 'half',
+          },
+          {
+            name: 'lastName',
+            label: 'Last Name',
+            type: 'text',
+            placeholder: 'Last name',
+            required: true,
+            width: 'half',
+          },
+          {
+            name: 'suffix',
+            label: 'Suffix',
+            type: 'select',
+            placeholder: 'Jr., Sr., III…',
+            width: 'third',
+            options: [
+              { label: 'Jr.', value: 'Jr.' },
+              { label: 'Sr.', value: 'Sr.' },
+              { label: 'II', value: 'II' },
+              { label: 'III', value: 'III' },
+              { label: 'IV', value: 'IV' },
+              { label: 'Esq.', value: 'Esq.' },
+            ],
           },
           {
             name: 'relationship',
@@ -1486,11 +1656,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.executor.primary.name',
-        label: 'Full Name',
+        name: 'fiduciaries.executor.primary.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Executor's full legal name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.executor.primary.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.executor.primary.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.executor.primary.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.executor.primary.relationship',
@@ -1594,11 +1793,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.executor.alternate.name',
-        label: 'Full Name',
+        name: 'fiduciaries.executor.alternate.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Alternate executor's full name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.executor.alternate.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.executor.alternate.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.executor.alternate.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.executor.alternate.relationship',
@@ -1696,11 +1924,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.trustee.primary.name',
-        label: 'Full Name',
+        name: 'fiduciaries.trustee.primary.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Trustee's full legal name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.trustee.primary.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.trustee.primary.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.trustee.primary.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.trustee.primary.relationship',
@@ -1799,11 +2056,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.trustee.alternate.name',
-        label: 'Full Name',
+        name: 'fiduciaries.trustee.alternate.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Alternate trustee's full name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.trustee.alternate.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.trustee.alternate.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.trustee.alternate.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.trustee.alternate.relationship',
@@ -1900,11 +2186,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.powerOfAttorney.agent.name',
-        label: 'Full Name',
+        name: 'fiduciaries.powerOfAttorney.agent.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Agent's full legal name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.agent.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.agent.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.agent.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.powerOfAttorney.agent.relationship',
@@ -2002,11 +2317,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.powerOfAttorney.alternateAgent.name',
-        label: 'Full Name',
+        name: 'fiduciaries.powerOfAttorney.alternateAgent.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Alternate agent's full name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.alternateAgent.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.alternateAgent.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.powerOfAttorney.alternateAgent.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.powerOfAttorney.alternateAgent.relationship',
@@ -2149,11 +2493,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.healthcareProxy.agent.name',
-        label: 'Full Name',
+        name: 'fiduciaries.healthcareProxy.agent.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Healthcare representative's full legal name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.agent.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.agent.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.agent.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.healthcareProxy.agent.relationship',
@@ -2251,11 +2624,40 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
-        name: 'fiduciaries.healthcareProxy.alternateAgent.name',
-        label: 'Full Name',
+        name: 'fiduciaries.healthcareProxy.alternateAgent.firstName',
+        label: 'First Name',
         type: 'text',
-        placeholder: "Alternate healthcare representative's full name",
+        placeholder: 'First name',
         width: 'half',
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.alternateAgent.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.alternateAgent.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.healthcareProxy.alternateAgent.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: [
+          { label: 'Jr.', value: 'Jr.' },
+          { label: 'Sr.', value: 'Sr.' },
+          { label: 'II', value: 'II' },
+          { label: 'III', value: 'III' },
+          { label: 'IV', value: 'IV' },
+          { label: 'Esq.', value: 'Esq.' },
+        ],
       },
       {
         name: 'fiduciaries.healthcareProxy.alternateAgent.relationship',

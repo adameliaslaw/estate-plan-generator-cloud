@@ -27,6 +27,10 @@ export interface AvailablePerson {
   /** Copied into the target slot when this option is picked. */
   data: {
     name: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
     relationship?: string;
     gender?: string;
     phone?: string;
@@ -96,7 +100,7 @@ export function getAvailablePeople(
   const hasSpouse = ['Married', 'Domestic Partnership'].includes(maritalStatus);
 
   if (hasSpouse && spouse && nonEmpty(spouse.firstName)) {
-    const spouseFullName = joinName([spouse.firstName, spouse.middleName, spouse.lastName]);
+    const spouseFullName = joinName([spouse.firstName, spouse.middleName, spouse.lastName, spouse.suffix]);
     if (spouseFullName) {
       // Spouse address: if sameAddress is true, mirror personalInfo.
       const sameAddr = spouse.sameAddress === true;
@@ -106,6 +110,10 @@ export function getAvailablePeople(
         source: 'spouse',
         data: {
           name: spouseFullName,
+          firstName: nonEmpty(spouse.firstName) ? spouse.firstName : undefined,
+          middleName: nonEmpty(spouse.middleName) ? spouse.middleName : undefined,
+          lastName: nonEmpty(spouse.lastName) ? spouse.lastName : undefined,
+          suffix: nonEmpty(spouse.suffix) ? spouse.suffix : undefined,
           relationship: 'Spouse',
           gender: typeof spouse.gender === 'string' ? spouse.gender : undefined,
           phone: typeof spouse.phone === 'string' ? spouse.phone : undefined,
@@ -130,13 +138,18 @@ export function getAvailablePeople(
   if (Array.isArray(children)) {
     children.forEach((c, idx) => {
       const child = c as AnyRec;
-      if (!nonEmpty(child.name)) return;
+      const displayName = resolveDisplayName(child);
+      if (!displayName) return;
       addIfNew({
         id: `child-${idx}`,
-        label: `${(child.name as string).trim()} (Child)`,
+        label: `${displayName} (Child)`,
         source: 'child',
         data: {
-          name: (child.name as string).trim(),
+          name: displayName,
+          firstName: nonEmpty(child.firstName) ? child.firstName : undefined,
+          middleName: nonEmpty(child.middleName) ? child.middleName : undefined,
+          lastName: nonEmpty(child.lastName) ? child.lastName : undefined,
+          suffix: nonEmpty(child.suffix) ? child.suffix : undefined,
           relationship: typeof child.relationship === 'string' ? child.relationship : 'Child',
           gender: typeof child.gender === 'string' ? child.gender : undefined,
           phone: typeof child.phone === 'string' ? child.phone : undefined,
@@ -156,16 +169,21 @@ export function getAvailablePeople(
   if (Array.isArray(others)) {
     others.forEach((o, idx) => {
       const dep = o as AnyRec;
-      if (!nonEmpty(dep.name)) return;
+      const displayName = resolveDisplayName(dep);
+      if (!displayName) return;
       const rel = typeof dep.relationship === 'string' && dep.relationship.trim().length > 0
         ? dep.relationship
         : 'Other Dependent';
       addIfNew({
         id: `dep-${idx}`,
-        label: `${(dep.name as string).trim()} (${rel})`,
+        label: `${displayName} (${rel})`,
         source: 'otherDependent',
         data: {
-          name: (dep.name as string).trim(),
+          name: displayName,
+          firstName: nonEmpty(dep.firstName) ? dep.firstName : undefined,
+          middleName: nonEmpty(dep.middleName) ? dep.middleName : undefined,
+          lastName: nonEmpty(dep.lastName) ? dep.lastName : undefined,
+          suffix: nonEmpty(dep.suffix) ? dep.suffix : undefined,
           relationship: rel,
           phone: typeof dep.phone === 'string' ? dep.phone : undefined,
           email: typeof dep.email === 'string' ? dep.email : undefined,
@@ -193,13 +211,18 @@ export function getAvailablePeople(
       slot = getPath(data, slotPath) as AnyRec | undefined;
     }
     if (!slot) continue;
-    if (!nonEmpty(slot.name)) continue;
+    const displayName = resolveDisplayName(slot);
+    if (!displayName) continue;
     addIfNew({
       id: `fid-${role}-${level}`,
-      label: `${(slot.name as string).trim()} (Previously named as ${label})`,
+      label: `${displayName} (Previously named as ${label})`,
       source: 'fiduciary',
       data: {
-        name: (slot.name as string).trim(),
+        name: displayName,
+        firstName: nonEmpty(slot.firstName) ? slot.firstName : undefined,
+        middleName: nonEmpty(slot.middleName) ? slot.middleName : undefined,
+        lastName: nonEmpty(slot.lastName) ? slot.lastName : undefined,
+        suffix: nonEmpty(slot.suffix) ? slot.suffix : undefined,
         relationship: typeof slot.relationship === 'string' ? slot.relationship : undefined,
         gender: typeof slot.gender === 'string' ? slot.gender : undefined,
         phone: typeof slot.phone === 'string' ? slot.phone : undefined,
@@ -214,4 +237,17 @@ export function getAvailablePeople(
   }
 
   return out;
+}
+
+/**
+ * Resolves a person's display name. Prefers split parts when firstName is set
+ * (mirroring the aggregator's deriveName); falls back to legacy `.name`.
+ * Returns '' when neither is populated.
+ */
+function resolveDisplayName(p: AnyRec): string {
+  if (nonEmpty(p.firstName)) {
+    return joinName([p.firstName, p.middleName, p.lastName, p.suffix]);
+  }
+  if (nonEmpty(p.name)) return (p.name as string).trim();
+  return '';
 }

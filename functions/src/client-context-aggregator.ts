@@ -245,6 +245,35 @@ export async function aggregateClientContext(
 // Compute derived fields
 // ---------------------------------------------------------------------------
 
+/**
+ * Joins split-name parts into a single full-name string.
+ * Empty/whitespace-only parts are dropped so we never emit "John  Smith".
+ */
+function joinNameParts(p: {
+  firstName?: unknown;
+  middleName?: unknown;
+  lastName?: unknown;
+  suffix?: unknown;
+}): string {
+  return [p.firstName, p.middleName, p.lastName, p.suffix]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter((s) => s.length > 0)
+    .join(' ');
+}
+
+/**
+ * If a fiduciary or repeater-item slot has split-name parts set, derive the
+ * legacy `.name` field from them in place. No-op when firstName is empty
+ * (legacy entries — `.name` already holds the canonical value).
+ */
+function deriveNameInPlace(slot: Record<string, unknown> | undefined | null): void {
+  if (!slot || typeof slot !== 'object') return;
+  const firstName = typeof slot.firstName === 'string' ? slot.firstName.trim() : '';
+  if (firstName.length === 0) return;
+  const joined = joinNameParts(slot as Record<string, unknown>);
+  if (joined.length > 0) slot.name = joined;
+}
+
 function computeFields(
   client: admin.firestore.DocumentData,
   _firm: admin.firestore.DocumentData,
@@ -274,6 +303,37 @@ function computeFields(
       child.county = child.county || pi.county;
     }
   }
+
+  // -- Name derivation: write joined name back into .name when split parts are set --
+  // The 2026-05-27 name-split refactor adds firstName/middleName/lastName/suffix
+  // to every fiduciary slot + repeater item. Existing Firestore templates bind
+  // {{...name}} directly, so we keep that field populated from the split parts
+  // for back-compat. New questionnaire entries fill the split fields; the
+  // joined string is computed once here and consumed everywhere downstream.
+  const fidNS = client.fiduciaries ?? {};
+  deriveNameInPlace(fidNS.executor?.primary);
+  deriveNameInPlace(fidNS.executor?.alternate);
+  deriveNameInPlace(fidNS.executor?.successor);
+  deriveNameInPlace(fidNS.executor?.secondSuccessor);
+  deriveNameInPlace(fidNS.trustee?.primary);
+  deriveNameInPlace(fidNS.trustee?.alternate);
+  deriveNameInPlace(fidNS.trustee?.successor);
+  deriveNameInPlace(fidNS.trustee?.coTrustee);
+  deriveNameInPlace(fidNS.powerOfAttorney?.agent);
+  deriveNameInPlace(fidNS.powerOfAttorney?.alternateAgent);
+  deriveNameInPlace(fidNS.powerOfAttorney?.successorAgent);
+  deriveNameInPlace(fidNS.healthcareProxy?.agent);
+  deriveNameInPlace(fidNS.healthcareProxy?.alternateAgent);
+  deriveNameInPlace(fidNS.healthcareProxy?.successorAgent);
+  deriveNameInPlace(fidNS.guardian?.primary);
+  deriveNameInPlace(fidNS.guardian?.alternate);
+  deriveNameInPlace(client.guardianPrimary);
+  deriveNameInPlace(client.guardianAlternate);
+  for (const child of children) deriveNameInPlace(child);
+  const grandchildren: Array<Record<string, unknown>> = client.grandchildren ?? [];
+  for (const gc of grandchildren) deriveNameInPlace(gc);
+  const otherDependents: Array<Record<string, unknown>> = client.otherDependents ?? [];
+  for (const od of otherDependents) deriveNameInPlace(od);
 
   const clientFullName = [pi.firstName, pi.middleName, pi.lastName, pi.suffix]
     .filter(Boolean)
