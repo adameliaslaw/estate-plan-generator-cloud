@@ -1712,6 +1712,46 @@ function autoFillSpouseInfoAddress(
   };
 }
 
+/**
+ * Non-married clients (widowed/single/divorced/separated) now route their
+ * primary fiduciary appointments through `fiduciaries.<role>.<level>` via
+ * the {{#if hasSpouse}}…{{else}}…{{/if}} conditional in IL templates. If
+ * the slot is named but missing an address, the doc renders empty address
+ * brackets in the primary appointment paragraph. Log a specific warning
+ * so the missing-address admin banner can surface the gap.
+ */
+function warnNonMarriedFiduciaryGaps(
+  fiduciaries: Record<string, unknown>,
+  personalInfo: Record<string, unknown> | undefined,
+): void {
+  const status = typeof personalInfo?.maritalStatus === 'string'
+    ? (personalInfo.maritalStatus as string).toLowerCase().trim()
+    : '';
+  const isNonMarried = ['widowed', 'single', 'divorced', 'separated'].includes(status);
+  if (!isNonMarried) return;
+
+  const SLOTS: ReadonlyArray<{ role: string; level: string }> = [
+    { role: 'executor', level: 'primary' },
+    { role: 'trustee', level: 'primary' },
+    { role: 'powerOfAttorney', level: 'agent' },
+    { role: 'healthcareProxy', level: 'agent' },
+  ];
+
+  for (const { role, level } of SLOTS) {
+    const roleObj = (fiduciaries[role] ?? {}) as Record<string, unknown>;
+    const levelObj = (roleObj[level] ?? {}) as Record<string, unknown>;
+    const name = typeof levelObj.name === 'string' ? (levelObj.name as string).trim() : '';
+    const address = typeof levelObj.address === 'string' ? (levelObj.address as string).trim() : '';
+    if (name.length > 0 && address.length === 0) {
+      console.warn(
+        `[template-engine] Non-married client (${status}) has named fiduciary with no address: ` +
+        `fiduciaries.${role}.${level} name="${name}" — primary appointment will render empty address brackets. ` +
+        `Fill the address in the client admin UI.`
+      );
+    }
+  }
+}
+
 function markMissingFiduciaries(
   fiduciaries: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -1791,6 +1831,10 @@ export function buildTemplateData(
   );
   const spouseInfoFilled = autoFillSpouseInfoAddress(
     ctx.client.spouseInfo as Record<string, unknown> | undefined,
+    ctx.client.personalInfo as Record<string, unknown> | undefined,
+  );
+  warnNonMarriedFiduciaryGaps(
+    fiduciariesRaw,
     ctx.client.personalInfo as Record<string, unknown> | undefined,
   );
 

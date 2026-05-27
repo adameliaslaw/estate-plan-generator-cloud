@@ -4,21 +4,46 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-26 PM (PR #16 AI Chambers reverted — misfiled here; ported to adamelias.ai)
+## 📍 Session left off here — 2026-05-27 AM (IL marital-status binding sweep + dedup — SHIPPED)
 
-### 🔄 What changed
+### 🔄 What changed (2026-05-27)
 
-PR #16 ("AI Chambers — 6-app build from solo-lawyer grievance research") was determined to be misfiled in `estate-plan-generator`. The research brief that drove it explicitly intended adamelias.ai — confirmed by adamelias.ai already having a `/chambers/<tool>` route convention. The squash commit `a0f2b75` has been reverted from `main`.
+**Dedup (4 templates deleted, payloads stashed to `tmp/dedup/__deleted/`):**
 
-PR #16's content was ported to adamelias.ai's `incoming-ai-chambers` branch (push pending merge):
-- ✅ `billing-calculator/` — fully converted to adamelias.ai conventions, routed at `/chambers/billing-calculator`
-- 🔶 `integrations-hub/`, `brief-analyzer/`, `automations/` — source files staged with per-tool rewiring READMEs (~30-90 min each to wire up)
+| Pair | Kept (canonical, isActive=true) | Deleted (isActive=false) |
+|------|---------------------------------|---------------------------|
+| Jessica HC 11.3.25 | `zNXZnZNN1YqGqSGWIEOe` | `QU978ikcinUlcKuMCqyg` |
+| Jessica POA 11.3.25 | `SUJUQRIjiTTxjdKJO79o` | `fN5MXom5iYsVkdUAZd6l` |
+| Rizzo Living Trust | `7HbUWAD8ofeHYYtq6tNZ` | `mcrsbJBXr8zBeZamjXbJ` |
+| Jessica LW&T 11.3.25 | `CCepgSwMNusH1jsWPRf8` | `nGH7jfJINVP08BK1mc7A` |
 
-**Not ported** (intentionally): Citation Verifier (adamelias.ai already has two better verifiers — `legal-verification-checklist` + `citation-verifier`). Enhancements to existing estate-plan-generator features that were bundled into PR #16 (Doc Review Billable Value, KB template drift, Research Chat anonymize + citation badges) were reverted with the rest — if any of these were desirable on their own merits, they can be re-implemented in a future PR scoped to estate-plan-generator alone.
+`isActive` flagged the canonical version in every pair — the kept ones are post-2026-04-28 retemplatized (correct `.alternateAgent` paths, full address composites, no hardcoded "my mother"). The deleted ones were pre-2026-04-28 legacy with cross-fiduciary bind bugs and Jessica-specific hardcoded family relationships. Diff dossiers in `tmp/dedup/<pair>__bindings.txt`. Backups recoverable at `tmp/dedup/__deleted/`.
 
-**Permanent record:** the full untouched PR #16 squash lives on the `ai-chambers-export` branch in this repo (commit `a0f2b75`). Do not delete that branch.
+**Binding sweep (8 surgical patches across 6 templates):** wraps each fiduciary-appointment paragraph in `{{#if hasSpouse}}…{{else}}fiduciaries.<role>.<level>.*…{{/if}}` so widowed/single clients route through the fiduciary record instead of empty `{{spouseFullName}}` + `{{spouseInfo.address}}` bindings. Original content stashed in `templateBaseline_pre_marital_sweep` field on each touched template (revert: `update({ content: data.templateBaseline_pre_marital_sweep })`).
 
-### 🔴 Open user actions
+Used `{{#if hasSpouse}}` (boolean from `pi.maritalStatus === 'Married' || 'Domestic Partnership'`) NOT `{{#if spouseFullName}}` — the latter can be falsely truthy if a widowed client retains the deceased spouse's name in `spouseInfo` for documentation purposes.
+
+| Template | Paragraph | Fallback fiduciary path |
+|---|---|---|
+| `aPLknv` Deepak HC | Primary HC Rep | `fiduciaries.healthcareProxy.agent` |
+| `zNXZnZNN` Jessica HC | Primary HC Rep | `fiduciaries.healthcareProxy.agent` |
+| `SUJUQRI` Jessica POA | Primary AIF | `fiduciaries.powerOfAttorney.agent` |
+| `7uu7gxTN` Vita Maria PourOver | Funeral Rep + Initial Executor | `fiduciaries.executor.primary` |
+| `ltaUcvCq` Vito PourOver | Funeral Rep | `fiduciaries.executor.primary` |
+| `CCepgSw` Jessica LW&T | Funeral Rep + Initial Executor | `fiduciaries.executor.primary` |
+
+Funeral Rep paragraphs additionally drop the "If {{spouseFullName}} is not living" spouse-contingency clause in the widowed/single branch (where the primary IS already the fallback, so the contingency is nonsensical).
+
+**Backstop logging (template-engine.ts):** new `warnNonMarriedFiduciaryGaps()` called from `buildTemplateData` — logs a specific warning when a widowed/single/divorced/separated client has a named primary fiduciary with no address. Surfaces the data gap that the new conditional will otherwise paint over as blank address brackets.
+
+**Intentionally skipped (different bug class, NOT the marital-status sweep):**
+- **Joint-trust templates** (`5ASIRxxh` Joint Revocable, `7HbUWAD8` Rizzo Living, `aRzJFmoc` Olukhov) — require both grantors by template design. Single-grantor clients need a single-grantor trust template, not a conditional patch.
+- **Family-info paragraphs** (12+ across remaining templates) — "I am married to X" / "I leave to my spouse Y" / "If my spouse predeceases me". Reference the actual spouse for legitimate family-history reasons. For widowed clients, prose may need to change ("I was married to X, who predeceased me"), but that's separate prose-design work, not a binding bug.
+- **Trust-name composites** (`{{personalInfo.lastName}} {{spouseInfo.lastName}}`) — naming convention, not appointment.
+- **POA powers** (`92qPzaWa` Deepak POA idx=17 "Gifts to Wife") — POA-power clauses keyed on `{{spouseTitle}}`. Different bug class (these powers don't apply when there's no spouse).
+- **JessicaPOA pre-existing successor-binding bugs** (1st-Successor pointing at `agent` instead of `alternateAgent`; 2nd-Successor pointing at `executor.alternate` on a POA template). Unchanged by this sweep — pre-existing template-author bugs left for separate cleanup.
+
+### 🔴 Open user actions (carried over from 2026-05-26 PM)
 
 1. **One-time CI bootstrap (5 min) — unblocks every future deploy.** `.github/workflows/firebase-hosting-deploy.yml` + `firebase-functions-deploy.yml` are now on main. To activate them:
    - Firebase Console → Project Settings → Service Accounts → **Generate new private key**. Download the JSON.
@@ -26,8 +51,22 @@ PR #16's content was ported to adamelias.ai's `incoming-ai-chambers` branch (pus
      - Name: `FIREBASE_SERVICE_ACCOUNT_EPG`
      - Value: paste the JSON
    - Once added, the workflows fire automatically on every push to `main` that touches `src/` (hosting) or `functions/` (functions). No more `firebase deploy` CLI calls. Manual trigger also available via Actions UI.
-   - First auto-deploy after secret-add will ship: SendGrid Test Connection backend + import fix, content-integrity false-positive fix, maritalStatus case-fix.
+   - First auto-deploy after secret-add will ship: SendGrid Test Connection backend + import fix, content-integrity false-positive fix, maritalStatus case-fix, **+ today's `warnNonMarriedFiduciaryGaps()` backstop**.
 2. **Merge `incoming-ai-chambers` in adamelias.ai** when you're ready to finish the port. See `src/tools/README-AI-CHAMBERS-PORT.md` on that branch for the rollup of remaining rewiring work.
+
+### 🟡 Smoke-test the marital-status sweep end-to-end via UI
+
+Templates are patched in Firestore — the change is live immediately for any new template-mode generation. Validate manually:
+
+1. **Karen Elias (married, `4Shw3Wp3Pf0kzozGAxGX`)** — regen will, POA, HC directive. Every fiduciary appointment paragraph should render IDENTICALLY to pre-2026-05-27 output (the `{{#if hasSpouse}}` true branch is exact-equivalent to the old unwrapped pattern).
+2. **Lucas Polo (widowed, `B6t17ajHjjNOddKz81td`)** — regen HC directive + POA. Primary HC Rep should now render "I appoint my Son, Ibrahim Polo" (was "[MISSING: primary healthcare proxy name and address]" pre-fix). Address fields will still render with `[MISSING: ...]` markers UNTIL Ibrahim's address is filled (see independent data gap below).
+3. **Look for the new console.warn line** in functions logs: `[template-engine] Non-married client (widowed) has named fiduciary with no address: fiduciaries.healthcareProxy.agent name="Ibrahim Polo"`. Confirms backstop is firing.
+
+If anything looks wrong: per-template revert is `update({ content: data.templateBaseline_pre_marital_sweep })`. All 6 templates have the stash field populated.
+
+### 🟢 Independent data gap (separate from binding sweep)
+
+Ibrahim Polo + Jose Polo Sr. have only `{ name, relationship, phone, email }` populated — **no `address/city/state/zip`** for any of Lucas's 4 fiduciary roles. After the binding fix the names render, but addresses still show `[MISSING: ...]`. Fix: ask Lucas, then fill via admin UI on his client page.
 
 ### 🟡 Activate Mercury 2 (Inception Labs) in production — still pending
 
@@ -41,53 +80,25 @@ firebase functions:secrets:set MERCURY_API_KEY --project estate-plan-generator
 gh workflow run firebase-functions-deploy.yml --repo adameliaslaw/estate-plan-generator-cloud
 ```
 
-### 🟡 NEXT DELIBERATE SESSION — IL Template marital-status binding sweep + dedup
+---
 
-**Surfaced 2026-05-26 PM** when Lucas Polo (widowed) regenerated his livingWill + POA. The 2026-04-28 `markMissingFiduciaries` accumulator-clobber fix (commit `1609b31`) cleared the empty-`<strong></strong>` and empty-appointment symptoms (verified clean — see ✅ entries above). But the regenerated HC directive's primary HC Rep slot still shows `[MISSING: primary healthcare proxy name and address]` even though Lucas's `fiduciaries.healthcareProxy.agent.name = "Ibrahim Polo"`. Diagnosis: IL HC template binds `{{spouseFullName}}` + `{{spouseInfo.address}}` directly. For married clients this works (the spouse IS the HC rep by default). For widowed/single/divorced clients, the binding falls through to empty and the post-render regex injects MISSING markers.
+## 📍 Prior session — 2026-05-26 PM (PR #16 AI Chambers reverted — misfiled here; ported to adamelias.ai)
 
-The 2026-05-12 fix `autoFillSpouseInfoAddress` (template-engine.ts:1685) only handles **married** clients. The full sweep is bigger than that function — it's a template-design issue spanning 15 of the firm's 16 Firestore-stored templates.
+### 🔄 What changed
 
-**Inventory (16 templates total, hashes in `tmp/template-inventory.cjs`):**
+PR #16 ("AI Chambers — 6-app build from solo-lawyer grievance research") was determined to be misfiled in `estate-plan-generator`. The research brief that drove it explicitly intended adamelias.ai — confirmed by adamelias.ai already having a `/chambers/<tool>` route convention. The squash commit `a0f2b75` has been reverted from `main`.
 
-| docType | templates with `{{spouseInfo.*}}` bindings | templates with `{{spouseFullName}}` | templates with `{{spouseTitle}}` |
-|---|---|---|---|
-| livingWill (3) | 2 buggy (`aPLknv...` Deepak HC, `zNXZnZNN...` Jessica HC newer) + 1 clean (`QU978ikc...` Jessica HC older) | all 3 | all 3 |
-| poa (3) | 2 of 3 (the 2 "Jessica Byrnes POA" copies) | 2 of 3 | 3 of 3 |
-| will (2) | 0 | 2 of 2 | 2 of 2 |
-| pourOverWill (3) | 0 | 3 of 3 | 3 of 3 |
-| trust (4) | 3 of 4 (lastName-only) + 1 clean ("Terry Trust" — zero spouse bindings) | 3 of 4 | 0 of 4 |
+PR #16's content was ported to adamelias.ai's `incoming-ai-chambers` branch (push pending merge):
+- ✅ `billing-calculator/` — fully converted to adamelias.ai conventions, routed at `/chambers/billing-calculator`
+- 🔶 `integrations-hub/`, `brief-analyzer/`, `automations/` — source files staged with per-tool rewiring READMEs (~30-90 min each to wire up)
 
-**Bug taxonomy (do NOT lump these together):**
+**Not ported** (intentionally): Citation Verifier (adamelias.ai already has two better verifiers — `legal-verification-checklist` + `citation-verifier`). Enhancements to existing estate-plan-generator features that were bundled into PR #16 (Doc Review Billable Value, KB template drift, Research Chat anonymize + citation badges) were reverted with the rest — if any of these were desirable on their own merits, they can be re-implemented in a future PR scoped to estate-plan-generator alone.
 
-1. **Fiduciary-appointment paragraphs** ("I appoint my husband, X, as Executor / Trustee / HC Rep / POA Agent") — **REAL BUG for non-married.** Fix with Handlebars conditional that falls back to the appropriate `fiduciaries.<role>.<level>.*` path. Affects livingWill (HC Rep), poa (POA agent), and probably some will/trust executor paragraphs.
-2. **Family-information paragraphs** ("I am married to X" / "I leave to my spouse Y" / "If my spouse predeceases me") — **NOT a binding bug.** These reference the actual spouse for legitimate family-history reasons. For widowed clients, prose may need to change ("I was married to X, who predeceased me on DATE"), but substituting the HC proxy here would corrupt the document. Leave these alone OR provide separate widowed/single template variants.
-3. **Trust naming** (`{{personalInfo.lastName}} {{spouseInfo.lastName}}` → "Smith Polo Family Trust") — **NOT a binding bug.** For single/widowed, the trust name might want a different formulation, but that's prose design, not a code fix.
+**Permanent record:** the full untouched PR #16 squash lives on the `ai-chambers-export` branch in this repo (commit `a0f2b75`). Do not delete that branch.
 
-**Duplicate templates (4 pairs — needs content diff per pair before deletion):**
+### ✅ IL Template marital-status binding sweep + dedup — SHIPPED 2026-05-27 AM
 
-- `QU978ikcinUlcKuMCqyg` (len 11921, hash 2a4a027430fd) vs `zNXZnZNN1YqGqSGWIEOe` (len 12782, hash 475fa5697c2f) — both "Jessica Byrnes HC 11.3.25". The first has 0 spouseInfo bindings, the second has 3. Likely the first is the legacy/cleaner version; the second got a re-import that introduced the buggy pattern. **Verify which paragraph layout is current attorney-approved.**
-- `SUJUQRIjiTTxjdKJO79o` (len 24420) vs `fN5MXom5iYsVkdUAZd6l` (len 23690) — both "Jessica Byrnes POA 11.3.25". Both buggy.
-- `7HbUWAD8ofeHYYtq6tNZ` (len 82185, 2 spouseInfo bindings) vs `mcrsbJBXr8zBeZamjXbJ` (len 63029, 3 spouseInfo bindings) — both "Rizzo Living Trust". The smaller may be an incomplete export.
-- `CCepgSwMNusH1jsWPRf8` (len 32250) vs `nGH7jfJINVP08BK1mc7A` (len 29493) — both "Jessica Byrnes LW&T 11.3.25". Neither has spouseInfo bindings; differ only in spouseFullName count.
-
-**Recommended approach for next session (2-3 hours):**
-
-1. **Dedup first** — diff each pair, decide canonical version with attorney (you), delete the loser. Removes 4 templates; remaining 12 to sweep.
-2. **Identify fiduciary-appointment paragraphs** in each of the 12 by searching for "appoint" / "designate" patterns adjacent to spouseFullName/spouseInfo bindings.
-3. **Apply Handlebars conditional surgically** to each appointment paragraph:
-   ```hbs
-   I appoint my {{#if spouseFullName}}{{spouseTitle}}, <strong>{{spouseFullName}}</strong>, of {{spouseInfo.address}}, {{spouseInfo.city}}, {{spouseInfo.state}}{{else}}{{fiduciaries.<role>.<level>.relationship}}, <strong>{{fiduciaries.<role>.<level>.name}}</strong>, of {{fiduciaries.<role>.<level>.address}}, {{fiduciaries.<role>.<level>.city}}, {{fiduciaries.<role>.<level>.state}}{{/if}}, as my {{role-noun}}
-   ```
-4. **Leave family-info paragraphs untouched.**
-5. **Validate via regen pair**: Karen Elias (married) — every doc should render identically pre/post. Lucas Polo (widowed) — primary HC Rep, POA agent, Executor should now render Ibrahim's name + address (modulo Lucas's missing fiduciary addresses, see below).
-6. **Backstop**: also update `autoFillSpouseInfoAddress` to log a warning when widowed/single client has empty `fiduciaries.<role>.<level>.address` — surfaces data gaps loudly.
-
-**Independent data gap (separate task):** Ibrahim Polo + Jose Polo Sr. have `fields: name, relationship, phone, email` only — **no `address/city/state/zip`** for ANY of Lucas's 4 fiduciary roles. Even after the binding fix, addresses will still render as MISSING markers until you enter them. Either: ask Lucas, or fill via admin UI on his client page.
-
-**Risk guardrails for the sweep session:**
-- Per template change, store the BEFORE content (e.g., `templateBaseline_pre_marital_sweep` field) so revert is possible.
-- Touch templates one at a time; regen-validate Karen + Lucas after each.
-- Don't run the sweep in parallel with active client work.
+See top of file for the full rundown (dedup table, patch list, intentional skips, validation plan). Live in Firestore now — no deploy needed since Firestore is the template source. Only outstanding items: smoke-test via UI, fill Ibrahim/Jose Polo addresses.
 
 ### 🟢 Also queued for the next functions deploy — content-integrity checker false-positive fix (2026-05-26 AM)
 
