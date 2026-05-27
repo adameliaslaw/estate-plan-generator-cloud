@@ -17,7 +17,7 @@ import { NJ_COUNTIES, US_STATES } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirmBranding } from '@/hooks/useFirmBranding';
 import { useGooglePlacesAutocomplete } from '@/hooks/useGooglePlacesAutocomplete';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 interface AddressFieldProps {
   parentPath: string;
@@ -99,6 +99,20 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
 
   useGooglePlacesAutocomplete(firmBranding?.googleMapsApiKey ?? undefined, inputRef, handlePlaceSelect);
 
+  const addressValue = (current['address'] as string) ?? '';
+  // The Street Address input is UNCONTROLLED (defaultValue + onChange) because
+  // google.maps.places.Autocomplete attaches native event listeners to the
+  // input element that suppress React 19's controlled-input event flow,
+  // causing user keystrokes to silently drop. We sync inputRef.current.value
+  // here whenever the parent state changes from outside (e.g. "Same as my
+  // address" button, autocomplete fill, initial load) and the displayed
+  // value diverges from what's in state.
+  useEffect(() => {
+    if (inputRef.current && inputRef.current.value !== addressValue) {
+      inputRef.current.value = addressValue;
+    }
+  }, [addressValue]);
+
   const state = (current['state'] as string) ?? 'NJ';
   const isNJ = state === 'NJ';
 
@@ -124,7 +138,7 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
         <input
           ref={inputRef}
           type="text"
-          value={(current['address'] as string) ?? ''}
+          defaultValue={addressValue}
           onChange={(e) => update('address', e.target.value)}
           placeholder="123 Main Street"
           required={required}
