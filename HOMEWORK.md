@@ -4,7 +4,34 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-27 AM (IL marital-status binding sweep + dedup — SHIPPED)
+## 📍 Session left off here — 2026-05-27 PM (functions deploy + Mercury 2 activation + warn-fires verified)
+
+### 🔄 What changed (2026-05-27 PM)
+
+- **Functions deploy succeeded.** 81 functions in `default` codebase redeployed on revisions `00043-muh` (generateDocuments) / `00048-zim` (generateSingleDocument) + all others. Ships every queued change since 2026-04 (warnNonMarriedFiduciaryGaps backstop, maritalStatus case-fix, content-integrity false-positive fix, SendGrid backend, codebase audit P1s). Backfill codebase untouched (no source changes).
+- **Mercury 2 activated.** `MERCURY_API_KEY` secret created (version 1). The 4 functions piloted on Mercury (`chatAi`, `transcribeAudio`+`summarizeTranscription`, `knowledge-base` ops, `bulkProcessKnowledgeFiles`) will now actually invoke Mercury for non-attorney-facing async tasks (extraction, summarization, tagging, enrichment). Provider-fallback chain still catches errors → primary provider.
+- **Carmela receptionist (e689ce5) intentionally NOT deployed this round.** `receptionistWebhook` + `receptionistStatus` need `TWILIO_AUTH_TOKEN` secret + Twilio phone-number wiring. Skipped via temporary `index.ts` export comment-out for the deploy; reverted in source. Carmela code remains in repo, ready to ship when Twilio is wired.
+- **End-to-end verification.** Ran the deployed template engine against Lucas Polo's data via `functions/scripts/test-warn-fires.cjs`. Confirmed:
+  - 4 `[template-engine] Non-married client (widowed) has named fiduciary with no address: fiduciaries.<role>.<level> name="Ibrahim Polo"` warnings fire (executor.primary, trustee.primary, powerOfAttorney.agent, healthcareProxy.agent)
+  - Primary HC Rep renders **`I appoint my Son, IBRAHIM POLO, of [MISSING: healthcare proxy address]`** (was `[MISSING: primary healthcare proxy name and address]` pre-fix). The `{{#if hasSpouse}}` conditional works end-to-end in production code.
+  - `[MISSING: healthcare proxy address]` marker will resolve once Ibrahim's address is entered.
+
+### 🔴 Open user actions (still pending)
+
+1. **Fill Ibrahim Polo + Jose Polo Sr. addresses via admin UI.** Lucas's 4 fiduciary roles all point at one of them with `{ name, relationship, phone, email }` only — no address fields. Until filled, primary appointment paragraphs render `[MISSING: <role> address]` markers in his regenerated docs.
+2. **UI smoke-test the marital-status sweep** (~5 min): regen Karen (married — should be byte-identical to pre-fix) + Lucas (widowed — should now show Ibrahim by name). The local test confirmed engine behavior; the UI test confirms the production callable + auth + save pipeline.
+3. **One-time CI bootstrap (5 min) — long-term unblock.** `.github/workflows/firebase-hosting-deploy.yml` + `firebase-functions-deploy.yml` are already on main. Less urgent now that today's manual deploy shipped — but still worth setting up so future deploys are automatic:
+   - Firebase Console → Project Settings → Service Accounts → Generate new private key. Download the JSON.
+   - GitHub repo Settings → Secrets and variables → Actions → New repository secret:
+     - Name: `FIREBASE_SERVICE_ACCOUNT_EPG`
+     - Value: paste the JSON
+   - After secret-add, workflows fire on every push to `main` touching `src/` (hosting) or `functions/` (functions).
+4. **Activate Carmela** (when ready): set `TWILIO_AUTH_TOKEN` secret + redeploy receptionist functions + configure Twilio phone number to POST to `receptionistWebhook?firmId=elias-counsel`.
+5. **Merge `incoming-ai-chambers` in adamelias.ai** when you're ready to finish the AI Chambers port. See `src/tools/README-AI-CHAMBERS-PORT.md` on that branch.
+
+---
+
+## 📍 Prior session — 2026-05-27 AM (IL marital-status binding sweep + dedup — SHIPPED)
 
 ### 🔄 What changed (2026-05-27)
 
@@ -43,42 +70,7 @@ Funeral Rep paragraphs additionally drop the "If {{spouseFullName}} is not livin
 - **POA powers** (`92qPzaWa` Deepak POA idx=17 "Gifts to Wife") — POA-power clauses keyed on `{{spouseTitle}}`. Different bug class (these powers don't apply when there's no spouse).
 - **JessicaPOA pre-existing successor-binding bugs** (1st-Successor pointing at `agent` instead of `alternateAgent`; 2nd-Successor pointing at `executor.alternate` on a POA template). Unchanged by this sweep — pre-existing template-author bugs left for separate cleanup.
 
-### 🔴 Open user actions (carried over from 2026-05-26 PM)
-
-1. **One-time CI bootstrap (5 min) — unblocks every future deploy.** `.github/workflows/firebase-hosting-deploy.yml` + `firebase-functions-deploy.yml` are now on main. To activate them:
-   - Firebase Console → Project Settings → Service Accounts → **Generate new private key**. Download the JSON.
-   - GitHub repo Settings → Secrets and variables → Actions → **New repository secret**:
-     - Name: `FIREBASE_SERVICE_ACCOUNT_EPG`
-     - Value: paste the JSON
-   - Once added, the workflows fire automatically on every push to `main` that touches `src/` (hosting) or `functions/` (functions). No more `firebase deploy` CLI calls. Manual trigger also available via Actions UI.
-   - First auto-deploy after secret-add will ship: SendGrid Test Connection backend + import fix, content-integrity false-positive fix, maritalStatus case-fix, **+ today's `warnNonMarriedFiduciaryGaps()` backstop**.
-2. **Merge `incoming-ai-chambers` in adamelias.ai** when you're ready to finish the port. See `src/tools/README-AI-CHAMBERS-PORT.md` on that branch for the rollup of remaining rewiring work.
-
-### 🟡 Smoke-test the marital-status sweep end-to-end via UI
-
-Templates are patched in Firestore — the change is live immediately for any new template-mode generation. Validate manually:
-
-1. **Karen Elias (married, `4Shw3Wp3Pf0kzozGAxGX`)** — regen will, POA, HC directive. Every fiduciary appointment paragraph should render IDENTICALLY to pre-2026-05-27 output (the `{{#if hasSpouse}}` true branch is exact-equivalent to the old unwrapped pattern).
-2. **Lucas Polo (widowed, `B6t17ajHjjNOddKz81td`)** — regen HC directive + POA. Primary HC Rep should now render "I appoint my Son, Ibrahim Polo" (was "[MISSING: primary healthcare proxy name and address]" pre-fix). Address fields will still render with `[MISSING: ...]` markers UNTIL Ibrahim's address is filled (see independent data gap below).
-3. **Look for the new console.warn line** in functions logs: `[template-engine] Non-married client (widowed) has named fiduciary with no address: fiduciaries.healthcareProxy.agent name="Ibrahim Polo"`. Confirms backstop is firing.
-
-If anything looks wrong: per-template revert is `update({ content: data.templateBaseline_pre_marital_sweep })`. All 6 templates have the stash field populated.
-
-### 🟢 Independent data gap (separate from binding sweep)
-
-Ibrahim Polo + Jose Polo Sr. have only `{ name, relationship, phone, email }` populated — **no `address/city/state/zip`** for any of Lucas's 4 fiduciary roles. After the binding fix the names render, but addresses still show `[MISSING: ...]`. Fix: ask Lucas, then fill via admin UI on his client page.
-
-### 🟡 Activate Mercury 2 (Inception Labs) in production — still pending
-
-Mercury is fully wired in `ai-client.ts` and piloted on `ai-memory`, `knowledge-base`, `bulk-knowledge-import`, `transcribe-audio`. **Without `MERCURY_API_KEY` set every Mercury call silently throws and falls back to the primary provider** — pilot does nothing in prod until this lands:
-
-```powershell
-# Run once locally to set the secret (still needs your account):
-firebase functions:secrets:set MERCURY_API_KEY --project estate-plan-generator
-# Paste key from https://app.inceptionlabs.ai → API Keys
-# Then trigger the functions CI workflow manually OR push any functions/ change:
-gh workflow run firebase-functions-deploy.yml --repo adameliaslaw/estate-plan-generator-cloud
-```
+_(Same-day session continued — see 2026-05-27 PM section above for deploy details.)_
 
 ---
 
