@@ -20,6 +20,7 @@ import { AddressField } from './fields/AddressField';
 import { RepeaterField } from './fields/RepeaterField';
 import { DateField } from './fields/DateField';
 import { ComboboxField } from './fields/ComboboxField';
+import { PersonPicker } from './fields/PersonPicker';
 
 // ============================================================================
 // Props
@@ -69,7 +70,7 @@ function FieldWrapper({ field, children, error }: FieldWrapperProps) {
 
   return (
     <div className={cn(widthClass, 'flex flex-col gap-1.5')}>
-      {field.label && field.type !== 'yesno' && field.type !== 'address' && (
+      {field.label && field.type !== 'yesno' && field.type !== 'address' && field.type !== 'personPicker' && (
         <label
           htmlFor={field.name}
           className="text-sm font-medium text-gray-700"
@@ -355,6 +356,20 @@ export function StepRenderer({ step }: StepRendererProps) {
                 value={value as Record<string, unknown> | undefined}
                 onChange={(v) => onChange(v)}
                 clientAddressSource={(data as unknown as Record<string, unknown> | undefined)?.personalInfo as Record<string, unknown> | undefined}
+              />
+            );
+            break;
+
+          case 'personPicker':
+            // The field's `name` is a unique React key; `targetPath` is the
+            // actual fiduciary slot the picker fills. PersonPicker reads
+            // questionnaire state internally and dispatches a multi-path
+            // update via updateFields on selection.
+            input = (
+              <PersonPicker
+                targetPath={field.targetPath ?? field.name}
+                label={field.label}
+                required={field.required}
               />
             );
             break;

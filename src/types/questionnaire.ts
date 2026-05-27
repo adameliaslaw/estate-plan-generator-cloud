@@ -60,7 +60,8 @@ export type FieldType =
   | 'address'     // composite address fields
   | 'repeater'    // dynamic add/remove sections
   | 'heading'     // section heading (non-input)
-  | 'info';       // informational text block
+  | 'info'        // informational text block
+  | 'personPicker'; // shortcut dropdown that auto-fills another field's path
 
 export interface SelectOption {
   label: string;
@@ -116,6 +117,10 @@ export interface FieldConfig {
     labelField: string;          // field in each item to use as the label (e.g. 'name')
     valueField: string;          // field in each item to use as the value (e.g. 'name')
   };
+  // For personPicker — the fiduciary slot path this picker fills.
+  // The field's `name` is only used as a unique React key; `targetPath`
+  // is the actual dot-path the picker writes to (e.g. "fiduciaries.executor.primary").
+  targetPath?: string;
   // For repeater fields
   itemLabel?: string;            // e.g. "Child", "Property"
   innerFields?: FieldConfig[];   // fields inside each repeater item
@@ -840,6 +845,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
+        name: 'picker_guardian_primary',
+        targetPath: 'guardianPrimary',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
         name: 'guardianPrimary.name',
         label: 'Full Name',
         type: 'text',
@@ -917,6 +930,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         label: 'Alternate Guardian',
         type: 'heading',
         helpText: 'In case the primary guardian is unable to serve.',
+        width: 'full',
+      },
+      {
+        name: 'picker_guardian_alternate',
+        targetPath: 'guardianAlternate',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
         width: 'full',
       },
       {
@@ -1457,6 +1478,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
+        name: 'picker_executor_primary',
+        targetPath: 'fiduciaries.executor.primary',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
         name: 'fiduciaries.executor.primary.name',
         label: 'Full Name',
         type: 'text',
@@ -1557,6 +1586,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
+        name: 'picker_executor_alternate',
+        targetPath: 'fiduciaries.executor.alternate',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
         name: 'fiduciaries.executor.alternate.name',
         label: 'Full Name',
         type: 'text',
@@ -1648,6 +1685,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         label: 'Primary Successor Trustee',
         type: 'heading',
         helpText: 'The person who will manage the trust if you become incapacitated or pass away.',
+        width: 'full',
+      },
+      {
+        name: 'picker_trustee_primary',
+        targetPath: 'fiduciaries.trustee.primary',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
         width: 'full',
       },
       {
@@ -1746,6 +1791,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
+        name: 'picker_trustee_alternate',
+        targetPath: 'fiduciaries.trustee.alternate',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
         name: 'fiduciaries.trustee.alternate.name',
         label: 'Full Name',
         type: 'text',
@@ -1836,6 +1889,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'heading_poa_primary',
         label: 'Primary POA Agent',
         type: 'heading',
+        width: 'full',
+      },
+      {
+        name: 'picker_poa_primary',
+        targetPath: 'fiduciaries.powerOfAttorney.agent',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
         width: 'full',
       },
       {
@@ -1930,6 +1991,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'heading_poa_alternate',
         label: 'Alternate POA Agent',
         type: 'heading',
+        width: 'full',
+      },
+      {
+        name: 'picker_poa_alternate',
+        targetPath: 'fiduciaries.powerOfAttorney.alternateAgent',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
         width: 'full',
       },
       {
@@ -2072,6 +2141,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
+        name: 'picker_hcp_primary',
+        targetPath: 'fiduciaries.healthcareProxy.agent',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
         name: 'fiduciaries.healthcareProxy.agent.name',
         label: 'Full Name',
         type: 'text',
@@ -2163,6 +2240,14 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         name: 'heading_hcp_alternate',
         label: 'Alternate Healthcare Representative',
         type: 'heading',
+        width: 'full',
+      },
+      {
+        name: 'picker_hcp_alternate',
+        targetPath: 'fiduciaries.healthcareProxy.alternateAgent',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
         width: 'full',
       },
       {
