@@ -83,13 +83,25 @@ export function getAvailablePeople(
   excludePath?: string,
 ): AvailablePerson[] {
   const out: AvailablePerson[] = [];
-  const seenNames = new Set<string>(); // lowercase full name dedup
+  // Dedup keys: when both firstName + lastName are populated we key on
+  // `${first}|${last}` (case-insensitive) so typos in middleName/suffix don't
+  // fragment the same person across slots ("Ibrahim A Polo" vs "Ibrahim Polo"
+  // resolve to the same entry). Legacy entries with only `.name` populated
+  // fall back to lowercase-full-string dedup.
+  const seenKeys = new Set<string>();
+
+  const dedupKey = (p: AvailablePerson): string => {
+    const first = nonEmpty(p.data.firstName) ? p.data.firstName.trim().toLowerCase() : '';
+    const last = nonEmpty(p.data.lastName) ? p.data.lastName.trim().toLowerCase() : '';
+    if (first && last) return `nm:${first}|${last}`;
+    return `legacy:${p.data.name.trim().toLowerCase()}`;
+  };
 
   const addIfNew = (person: AvailablePerson) => {
-    const key = person.data.name.trim().toLowerCase();
-    if (key.length === 0) return;
-    if (seenNames.has(key)) return;
-    seenNames.add(key);
+    const key = dedupKey(person);
+    if (key === 'legacy:' || key === 'nm:|') return;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
     out.push(person);
   };
 
