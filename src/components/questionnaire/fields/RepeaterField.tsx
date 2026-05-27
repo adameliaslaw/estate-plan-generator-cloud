@@ -9,7 +9,7 @@
  * - Handles nested field conditions within each item
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FieldConfig } from '@/types/questionnaire';
@@ -287,19 +287,33 @@ export function RepeaterField({
   const innerFields = field.innerFields ?? [];
   const itemLabel = field.itemLabel ?? 'Item';
 
+  // itemsRef holds the LATEST items array so that sequential updates within
+  // the same tick (e.g. AddressField's 5 onFieldChange calls per "Same as my
+  // address" click) each build on the previous update instead of clobbering
+  // it from a stale closure. Without this, only the last-fired field's
+  // update survives — the previous 4 are overwritten because all dispatches
+  // start from the same closure-captured `items`.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
   function addItem() {
-    onChange([...items, { id: generateId() }]);
+    const updated = [...itemsRef.current, { id: generateId() }];
+    itemsRef.current = updated;
+    onChange(updated);
   }
 
   function removeItem(index: number) {
-    onChange(items.filter((_, i) => i !== index));
+    const updated = itemsRef.current.filter((_, i) => i !== index);
+    itemsRef.current = updated;
+    onChange(updated);
   }
 
   function updateItem(index: number, fieldName: string, val: unknown) {
-    const updated = items.map((item, i) => {
+    const updated = itemsRef.current.map((item, i) => {
       if (i !== index) return item;
       return { ...item, [fieldName]: val };
     });
+    itemsRef.current = updated;
     onChange(updated);
   }
 
