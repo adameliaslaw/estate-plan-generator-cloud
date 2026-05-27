@@ -4,7 +4,53 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-05-27 evening (PersonPicker + AddressField fixes; name-split refactor queued)
+## 📍 Session left off here — 2026-05-27 afternoon (name-split refactor SHIPPED, manual smoke pending)
+
+### ✅ Name-split refactor — all 6 phases on main
+
+5 commits pushed to `origin/main`. Build + tests + tsc all clean (604/604, both packages).
+
+| Phase | Commit | What |
+|---|---|---|
+| A — Write-side migration | `ad83324` | Schema additions on `FiduciaryPerson` + `Child` + grandchildren/otherDependents items (added `firstName/middleName/lastName/suffix + _pendingNameSplit`). All 10 fiduciary questionnaire steps + 3 repeater inner-fields now render 4 inputs instead of "Full Name". PersonPicker writes split fields + `.name`. `client-context-aggregator.deriveNameInPlace` joins parts back into `.name` before any downstream consumer reads it — so existing Firestore templates bound to `{{...name}}` keep rendering with **zero template edits**. |
+| B — Migration script | `294037c` | `functions/scripts/split-names.cjs` proposes splits into a `_pendingNameSplit` staging field. Idempotent. Flags: `--dry-run` (default), `--commit`, `--force`, `--firm <id>`, `--client <id>`. Handles Jr/Sr/II-V/Esq suffix detection. Never touches canonical fields. |
+| C — Admin review UI | `831f6bf` | `/admin/name-splits` lists every client with pending splits. Per-row editable firstName/middleName/lastName/suffix; Approve commits split + writes joined `.name`; Skip clears proposal only. Bulk-approve per client. |
+| D — Prompt-doc refresh | `4b30015` | `process-template-file.ts` + `retemplatize-templates.ts` AVAILABLE_FIELDS now lists split fields for every fiduciary + repeater item. Used on next template re-upload, not retroactive. |
+| E — PersonPicker dedup upgrade | `bbe2da1` | `getAvailablePeople` dedup key upgraded from lowercase-name-string → `firstName|lastName` (case-insensitive). Falls back to legacy key when parts aren't both populated. |
+
+### 🔴 Open user actions for next session
+
+**Manual smoke-test (the verification block in the plan):**
+
+1. **Open the questionnaire** (any client) — confirm:
+   - Family steps (children/grandchildren/otherDependents) render 4 inputs instead of single "Full Name"
+   - All 10 fiduciary steps render 4 inputs (executor/trustee/POA/HC primary+alt, guardian primary+alt)
+   - PersonPicker dropdown auto-fills all 4 split fields when a person is selected
+2. **Run the migration script (dry-run first):**
+   ```powershell
+   node functions/scripts/split-names.cjs --dry-run --firm elias-counsel
+   ```
+   Inspect proposed splits for Karen / Lucas / Jessica / Vita Maria / Vito / Deepak rosters. Especially confirm "Jose Polo Sr." → `{ firstName: Jose, lastName: Polo, suffix: Sr. }` and "Ibrahim Polo" → `{ firstName: Ibrahim, lastName: Polo }`.
+3. **Commit the migration when splits look right:**
+   ```powershell
+   node functions/scripts/split-names.cjs --commit --firm elias-counsel
+   ```
+4. **Navigate to `/admin/name-splits`** in the deployed app. Review + Approve / Edit / Skip per row.
+5. **Regen Karen (married) and Lucas (widowed) full packages.** Karen should be byte-identical (her fiduciary roster lives at the spouse level, no split parts to write back); Lucas's POA + HC should now show Ibrahim Polo with the split fields populated. Compare against last-known-good.
+
+**Why no functions deploy is needed:** the only function-side change is in `client-context-aggregator.deriveNameInPlace`, which is a no-op when entries don't have `firstName` set. Deploy isn't required until you actually want the back-write to happen on generation — but since the migration UI commits canonical `.name` directly too, generations work either way. **A deploy is still recommended** the next time you're shipping anything else, so the aggregator's deriveName runs on split entries that someone fills in via the questionnaire without going through the admin UI.
+
+### 🔴 Open user actions (carried from prior session, still pending)
+
+1. **Fill Ibrahim Polo + Jose Polo Sr. addresses via admin UI** — Lucas's 4 fiduciary roles all point at one of them with `{ name, relationship, phone, email }` only. After yesterday's AddressField fixes, you should now be able to type/autocomplete/copy successfully. Once filled, regenerate POA + HC for Lucas to confirm `[MISSING: <role> address]` markers clear.
+2. **UI smoke-test the marital-status sweep** — regen Karen (married, should be byte-identical) + Lucas (widowed, should now show Ibrahim by name).
+3. **One-time CI bootstrap** (`FIREBASE_SERVICE_ACCOUNT_EPG` GitHub secret) — less urgent now that yesterday's manual deploy shipped.
+4. **Activate Carmela** (when ready) — set `TWILIO_AUTH_TOKEN` + redeploy receptionist functions + configure Twilio phone number.
+5. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
+
+---
+
+## 📍 Prior session — 2026-05-27 evening (PersonPicker + AddressField fixes; name-split refactor queued)
 
 ### 🔄 What changed (2026-05-27 evening, after the PM functions deploy below)
 
@@ -21,32 +67,7 @@ Items requiring human action or decisions before the next agent session can proc
 4. **Activate Carmela** (when ready) — set `TWILIO_AUTH_TOKEN` + redeploy receptionist functions + configure Twilio phone number.
 5. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
 
-### 🟡 NEXT DELIBERATE SESSION — Split fiduciary + repeater names into firstName/middleName/lastName/suffix
-
-**Triggered 2026-05-27 evening** during PersonPicker review. Today's schema is asymmetric: client (`personalInfo`) and spouse (`spouseInfo`) have separate `firstName` / `middleName` / `lastName` / `suffix` fields, joined into computed `clientFullName` / `spouseFullName`. Everywhere else — `children`, `grandchildren`, `otherDependents`, all 10 fiduciary slots — uses a single "Full Name" string field. Templates bind to `{{fiduciaries.X.Y.name}}` directly for fiduciaries and `{{children.[N].name}}` for children; only client and spouse use computed joined names.
-
-Attorney's call: the single-name string is more error-prone in steady-state (no structural validation; dedup falls apart on typos; templates can't extract parts for formal address; cross-slot consistency issues invisible at data layer). The one-time migration risk (splitting "John A. Smith Jr." correctly) is bounded by an admin-review UI that previews each split before committing.
-
-**Scope (~2–3 hours):**
-
-1. **Schema additions.** Add `firstName`, `middleName`, `lastName`, `suffix` to each fiduciary slot (executor/trustee/powerOfAttorney/healthcareProxy primary+alt, guardian primary+alt at top-level paths) AND to each repeater item type (`children[*]`, `grandchildren[*]`, `otherDependents[*]`). Keep the existing `name` field as a derived alias for backwards-compat until templates migrate (see step 4).
-2. **Computed full-name helper.** In `client-context-aggregator.ts` (or `client-data-serializer.ts`), add per-slot computed full-names (e.g. `fiduciaries.executor.primary.fullName`) joined the same way `clientFullName` is. For backwards-compat, also write back to `.name` so existing templates continue to render until migration.
-3. **Migration script.** `functions/scripts/split-names.cjs` — one-pass scan of every client doc's fiduciaries + repeater items, propose a split via a basic heuristic (`first token = firstName`, `last token = lastName` modulo Jr/Sr/III/IV suffix detection, middle tokens = `middleName`), and write the proposal into a `_pendingNameSplit` field on each entry. NO production reads change until step 5.
-4. **Admin review UI.** New `/admin/name-splits` page showing every proposed split per client: editable firstName/middle/last/suffix vs. the original `name`. Bulk-approve workflow with "Skip" and "Edit" per row. On approve, write the splits into the canonical fields and clear `_pendingNameSplit`. Surfaces edge cases (compound surnames, missing middle, suffixes the heuristic missed) for human review before any data commits.
-5. **Template migration.** After all client docs are reviewed + approved, update IL template bindings from `{{fiduciaries.X.Y.name}}` → `{{fiduciaries.X.Y.fullName}}` (or keep `.name` as derived alias — even less template churn). Same for `{{children.[N].name}}`. Re-validate against Karen + Lucas regens.
-6. **PersonPicker upgrade.** Fills `firstName`/`middleName`/`lastName`/`suffix` individually instead of `name`. Dedup logic upgrades from "lowercase full-string equality" to "firstName + lastName match (case-insensitive)" so typos in middle names or suffixes don't fragment the same person across slots.
-
-**Risk guardrails for that session:**
-- Don't change template bindings until ALL client docs are reviewed + approved. The derived-alias `.name` keeps templates rendering correctly during the transition.
-- Per-client review queue — never auto-commit splits without human approval.
-- Test against Karen (married, no fiduciary uses separate parts today) and Lucas (widowed, Ibrahim Polo is straightforward; Jose Polo Sr. has a suffix that the heuristic must handle).
-- Run regen pair before declaring done.
-
-**Why this matters going forward:**
-- Better validation (enforce non-empty first + last).
-- PersonPicker dedup catches typos ("Ibrhim" vs "Ibrahim") via firstName+lastName comparison.
-- Templates gain the ability to render formal address ("Mr. Polo") and sorted lists.
-- Cross-slot consistency becomes data-visible (a name in two slots either matches at the part level or doesn't).
+### ✅ Name-split refactor SHIPPED 2026-05-27 afternoon — see top of file for the rundown + manual smoke-test steps.
 
 ---
 
