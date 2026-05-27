@@ -85,6 +85,11 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
   }
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const cityRef = useRef<HTMLInputElement>(null);
+  const stateRef = useRef<HTMLSelectElement>(null);
+  const zipRef = useRef<HTMLInputElement>(null);
+  const countySelectRef = useRef<HTMLSelectElement>(null);
+  const countyInputRef = useRef<HTMLInputElement>(null);
 
   const handlePlaceSelect = useCallback((components: Partial<{ streetNumber: string; route: string; city: string; state: string; zip: string; county: string }>) => {
     onChange({
@@ -100,21 +105,40 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
   useGooglePlacesAutocomplete(firmBranding?.googleMapsApiKey ?? undefined, inputRef, handlePlaceSelect);
 
   const addressValue = (current['address'] as string) ?? '';
-  // The Street Address input is UNCONTROLLED (defaultValue + onChange) because
-  // google.maps.places.Autocomplete attaches native event listeners to the
-  // input element that suppress React 19's controlled-input event flow,
-  // causing user keystrokes to silently drop. We sync inputRef.current.value
-  // here whenever the parent state changes from outside (e.g. "Same as my
-  // address" button, autocomplete fill, initial load) and the displayed
-  // value diverges from what's in state.
+  const cityValue = (current['city'] as string) ?? '';
+  const stateValue = (current['state'] as string) || 'NJ';
+  const zipValue = (current['zip'] as string) ?? '';
+  const countyValue = (current['county'] as string) ?? '';
+
+  // ALL AddressField inputs are UNCONTROLLED (defaultValue + onChange) because
+  // google.maps.places.Autocomplete attaches native event listeners that
+  // suppress React 19's controlled-input event flow across the entire
+  // address sub-form, causing user keystrokes to silently drop. We sync
+  // ref.current.value whenever the canonical value changes externally
+  // (initial load, "Same as my address" button, autocomplete fill) and
+  // the displayed value diverges from state.
   useEffect(() => {
     if (inputRef.current && inputRef.current.value !== addressValue) {
       inputRef.current.value = addressValue;
     }
-  }, [addressValue]);
+    if (cityRef.current && cityRef.current.value !== cityValue) {
+      cityRef.current.value = cityValue;
+    }
+    if (stateRef.current && stateRef.current.value !== stateValue) {
+      stateRef.current.value = stateValue;
+    }
+    if (zipRef.current && zipRef.current.value !== zipValue) {
+      zipRef.current.value = zipValue;
+    }
+    if (countySelectRef.current && countySelectRef.current.value !== countyValue) {
+      countySelectRef.current.value = countyValue;
+    }
+    if (countyInputRef.current && countyInputRef.current.value !== countyValue) {
+      countyInputRef.current.value = countyValue;
+    }
+  }, [addressValue, cityValue, stateValue, zipValue, countyValue]);
 
-  const state = (current['state'] as string) ?? 'NJ';
-  const isNJ = state === 'NJ';
+  const isNJ = stateValue === 'NJ';
 
   return (
     <div className="w-full space-y-4">
@@ -160,8 +184,9 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
             {required && <span className="ml-1 text-red-500">*</span>}
           </label>
           <input
+            ref={cityRef}
             type="text"
-            value={(current['city'] as string) ?? ''}
+            defaultValue={cityValue}
             onChange={(e) => update('city', e.target.value)}
             placeholder="City"
             required={required}
@@ -181,7 +206,8 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
             {required && <span className="ml-1 text-red-500">*</span>}
           </label>
           <select
-            value={(current['state'] as string) ?? 'NJ'}
+            ref={stateRef}
+            defaultValue={stateValue}
             onChange={(e) => {
               update('state', e.target.value);
               // Clear county if switching away from NJ
@@ -207,13 +233,18 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
             {required && <span className="ml-1 text-red-500">*</span>}
           </label>
           <input
+            ref={zipRef}
             type="text"
             inputMode="numeric"
             pattern="[0-9]{5}"
             maxLength={5}
-            value={(current['zip'] as string) ?? ''}
+            defaultValue={zipValue}
             onChange={(e) => {
               const digits = e.target.value.replace(/\D/g, '').slice(0, 5);
+              // Reflect the sanitized value back to the input
+              if (zipRef.current && zipRef.current.value !== digits) {
+                zipRef.current.value = digits;
+              }
               update('zip', digits);
             }}
             placeholder="08831"
@@ -236,7 +267,8 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
         </label>
         {isNJ ? (
           <select
-            value={(current['county'] as string) ?? ''}
+            ref={countySelectRef}
+            defaultValue={countyValue}
             onChange={(e) => update('county', e.target.value)}
             required={required && isNJ}
             className={inputClass(!!(current['county']))}
@@ -252,8 +284,9 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
           </select>
         ) : (
           <input
+            ref={countyInputRef}
             type="text"
-            value={(current['county'] as string) ?? ''}
+            defaultValue={countyValue}
             onChange={(e) => update('county', e.target.value)}
             placeholder="Auto-detected from address"
             className={cn(
