@@ -20,25 +20,22 @@ Items requiring human action or decisions before the next agent session can proc
 
 ### 🔴 Open user actions for next session
 
-**Manual smoke-test (the verification block in the plan):**
+**Manual smoke-test of the refactor — 3 steps:**
 
-1. **Open the questionnaire** (any client) — confirm:
-   - Family steps (children/grandchildren/otherDependents) render 4 inputs instead of single "Full Name"
-   - All 10 fiduciary steps render 4 inputs (executor/trustee/POA/HC primary+alt, guardian primary+alt)
-   - PersonPicker dropdown auto-fills all 4 split fields when a person is selected
-2. **Run the migration script (dry-run first):**
+1. **Browser smoke-test the questionnaire.** Open any client → Questionnaire → confirm the family repeater steps (children / grandchildren / otherDependents) and all 10 fiduciary steps render **4 inputs** (firstName / middleName / lastName / suffix) instead of a single "Full Name". On a fiduciary slot, pick someone from the PersonPicker dropdown and confirm all 4 split fields auto-fill. Repeat the pick on a third slot — confirm dedup (Phase E) collapses the same person to a single row.
+
+2. **Run the migration script.** First dry-run, then commit if proposals look right:
    ```powershell
    node functions/scripts/split-names.cjs --dry-run --firm elias-counsel
-   ```
-   Inspect proposed splits for Karen / Lucas / Jessica / Vita Maria / Vito / Deepak rosters. Especially confirm "Jose Polo Sr." → `{ firstName: Jose, lastName: Polo, suffix: Sr. }` and "Ibrahim Polo" → `{ firstName: Ibrahim, lastName: Polo }`.
-3. **Commit the migration when splits look right:**
-   ```powershell
    node functions/scripts/split-names.cjs --commit --firm elias-counsel
    ```
-4. **Navigate to `/admin/name-splits`** in the deployed app. Review + Approve / Edit / Skip per row.
-5. **Regen Karen (married) and Lucas (widowed) full packages.** Karen should be byte-identical (her fiduciary roster lives at the spouse level, no split parts to write back); Lucas's POA + HC should now show Ibrahim Polo with the split fields populated. Compare against last-known-good.
+   Inspect splits for Karen / Lucas / Jessica / Vita Maria / Vito / Deepak rosters. Specifically confirm "Jose Polo Sr." → `{ firstName: Jose, lastName: Polo, suffix: Sr. }` and "Ibrahim Polo" → `{ firstName: Ibrahim, lastName: Polo }`. Re-run with `--client <id>` to scope down if a single client looks off.
 
-**Why no functions deploy is needed:** the only function-side change is in `client-context-aggregator.deriveNameInPlace`, which is a no-op when entries don't have `firstName` set. Deploy isn't required until you actually want the back-write to happen on generation — but since the migration UI commits canonical `.name` directly too, generations work either way. **A deploy is still recommended** the next time you're shipping anything else, so the aggregator's deriveName runs on split entries that someone fills in via the questionnaire without going through the admin UI.
+3. **Review in `/admin/name-splits` + regen Karen + Lucas.** Navigate to the admin page; per row, Approve / edit-then-Approve / Skip. Bulk-approve once a client's section looks right. Then regen Karen (married — should be byte-identical to last known good) and Lucas (widowed — POA + HC should now show Ibrahim Polo populated in the appointment paragraphs). Diff each against last-known-good output.
+
+**Why no functions deploy is needed:** the only function-side change is `client-context-aggregator.deriveNameInPlace`, a no-op when entries don't have `firstName` set. The migration UI commits canonical `.name` directly too, so generations work either way. **A deploy is still recommended** the next time you're shipping anything else, so the aggregator's deriveName runs on split entries someone fills in via the questionnaire without going through the admin UI.
+
+**Pre-refactor blocker resolved today:** Google Sign-In was broken because a prior Claude Code session (commit `88eff43`, 2026-04-23) rotated the OAuth client via gcloud CLI but never PATCH'd Firebase Auth's IdP config to point at the new one. Old client deleted; replacement orphaned; nobody noticed for 5 weeks because stale sessions kept working. Fixed today: new OAuth client `749324460027-ej1n0hnqvtga3pa5d9bctiro1vcl0du9.apps.googleusercontent.com` created in GCP Credentials; Identity Toolkit IdP config PATCH'd to point at it. Google Sign-In end-to-end verified working. Memory saved at `feedback_audit_log_ai_attribution.md` so future sessions check git log + commit authors before assuming a human action when audit logs show destructive changes attributed to the user's gmail.
 
 ### 🔴 Open user actions (carried from prior session, still pending)
 
