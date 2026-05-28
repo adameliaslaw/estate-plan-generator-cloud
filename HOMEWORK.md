@@ -59,7 +59,6 @@ Items requiring human action or decisions before the next agent session can proc
    - Without 1b: you can trigger deploys from GitHub mobile but can't write the code that triggers them.
    - Together: full PR → CI → deploy cycle works from a phone. iPad-with-keyboard is dramatically more practical than iPhone-alone for any non-trivial session.
 
-2. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
 
 ---
 
