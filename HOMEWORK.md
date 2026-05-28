@@ -39,11 +39,27 @@ Items requiring human action or decisions before the next agent session can proc
 
 ### 🔴 Open user actions (carried from prior session, still pending)
 
-1. **Fill Ibrahim Polo + Jose Polo Sr. addresses via admin UI** — Lucas's 4 fiduciary roles all point at one of them with `{ name, relationship, phone, email }` only. After yesterday's AddressField fixes, you should now be able to type/autocomplete/copy successfully. Once filled, regenerate POA + HC for Lucas to confirm `[MISSING: <role> address]` markers clear.
-2. **UI smoke-test the marital-status sweep** — regen Karen (married, should be byte-identical) + Lucas (widowed, should now show Ibrahim by name).
-3. **One-time CI bootstrap** (`FIREBASE_SERVICE_ACCOUNT_EPG` GitHub secret) — less urgent now that yesterday's manual deploy shipped.
-4. **Activate Carmela** (when ready) — set `TWILIO_AUTH_TOKEN` + redeploy receptionist functions + configure Twilio phone number.
-5. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
+1. **iPhone-deploy unlock — 3 legs of setup.** Goal: deploys + edits + tests all possible without the laptop. Each leg is independent; do them in this order:
+
+   **1a. CI bootstrap (closes the deploy loop):**
+   - In GCP IAM, create a service account: `epg-deployer@estate-plan-generator.iam.gserviceaccount.com`
+   - Grant roles: `Firebase Admin`, `Cloud Functions Admin`, `Cloud Build Editor`, `Service Account User`, `Firebase Hosting Admin`
+   - Mint a JSON key for it; copy the JSON contents
+   - In GitHub: repo Settings → Secrets and variables → Actions → New secret → name `FIREBASE_SERVICE_ACCOUNT_EPG`, value = the entire JSON
+   - The deploy workflow already exists in `.github/workflows/` — confirm it references `FIREBASE_SERVICE_ACCOUNT_EPG` (or create one if missing)
+   - Test by triggering the workflow manually from the GitHub Actions tab
+
+   **1b. Editor for phone-side code work:** pick one
+   - **Claude Code via claude.ai/code or Anthropic mobile app** — full agent that edits, tests, commits, pushes. Best for AI-driven sessions like this one.
+   - **GitHub Codespaces** — browser-based VS Code with full terminal. Slow on iPhone Safari; usable on iPad with keyboard.
+   - **GitHub mobile app** — for tiny edits only, no test runner.
+
+   **1c. Why each leg matters:**
+   - Without 1a: you can edit + commit from anywhere but deploys still require the laptop.
+   - Without 1b: you can trigger deploys from GitHub mobile but can't write the code that triggers them.
+   - Together: full PR → CI → deploy cycle works from a phone. iPad-with-keyboard is dramatically more practical than iPhone-alone for any non-trivial session.
+
+2. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
 
 ---
 
