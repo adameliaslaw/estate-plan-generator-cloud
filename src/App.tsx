@@ -33,6 +33,7 @@ const ChatPage = lazy(() => import('@/pages/admin/ChatPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 const ReceptionistPage = lazy(() => import('@/pages/admin/ReceptionistPage'));
 const NameSplitsReview = lazy(() => import('@/pages/admin/NameSplitsReview'));
+const QuestionnaireRegisterPage = lazy(() => import('@/pages/client/QuestionnaireRegisterPage'));
 
 
 
@@ -210,6 +211,10 @@ export default function App() {
             />
 
             {/* ── Client-facing routes (ClientLayout) ── */}
+
+            {/* Generic questionnaire link — no per-client invite needed */}
+            <Route path="/questionnaire/:firmId/register" element={<QuestionnaireRegisterPage />} />
+
             <Route
               path="/questionnaire/:firmId/:clientId"
               element={
