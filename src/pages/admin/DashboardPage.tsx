@@ -17,6 +17,8 @@ import {
   Sparkles,
   FileCheck2,
   CalendarClock,
+  Link2,
+  Check,
 } from 'lucide-react';
 import { orderBy, limit, doc, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
@@ -231,6 +233,19 @@ export default function DashboardPage() {
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [bottomTab, setBottomTab] = useState<'calendar' | 'payments'>('calendar');
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyQuestionnaireLink = () => {
+    if (!firmId) return;
+    const url = `${window.location.origin}/questionnaire/${firmId}/register`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      toast.success('Questionnaire link copied — send it directly to your client.');
+      setTimeout(() => setLinkCopied(false), 3000);
+    }).catch(() => {
+      toast.error('Could not copy link. Check browser permissions.');
+    });
+  };
 
   const toggleExpanded = async () => {
     const nextState = !isExpanded;
@@ -550,6 +565,15 @@ export default function DashboardPage() {
           >
             <Mic className="h-4 w-4" />
             Record Note
+          </button>
+          <button
+            onClick={handleCopyQuestionnaireLink}
+            disabled={!firmId}
+            title="Copy a generic questionnaire link to send directly to a client"
+            className="flex items-center gap-2 rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 transition-colors disabled:opacity-40"
+          >
+            {linkCopied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+            {linkCopied ? 'Copied!' : 'Copy Questionnaire Link'}
           </button>
           <button
             onClick={() => navigate(ROUTES.CLIENT_NEW)}

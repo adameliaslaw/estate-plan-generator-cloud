@@ -73,3 +73,4 @@ export { willsPilotRun } from './wills-pilot';
 
 // AI Receptionist — "Carmela" intake & screening
 export { receptionistWebhook, receptionistStatus } from './receptionist-intake';
+export { registerClientFromLink } from './register-client';
