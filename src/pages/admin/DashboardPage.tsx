@@ -558,7 +558,7 @@ export default function DashboardPage() {
             {firmId && <span>Firm ID: {firmId}</span>}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setIsRecordModalOpen(true)}
             className="flex items-center gap-2 rounded-lg border border-[#2b6cb0] bg-white px-4 py-2 text-sm font-semibold text-[#2b6cb0] shadow-sm hover:bg-[#ebf4ff] transition-colors"
@@ -573,7 +573,8 @@ export default function DashboardPage() {
             className="flex items-center gap-2 rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 transition-colors disabled:opacity-40"
           >
             {linkCopied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
-            {linkCopied ? 'Copied!' : 'Copy Questionnaire Link'}
+            <span className="sm:hidden">{linkCopied ? 'Copied!' : 'Copy Link'}</span>
+            <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Copy Questionnaire Link'}</span>
           </button>
           <button
             onClick={() => navigate(ROUTES.CLIENT_NEW)}
