@@ -10,15 +10,20 @@
  * Flow:
  *  1. Client arrives at this page with no prior session.
  *  2. Fills in First Name, Last Name, and Email.
- *  3. The registerClientFromLink Cloud Function either finds or creates
- *     a client record for this firm.
- *  4. Client is redirected to /questionnaire/:firmId/:clientId.
+ *  3. The page signs in anonymously with Firebase Auth.
+ *  4. registerClientFromLink Cloud Function finds or creates the client
+ *     record and stores linkedUserId = anonymousUid on the document.
+ *  5. Client is redirected to /questionnaire/:firmId/:clientId.
+ *     ClientLayout sees the anonymous auth session and skips the login
+ *     redirect; Firestore allows the anonymous session to read/write
+ *     the client record via the linkedUserId rule.
  */
 
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/config/firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { functions, auth } from '@/config/firebase';
 import { Scale, Lock } from 'lucide-react';
 import { FIRM_DEFAULTS } from '@/config/constants';
 
@@ -29,6 +34,7 @@ interface RegisterRequest {
   email: string;
   firstName: string;
   lastName: string;
+  anonymousUid: string;
 }
 
 interface RegisterResponse {
@@ -133,6 +139,12 @@ export default function QuestionnaireRegisterPage() {
     setServerError('');
 
     try {
+      // Sign in anonymously so the client gets a Firebase session. This UID is
+      // stored as linkedUserId on the client document, which lets the session
+      // read/write the Firestore record without a full login.
+      const anonCred = await signInAnonymously(auth);
+      const anonymousUid = anonCred.user.uid;
+
       const fn = httpsCallable<RegisterRequest, RegisterResponse>(
         functions,
         'registerClientFromLink',
@@ -142,6 +154,7 @@ export default function QuestionnaireRegisterPage() {
         email: form.email.trim().toLowerCase(),
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
+        anonymousUid,
       });
       navigate(`/questionnaire/${firmId}/${result.data.clientId}`, { replace: true });
     } catch (err: unknown) {

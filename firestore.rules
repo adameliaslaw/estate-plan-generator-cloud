@@ -287,10 +287,14 @@ service cloud.firestore {
         // --- READ ---
         // Admin: always allowed.
         // Attorney/Paralegal: must belong to the same firm.
-        // Client: may only read their own record.
+        // Client (role=client): may only read their own record.
+        // Linked session (e.g. anonymous auth from questionnaire link): may read
+        //   their own record when linkedUserId matches. linkedUserId is set only
+        //   by the trusted admin SDK in registerClientFromLink, so this is safe.
         allow read: if isAdmin()
                     || ((hasRole('attorney') || hasRole('paralegal') || canManageClients()) && belongsToFirm(firmId))
-                    || (isClient() && isOwnClientRecord(clientId));
+                    || (isClient() && isOwnClientRecord(clientId))
+                    || (isAuthenticated() && isOwnClientRecord(clientId));
 
         // --- CREATE ---
         // Admin: always allowed.
@@ -309,8 +313,10 @@ service cloud.firestore {
         // Attorney: allowed within their firm with validation.
         // Paralegal: allowed within their firm with validation
         //            (needed for questionnaire progress, notes, status updates).
-        // Client: may update ONLY their own record (questionnaire data)
+        // Client (role=client): may update ONLY their own record (questionnaire data)
         //         with status and personalInfo validation.
+        // Linked session (e.g. anonymous auth from questionnaire link): same as
+        //   client self-update. linkedUserId is set only by admin SDK.
         allow update: if isAdmin()
                       || (canManageClients()
                           && belongsToFirm(firmId)
@@ -321,6 +327,10 @@ service cloud.firestore {
                           && hasValidPersonalInfo()
                           && hasValidClientStatus())
                       || (isClient()
+                          && isOwnClientRecord(clientId)
+                          && hasValidPersonalInfo()
+                          && hasValidClientStatus())
+                      || (isAuthenticated()
                           && isOwnClientRecord(clientId)
                           && hasValidPersonalInfo()
                           && hasValidClientStatus());

@@ -8,6 +8,11 @@
  * client can be redirected into the questionnaire without the attorney
  * manually sending a per-client invite.
  *
+ * If `anonymousUid` is supplied (from a Firebase Anonymous Auth session the
+ * client signed into on the register page), it is stored as `linkedUserId` on
+ * the client document. This allows the anonymous session to read and write the
+ * client's Firestore record directly via the "linked session" Firestore rules.
+ *
  * No authentication required — this is deliberately public.
  */
 
@@ -24,12 +29,14 @@ export const registerClientFromLink = onCall(
       email?: unknown;
       firstName?: unknown;
       lastName?: unknown;
+      anonymousUid?: unknown;
     };
 
     const firmId = typeof data.firmId === 'string' ? data.firmId.trim() : '';
     const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
     const firstName = typeof data.firstName === 'string' ? data.firstName.trim() : '';
     const lastName = typeof data.lastName === 'string' ? data.lastName.trim() : '';
+    const anonymousUid = typeof data.anonymousUid === 'string' ? data.anonymousUid.trim() : '';
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
     if (!email || !EMAIL_RE.test(email)) throw new HttpsError('invalid-argument', 'A valid email address is required.');
@@ -52,6 +59,12 @@ export const registerClientFromLink = onCall(
       .get();
 
     if (!existingSnap.empty) {
+      const existingRef = existingSnap.docs[0].ref;
+      // Link the anonymous session to the existing record so the client can
+      // read/write it without a full login.
+      if (anonymousUid) {
+        await existingRef.update({ linkedUserId: anonymousUid, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      }
       return { clientId: existingSnap.docs[0].id, isNew: false };
     }
 
@@ -64,6 +77,7 @@ export const registerClientFromLink = onCall(
         lastName,
         email,
       },
+      ...(anonymousUid ? { linkedUserId: anonymousUid } : {}),
       status: 'prospect',
       isArchived: false,
       questionnaireProgress: {
