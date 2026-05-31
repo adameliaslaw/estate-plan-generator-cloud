@@ -6,6 +6,8 @@
 2. **Minimum code that solves the problem. Nothing speculative.** No future-proofing, no premature abstractions, no "while I'm here" cleanups. Three similar lines beat a clever helper.
 3. **Touch only what you need. Clean up only your own mess.** Don't reformat unrelated files. Don't delete unfamiliar files/branches/state — investigate first; it may be in-progress work.
 4. **Define success criteria. Loop until verified.** State what "done" looks like before starting. Run tsc, build, and (when UI) manual browser verification. Type-checks prove correctness of code, not of the feature.
+5. **Never tell the user to deploy manually.** This repo has GitHub Actions that auto-deploy hosting and functions on every push to `main` (`.github/workflows/firebase-hosting-deploy.yml` and `firebase-functions-deploy.yml`). Merging a PR is sufficient — no `firebase deploy` command needed.
+6. **Always confirm when a push or merge completes.** After every `git push` or PR merge, explicitly tell the user it's done and that CI/CD is deploying automatically.
 
 ## Build / Verify Commands
 
