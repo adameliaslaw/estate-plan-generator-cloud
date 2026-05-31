@@ -60,6 +60,14 @@ jobs:
 
       - name: Type-check + build
         run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyCMSjBKJ4vr8zXTPk2lpNNDWgCG4AR88oo
+          VITE_FIREBASE_AUTH_DOMAIN: estate-plan-generator.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: estate-plan-generator
+          VITE_FIREBASE_STORAGE_BUCKET: estate-plan-generator.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "749324460027"
+          VITE_FIREBASE_APP_ID: 1:749324460027:web:410d9c51785e6c0dd8b55e
+          VITE_USE_EMULATORS: "false"
 
       - name: Deploy to Firebase Hosting (live channel)
         uses: FirebaseExtended/action-hosting-deploy@v0
