@@ -74,3 +74,6 @@ export { willsPilotRun } from './wills-pilot';
 // AI Receptionist — "Carmela" intake & screening
 export { receptionistWebhook, receptionistStatus } from './receptionist-intake';
 export { registerClientFromLink } from './register-client';
+
+// Firecrawl — scrape estate planning software for KB training
+export { scrapeEstatePlanningSoftware } from './firecrawl-scraper';
