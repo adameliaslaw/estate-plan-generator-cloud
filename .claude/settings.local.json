@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npm install *)",
+      "Bash(mkdir -p /tmp/docx-extract)",
+      "Read(//tmp/**)",
+      "Bash(unzip -o \"/g/My Drive/Everybody \\(S\\)/Wills and Trusts/Byrnes, Sean & Jessica/Jessica Byrnes- POA 11.3.25.docx\" word/document.xml)",
+      "Bash(mkdir -p /tmp/karen-poa)",
+      "Bash(unzip -o \"/c/Users/adame/Downloads/Durable_Power_of_Attorney_of_Karen_K_Elias_1776774279364.docx\" word/document.xml)",
+      "Bash(unzip -o \"/g/My Drive/Everybody \\(S\\)/Wills and Trusts/Byrnes, Sean & Jessica/Jessica Byrnes- HC 11.3.25.docx\" word/document.xml)",
+      "Bash(python -c ' *)",
+      "Bash(unzip -o \"/c/Users/adame/Downloads/Advance_Directive_for_Health_Care_of_Karen_K_Elias_1776775085174.docx\" word/document.xml)",
+      "Bash(python)",
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -rn \"collection.*firms\\\\|firms/\\\\${\" src/config/)",
+      "Bash(npm run *)",
+      "Bash(firebase deploy *)",
+      "Bash(GOOGLE_CLOUD_PROJECT=estate-plan-generator node scripts/fetch-poa-template.cjs)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(NODE_PATH=node_modules node ../scripts/fetch-poa-template.cjs)",
+      "Read(//c/Users/adame/.config/gcloud/**)",
+      "Bash(firebase login:list)",
+      "Bash(gcloud auth *)",
+      "Bash(mkdir -p /tmp/karen-poa-v2)",
+      "Bash(unzip -o \"/c/Users/adame/Downloads/Durable_Power_of_Attorney_of_Karen_K_Elias_1776782013812.docx\" word/document.xml)",
+      "Bash(mkdir -p /tmp/karen-poa-v3)",
+      "Bash(unzip -o \"/c/Users/adame/Downloads/Durable_Power_of_Attorney_of_Karen_K_Elias_1776783987184.docx\" word/document.xml)"
+    ]
+  }
+}

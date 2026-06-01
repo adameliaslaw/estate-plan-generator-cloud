@@ -71,8 +71,6 @@ export { willsDriveWebhook, willsDriveWatchRenew, willsSetupDriveWatch } from '.
 export { willsStartBackfill } from './wills-backfill';
 export { willsPilotRun } from './wills-pilot';
 
-// AI Receptionist — "Carmela" intake & screening
-export { receptionistWebhook, receptionistStatus } from './receptionist-intake';
 export { registerClientFromLink } from './register-client';
 
 // Firecrawl — scrape estate planning software for KB training

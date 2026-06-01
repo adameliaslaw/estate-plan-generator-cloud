@@ -4,7 +4,31 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-06-01 PM (Google Calendar sync restored)
+## 📍 Session left off here — 2026-06-01 (later) — CI deploy fixed + name-split migration committed
+
+### ✅ CI functions-deploy — root cause found & fixed (had been failing for WEEKS)
+
+Triggered by setting `FIRECRAWL_API_KEY`: the `scrapeEstatePlanningSoftware` function was 404 (never deployed), and **every** `firebase-functions-deploy.yml` run had been failing since at least 2026-05-27. Layered diagnosis:
+
+1. **Wrong SA in the CI secret (root cause).** `FIREBASE_SERVICE_ACCOUNT_EPG` authenticated as `firebase-adminsdk-fbsvc@…` (the app's admin-SDK SA, which lacks deploy rights), **not** the purpose-built `github-action-1189038360@…` deployer SA (which has `cloudfunctions.developer` + `firebasehosting.admin` + `run.viewer`). Confirmed via a temporary `client_email`-printing diagnostic step in the workflow (since removed). Fix (Path A, user-chosen — least-privilege over escalating the admin SA): minted a fresh JSON key for `github-action`, rotated it into the GitHub secret via `gh secret set`, and granted `github-action` `roles/iam.serviceAccountUser` on the appspot runtime SA (the `iam.serviceAccounts.ActAs` the deploy needs). This got past the long-standing ActAs wall.
+2. **functions-backfill predeploy build error (next layer, newly exposed).** Once ActAs passed, the deploy reached the build stage and the `functions-backfill` codebase's predeploy `tsc` failed `TS5107` (`moduleResolution=node10` deprecated). The real root cause: the workflow `npm ci`'s only the `functions/` codebase, never `functions-backfill/`, so `firebase deploy`'s backfill predeploy build resolved `tsc` to an **ambient newer TypeScript** (not the locked 5.9.3) that demands `ignoreDeprecations:"6.0"` — while local/functions use `"5.0"` (and TS 5.9.3 *rejects* `"6.0"` as invalid, so no single value satisfies both). Fix (commit `2dd043e`): added an `npm ci` step for `functions-backfill` so CI builds with its pinned 5.9.3, and set `ignoreDeprecations:"5.0"` in `functions-backfill/tsconfig.json` to match `functions/`. Verified local `npm ci` + `tsc` exit 0. (Interim commit `9d3235d` tried `"5.0"` alone but its push didn't even trigger a run — see paths gap below.)
+
+**Validating now:** deploy run `26785053032` (push of `2dd043e`, all fixes) was in flight at session-write time. **Confirm it went green** and that `scrapeEstatePlanningSoftware` is live (`gcloud functions describe scrapeEstatePlanningSoftware --region=us-east1 --gen2`). If green → CI deploys are permanently fixed and the **Scrape Software** button works. If it failed, read the run's failed log — likely the *next* latent layer (a function-specific missing perm or secret), to be granted least-privilege on the `github-action` SA.
+
+**Carry-forward / known gaps:**
+- The workflow `paths:` filter covers `functions/**` but **not** `functions-backfill/**` — backfill-only changes won't auto-deploy on push (must `workflow_dispatch`). The `9d3235d` push didn't trigger a run for this reason. Low priority (a triggered deploy rebuilds both codebases); consider adding `functions-backfill/**` to the paths.
+- A new user-managed key now exists on `github-action-1189038360` (key id `bfbc4eee…`). The old `firebase-adminsdk-fbsvc` keys were left intact (`service-account.json` still uses one). Rotate/track the new key per normal hygiene.
+
+### ✅ Name-split migration — comma bug fixed, proposals committed for elias-counsel
+
+- **Bug fixed (commit `20e2514`).** `split-names.cjs` left a trailing comma stuck to the last name on comma-separated suffixes: `"Jose Polo, Sr."` → `lastName:"Polo,"`. Now strips a trailing comma per token (periods preserved for middle initials). Verified: `"Jose Polo, Sr." → Jose | Polo | Sr.`, and 4-token suffix names (`"Adam J. Elias, Jr."` etc.) all clean.
+- **`--commit` run for `elias-counsel`:** 28 scanned, **14 clients** written with `_pendingNameSplit` staging proposals (canonical `.name` untouched; reversible via admin Skip).
+- **🔴 One manual case for `/admin/name-splits`:** **Diana Doran** (`cBQcaw29tDUA0DGjLRbo`) has two people in one slot — `"Diana Lynn Doran & Michael Doran"` → garbage middleName. Heuristic can't split this; edit it manually (or fix source data into two slots).
+- **🔴 Your remaining browser steps (unchanged):** review/approve at `/admin/name-splits`, then regen Karen (married — should be byte-identical) + Lucas (widowed — Ibrahim should populate). See the 2026-05-27 block for the full smoke-test rundown.
+
+---
+
+## 📍 Earlier — 2026-06-01 PM (Google Calendar sync restored)
 
 ### ✅ syncGoogleCalendar scheduled fn — broken for 5+ weeks, fixed end-to-end
 

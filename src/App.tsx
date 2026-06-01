@@ -31,7 +31,6 @@ const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 const ChatPage = lazy(() => import('@/pages/admin/ChatPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
-const ReceptionistPage = lazy(() => import('@/pages/admin/ReceptionistPage'));
 const NameSplitsReview = lazy(() => import('@/pages/admin/NameSplitsReview'));
 const QuestionnaireRegisterPage = lazy(() => import('@/pages/client/QuestionnaireRegisterPage'));
 
@@ -190,14 +189,6 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <ChatPage />
-                </AppLayout>
-              }
-            />
-            <Route
-              path={ROUTES.RECEPTIONIST}
-              element={
-                <AppLayout allowedRoles={[...STAFF_ROLES]}>
-                  <ReceptionistPage />
                 </AppLayout>
               }
             />
