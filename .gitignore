@@ -82,3 +82,6 @@ recent_changes.txt
 
 # Local verification output (not for repo)
 out/
+
+# Local Claude Code config (per-machine, not for repo)
+.claude/
