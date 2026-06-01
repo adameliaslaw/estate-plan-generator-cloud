@@ -57,7 +57,10 @@ const SUFFIX_TOKENS = new Set(['JR', 'SR', 'II', 'III', 'IV', 'V', 'VI', 'ESQ'])
 
 function proposeSplit(name) {
   if (typeof name !== 'string') return null;
-  const tokens = name.trim().split(/\s+/).filter(Boolean);
+  // Strip a trailing comma from each token so comma-separated suffixes
+  // ("Jose Polo, Sr.") don't leave the comma stuck on the last name token
+  // ("Polo,"). Periods are preserved so middle initials ("C.") survive.
+  const tokens = name.trim().split(/\s+/).map(t => t.replace(/,$/, '')).filter(Boolean);
   if (tokens.length === 0) return null;
   let suffix = '';
   // Detect trailing suffix token (strip trailing comma/period for the match).
