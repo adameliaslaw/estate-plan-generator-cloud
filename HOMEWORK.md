@@ -15,7 +15,7 @@ Session-start health check (per global rule) caught it: every 5-min cron invocat
 
 **Carry-forward gaps:**
 
-- `VITE_GOOGLE_CLIENT_ID` is in `.env` locally but missing from `.env.example` — CLAUDE.md contract says mirror new vars in the example. One-line add (no real-secret risk, the client ID is public).
+- ✅ **Closed 2026-06-01** (commit `33d8c2b`, pushed to `main`). `VITE_GOOGLE_CLIENT_ID` is now mirrored in `.env.example` (frontend config block, blank value per convention). CLAUDE.md "mirror new vars" contract satisfied.
 - The manual hosting deploy this session was done before the CLAUDE.md "Never tell the user to deploy manually" rule (#5) landed. Going forward: push to `main`, let `.github/workflows/firebase-hosting-deploy.yml` handle it.
 
 ---
