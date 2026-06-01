@@ -4,7 +4,23 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-06-01 (Firecrawl KB scraper SHIPPED, one manual step pending)
+## 📍 Session left off here — 2026-06-01 PM (Google Calendar sync restored)
+
+### ✅ syncGoogleCalendar scheduled fn — broken for 5+ weeks, fixed end-to-end
+
+Session-start health check (per global rule) caught it: every 5-min cron invocation since at least 2026-04-23 was throwing `invalid_grant` on the refresh-token call. Two-stage fix:
+
+1. **Stale OAuth refresh token (root cause).** Commit `88eff43` (2026-04-23) rotated `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` secrets but left the *firm's* `firms/elias-counsel.googleCalendar.refreshToken` pointing at the prior client. **Two prior sessions missed this** because the symptom (every-5-min scheduler error) only surfaces in `firebase functions:log`, not in the UI. Same blast-radius pattern as the Google Sign-In bug fixed 2026-05-27 (which had the same root cause and was found the same way). Fix: hosting was redeployed first because the Settings → Integrations → Google Calendar card was rendering `Missing VITE_GOOGLE_CLIENT_ID` — the deployed bundle predated that var being added to `.env`. After fresh `npm run build` + `firebase deploy --only hosting` the Connect button worked; reconnect minted a fresh refresh token from the current client.
+2. **Stale sync checkpoint.** After the auth fix, next sync still failed on `adam@adameliaslaw.com` with `410 updatedMinTooLongAgo` — the firm-level `googleCalendarLastSyncAt` checkpoint was 5+ weeks old, past Google's ~30-day cap on `updatedMin`. One-shot Firestore update reset it to 7 days back. Next sync after reset: **67 events across 4 calendars** (KarenAdam 18, Elias Counsel LLC 34, info@ 0, adam@ 15) with no errors.
+
+**Carry-forward gaps:**
+
+- `VITE_GOOGLE_CLIENT_ID` is in `.env` locally but missing from `.env.example` — CLAUDE.md contract says mirror new vars in the example. One-line add (no real-secret risk, the client ID is public).
+- The manual hosting deploy this session was done before the CLAUDE.md "Never tell the user to deploy manually" rule (#5) landed. Going forward: push to `main`, let `.github/workflows/firebase-hosting-deploy.yml` handle it.
+
+---
+
+## 📍 Earlier same day — 2026-06-01 (Firecrawl KB scraper SHIPPED, one manual step pending)
 
 ### ✅ Firecrawl estate planning scraper — merged to main
 
@@ -31,7 +47,7 @@ Go to Knowledge Base → Resources tab → click **Scrape Software**. Runs once 
 
 ---
 
-## 📍 Session left off here — 2026-05-27 afternoon (name-split refactor SHIPPED, manual smoke pending)
+## 📍 Prior session — 2026-05-27 afternoon (name-split refactor SHIPPED, manual smoke pending)
 
 ### ✅ Name-split refactor — all 6 phases on main
 
