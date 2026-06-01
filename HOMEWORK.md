@@ -4,27 +4,36 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-06-01 (later) — CI deploy fixed + name-split migration committed
+## 📍 Session left off here — 2026-06-01 (later) — CI fixed & GREEN, Carmela removed, name validation shipped
 
-### ✅ CI functions-deploy — root cause found & fixed (had been failing for WEEKS)
+### ✅ CI functions-deploy — FULLY FIXED & GREEN (had been failing for WEEKS)
 
-Triggered by setting `FIRECRAWL_API_KEY`: the `scrapeEstatePlanningSoftware` function was 404 (never deployed), and **every** `firebase-functions-deploy.yml` run had been failing since at least 2026-05-27. Layered diagnosis:
+Triggered by setting `FIRECRAWL_API_KEY`: `scrapeEstatePlanningSoftware` was 404 (never deployed), and **every** `firebase-functions-deploy.yml` run had failed since ≥2026-05-27. Peeled through many layers; final state: **run `26786510980` succeeded**, `scrapeEstatePlanningSoftware` is **ACTIVE + callable** → the **Scrape Software** button works.
 
-1. **Wrong SA in the CI secret (root cause).** `FIREBASE_SERVICE_ACCOUNT_EPG` authenticated as `firebase-adminsdk-fbsvc@…` (the app's admin-SDK SA, which lacks deploy rights), **not** the purpose-built `github-action-1189038360@…` deployer SA (which has `cloudfunctions.developer` + `firebasehosting.admin` + `run.viewer`). Confirmed via a temporary `client_email`-printing diagnostic step in the workflow (since removed). Fix (Path A, user-chosen — least-privilege over escalating the admin SA): minted a fresh JSON key for `github-action`, rotated it into the GitHub secret via `gh secret set`, and granted `github-action` `roles/iam.serviceAccountUser` on the appspot runtime SA (the `iam.serviceAccounts.ActAs` the deploy needs). This got past the long-standing ActAs wall.
-2. **functions-backfill predeploy build error (next layer, newly exposed).** Once ActAs passed, the deploy reached the build stage and the `functions-backfill` codebase's predeploy `tsc` failed `TS5107` (`moduleResolution=node10` deprecated). The real root cause: the workflow `npm ci`'s only the `functions/` codebase, never `functions-backfill/`, so `firebase deploy`'s backfill predeploy build resolved `tsc` to an **ambient newer TypeScript** (not the locked 5.9.3) that demands `ignoreDeprecations:"6.0"` — while local/functions use `"5.0"` (and TS 5.9.3 *rejects* `"6.0"` as invalid, so no single value satisfies both). Fix (commit `2dd043e`): added an `npm ci` step for `functions-backfill` so CI builds with its pinned 5.9.3, and set `ignoreDeprecations:"5.0"` in `functions-backfill/tsconfig.json` to match `functions/`. Verified local `npm ci` + `tsc` exit 0. (Interim commit `9d3235d` tried `"5.0"` alone but its push didn't even trigger a run — see paths gap below.)
+Root causes & fixes (in order surfaced):
+1. **Wrong SA in the CI secret.** `FIREBASE_SERVICE_ACCOUNT_EPG` authenticated as `firebase-adminsdk-fbsvc@…` (no deploy rights), not the purpose-built `github-action-1189038360@…` deployer SA. Confirmed via a temporary `client_email` diagnostic step (since removed). Fix (Path A, user-chosen, least-privilege): minted a fresh key for `github-action`, rotated it into the GitHub secret via `gh secret set`.
+2. **functions-backfill predeploy `tsc` TS5107.** Workflow only `npm ci`'d `functions/`, so backfill's predeploy `tsc` used an ambient newer TS demanding `ignoreDeprecations:"6.0"` (local 5.9.3 uses/accepts only `"5.0"`). Fix (`2dd043e`): added an `npm ci` step for `functions-backfill` + set `ignoreDeprecations:"5.0"` to match `functions/`.
+3. **Six least-privilege IAM grants on `github-action`** (each a distinct preflight/deploy layer): `iam.serviceAccountUser` on the **appspot** SA → `secretmanager.admin` → `datastore.viewer` → `iam.serviceAccountUser` on the **compute** SA (Gen2 runtime) → `run.admin` → `cloudscheduler.admin`.
+4. **Invoker binding.** The function was created during a partial deploy *before* `run.admin`, so its Cloud Run service had no invoker. Manually granted `allUsers`→`roles/run.invoker` (matches other callable fns; auth still enforced in-code via `request.auth`).
 
-**Validating now:** deploy run `26785053032` (push of `2dd043e`, all fixes) was in flight at session-write time. **Confirm it went green** and that `scrapeEstatePlanningSoftware` is live (`gcloud functions describe scrapeEstatePlanningSoftware --region=us-east1 --gen2`). If green → CI deploys are permanently fixed and the **Scrape Software** button works. If it failed, read the run's failed log — likely the *next* latent layer (a function-specific missing perm or secret), to be granted least-privilege on the `github-action` SA.
+**Known gaps:**
+- Workflow `paths:` covers `functions/**` but **not** `functions-backfill/**` — backfill-only pushes won't auto-trigger (use `workflow_dispatch`). Consider adding it.
+- A new user-managed key exists on `github-action-1189038360` (id `bfbc4eee…`); old `firebase-adminsdk-fbsvc` keys left intact (`service-account.json` uses one). Track/rotate per hygiene.
 
-**Carry-forward / known gaps:**
-- The workflow `paths:` filter covers `functions/**` but **not** `functions-backfill/**` — backfill-only changes won't auto-deploy on push (must `workflow_dispatch`). The `9d3235d` push didn't trigger a run for this reason. Low priority (a triggered deploy rebuilds both codebases); consider adding `functions-backfill/**` to the paths.
-- A new user-managed key now exists on `github-action-1189038360` (key id `bfbc4eee…`). The old `firebase-adminsdk-fbsvc` keys were left intact (`service-account.json` still uses one). Rotate/track the new key per normal hygiene.
+### ✅ Carmela (AI receptionist / Twilio) — REMOVED per user request
 
-### ✅ Name-split migration — comma bug fixed, proposals committed for elias-counsel
+Its required `TWILIO_AUTH_TOKEN` secret (never set) was blocking the full-source CI deploy. Removed entirely (commit `e199609`): deleted `receptionist-intake.ts` + `ReceptionistPage.tsx`, stripped the export/route/`ROUTES.RECEPTIONIST`/`.env.example` Twilio block, and the `firestore.rules` blocks for `intakes`/`receptionistSessions`. **Rules deployed** (`firebase deploy --only firestore:rules`, released ✓) and the empty **`TWILIO_AUTH_TOKEN` secret deleted**. tsc + build clean.
 
-- **Bug fixed (commit `20e2514`).** `split-names.cjs` left a trailing comma stuck to the last name on comma-separated suffixes: `"Jose Polo, Sr."` → `lastName:"Polo,"`. Now strips a trailing comma per token (periods preserved for middle initials). Verified: `"Jose Polo, Sr." → Jose | Polo | Sr.`, and 4-token suffix names (`"Adam J. Elias, Jr."` etc.) all clean.
-- **`--commit` run for `elias-counsel`:** 28 scanned, **14 clients** written with `_pendingNameSplit` staging proposals (canonical `.name` untouched; reversible via admin Skip).
-- **🔴 One manual case for `/admin/name-splits`:** **Diana Doran** (`cBQcaw29tDUA0DGjLRbo`) has two people in one slot — `"Diana Lynn Doran & Michael Doran"` → garbage middleName. Heuristic can't split this; edit it manually (or fix source data into two slots).
-- **🔴 Your remaining browser steps (unchanged):** review/approve at `/admin/name-splits`, then regen Karen (married — should be byte-identical) + Lucas (widowed — Ibrahim should populate). See the 2026-05-27 block for the full smoke-test rundown.
+### ✅ Name-split migration — DONE (committed, reviewed, approved)
+
+- **Comma bug fixed (`20e2514`):** `split-names.cjs` left a trailing comma on comma-separated suffixes (`"Jose Polo, Sr." → lastName:"Polo,"`). Now strips it. Verified in live data post-approval: `Jose | Polo | Sr.`, joined `name="Jose Polo Sr."`.
+- **`--commit` for `elias-counsel`:** 14 clients got `_pendingNameSplit`; **user reviewed & approved** at `/admin/name-splits` (queue now empty = done).
+- **Diana Doran accidental approval — undone.** She had two people in one slot (`"Diana Lynn Doran & Michael Doran"`); the accidental approve set a garbage `middleName`. Removed the split fields from `executor.primary` (name preserved, renders fine). If Michael should be a real co-/alternate fiduciary, restructure her record (decision pending).
+- **🔴 Remaining browser step:** regen Karen (married — expect byte-identical) + Lucas (widowed — Ibrahim renders by name; addresses still `[MISSING]` until filled).
+
+### ✅ Name-field input validation — SHIPPED (`f7b4f6b`)
+
+Blocks symbols/digits in first/middle/last name fields; **hyphen allowed only in last names**; apostrophes (O'Brien) + middle-initial periods kept. New `sanitizeName`/`sanitizeNameField` in `src/utils/sanitize.ts`, applied centrally at `QuestionnaireContext.updateField/updateFields` (covers all steps + PersonPicker), `RepeaterField.updateItem`, `NameSplitsReview`, `NewClientPage`, `QuestionnaireRegisterPage`. 9 new tests, full suite **613 pass**, build clean. (Suffix unaffected — constrained dropdown.) Backend/bulk-import is NOT yet guarded — possible defense-in-depth follow-up.
 
 ---
 
@@ -142,8 +151,8 @@ Go to Knowledge Base → Resources tab → click **Scrape Software**. Runs once 
 
 1. **Fill Ibrahim Polo + Jose Polo Sr. addresses via admin UI** — Lucas's 4 fiduciary roles all point at one of them with `{ name, relationship, phone, email }` only. After the fixes today, you should now be able to type/autocomplete/copy successfully. Once filled, regenerate POA + HC for Lucas to confirm `[MISSING: <role> address]` markers clear.
 2. **UI smoke-test the marital-status sweep** — regen Karen (married, should be byte-identical) + Lucas (widowed, should now show Ibrahim by name).
-3. **One-time CI bootstrap** (`FIREBASE_SERVICE_ACCOUNT_EPG` GitHub secret) — less urgent now that today's manual deploy shipped.
-4. **Activate Carmela** (when ready) — set `TWILIO_AUTH_TOKEN` + redeploy receptionist functions + configure Twilio phone number.
+3. ~~**One-time CI bootstrap**~~ — ✅ DONE 2026-06-01. CI functions-deploy is green; see top section for the full bootstrap (key rotation + 6 IAM grants + invoker).
+4. ~~**Activate Carmela**~~ — ❌ MOOT 2026-06-01. Carmela removed entirely per user request; see top section.
 5. **Merge `incoming-ai-chambers` in adamelias.ai** when ready.
 
 ### ✅ Name-split refactor SHIPPED 2026-05-27 afternoon — see top of file for the rundown + manual smoke-test steps.
