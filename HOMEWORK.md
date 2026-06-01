@@ -4,6 +4,33 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 Session left off here — 2026-06-01 (Firecrawl KB scraper SHIPPED, one manual step pending)
+
+### ✅ Firecrawl estate planning scraper — merged to main
+
+Two PRs merged and auto-deployed:
+
+- **PR #22** — `scrapeEstatePlanningSoftware` Cloud Function (`functions/src/firecrawl-scraper.ts`)
+  Scrapes 32 publicly accessible pages across WealthCounsel, InterActive Legal, Smokeball, HotDocs, BeyondCounsel, BolsterBruderLegacy. Saves each page to `firms/{firmId}/knowledgeBase/` as a `practice_note`, AI-enriches via Mercury, vectorizes automatically via the existing `onKnowledgeResourceWritten` trigger. Idempotent — skips already-scraped URLs.
+
+- **PR #23** — "Scrape Software" button on Knowledge Base page (Resources tab, purple, beside Bulk Import)
+
+### 🔴 One manual step required before the scrape will work
+
+**Set the Firecrawl API key as a Firebase secret:**
+
+```bash
+firebase functions:secrets:set FIRECRAWL_API_KEY
+```
+
+Get your key at firecrawl.dev (free tier available). Without this, the function throws an internal error immediately.
+
+**Then trigger the scrape:**
+
+Go to Knowledge Base → Resources tab → click **Scrape Software**. Runs once (~2–5 min). All 32 pages will appear in Resources tagged `firecrawl-wealthcounsel`, `firecrawl-smokeball`, etc., and become available for RAG retrieval during document generation.
+
+---
+
 ## 📍 Session left off here — 2026-05-27 afternoon (name-split refactor SHIPPED, manual smoke pending)
 
 ### ✅ Name-split refactor — all 6 phases on main
