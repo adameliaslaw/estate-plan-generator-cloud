@@ -20,6 +20,8 @@ import {
   formatCurrency,
   formatPhone,
   formatSSNLast4,
+  sanitizeName,
+  sanitizeNameField,
 } from '@/utils/sanitize';
 
 // ============================================================================
@@ -340,5 +342,68 @@ describe('formatSSNLast4', () => {
 
   it('formats 4-digit input as masked SSN', () => {
     expect(formatSSNLast4('6789')).toBe('***-**-6789');
+  });
+});
+
+// ============================================================================
+// sanitizeName — block symbols, allow hyphen only in last names
+// ============================================================================
+
+describe('sanitizeName', () => {
+  it('removes symbols and digits', () => {
+    expect(sanitizeName('Diana & Michael')).toBe('Diana  Michael');
+    expect(sanitizeName('John123')).toBe('John');
+    expect(sanitizeName('Anne@#$%')).toBe('Anne');
+    expect(sanitizeName('a/b\\c')).toBe('abc');
+  });
+
+  it('keeps letters, spaces, apostrophes and periods', () => {
+    expect(sanitizeName("O'Brien")).toBe("O'Brien");
+    expect(sanitizeName('J.')).toBe('J.');
+    expect(sanitizeName('Mary Anne')).toBe('Mary Anne');
+  });
+
+  it('keeps accented / non-ASCII letters', () => {
+    expect(sanitizeName('José')).toBe('José');
+    expect(sanitizeName('Renée')).toBe('Renée');
+  });
+
+  it('strips hyphens by default but keeps them when allowHyphen is set', () => {
+    expect(sanitizeName('Jean-Paul')).toBe('JeanPaul');
+    expect(sanitizeName('Palmieri-Sauter', { allowHyphen: true })).toBe('Palmieri-Sauter');
+    expect(sanitizeName('Smith-Jones&', { allowHyphen: true })).toBe('Smith-Jones');
+  });
+
+  it('returns empty string for empty input', () => {
+    expect(sanitizeName('')).toBe('');
+  });
+});
+
+// ============================================================================
+// sanitizeNameField — per-field policy keyed on the field path
+// ============================================================================
+
+describe('sanitizeNameField', () => {
+  it('blocks hyphens in first and middle names', () => {
+    expect(sanitizeNameField('firstName', 'Jean-Paul')).toBe('JeanPaul');
+    expect(sanitizeNameField('personalInfo.middleName', 'Ann-Marie')).toBe('AnnMarie');
+  });
+
+  it('allows hyphens in last names (including nested paths)', () => {
+    expect(sanitizeNameField('lastName', 'Palmieri-Sauter')).toBe('Palmieri-Sauter');
+    expect(
+      sanitizeNameField('fiduciaries.executor.primary.lastName', 'Smith-Jones'),
+    ).toBe('Smith-Jones');
+  });
+
+  it('strips the ampersand that caused the two-person bug', () => {
+    expect(sanitizeNameField('fiduciaries.executor.primary.lastName', 'Doran & Michael'))
+      .toBe('Doran  Michael');
+  });
+
+  it('leaves non-name fields untouched', () => {
+    expect(sanitizeNameField('email', 'a@b.com')).toBe('a@b.com');
+    expect(sanitizeNameField('suffix', 'Jr.')).toBe('Jr.');
+    expect(sanitizeNameField('relationship', 'Son/Daughter')).toBe('Son/Daughter');
   });
 });

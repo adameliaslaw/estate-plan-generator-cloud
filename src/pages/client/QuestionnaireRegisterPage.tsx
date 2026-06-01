@@ -26,6 +26,7 @@ import { signInAnonymously } from 'firebase/auth';
 import { functions, auth } from '@/config/firebase';
 import { Scale, Lock } from 'lucide-react';
 import { FIRM_DEFAULTS } from '@/config/constants';
+import { sanitizeNameField } from '@/utils/sanitize';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -122,7 +123,7 @@ export default function QuestionnaireRegisterPage() {
   }
 
   const handleChange = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    setForm((prev) => ({ ...prev, [field]: sanitizeNameField(field, e.target.value) }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
     if (serverError) setServerError('');
   };

@@ -12,6 +12,7 @@
 import React, { useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { sanitizeNameField } from '@/utils/sanitize';
 import type { FieldConfig } from '@/types/questionnaire';
 import { evaluateCondition } from '@/contexts/QuestionnaireContext';
 
@@ -309,9 +310,10 @@ export function RepeaterField({
   }
 
   function updateItem(index: number, fieldName: string, val: unknown) {
+    const clean = typeof val === 'string' ? sanitizeNameField(fieldName, val) : val;
     const updated = itemsRef.current.map((item, i) => {
       if (i !== index) return item;
-      return { ...item, [fieldName]: val };
+      return { ...item, [fieldName]: clean };
     });
     itemsRef.current = updated;
     onChange(updated);

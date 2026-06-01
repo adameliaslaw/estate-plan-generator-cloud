@@ -25,6 +25,7 @@ import React, {
 import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
+import { sanitizeNameField } from '@/utils/sanitize';
 import {
   QUESTIONNAIRE_STEPS,
   SECTION_META,
@@ -501,7 +502,8 @@ export function QuestionnaireProvider({
 
   const updateField = useCallback(
     (path: string, value: unknown) => {
-      dispatch({ type: 'UPDATE_FIELD', path, value });
+      const clean = typeof value === 'string' ? sanitizeNameField(path, value) : value;
+      dispatch({ type: 'UPDATE_FIELD', path, value: clean });
       scheduleAutoSave();
     },
     [scheduleAutoSave],
@@ -509,7 +511,11 @@ export function QuestionnaireProvider({
 
   const updateFields = useCallback(
     (updates: Record<string, unknown>) => {
-      dispatch({ type: 'UPDATE_FIELDS', updates });
+      const clean: Record<string, unknown> = {};
+      for (const [path, value] of Object.entries(updates)) {
+        clean[path] = typeof value === 'string' ? sanitizeNameField(path, value) : value;
+      }
+      dispatch({ type: 'UPDATE_FIELDS', updates: clean });
       scheduleAutoSave();
     },
     [scheduleAutoSave],

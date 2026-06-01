@@ -15,6 +15,7 @@ import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { sanitizeNameField } from '@/utils/sanitize';
 import { toast } from 'sonner';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
@@ -187,11 +188,12 @@ export default function NameSplitsReview() {
   }, [firmId]);
 
   const updateField = (clientId: string, label: string, field: keyof PendingSplit, value: string) => {
+    const clean = sanitizeNameField(field, value);
     setEdits((prev) => ({
       ...prev,
       [`${clientId}::${label}`]: {
         ...(prev[`${clientId}::${label}`] ?? { firstName: '', middleName: '', lastName: '', suffix: '' }),
-        [field]: value,
+        [field]: clean,
       },
     }));
   };

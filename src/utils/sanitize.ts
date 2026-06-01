@@ -150,6 +150,42 @@ export function validatePhone(phone: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Name-field sanitization
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip characters that don't belong in a person's name.
+ *
+ * Allowed: Unicode letters (any script), combining marks (accents), spaces,
+ * apostrophes (straight ' and curly ’), and periods (middle initials like
+ * "J."). A hyphen is allowed ONLY when `allowHyphen` is true — used for last
+ * names ("Palmieri-Sauter"). Everything else (digits, & @ # / etc.) is removed.
+ *
+ * Intended for input onChange so junk can't enter name fields. Does NOT trim,
+ * so a user can still type a space between name parts as they go.
+ */
+export function sanitizeName(value: string, opts?: { allowHyphen?: boolean }): string {
+  if (!value) return '';
+  const hyphen = opts?.allowHyphen ? '-' : '';
+  // Negated class: remove anything that is NOT an allowed name character.
+  const disallowed = new RegExp(`[^\\p{L}\\p{M}\\s'’.${hyphen}]`, 'gu');
+  return value.replace(disallowed, '');
+}
+
+/**
+ * Apply name sanitization to `value` only when `fieldKey` is (or ends with)
+ * a first/middle/last name field — e.g. "firstName" or
+ * "fiduciaries.executor.primary.lastName". Last names allow a hyphen;
+ * first/middle do not. Non-name fields are returned unchanged.
+ */
+const NAME_FIELD_RE = /(?:^|\.)(firstName|middleName|lastName)$/;
+export function sanitizeNameField(fieldKey: string, value: string): string {
+  const m = fieldKey.match(NAME_FIELD_RE);
+  if (!m) return value;
+  return sanitizeName(value, { allowHyphen: m[1] === 'lastName' });
+}
+
+// ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------
 
