@@ -298,7 +298,6 @@ The upload modal at `/chat` → Upload Document lets the user pick a namespace; 
 ### 🆕 New follow-ups from this session
 
 - **Anthropic API key is 401-ing.** `pageIndexClientFilesChat` + `ragChat` logs repeatedly show `Anthropic stream failed pre-chunk; falling back to OpenAI. err=401 invalid x-api-key`. Graceful-degradation (shipped 2026-05-06 in commit `91c51f6`) is doing its job — OpenAI substitutes successfully so user-facing chat still answers — but the Anthropic key needs re-rotation. HOMEWORK previously said it was rotated 2026-05-06; something has happened to it since. Run `gcloud secrets versions list ANTHROPIC_API_KEY --project=estate-plan-generator` to see current state, then mint a new key on console.anthropic.com if needed.
-- **Research chat page layout bug.** User reported "all boxes popping out of main box" on `/chat`. Not investigated this session. Probably a CSS flex/overflow issue in `ChatPage.tsx`; the 70/30 split panel may break at certain viewport widths or under certain DOM states.
 
 ### ✅ 2026-05-12 hosting smoke-test bugs — all closed same day
 
@@ -323,7 +322,7 @@ The upload modal at `/chat` → Upload Document lets the user pick a namespace; 
 ### 🟡 What's blocked vs. what's agent-codeable now
 
 - **Blocked on deploy + smoke-test of the chat-completion migration** (open item 1). Code is on `main`; running `firebase deploy --only` on the two functions unblocks the Research chat right-panel citations end-to-end. Wills → PageIndex pipeline (mid-term) is no longer blocked on retrieval — upload path always worked; the deprecation only affected retrieval, which the wills-processor doesn't touch.
-- **Agent-codeable without user blockers:** item 4 + item 5 are still user verification tasks. The `/chat` page layout bug (boxes popping out) is agent-codeable once a repro/screenshot lands.
+- **Agent-codeable without user blockers:** item 4 + item 5 are still user verification tasks.
 - **Anthropic key re-rotation** is still agent-codeable if user wants it run, BUT it now only affects `chatAi` (research mode) — `ragChat` and `pageIndexClientFilesChat` no longer call Anthropic after the migration.
 
 ### 🧠 Memory added this session
