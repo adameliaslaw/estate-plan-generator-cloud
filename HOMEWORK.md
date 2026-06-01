@@ -4,7 +4,22 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 Session left off here — 2026-06-01 (later) — CI fixed & GREEN, Carmela removed, name validation shipped
+## 🔜 RESUME HERE NEXT SESSION — continue the "template options" thread
+
+**To resume:** start a fresh session and say **"Resume with HOMEWORK.md"** (that's how this session began). The active thread below was mid-conversation; no code was written for it.
+
+### Open thread: adding template options (in progress — awaiting Adam's answer)
+Adam wants to **add new document types / template variants** the tool can generate. (He'd tried using the Firecrawl scrape for this — wrong lever; the scrape only adds RAG *reference* content, not templates.) Where it landed:
+- **Add a template VARIANT of an existing doc type** (will, POA, trust, livingWill, pourOverWill, deed, affidavit, gitRep3, estatePlanSummary) = **NO code.** Upload a template doc to Firestore `firms/{firmId}/documentTemplates` via the existing UI: **Knowledge Base page → Templates tab → Add Template** (or Bulk Template Import). Key fields: `docType`, `variant`, `content` (Handlebars/HTML), `isActive`, `isDefault`, `complexity`. Engine `getTemplate()` (`template-engine.ts:1325`) resolves variants automatically. **This is almost certainly what he wants.** The real input needed is actual template documents (his own attorney-drafted `.docx`/clauses), not scraped marketing.
+- **Add a brand-new document TYPE** = heavyweight (~7-10 files: type unions `unified-generator.ts:25-39` + `src/types/index.ts` + `constants.ts` DOC_TYPES; new generator in `functions/src/generators/`; register in `loadGenerator()` `unified-generator.ts:250`; package config `generate-documents.ts:72`; deploy). Likely unnecessary — ~13 AI "flex" types already exist (engagementLetter, certificationOfTrust, trustAmendment, trustRestatement, petTrust, codicil, hipaaRelease, letterOfInstruction, memorandumOfPersonalProp, beneficiaryDesignation, …).
+- **🔴 OPEN QUESTION (ask Adam first, one question):** which specific document — a new *variant* of an existing doc (easy, UI upload of a real template), or a genuinely new doc type not in the list? He has NOT answered yet; his answer sets the path.
+
+### 🔴 TODO: evaluate which scraped sites are genuinely useful to the tool
+Today's Firecrawl scrape put **30 competitor-software pages** (WealthCounsel, InterActive Legal, Smokeball, HotDocs, Wealth Docx — mostly **marketing/blog** content) into `firms/elias-counsel/knowledgeBase` as RAG resources (tagged `firecrawl-{source}`, `contentSource:'firecrawl'` — easy to query). **Evaluate per-page which (if any) genuinely help** document generation vs. dilute retrieval quality with competitor marketing fluff. Benchmark against the genuinely-useful KB content (NJ Title 3B statutes). Decide per page: keep / tag-down / deactivate / purge. Lean skeptical — "Best Document Automation Software" marketing has near-zero drafting value; a few practice-note pages ("RLT Drafting 101", "post-SECURE Act drafting") may be marginally useful.
+
+---
+
+## 📍 2026-06-01 session log — CI fixed & GREEN, Carmela removed, name validation, scrape + prod bugs
 
 ### ✅ CI functions-deploy — FULLY FIXED & GREEN (had been failing for WEEKS)
 
@@ -37,7 +52,7 @@ Blocks symbols/digits in first/middle/last name fields; **hyphen allowed only in
 
 ### ✅ Firecrawl scrape + two prod bugs it exposed (all fixed)
 
-Scrape ran: **29 pages saved**, 1 skipped, 2 failed. The 2 failures (`beyondcounsel.com` + `/features`) were **transient Firecrawl proxy errors** (`HTTP 500 / ERR_TUNNEL_CONNECTION_FAILED`) — re-click Scrape Software to retry (idempotent). Two real bugs surfaced and were fixed:
+Scrape: **30 pages saved** total (29 first run + idempotent retry confirmed 30 existed), **2 permanently failed** — `beyondcounsel.com` + `/features`. **Diagnosed as the SITE being down/unreachable, not our bug:** DNS resolves (`207.148.248.143`) but port 443 refuses connections from this machine *and* all Firecrawl proxy modes (basic→`ERR_TUNNEL_CONNECTION_FAILED`, stealth/enhanced→`ERR_CONNECTION_CLOSED`). **Called done at 30 pages** (5 of 6 vendors fully covered). If BeyondCounsel content is ever wanted: retry when their site is up, or pull from web.archive.org. Two real bugs surfaced and were fixed:
 
 - **KB page "Failed to load resources" (`ba912a8`).** `searchKnowledgeResources` loads up to 200 docs with full `content`; the 29 new ~50KB Firecrawl docs pushed the **256MiB** function into a startup OOM. Bumped to **512MiB** (matches sibling KB fns). Deployed, ACTIVE.
 - **Mercury enrichment broken project-wide (`619a54f`).** `mercury-coder-small` was retired (403 for accounts created after 2026-02-24), so ALL Mercury calls failed (scrape enrichment, transcription summaries, ai-memory, bulk-import, KB analyze). Migrated → **`mercury-2`** across the default + 6 call sites + the allowlist, and **removed `diffusing:true`** (mercury-2 returns 400 on it for non-streaming). Verified live vs `api.inceptionlabs.ai`.
