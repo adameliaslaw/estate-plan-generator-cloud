@@ -55,6 +55,15 @@ jobs:
         working-directory: functions
         run: npm run build
 
+      # functions-backfill is a second codebase with its own pinned TypeScript.
+      # `firebase deploy` runs its predeploy build (npm run build -> tsc) but
+      # does NOT install its deps. Without this, tsc resolves to an ambient
+      # newer TypeScript that errors on moduleResolution=node10 (TS5107).
+      # Installing the locked deps pins it to the same TS as local builds.
+      - name: Install functions-backfill dependencies (frozen lockfile)
+        working-directory: functions-backfill
+        run: npm ci
+
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
