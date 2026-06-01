@@ -185,7 +185,10 @@ export const deleteKnowledgeResource = onCall(
 // ---------------------------------------------------------------------------
 
 export const searchKnowledgeResources = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  // 512MiB (was 256MiB): loads up to 200 resources with full `content` (Firecrawl
+  // docs can be ~50KB each), which pushed the 256MiB cap into a startup OOM once
+  // the KB grew. Matches the sibling heavy KB functions (bulkImport/analyzeContent).
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, category, docType, tag, activeOnly = true } = request.data as {
