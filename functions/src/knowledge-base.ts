@@ -340,7 +340,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
 
     // Use the firm's preferred AI provider or default
     const raw = await callAI(systemPrompt, userPrompt, {}, {
-      model: 'mercury-coder-small',
+      model: 'mercury-2',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,

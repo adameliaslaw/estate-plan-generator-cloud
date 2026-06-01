@@ -391,7 +391,7 @@ export const summarizeTranscription = functions
     let aiSummary: string;
     try {
       aiSummary = await callAI(systemPrompt, userPrompt, firmData, {
-        model: 'mercury-coder-small',
+        model: 'mercury-2',
         temperature: 0.2,
         maxTokens: 1024,
       });

@@ -123,7 +123,9 @@ const KNOWN_MODELS: Record<string, Set<string>> = {
     'sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro',
   ]),
   mercury: new Set([
-    'mercury-2', 'mercury-coder-small', 'mercury-coder-medium',
+    // Available models per api.inceptionlabs.ai/v1/models (verified 2026-06-01).
+    // mercury-coder-small/-medium were retired for accounts created after 2026-02-24.
+    'mercury', 'mercury-2', 'mercury-coder', 'mercury-edit', 'mercury-edit-2',
   ]),
 };
 
@@ -132,7 +134,7 @@ const DEFAULT_MODELS: Record<string, string> = {
   anthropic: 'claude-sonnet-4-6',
   gemini: 'gemini-2.5-flash',
   perplexity: 'sonar-pro',
-  mercury: 'mercury-coder-small',
+  mercury: 'mercury-2',
 };
 
 /**
@@ -499,8 +501,6 @@ async function _callMercury(
     ],
     temperature,
     max_tokens: options.maxTokens ?? 4096,
-    // Required for Mercury diffusion models via the OpenAI-compatible endpoint.
-    diffusing: true,
   };
 
   if (options.jsonMode) {
