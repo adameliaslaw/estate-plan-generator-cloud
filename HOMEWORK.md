@@ -35,6 +35,14 @@ Its required `TWILIO_AUTH_TOKEN` secret (never set) was blocking the full-source
 
 Blocks symbols/digits in first/middle/last name fields; **hyphen allowed only in last names**; apostrophes (O'Brien) + middle-initial periods kept. New `sanitizeName`/`sanitizeNameField` in `src/utils/sanitize.ts`, applied centrally at `QuestionnaireContext.updateField/updateFields` (covers all steps + PersonPicker), `RepeaterField.updateItem`, `NameSplitsReview`, `NewClientPage`, `QuestionnaireRegisterPage`. 9 new tests, full suite **613 pass**, build clean. (Suffix unaffected — constrained dropdown.) Backend/bulk-import is NOT yet guarded — possible defense-in-depth follow-up.
 
+### ✅ Firecrawl scrape + two prod bugs it exposed (all fixed)
+
+Scrape ran: **29 pages saved**, 1 skipped, 2 failed. The 2 failures (`beyondcounsel.com` + `/features`) were **transient Firecrawl proxy errors** (`HTTP 500 / ERR_TUNNEL_CONNECTION_FAILED`) — re-click Scrape Software to retry (idempotent). Two real bugs surfaced and were fixed:
+
+- **KB page "Failed to load resources" (`ba912a8`).** `searchKnowledgeResources` loads up to 200 docs with full `content`; the 29 new ~50KB Firecrawl docs pushed the **256MiB** function into a startup OOM. Bumped to **512MiB** (matches sibling KB fns). Deployed, ACTIVE.
+- **Mercury enrichment broken project-wide (`619a54f`).** `mercury-coder-small` was retired (403 for accounts created after 2026-02-24), so ALL Mercury calls failed (scrape enrichment, transcription summaries, ai-memory, bulk-import, KB analyze). Migrated → **`mercury-2`** across the default + 6 call sites + the allowlist, and **removed `diffusing:true`** (mercury-2 returns 400 on it for non-streaming). Verified live vs `api.inceptionlabs.ai`.
+- **Re-enriched the 29 saved docs** via `functions/scripts/backfill-firecrawl-enrichment.cjs` (mercury-2 direct): **29/29 enriched** (titles/categories/tags/docTypes/summaries written; `onKnowledgeResourceWritten` re-vectorized them). Future scrapes enrich automatically.
+
 ---
 
 ## 📍 Earlier — 2026-06-01 PM (Google Calendar sync restored)
