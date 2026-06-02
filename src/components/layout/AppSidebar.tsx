@@ -8,7 +8,6 @@ import {
   X,
   Scale,
   BookOpen,
-  MessageSquareText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,7 +24,6 @@ const prefetchMap: Record<string, () => void> = {
   [ROUTES.CALENDAR]: () => { import('@/pages/admin/CalendarPage'); },
   [ROUTES.PAYMENTS]: () => { import('@/pages/admin/PaymentsPage'); },
   [ROUTES.KNOWLEDGE_BASE]: () => { import('@/pages/admin/KnowledgeBasePage'); },
-  [ROUTES.CHAT]: () => { import('@/pages/admin/ChatPage'); },
 };
 
 interface NavItem {
@@ -41,7 +39,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Calendar', href: ROUTES.CALENDAR, icon: Calendar },
   { label: 'Payments', href: ROUTES.PAYMENTS, icon: DollarSign },
   { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
-  { label: 'Research Chat', href: ROUTES.CHAT, icon: MessageSquareText },
 ];
 
 interface AppSidebarProps {

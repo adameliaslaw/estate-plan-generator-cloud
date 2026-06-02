@@ -14,7 +14,6 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
-import { fetchPageIndexContext } from './pageindex-retrieval';
 import { searchCaseLaw, formatCaseCitations } from './courtlistener-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot, DocSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
@@ -57,8 +56,6 @@ interface ChatAiResponse {
   conversationId?: string;
   /** Source citations — URLs from Perplexity + case law from CourtListener */
   citations?: string[];
-  /** Firm documents retrieved from PageIndex (research mode) */
-  pageIndexSources?: Array<{ namespace: string; documentName: string; section: string; pageNumber: number; excerpt: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,7 +472,7 @@ function buildResearchUserPrompt(
 // ---------------------------------------------------------------------------
 
 export const chatAi = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ['PAGEINDEX_API_KEY'] })
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
   .region('us-east1')
   .https.onCall(
   async (data: ChatAiRequest, context: functions.https.CallableContext) => {
@@ -625,23 +622,16 @@ export const chatAi = functions
       }
 
       // =====================================================================
-      // 4b. RESEARCH MODE: PageIndex firm docs + CourtListener case law +
-      //     Perplexity web search — all in parallel, synthesised by the LLM.
+      // 4b. RESEARCH MODE: CourtListener case law + Perplexity web search,
+      //     synthesised by the LLM.
       // =====================================================================
       if (mode === 'research') {
-        console.log(`[chatAi] Research mode — fetching firm docs, case law, and web results in parallel`);
+        console.log(`[chatAi] Research mode — fetching case law and web results`);
 
-        const pageIndexKey       = (firmData as Record<string, unknown>).pageindexApiKey as string | undefined
-                               ?? process.env.PAGEINDEX_API_KEY
-                               ?? '';
         const courtListenerKey   = (firmData as Record<string, unknown>).courtlistenerApiKey as string | undefined ?? '';
-        const db                 = admin.firestore();
 
-        // Phase 1: Fetch firm docs + case law in parallel (fast lookups)
-        const [pageIndexResult, caseLawResult] = await Promise.all([
-          fetchPageIndexContext(['reference', 'work-product'], message, pageIndexKey, db),
-          searchCaseLaw(message, courtListenerKey),
-        ]);
+        // Phase 1: Fetch case law
+        const caseLawResult = await searchCaseLaw(message, courtListenerKey);
 
         // Phase 2: Perplexity web search, enriched with internal context
         const researchSystemPrompt =
@@ -663,13 +653,13 @@ RULES:
 
         const perplexityResult = await callPerplexityWithCitations(
           researchSystemPrompt,
-          buildResearchUserPrompt(message, resolvedHistory, pageIndexResult.contextString, caseLawResult.contextString),
+          buildResearchUserPrompt(message, resolvedHistory, '', caseLawResult.contextString),
           firmData,
           { model: modelOverride ?? 'sonar', temperature: 0.2 },
         );
 
         console.log(
-          `[chatAi] Research complete: ${pageIndexResult.sources.length} firm docs, ` +
+          `[chatAi] Research complete: ` +
           `${caseLawResult.results.length} cases, ${perplexityResult.citations.length} web citations (${Date.now() - t0}ms)`,
         );
 
@@ -690,7 +680,6 @@ RULES:
         return {
           reply: perplexityResult.content,
           citations: allCitations,
-          pageIndexSources: pageIndexResult.sources,
           conversationId: convId,
         } as ChatAiResponse;
       }

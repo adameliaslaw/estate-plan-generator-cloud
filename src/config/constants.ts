@@ -444,7 +444,6 @@ export const ROUTES = {
   SETTINGS_FIRM: '/settings/firm',
   SETTINGS_USERS: '/settings/users',
   SETTINGS_BILLING: '/settings/billing',
-  CHAT: '/chat',
   ADMIN_NAME_SPLITS: '/admin/name-splits',
 } as const;
 

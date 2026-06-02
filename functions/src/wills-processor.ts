@@ -18,7 +18,7 @@
  *   7.  Route: Correspondence | Other | requires_ocr → write record, done
  *   8.  Extract metadata (claude-sonnet-4-6)
  *   9.  Validate schema; stub on second failure
- *  10.  Write Firestore record, push to PageIndex, write audit log
+ *  10.  Write Firestore record, write audit log
  */
 
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
@@ -42,7 +42,6 @@ import { writePipelineAuditEntry } from './wills-audit';
 // Secrets
 // ---------------------------------------------------------------------------
 
-const PAGEINDEX_API_KEY = defineSecret('PAGEINDEX_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 export const WILLS_PUBSUB_TOPIC = 'wills-document-processing';
@@ -51,13 +50,12 @@ export const WILLS_PUBSUB_TOPIC = 'wills-document-processing';
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGEINDEX_BASE        = 'https://api.pageindex.ai';
 const PAGEINDEX_NAMESPACE   = 'work-product' as const;
 const OCR_TEXT_MIN_CHARS    = 100;
 const BACKFILL_SPEND_LIMIT  = 50;   // USD / day in backfill mode
 const LIVE_SPEND_LIMIT      = 5;    // USD / day in live mode
 
-// Doc types that skip extraction + PageIndex indexing
+// Doc types that skip extraction
 const SKIP_EXTRACTION_TYPES = new Set(['Correspondence', 'Letter-of-Instruction', 'Other']);
 
 // ---------------------------------------------------------------------------
@@ -70,7 +68,7 @@ export const willsProcessor = onMessagePublished(
     region: 'us-east1',
     timeoutSeconds: 540,
     memory: '1GiB',
-    secrets: [PAGEINDEX_API_KEY, ANTHROPIC_API_KEY],
+    secrets: [ANTHROPIC_API_KEY],
   },
   async (event) => {
     // ── Parse Pub/Sub message ───────────────────────────────────────────────
@@ -98,7 +96,6 @@ export const willsProcessor = onMessagePublished(
 
     const db = admin.firestore();
     const anthropicKey = ANTHROPIC_API_KEY.value();
-    const pageIndexKey = PAGEINDEX_API_KEY.value();
 
     // ── Step 1: Kill switch ─────────────────────────────────────────────────
     const control = await _readControl(db);
@@ -256,49 +253,20 @@ export const willsProcessor = onMessagePublished(
     });
     await docRef.set(record);
 
-    // ── Step 10b: Push to PageIndex ─────────────────────────────────────────
-    let pageIndexDocId: string | null = null;
-    try {
-      pageIndexDocId = await _uploadToPageIndex(bytes, fileName, mimeType, pageIndexKey);
-      await docRef.update({
-        pageindex_doc_id: pageIndexDocId,
-        processing_status: 'indexed',
-      });
-
-      // Register in existing pageindex_docs collection for RAG retrieval
-      await db.collection(`pageindex_docs/${PAGEINDEX_NAMESPACE}/files`).doc(pageIndexDocId).set({
-        doc_id: pageIndexDocId,
-        fileName,
-        namespace: PAGEINDEX_NAMESPACE,
-        firmId,
-        drive_file_id,
-        uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      writePipelineAuditEntry({
-        action: 'pageindex_submitted', drive_file_id, pageindex_doc_id: pageIndexDocId,
-        user_uid: null, query_text: null, results_returned: null, duration_ms: Date.now() - startMs,
-        error: null, firmId,
-      }, db);
-    } catch (err) {
-      logger.error('[willsProcessor] PageIndex upload failed', { drive_file_id, err });
-      await docRef.update({ processing_status: 'error', processing_error: (err as Error).message });
-    }
-
-    // ── Step 10c: Update daily spend estimate ───────────────────────────────
+    // ── Step 10b: Update daily spend estimate ───────────────────────────────
     _incrementDailySpend(db, _estimateCost(text)).catch((e: unknown) =>
       logger.warn('[willsProcessor] spend tracking failed', { err: String(e) }),
     );
 
     writePipelineAuditEntry({
-      action: 'ingestion_completed', drive_file_id, pageindex_doc_id: pageIndexDocId,
+      action: 'ingestion_completed', drive_file_id, pageindex_doc_id: null,
       user_uid: null, query_text: null, results_returned: null,
       duration_ms: Date.now() - startMs, error: null, firmId,
     }, db);
 
     logger.info('[willsProcessor] done', {
       drive_file_id, document_type: classification.document_type,
-      pageindex_doc_id: pageIndexDocId, duration_ms: Date.now() - startMs,
+      pageindex_doc_id: null, duration_ms: Date.now() - startMs,
     });
   },
 );
@@ -378,30 +346,6 @@ function _extractVersionLabel(text: string): string | null {
   if (/\bv(\d+)\b/.test(lower)) return lower.match(/\bv(\d+)\b/)![0];
   if (/\bdraft\b/.test(lower)) return 'draft';
   return null;
-}
-
-async function _uploadToPageIndex(
-  bytes: Buffer,
-  fileName: string,
-  mimeType: string,
-  apiKey: string,
-): Promise<string> {
-  const form = new FormData();
-  form.append('file', new Blob([new Uint8Array(bytes)], { type: mimeType }), fileName);
-
-  const res = await fetch(`${PAGEINDEX_BASE}/doc/`, {
-    method: 'POST',
-    headers: { api_key: apiKey },
-    body: form,
-  });
-
-  if (!res.ok) {
-    throw new Error(`PageIndex upload ${res.status}: ${await res.text()}`);
-  }
-
-  const data = (await res.json()) as { doc_id?: string };
-  if (!data.doc_id) throw new Error('PageIndex returned no doc_id');
-  return data.doc_id;
 }
 
 function _estimateCost(text: string): number {

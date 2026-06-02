@@ -533,20 +533,6 @@ service cloud.firestore {
     }
 
     // ==========================================================
-    // /pageindex_docs/{namespace}/files/{docId}
-    // PageIndex document registry — tracks which doc IDs have been
-    // ingested per namespace (reference, work-product, client-files).
-    // Written only by Cloud Functions; staff may read to populate the
-    // Draft tab document picker.
-    // ==========================================================
-    match /pageindex_docs/{namespace}/files/{docId} {
-      allow read: if isAuthenticated()
-                  && request.auth.token.role in ['admin', 'attorney', 'paralegal']
-                  && request.auth.token.firmId == resource.data.firmId;
-      allow write: if false;
-    }
-
-    // ==========================================================
     // /wills_documents/{fileId}
     // Wills ingestion pipeline — one doc per Drive file, keyed by
     // drive_file_id. Written only by Cloud Functions (Admin SDK).
