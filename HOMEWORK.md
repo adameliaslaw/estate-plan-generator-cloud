@@ -4,17 +4,17 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 🔜 RESUME HERE NEXT SESSION — finish the API/LLM consolidation
+## ✅ API/LLM CONSOLIDATION — COMPLETE (2026-06-01). See the "COMPLETE" summary below for the manual cleanup queue.
 
-**To resume:** start a fresh session and say **"Resume with HOMEWORK.md"**.
+**To resume:** start a fresh session and say **"Resume with HOMEWORK.md"**. The consolidation is finished; the only open items are the 5 manual `firebase`/`gcloud` steps in the **API/LLM CONSOLIDATION — COMPLETE** block below. After those, the next real work is the **template-options** thread (further down) or the **optional follow-ups** (AssemblyAI→Whisper, `.env.example` drift).
 
 **Context:** Evaluated whether the tool still needs all its APIs/LLMs now that document generation defaults to **Template** (no LLM) and AI-from-scratch is removed. Verdict: core functionality needs only **Vertex embeddings + Anthropic + OpenAI (fallback)**; the rest is secondary or dead.
 
-**Adam's feature-usage answers (drive the cuts):** USES Research chat (Perplexity + CourtListener) and Audio transcription. Does NOT use client-file chat (PageIndex). → Keep: Vertex embeddings, Anthropic, OpenAI (+content-filter fallback), Perplexity, CourtListener, transcription, SendGrid, LawPay, Google. Cut: Firecrawl, Fastcase, Mercury, PageIndex.
+**Adam's feature-usage answers (drove the cuts):** USES Research chat (Perplexity + CourtListener) and Audio transcription. Does NOT use client-file chat (PageIndex). → Keep: Vertex embeddings, Anthropic, OpenAI (+content-filter fallback), Perplexity, CourtListener, transcription, SendGrid, LawPay, Google. Cut: Firecrawl, Fastcase, Mercury, PageIndex.
 
-**✅ DONE this session:** Firecrawl removed entirely (commit `ee3d0cc`) — scraper fn, index export, frontend service+button, `.env.example` block; backfill script archived. (Its only output was the 29 competitor-marketing KB pages, which were also **deactivated then hard-deleted** this session.) `FIRECRAWL_API_KEY` GCP secret can be destroyed (no code consumers left).
+**✅ Firecrawl** removed entirely last session (commit `ee3d0cc`). **✅ Fastcase / Mercury / PageIndex** all removed this session — see the three numbered sections below for details.
 
-**🔜 REMAINING — three cuts. Do safest-first, commit + verify each (functions `npx tsc --noEmit` + root `npm run build`), push (CI auto-deploys):**
+**The three cuts (all DONE — commit + verify + push each, CI auto-deploys):**
 
 ### 1. ✅ Fastcase — DONE (commit `d1cf32d`, pushed to main, CI deploying)
 - Removed `searchFastcase` + the fastcase branch in `searchCaseLaw` (`courtlistener-client.ts`), the `'fastcase'` member of `CaseLawResult.source`, the `fastcaseKey` read + call-site param in `chat-ai.ts`, and the `.env.example` Fastcase block. Repo-wide grep confirmed **no** frontend/settings-UI/type references existed (homework's "per-firm settings UI" guess was moot). CourtListener untouched. functions `tsc --noEmit` + root `npm run build` both clean.
@@ -28,12 +28,30 @@ Items requiring human action or decisions before the next agent session can proc
 - 🔴 **GCP secret still to destroy:** `firebase functions:secrets:destroy MERCURY_API_KEY` (no code consumers left). Manual.
 - 🔴 Manual verify still open: confirm KB tagging / transcription summary / KB-import enrichment still run on `gpt-4o-mini` post-deploy.
 
-### 3. PageIndex (large; touches /chat — budget a careful session)
-- **Preserve the Perplexity-backed research mode (`chatAi`) — Adam uses it.** Only remove the PageIndex pieces.
-- Backend: delete `pageindex-retrieval.ts`, `pageindex-client-files-chat.ts`; strip PageIndex from `rag-chat.ts` (retrieval+synthesis) and `ingest-document.ts`; check `wills-processor.ts` (`/doc` upload). Remove the dead exports from `index.ts` (`pageIndexClientFilesChat`, `ingestDocument`, and `ragChat` if it's PageIndex-only — confirm it's not the Perplexity path first).
-- Frontend `ChatPage.tsx`: remove the emerald "From Client Files" bubble + the upload-to-PageIndex modal/namespace UI + client-files streaming state; keep the Research bubble. (The gray "Research Assistant" ragChat bubble queries PageIndex reference/work-product namespaces which have **0 docs** — always returns "nothing indexed" — so it's safe to drop too.)
-- Remove `PAGEINDEX_API_KEY` from `.env.example` + secrets arrays; destroy GCP secret.
-- Verify `/chat` research mode answers end-to-end after the teardown.
+### 3. ✅ PageIndex — DONE (commit `bc56ed5`, pushed to main, CI deploying)
+- **Key discovery that corrected the plan:** the `/chat` "Research Chat" page was **100% PageIndex** — its main gray bubble = `ragChat` (0-doc namespaces) and its emerald bubble = client-files. It had **no** Perplexity bubble. The Perplexity research mode Adam uses lives in the **floating AI widget** (`GlobalAiWidget.tsx` → `chatAi` callable, `mode:'research'`) — that's "the Research bubble" the homework meant to keep, and it's preserved (Perplexity + CourtListener intact). Also found `DraftTab.tsx` (Client Dashboard tab, not in the homework) rode `ragChat` draft mode → PageIndex.
+- **Adam's call: retire both `/chat` + the Draft tab fully** (the AI widget already covers research + draft).
+- Backend deleted: `pageindex-retrieval.ts`, `pageindex-client-files-chat.ts`, `rag-chat.ts`, `ingest-document.ts`, `backfill-pageindex-firmid.ts` + their `index.ts` exports. `chat-ai.ts` research mode stripped of PageIndex (kept Perplexity+CourtListener, dropped `PAGEINDEX_API_KEY` secret + `pageIndexSources` field). `wills-processor.ts` PageIndex upload step + `_uploadToPageIndex` + secret removed; wills pipeline otherwise unchanged (docs finish at status `extracted`; inert `pageindex_doc_id/namespace` record fields kept to avoid a 15-site ripple).
+- Frontend deleted: `ChatPage.tsx` + `/chat` route + sidebar "Research Chat" link + `ROUTES.CHAT`; `DraftTab.tsx` + its tab trigger/content; `rag-chat-service.ts`, `ingest-service.ts`, `UploadDocumentModal.tsx`.
+- Config: removed pageindex_docs `firestore.rules` block, `PAGEINDEX_API_KEY` from `.env.example` + CI comment, and `scripts/ingest` + `scripts/seed-pageindex` tooling.
+- Verified: functions `tsc --noEmit` clean, root `npm run build` clean, **613/613 tests pass**.
+- 🔴 **Two manual steps remain:**
+  - **Manual rules deploy:** `firebase deploy --only firestore:rules` (rules deploy is NOT in CI — the pageindex_docs block is removed from the file but still live in prod until you deploy; harmless meanwhile since the collection is gone).
+  - **Destroy GCP secret:** `firebase functions:secrets:destroy PAGEINDEX_API_KEY` (no code consumers left).
+- 🔴 Manual verify: confirm the AI widget's Research mode still answers end-to-end post-deploy.
+
+---
+
+## ✅ API/LLM CONSOLIDATION — COMPLETE (all 3 cuts shipped)
+
+Fastcase (`d1cf32d`) + Mercury (`ca2570d`) + PageIndex (`bc56ed5`) all on `main`, CI auto-deploying. **Kept:** Vertex embeddings, Anthropic, OpenAI (+content-filter fallback), Perplexity, CourtListener, transcription (Whisper/AssemblyAI), SendGrid, LawPay, Google. **Cut:** Firecrawl, Fastcase, Mercury, PageIndex.
+
+🔴 **Manual cleanup queue for Adam (all need your `firebase`/`gcloud` auth):**
+1. `firebase functions:secrets:destroy FIRECRAWL_API_KEY` (from last session)
+2. `firebase functions:secrets:destroy MERCURY_API_KEY`
+3. `firebase functions:secrets:destroy PAGEINDEX_API_KEY`
+4. `firebase deploy --only firestore:rules` (drops the dead pageindex_docs rule)
+5. Smoke-test post-deploy: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`.
 
 ### Optional follow-ups
 - **AssemblyAI → Whisper:** transcription is kept, but AssemblyAI is redundant with OpenAI Whisper. Before dropping, confirm the firm's `transcriptionProvider` isn't set to `assemblyai` (per-firm setting; default is Whisper). Then remove `assemblyai-transcribe.ts` + the dynamic-import branch in `transcribe-audio.ts` + `ASSEMBLYAI_API_KEY`.
