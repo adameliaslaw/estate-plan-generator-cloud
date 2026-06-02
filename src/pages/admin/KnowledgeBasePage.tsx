@@ -28,7 +28,6 @@ import {
   Zap,
   Sparkles,
   Loader2,
-  Globe,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -154,7 +153,6 @@ export default function KnowledgeBasePage() {
   const [editingTemplateContent, setEditingTemplateContent] = useState<TemplateVariant | null>(null);
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
   const [templateEmbeddingState, setTemplateEmbeddingState] = useState<'idle' | 'running' | 'done'>('idle');
-  const [scrapeState, setScrapeState] = useState<'idle' | 'running'>('idle');
 
   // Fetch data
   const fetchResources = useCallback(async () => {
@@ -334,23 +332,6 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const handleScrapeSoftware = async () => {
-    if (!firmId) return;
-    setScrapeState('running');
-    try {
-      const result = await knowledgeBaseService.scrapeSoftware(firmId);
-      toast.success(
-        `Scrape complete: ${result.saved} pages saved, ${result.skipped} already existed, ${result.failed} failed.`,
-        { duration: 8000 },
-      );
-      fetchResources();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Scrape failed.');
-    } finally {
-      setScrapeState('idle');
-    }
-  };
-
   const handleBackfillEmbeddings = async () => {
     if (!firmId) return;
     setEmbeddingState('running');
@@ -452,17 +433,6 @@ export default function KnowledgeBasePage() {
               >
                 <Zap className="mr-2 h-4 w-4" />
                 {embeddingState === 'running' ? 'Generating...' : embeddingState === 'done' ? 'Embeddings ✓' : 'Generate Embeddings'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleScrapeSoftware}
-                disabled={scrapeState === 'running'}
-                className="border-purple-600 text-purple-600 hover:bg-purple-50"
-              >
-                {scrapeState === 'running'
-                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  : <Globe className="mr-2 h-4 w-4" />}
-                {scrapeState === 'running' ? 'Scraping...' : 'Scrape Software'}
               </Button>
               <Button
                 variant="outline"

@@ -226,15 +226,6 @@ export const knowledgeBaseService = {
     };
   },
 
-  async scrapeSoftware(
-    firmId: string,
-    sources?: string[],
-  ): Promise<{ saved: number; skipped: number; failed: number; total: number }> {
-    const fn = httpsCallable(functions, 'scrapeEstatePlanningSoftware', { timeout: 540000 });
-    const res = await fn({ firmId, sources });
-    return res.data as { saved: number; skipped: number; failed: number; total: number };
-  },
-
   /**
    * Trigger batch embedding generation for existing KB resources.
    * Processes up to 50 resources per call; call repeatedly until processed = 0.
