@@ -13,7 +13,6 @@
  */
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { GoogleAuth } from 'google-auth-library';
 
@@ -42,7 +41,6 @@ const CHUNK_SIZE = 6000;
 const CHUNK_OVERLAP = 600;
 
 /** Max resources to process per backfill invocation. */
-const BACKFILL_BATCH_SIZE = 5;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -285,90 +283,6 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
 // Backfill callable — batch-embed existing resources
 // ---------------------------------------------------------------------------
 
-export const backfillEmbeddings = onCall(
-  {
-    region: 'us-east1',
-    memory: '8GiB',
-    timeoutSeconds: 540,
-  },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Sign in required.');
-    }
-
-    const { firmId, forceAll } = request.data as { firmId: string; forceAll?: boolean };
-    if (!firmId) {
-      throw new HttpsError('invalid-argument', 'firmId is required.');
-    }
-
-    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
-      throw new HttpsError('permission-denied', 'Cannot backfill embeddings for a different firm.');
-    }
-
-    const db = admin.firestore();
-
-    // Fetch metadata for active resources — use a larger limit to find unembedded ones
-    const snap = await db
-      .collection(`firms/${firmId}/knowledgeBase`)
-      .where('isActive', '==', true)
-      .select('embeddedAt', 'title')
-      .limit(500)
-      .get();
-
-    // Filter to those needing embedding, then take up to BACKFILL_BATCH_SIZE
-    const needsEmbedding = snap.docs
-      .filter((doc) => forceAll || doc.data().embeddingModel !== EMBEDDING_MODEL)
-      .slice(0, BACKFILL_BATCH_SIZE);
-
-    let processed = 0;
-    let errors = 0;
-
-    // Process one document at a time to keep memory low
-    for (const docSnap of needsEmbedding) {
-      try {
-        // Load content for this single document
-        const fullDoc = await db
-          .doc(`firms/${firmId}/knowledgeBase/${docSnap.id}`)
-          .get();
-        const data = fullDoc.data();
-
-        if (!data?.content || typeof data.content !== 'string' || data.content.length < 50) {
-          continue; // Skip documents without meaningful content
-        }
-
-        await embedResource(firmId, docSnap.id, data.content);
-        processed++;
-
-        // Rate limiting: ~3 requests per second to stay within Gemini limits
-        await new Promise((r) => setTimeout(r, 350));
-      } catch (err) {
-        console.error(`[backfillEmbeddings] Failed for ${docSnap.id}:`, err);
-        errors++;
-      }
-    }
-
-    const skipped = snap.docs.length - needsEmbedding.length;
-
-    // Count total active resources for the frontend progress display
-    const totalSnap = await db
-      .collection(`firms/${firmId}/knowledgeBase`)
-      .where('isActive', '==', true)
-      .count()
-      .get();
-    const total = totalSnap.data().count;
-
-    console.log(
-      `[backfillEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors, ${total} total.`,
-    );
-
-    return {
-      processed,
-      skipped,
-      errors,
-      total,
-    };
-  },
-);
 
 // ---------------------------------------------------------------------------
 // Helper: strip Handlebars syntax from template content before embedding
@@ -539,89 +453,3 @@ async function embedTemplate(
   return { embedded: true, chunks: textChunks.length };
 }
 
-// ---------------------------------------------------------------------------
-// Backfill callable — batch-embed existing templates
-// ---------------------------------------------------------------------------
-
-export const backfillTemplateEmbeddings = onCall(
-  {
-    region: 'us-east1',
-    memory: '8GiB',
-    timeoutSeconds: 540,
-  },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Sign in required.');
-    }
-
-    const { firmId, forceAll } = request.data as { firmId: string; forceAll?: boolean };
-    if (!firmId) {
-      throw new HttpsError('invalid-argument', 'firmId is required.');
-    }
-    if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
-      throw new HttpsError('permission-denied', 'Cannot backfill embeddings for a different firm.');
-    }
-
-    const db = admin.firestore();
-
-    // Fetch metadata for active templates
-    const snap = await db
-      .collection(`firms/${firmId}/documentTemplates`)
-      .where('isActive', '==', true)
-      .select('embeddedAt', 'name')
-      .limit(500)
-      .get();
-
-    const needsEmbedding = snap.docs
-      .filter((doc) => forceAll || doc.data().embeddingModel !== EMBEDDING_MODEL)
-      .slice(0, BACKFILL_BATCH_SIZE);
-
-    let processed = 0;
-    let errors = 0;
-
-    for (const docSnap of needsEmbedding) {
-      try {
-        const fullDoc = await db
-          .doc(`firms/${firmId}/documentTemplates/${docSnap.id}`)
-          .get();
-        const data = fullDoc.data();
-
-        if (!data?.content || typeof data.content !== 'string' || data.content.length < 50) {
-          continue;
-        }
-
-        const cleanContent = stripHandlebars(data.content);
-        if (cleanContent.length < 50) continue;
-
-        await embedTemplate(firmId, docSnap.id, cleanContent);
-        processed++;
-
-        await new Promise((r) => setTimeout(r, 350));
-      } catch (err) {
-        console.error(`[backfillTemplateEmbeddings] Failed for ${docSnap.id}:`, err);
-        errors++;
-      }
-    }
-
-    const skipped = snap.docs.length - needsEmbedding.length;
-
-    // Count total active templates for the frontend progress display
-    const totalSnap = await db
-      .collection(`firms/${firmId}/documentTemplates`)
-      .where('isActive', '==', true)
-      .count()
-      .get();
-    const total = totalSnap.data().count;
-
-    console.log(
-      `[backfillTemplateEmbeddings] Done: ${processed} processed, ${skipped} skipped, ${errors} errors, ${total} total.`,
-    );
-
-    return {
-      processed,
-      skipped,
-      errors,
-      total,
-    };
-  },
-);

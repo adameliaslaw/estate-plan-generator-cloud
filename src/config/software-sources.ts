@@ -29,11 +29,6 @@ export const SOFTWARE_SOURCES: SoftwareSourceOption[] = [
   { value: 'other',           label: 'Other' },
 ];
 
-/** Only the non-empty values (for filtering / display) */
-export const SOFTWARE_SOURCE_VALUES = SOFTWARE_SOURCES
-  .filter((s) => s.value !== '')
-  .map((s) => s.value);
-
 /**
  * Get the display label for a software source value.
  */

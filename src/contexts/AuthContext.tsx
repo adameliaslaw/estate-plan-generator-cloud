@@ -174,7 +174,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // ---------------------------------------------------------------------------
   // Firebase auth state listener
-  // NOTE: Session timeout is handled by useSessionTimeout hook in the layout.
   // ---------------------------------------------------------------------------
 
   useEffect(() => {

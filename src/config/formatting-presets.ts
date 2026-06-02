@@ -21,11 +21,3 @@ export const FORMATTING_PRESET_OPTIONS: FormattingPresetOption[] = [
   // Add new presets here as they are analyzed and defined in the backend config.
   // { value: 'beyondcounsel', label: 'BeyondCounsel' },
 ];
-
-/**
- * Get the display label for a formatting preset value.
- */
-export function getFormattingPresetLabel(value: string): string {
-  const found = FORMATTING_PRESET_OPTIONS.find((p) => p.value === value);
-  return found?.label ?? 'Default';
-}

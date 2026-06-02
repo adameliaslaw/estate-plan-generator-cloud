@@ -437,10 +437,6 @@ export const ROUTES = {
   CLIENTS: '/clients',
   CLIENT_NEW: '/clients/new',
   CLIENT_DETAIL: (id: string) => `/clients/${id}`,
-  CLIENT_QUESTIONNAIRE: (id: string) => `/clients/${id}/questionnaire`,
-  CLIENT_DOCUMENTS: (id: string) => `/clients/${id}/documents`,
-  CLIENT_DOCUMENT_EDIT: (clientId: string, documentId: string) =>
-    `/clients/${clientId}/documents/${documentId}/edit`,
   CALENDAR: '/calendar',
   PAYMENTS: '/payments',
   KNOWLEDGE_BASE: '/knowledge-base',
@@ -448,8 +444,6 @@ export const ROUTES = {
   SETTINGS_FIRM: '/settings/firm',
   SETTINGS_USERS: '/settings/users',
   SETTINGS_BILLING: '/settings/billing',
-  CLIENT_PORTAL: (firmId: string, clientId: string) =>
-    `/portal/${firmId}/${clientId}`,
   CHAT: '/chat',
   ADMIN_NAME_SPLITS: '/admin/name-splits',
 } as const;
