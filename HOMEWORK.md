@@ -50,12 +50,13 @@ Fastcase (`d1cf32d`) + Mercury (`ca2570d`) + PageIndex (`bc56ed5`) all on `main`
 1. `firebase functions:secrets:destroy FIRECRAWL_API_KEY` (from last session)
 2. `firebase functions:secrets:destroy MERCURY_API_KEY`
 3. `firebase functions:secrets:destroy PAGEINDEX_API_KEY`
-4. `firebase deploy --only firestore:rules` (drops the dead pageindex_docs rule)
-5. Smoke-test post-deploy: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`.
+4. `firebase functions:secrets:destroy VERTEX_AI_KEY` (added 2026-06-02 — code declaration removed in `3fe6a45`; no consumers. Destroy only after that commit's CI deploy lands, so the running functions no longer reference it.)
+5. `firebase deploy --only firestore:rules` (drops the dead pageindex_docs rule)
+6. Smoke-test post-deploy: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`.
 
 ### Optional follow-ups
-- **AssemblyAI → Whisper:** transcription is kept, but AssemblyAI is redundant with OpenAI Whisper. Before dropping, confirm the firm's `transcriptionProvider` isn't set to `assemblyai` (per-firm setting; default is Whisper). Then remove `assemblyai-transcribe.ts` + the dynamic-import branch in `transcribe-audio.ts` + `ASSEMBLYAI_API_KEY`.
-- **`.env.example` drift:** `VERTEX_AI_KEY`, Perplexity, and AssemblyAI keys are used in code but not mirrored in `.env.example` (against the repo's "mirror new vars" rule). Add them.
+- **❌ AssemblyAI → Whisper — DO NOT REMOVE (verified 2026-06-02).** The removal was predicated on AssemblyAI being redundant + the firm defaulting to Whisper. Both are false: (1) read-only Firestore check shows `elias-counsel` is **actively set to `transcriptionProvider: 'assemblyai'`** with a key present — it's the live provider, removing it breaks/downgrades transcription; (2) AssemblyAI is **not** redundant — it provides speaker diarization, entity extraction, speaker count, and confidence (`transcribe-audio.ts:202-219`) that Whisper doesn't. Keep AssemblyAI unless Adam explicitly switches the firm to Whisper first.
+- **✅ `.env.example` drift — DONE (2026-06-02, commits `30ca62a` + `3fe6a45`).** Added `ASSEMBLYAI_API_KEY`; documented Perplexity + Gemini as per-firm Firestore keys (not env secrets, like CourtListener); documented Vertex embeddings as ADC-authenticated. Discovered `VERTEX_AI_KEY` was **declared-but-unread** on the 3 generate functions → removed the dead `secrets:[]` declaration. The Secret Manager value `VERTEX_AI_KEY` can now be destroyed (no consumers) — added to the manual queue below.
 
 ---
 
