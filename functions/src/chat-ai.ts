@@ -55,7 +55,7 @@ interface ChatAiResponse {
   draftTitle?: string;
   /** Persistent conversation ID for resuming */
   conversationId?: string;
-  /** Source citations — URLs from Perplexity + case law from CourtListener/Fastcase */
+  /** Source citations — URLs from Perplexity + case law from CourtListener */
   citations?: string[];
   /** Firm documents retrieved from PageIndex (research mode) */
   pageIndexSources?: Array<{ namespace: string; documentName: string; section: string; pageNumber: number; excerpt: string }>;
@@ -635,13 +635,12 @@ export const chatAi = functions
                                ?? process.env.PAGEINDEX_API_KEY
                                ?? '';
         const courtListenerKey   = (firmData as Record<string, unknown>).courtlistenerApiKey as string | undefined ?? '';
-        const fastcaseKey        = (firmData as Record<string, unknown>).fastcaseApiKey as string | undefined ?? '';
         const db                 = admin.firestore();
 
         // Phase 1: Fetch firm docs + case law in parallel (fast lookups)
         const [pageIndexResult, caseLawResult] = await Promise.all([
           fetchPageIndexContext(['reference', 'work-product'], message, pageIndexKey, db),
-          searchCaseLaw(message, courtListenerKey, fastcaseKey),
+          searchCaseLaw(message, courtListenerKey),
         ]);
 
         // Phase 2: Perplexity web search, enriched with internal context

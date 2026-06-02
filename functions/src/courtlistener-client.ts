@@ -1,12 +1,9 @@
 /**
  * functions/src/courtlistener-client.ts
  *
- * Legal case law retrieval from CourtListener (free, public API) and
- * a stub for Fastcase (activate once API credentials are obtained).
+ * Legal case law retrieval from CourtListener (free, public API).
  *
  * CourtListener: https://www.courtlistener.com/help/api/rest/
- * Fastcase: https://www.fastcase.com/solutions/legal-data-api/
- *   → Contact sales@fastcase.com to obtain credentials.
  */
 
 // ---------------------------------------------------------------------------
@@ -19,7 +16,7 @@ export interface CaseLawResult {
   dateFiled: string;
   snippet: string;
   url: string;
-  source: 'courtlistener' | 'fastcase';
+  source: 'courtlistener';
 }
 
 interface CourtListenerOpinion {
@@ -89,37 +86,13 @@ export async function searchCourtListener(
 }
 
 // ---------------------------------------------------------------------------
-// Fastcase stub — wire up once API credentials are obtained
-// ---------------------------------------------------------------------------
-
-export async function searchFastcase(
-  _query: string,
-  _apiKey: string,
-): Promise<CaseLawResult[]> {
-  // TODO: Implement when Fastcase API credentials are available.
-  // Contact sales@fastcase.com or call 1-866-773-2782 for access.
-  //
-  // Expected endpoint: POST https://services.fastcase.com/REST/ResearchServices.svc/Search
-  // Auth: ServiceAccountContext field with API key in JSON body
-  //
-  // When implemented, return CaseLawResult[] with source: 'fastcase'
-  return [];
-}
-
-// ---------------------------------------------------------------------------
-// Combined legal search — runs both in parallel
+// Combined legal search
 // ---------------------------------------------------------------------------
 export async function searchCaseLaw(
   query: string,
   courtListenerKey: string,
-  fastcaseKey: string,
 ): Promise<{ results: CaseLawResult[]; contextString: string }> {
-  const [clResults, fcResults] = await Promise.all([
-    searchCourtListener(query, courtListenerKey),
-    searchFastcase(query, fastcaseKey),
-  ]);
-
-  const results = [...clResults, ...fcResults];
+  const results = await searchCourtListener(query, courtListenerKey);
 
   if (results.length === 0) return { results: [], contextString: '' };
 
