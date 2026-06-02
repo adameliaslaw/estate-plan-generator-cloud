@@ -16,17 +16,17 @@ Items requiring human action or decisions before the next agent session can proc
 
 **🔜 REMAINING — three cuts. Do safest-first, commit + verify each (functions `npx tsc --noEmit` + root `npm run build`), push (CI auto-deploys):**
 
-### 1. Fastcase (clean, ~2 files) — non-functional stub
-- `functions/src/courtlistener-client.ts:~95` — `searchFastcase` is a TODO returning nothing. Remove.
-- `functions/src/chat-ai.ts:~638,644` — `fastcaseKey` read + passed to `searchCaseLaw`. Remove the fastcase param/branch; **keep CourtListener** (used).
-- Grep `fastcase`/`fastcaseApiKey` across repo (incl. per-firm settings UI + types) and remove. Remove `.env.example` Fastcase line.
-- Verify research chat (CourtListener) still answers after.
+### 1. ✅ Fastcase — DONE (commit `d1cf32d`, pushed to main, CI deploying)
+- Removed `searchFastcase` + the fastcase branch in `searchCaseLaw` (`courtlistener-client.ts`), the `'fastcase'` member of `CaseLawResult.source`, the `fastcaseKey` read + call-site param in `chat-ai.ts`, and the `.env.example` Fastcase block. Repo-wide grep confirmed **no** frontend/settings-UI/type references existed (homework's "per-firm settings UI" guess was moot). CourtListener untouched. functions `tsc --noEmit` + root `npm run build` both clean.
+- 🔴 Manual verify still open: confirm research chat (CourtListener path) still answers end-to-end in the live UI.
 
-### 2. Mercury (medium) — marginal background tasks, re-route off it
-- `functions/src/ai-client.ts`: remove `_callMercury` (~480-526), the `provider === 'mercury'` dispatch (~222), the `m.startsWith('mercury')` detection (~186), and the `mercury` entries in `KNOWN_MODELS` (~125) + `DEFAULT_MODELS` (~137).
-- Re-route the 4 remaining hard-coded `model:'mercury-2'` call sites to a cheap kept model (pick from the OpenAI/Gemini allowlist — e.g. a gpt-mini or gemini-flash): `transcribe-audio.ts`, `knowledge-base.ts:~343`, `bulk-knowledge-import.ts`, `ai-memory.ts`. (firecrawl-scraper site already gone.)
-- Remove `MERCURY_API_KEY` from any function `secrets:[...]` arrays + the `.env.example` Mercury block. Destroy the GCP secret separately.
-- Verify those background tasks (KB tagging, transcription summary, enrichment) still run on the new model.
+### 2. ✅ Mercury — DONE (commit `ca2570d`, pushed to main, CI deploying)
+- Removed from `ai-client.ts`: `_callMercury`, the `provider === 'mercury'` dispatch, the `m.startsWith('mercury')` detection, and the `mercury` entries in `KNOWN_MODELS` + `DEFAULT_MODELS`. Anthropic/OpenAI/Vertex fallback chain untouched.
+- Re-routed all **5** hard-coded `model:'mercury-2'` call sites → **`gpt-4o-mini`** (cheap, OpenAI allowlist; firm already has an OpenAI key — Whisper transcription uses it): `transcribe-audio.ts` (summarizeTranscription), `knowledge-base.ts` (analyzeKnowledgeContent), `bulk-knowledge-import.ts` (enrichResourceWithAI), `ai-memory.ts` (×2 — fact + correction extraction).
+- **`analyzeKnowledgeContent` snag fixed:** it had passed empty `firmData` and depended entirely on the `MERCURY_API_KEY` secret in `process.env`. Now loads the firm doc (firmId from `request.auth.token.firmId`, mirroring `bulkProcessKnowledgeFiles`) so `callAI` reaches the firm's OpenAI key. (Gemini was NOT viable for the `{}` sites — `_callGemini` has no `process.env` fallback.)
+- Dropped `MERCURY_API_KEY` from every `secrets:[...]` array (`transcribe-audio`, `knowledge-base`, `bulk-knowledge-import`, `chat-ai` — the last no longer calls Mercury at all), the `.env.example` Mercury block, and the CI workflow comment.
+- 🔴 **GCP secret still to destroy:** `firebase functions:secrets:destroy MERCURY_API_KEY` (no code consumers left). Manual.
+- 🔴 Manual verify still open: confirm KB tagging / transcription summary / KB-import enrichment still run on `gpt-4o-mini` post-deploy.
 
 ### 3. PageIndex (large; touches /chat — budget a careful session)
 - **Preserve the Perplexity-backed research mode (`chatAi`) — Adam uses it.** Only remove the PageIndex pieces.
