@@ -14,7 +14,7 @@ import { getVersionHistory, revertToVersion } from './document-save-helper';
 // ---------------------------------------------------------------------------
 
 export const getDocumentVersions = onCall(
-  { timeoutSeconds: 30, memory: '256MiB', region: 'us-east1' },
+  { timeoutSeconds: 30, memory: '512MiB', region: 'us-east1' },
   async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
@@ -58,7 +58,7 @@ export const getDocumentVersions = onCall(
 // ---------------------------------------------------------------------------
 
 export const getDocumentVersionContent = onCall(
-  { timeoutSeconds: 30, memory: '256MiB', region: 'us-east1' },
+  { timeoutSeconds: 30, memory: '512MiB', region: 'us-east1' },
   async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
@@ -99,7 +99,7 @@ export const getDocumentVersionContent = onCall(
 // ---------------------------------------------------------------------------
 
 export const revertDocumentVersion = onCall(
-  { timeoutSeconds: 60, memory: '256MiB', region: 'us-east1' },
+  { timeoutSeconds: 60, memory: '512MiB', region: 'us-east1' },
   async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
