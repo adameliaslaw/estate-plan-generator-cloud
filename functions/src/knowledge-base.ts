@@ -315,7 +315,7 @@ export const bulkImportKnowledgeResources = onCall(
 
 
 export const analyzeKnowledgeContent = onCall(
-  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30, secrets: ['MERCURY_API_KEY'] },
+  { region: 'us-east1', memory: '512MiB', timeoutSeconds: 30 },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { text } = request.data as { text: string };
@@ -323,6 +323,12 @@ export const analyzeKnowledgeContent = onCall(
     if (!text || typeof text !== 'string' || text.trim().length < 20) {
       throw new HttpsError('invalid-argument', 'Please provide at least 20 characters of text to analyze.');
     }
+
+    // Load the firm's AI provider keys so callAI can reach the configured provider.
+    const firmId = request.auth.token.firmId as string | undefined;
+    if (!firmId) throw new HttpsError('permission-denied', 'No firm associated with this account.');
+    const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
+    const firmData = firmSnap.data() ?? {};
 
     const systemPrompt = `You are a legal research assistant specializing in New Jersey estate planning law.
 Analyze the following text and extract structured metadata. Return a valid JSON object with these fields:
@@ -338,9 +344,8 @@ Respond with ONLY the JSON object, no markdown fences.`;
 
     const userPrompt = `Analyze this text and extract metadata:\n\n${text.slice(0, 5000)}`;
 
-    // Use the firm's preferred AI provider or default
-    const raw = await callAI(systemPrompt, userPrompt, {}, {
-      model: 'mercury-2',
+    const raw = await callAI(systemPrompt, userPrompt, firmData, {
+      model: 'gpt-4o-mini',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,

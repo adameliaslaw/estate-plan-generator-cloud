@@ -122,11 +122,6 @@ const KNOWN_MODELS: Record<string, Set<string>> = {
   perplexity: new Set([
     'sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro',
   ]),
-  mercury: new Set([
-    // Available models per api.inceptionlabs.ai/v1/models (verified 2026-06-01).
-    // mercury-coder-small/-medium were retired for accounts created after 2026-02-24.
-    'mercury', 'mercury-2', 'mercury-coder', 'mercury-edit', 'mercury-edit-2',
-  ]),
 };
 
 const DEFAULT_MODELS: Record<string, string> = {
@@ -134,7 +129,6 @@ const DEFAULT_MODELS: Record<string, string> = {
   anthropic: 'claude-sonnet-4-6',
   gemini: 'gemini-2.5-flash',
   perplexity: 'sonar-pro',
-  mercury: 'mercury-2',
 };
 
 /**
@@ -183,7 +177,6 @@ export async function callAI(
     if (m.startsWith('gemini')) provider = 'gemini';
     else if (m.startsWith('claude') || m.includes('opus') || m.includes('sonnet') || m.includes('haiku')) provider = 'anthropic';
     else if (m.startsWith('sonar')) provider = 'perplexity';
-    else if (m.startsWith('mercury')) provider = 'mercury';
     else if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('gpt-5')) provider = 'openai';
     else provider = 'openai';
   }
@@ -219,8 +212,6 @@ export async function callAI(
     return _callGemini(systemPrompt, userPrompt, firmData, options);
   } else if (provider === 'perplexity') {
     return _callPerplexity(systemPrompt, userPrompt, firmData, options);
-  } else if (provider === 'mercury') {
-    return _callMercury(systemPrompt, userPrompt, options);
   } else {
     // Default to OpenAI
     return _callOpenAI(systemPrompt, userPrompt, firmData, options);
@@ -473,55 +464,6 @@ async function _callPerplexity(
   }
 
   const data = await response.json() as PerplexityChatCompletion;
-  return data.choices?.[0]?.message?.content ?? '';
-}
-
-// ---------------------------------------------------------------------------
-// Mercury (Inception Labs diffusion LLM — OpenAI-compatible)
-// ---------------------------------------------------------------------------
-
-async function _callMercury(
-  systemPrompt: string,
-  userPrompt: string,
-  options: CallAIOptions,
-): Promise<string> {
-  const apiKey = process.env.MERCURY_API_KEY;
-  if (!apiKey) {
-    throw new Error('Mercury API key is missing. Set MERCURY_API_KEY in Firebase secrets.');
-  }
-
-  const model = options.model ?? DEFAULT_MODELS.mercury;
-  const temperature = options.temperature ?? 0.2;
-
-  const body: Record<string, unknown> = {
-    model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    temperature,
-    max_tokens: options.maxTokens ?? 4096,
-  };
-
-  if (options.jsonMode) {
-    body.response_format = { type: 'json_object' };
-  }
-
-  const response = await fetchWithRetry('https://api.inceptionlabs.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Mercury API error: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const data = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
   return data.choices?.[0]?.message?.content ?? '';
 }
 
