@@ -12,7 +12,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@google-cloud/vertexai": "^1.10.4",
     "@hookform/resolvers": "^5.2.2",
     "@react-oauth/google": "^0.13.4",
     "@tiptap/extension-character-count": "^3.20.0",
@@ -40,7 +39,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "diff": "^9.0.0",
-    "docxtemplater": "^3.68.3",
     "dompurify": "^3.3.3",
     "file-saver": "^2.0.5",
     "firebase": "^12.10.0",
@@ -51,7 +49,6 @@
     "lucide-react": "^0.575.0",
     "mammoth": "^1.12.0",
     "pdfjs-dist": "^5.5.207",
-    "pizzip": "^3.2.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
