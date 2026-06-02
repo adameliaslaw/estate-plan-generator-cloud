@@ -164,7 +164,7 @@ export default function GenerateDocumentsButton({
   const [errorMessage, setErrorMessage] = useState('');
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
-  const [generationMode, setGenerationMode] = useState('hybrid');
+  const [generationMode, setGenerationMode] = useState('template');
   // Package is chosen in the dialog (not fixed per client). Seeded from the
   // passed-in default, freely changeable before generating.
   const [chosenPackage, setChosenPackage] = useState<'foundation' | 'guardian' | 'fortress'>(packageType);
@@ -520,12 +520,12 @@ export default function GenerateDocumentsButton({
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">Template: Enhanced (Hybrid) — Recommended</SelectItem>
-                    <SelectItem value="template" className="text-xs">Template: Exact Fidelity</SelectItem>
+                    <SelectItem value="template" className="text-xs text-[#1a365d] font-medium">Template: Exact Fidelity — Recommended</SelectItem>
+                    <SelectItem value="hybrid" className="text-xs">Template: Enhanced (Hybrid)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[10px] text-gray-400">
-                  Hybrid mode fills your template with client data then uses AI to enhance any unresolved fields.
+                  Template uses your saved template exactly. Hybrid additionally runs AI over unresolved fields using Knowledge Base context.
                 </p>
               </div>
             </div>

@@ -89,7 +89,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   // Match the batch dialog's defaults: hybrid mode + IL formatting. Hybrid
   // is the only mode that pulls Knowledge Base context into the prompt
   // (template-only skips KB; ai-only skips templates).
-  const [generationMode, setGenerationMode] = useState<GenerationMode>('hybrid');
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('template');
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generating, setGenerating] = useState(false);
@@ -198,7 +198,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     setSelectedDocType('');
     setCustomInstructions('');
     setSpouseRole('client');
-    setGenerationMode('hybrid');
+    setGenerationMode('template');
     setSoftwareSource('interactivelegal');
     setFormattingPreset('interactivelegal');
     setError('');
@@ -295,11 +295,11 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
                   <SelectValue placeholder="Select mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">
-                    Template: Enhanced (Hybrid) — Recommended
+                  <SelectItem value="template" className="text-xs text-[#1a365d] font-medium">
+                    Template: Exact Fidelity — Recommended
                   </SelectItem>
-                  <SelectItem value="template" className="text-xs">
-                    Template: Exact Fidelity
+                  <SelectItem value="hybrid" className="text-xs">
+                    Template: Enhanced (Hybrid)
                   </SelectItem>
                 </SelectContent>
               </Select>

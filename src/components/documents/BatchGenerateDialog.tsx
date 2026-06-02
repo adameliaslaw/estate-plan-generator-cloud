@@ -122,7 +122,7 @@ export default function BatchGenerateDialog({
   );
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
-  const [generationMode, setGenerationMode] = useState('hybrid');
+  const [generationMode, setGenerationMode] = useState('template');
   const [phase, setPhase] = useState<Phase>('configuring');
   const [statusById, setStatusById] = useState<Record<string, ClientStatus>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -390,13 +390,13 @@ export default function BatchGenerateDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem
-                        value="hybrid"
+                        value="template"
                         className="text-xs text-[#1a365d] font-medium"
                       >
-                        Template: Enhanced (Hybrid) — Recommended
+                        Template: Exact Fidelity — Recommended
                       </SelectItem>
-                      <SelectItem value="template" className="text-xs">
-                        Template: Exact Fidelity
+                      <SelectItem value="hybrid" className="text-xs">
+                        Template: Enhanced (Hybrid)
                       </SelectItem>
                     </SelectContent>
                   </Select>
