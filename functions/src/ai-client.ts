@@ -112,7 +112,7 @@ const KNOWN_MODELS: Record<string, Set<string>> = {
   anthropic: new Set([
     'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307',
     'claude-3.5-sonnet', 'claude-3.5-haiku', 'claude-3.7-sonnet',
-    'claude-sonnet-4-6', 'claude-4-opus', 'claude-opus-4-6',
+    'claude-sonnet-4-6', 'claude-4-opus', 'claude-opus-4-6', 'claude-opus-4-8',
     'claude-haiku-4-5-20251001',
   ]),
   gemini: new Set([

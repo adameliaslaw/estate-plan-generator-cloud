@@ -41,6 +41,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
 
   // Anthropic
   'claude-sonnet-4-6': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude Sonnet 4' },
+  'claude-opus-4-8':   { inputPer1M: 5.00,  outputPer1M: 25.00, label: 'Claude Opus 4.8' },
   'claude-4-opus':     { inputPer1M: 15.00, outputPer1M: 75.00, label: 'Claude 4 Opus' },
   'claude-3.7-sonnet': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude 3.7 Sonnet' },
   'claude-3.5-sonnet': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude 3.5 Sonnet' },
