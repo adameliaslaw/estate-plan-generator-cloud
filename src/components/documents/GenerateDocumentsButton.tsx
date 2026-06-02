@@ -522,7 +522,6 @@ export default function GenerateDocumentsButton({
                   <SelectContent>
                     <SelectItem value="hybrid" className="text-xs text-[#1a365d] font-medium">Template: Enhanced (Hybrid) — Recommended</SelectItem>
                     <SelectItem value="template" className="text-xs">Template: Exact Fidelity</SelectItem>
-                    <SelectItem value="ai" className="text-xs">AI Drafting (From Scratch)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[10px] text-gray-400">

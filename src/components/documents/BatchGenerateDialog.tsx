@@ -398,9 +398,6 @@ export default function BatchGenerateDialog({
                       <SelectItem value="template" className="text-xs">
                         Template: Exact Fidelity
                       </SelectItem>
-                      <SelectItem value="ai" className="text-xs">
-                        AI Drafting (From Scratch)
-                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

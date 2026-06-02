@@ -301,13 +301,10 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
                   <SelectItem value="template" className="text-xs">
                     Template: Exact Fidelity
                   </SelectItem>
-                  <SelectItem value="ai" className="text-xs">
-                    AI Drafting (From Scratch)
-                  </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-gray-500">
-                Hybrid + AI use Knowledge Base context; Template skips it.
+                Hybrid uses Knowledge Base context; Template skips it.
               </p>
             </div>
             <div className="space-y-1.5">
