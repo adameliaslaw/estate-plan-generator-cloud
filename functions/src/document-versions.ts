@@ -7,6 +7,7 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
 import { getVersionHistory, revertToVersion } from './document-save-helper';
 
 // ---------------------------------------------------------------------------
@@ -74,22 +75,34 @@ export const getDocumentVersionContent = onCall(
       throw new HttpsError('invalid-argument', 'firmId, clientId, documentId, and versionNumber are required.');
     }
 
-    const versions = await getVersionHistory(firmId, clientId, documentId);
-    const target = versions.find((v) => v.versionNumber === versionNumber);
+    if ((auth.token.firmId as string | undefined) !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot access document versions for a different firm.');
+    }
 
-    if (!target) {
+    // Fetch only the requested version doc directly (id = `v{versionNumber}`,
+    // matching the write in document-save-helper). Avoids loading the entire
+    // version history into memory just to return one snapshot.
+    const snap = await admin.firestore()
+      .collection('firms').doc(firmId)
+      .collection('clients').doc(clientId)
+      .collection('documents').doc(documentId)
+      .collection('versions').doc(`v${versionNumber}`)
+      .get();
+
+    if (!snap.exists) {
       throw new HttpsError('not-found', `Version ${versionNumber} not found.`);
     }
 
+    const data = snap.data()!;
     return {
       success: true,
-      versionNumber: target.versionNumber,
-      content: target.content,
-      displayName: target.displayName,
-      status: target.status,
-      changeNotes: target.changeNotes,
-      createdBy: target.createdBy,
-      createdAt: target.createdAt?.toDate?.()?.toISOString() ?? null,
+      versionNumber: data.versionNumber,
+      content: data.content ?? '',
+      displayName: data.displayName ?? '',
+      status: data.status ?? 'draft',
+      changeNotes: data.changeNotes ?? '',
+      createdBy: data.createdBy ?? '',
+      createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
     };
   },
 );
