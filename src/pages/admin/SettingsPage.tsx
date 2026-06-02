@@ -146,6 +146,7 @@ interface FirmSettings {
   anthropicApiKey?: string;
   geminiApiKey?: string;
   perplexityApiKey?: string;
+  courtlistenerApiKey?: string;
   activeAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
   chatbotAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
   documentDraftingAiProvider?: 'openai' | 'anthropic' | 'gemini' | 'perplexity';
@@ -277,6 +278,7 @@ export default function SettingsPage() {
   const [anthropicKey, setAnthropicKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [perplexityKey, setPerplexityKey] = useState('');
+  const [courtListenerKey, setCourtListenerKey] = useState('');
   const [chatbotAiProvider, setChatbotAiProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'perplexity'>('openai');
   const [documentDraftingAiProvider, setDocumentDraftingAiProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'perplexity'>('openai');
 
@@ -294,6 +296,7 @@ export default function SettingsPage() {
   const [savingAnthropic, setSavingAnthropic] = useState(false);
   const [savingGemini, setSavingGemini] = useState(false);
   const [savingPerplexity, setSavingPerplexity] = useState(false);
+  const [savingCourtListener, setSavingCourtListener] = useState(false);
   const [savingChatbotProvider, setSavingChatbotProvider] = useState(false);
   const [savingDocumentDraftingProvider, setSavingDocumentDraftingProvider] = useState(false);
   const [savingChatbotModel, setSavingChatbotModel] = useState(false);
@@ -1571,6 +1574,22 @@ export default function SettingsPage() {
                         }
                         saving={savingPerplexity}
                         description="Find your key at perplexity.ai/settings/api"
+                      />
+                      <ApiKeyField
+                        label="CourtListener API Key"
+                        storedKey={firmDoc?.courtlistenerApiKey}
+                        pendingKey={courtListenerKey}
+                        onPendingChange={setCourtListenerKey}
+                        onSave={() =>
+                          handleSaveApiKey(
+                            'courtlistenerApiKey',
+                            courtListenerKey,
+                            setSavingCourtListener,
+                            () => setCourtListenerKey(''),
+                          )
+                        }
+                        saving={savingCourtListener}
+                        description="Free case-law search in Research mode. Generate a token at courtlistener.com/help/api/rest (Sign in → Profile → API tokens)."
                       />
                     </div>
                   </CardContent>
