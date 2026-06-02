@@ -59,7 +59,6 @@ export const generateSingleDocument = onCall(
     // 512Mi was tight; bumped to 2GiB to give headroom.
     memory: '2GiB',
     region: 'us-east1',
-    secrets: ['VERTEX_AI_KEY'],
   },
   async (request: CallableRequest<GenerateSingleRequest>) => {
     // ------------------------------------------------------------------

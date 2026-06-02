@@ -153,7 +153,6 @@ export const generateDocuments = onCall(
     // sequence with shared preloadedContext).
     memory: '2GiB',
     region: 'us-east1',
-    secrets: ['VERTEX_AI_KEY'],
   },
   async (request: CallableRequest<GenerateRequest>) => {
     // ------------------------------------------------------------------

@@ -11,7 +11,6 @@ export const generateEstateDocument = functions
   .runWith({
     timeoutSeconds: 300,
     memory: '1GB',
-    secrets: ['VERTEX_AI_KEY'],
   })
   .region('us-east1')
   .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
