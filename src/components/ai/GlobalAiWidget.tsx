@@ -66,6 +66,25 @@ const WELCOME_MSG = (mode: 'chat' | 'draft' | 'research', hasClient?: boolean): 
   timestamp: new Date(),
 });
 
+// Parse a citation into a display label + optional link.
+// Bare URLs (Perplexity web sources) → hostname label. CourtListener case law
+// arrives as "Case Name | citation | year | url" → show the case name/citation,
+// linked to the case URL. (Previously these were dropped by an isHttpUrl filter,
+// so case law was counted in the total but never displayed.)
+function parseCitation(c: string): { label: string; href?: string } {
+  if (isHttpUrl(c)) {
+    try {
+      return { label: new URL(c).hostname.replace('www.', ''), href: c };
+    } catch {
+      return { label: c.slice(0, 40), href: c };
+    }
+  }
+  const parts = c.split(' | ').map((p) => p.trim()).filter(Boolean);
+  const href = parts.find(isHttpUrl);
+  const label = parts.filter((p) => !isHttpUrl(p)).join(', ') || c.slice(0, 60);
+  return { label, href };
+}
+
 // Collapsible citation block for research responses
 function CitationBlock({ citations }: { citations: string[] }) {
   const [expanded, setExpanded] = useState(false);
@@ -81,25 +100,28 @@ function CitationBlock({ citations }: { citations: string[] }) {
         </span>
       </div>
       <div className="space-y-0.5">
-        {visible.filter(isHttpUrl).map((url, i) => {
-          let hostname = '';
-          try {
-            hostname = new URL(url).hostname.replace('www.', '');
-          } catch {
-            hostname = url.slice(0, 40);
-          }
-          return (
+        {visible.map((c, i) => {
+          const { label, href } = parseCitation(c);
+          return href ? (
             <a
               key={i}
-              href={url}
+              href={href}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition-colors truncate"
             >
               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
               <span className="font-medium">[{i + 1}]</span>
-              <span className="truncate">{hostname}</span>
+              <span className="truncate">{label}</span>
             </a>
+          ) : (
+            <div
+              key={i}
+              className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] text-gray-600 truncate"
+            >
+              <span className="font-medium">[{i + 1}]</span>
+              <span className="truncate">{label}</span>
+            </div>
           );
         })}
       </div>

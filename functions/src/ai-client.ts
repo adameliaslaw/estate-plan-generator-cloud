@@ -483,7 +483,7 @@ export interface PerplexityCitedResponse {
  * include-only; case law still comes separately from CourtListener.)
  */
 const PERPLEXITY_RESEARCH_DOMAINS = [
-  'law.cornell.edu', 'justia.com', 'courtlistener.com', 'govinfo.gov',
+  'law.cornell.edu', 'law.justia.com', 'courtlistener.com', 'govinfo.gov',
   'congress.gov', 'irs.gov', 'nj.gov', 'njcourts.gov',
 ];
 
