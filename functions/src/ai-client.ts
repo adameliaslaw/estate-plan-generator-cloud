@@ -477,6 +477,17 @@ export interface PerplexityCitedResponse {
 }
 
 /**
+ * Strict allowlist for Research-mode web search — restricts Perplexity's
+ * retrieval to primary/authoritative legal sources so it cannot surface
+ * law-firm marketing/SEO pages. (Perplexity's search_domain_filter is hard
+ * include-only; case law still comes separately from CourtListener.)
+ */
+const PERPLEXITY_RESEARCH_DOMAINS = [
+  'law.cornell.edu', 'justia.com', 'courtlistener.com', 'govinfo.gov',
+  'congress.gov', 'irs.gov', 'nj.gov', 'njcourts.gov',
+];
+
+/**
  * Call Perplexity API and return both the content AND source citations.
  * Used by the Research tab to provide grounded, cited answers.
  */
@@ -507,6 +518,8 @@ export async function callPerplexityWithCitations(
         { role: 'user', content: userPrompt },
       ],
       temperature,
+      // Restrict web retrieval to authoritative legal sources (no law-firm marketing).
+      search_domain_filter: PERPLEXITY_RESEARCH_DOMAINS,
     }),
   });
 
