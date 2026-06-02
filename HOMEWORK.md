@@ -65,8 +65,8 @@ Attempted the secret-destroy cleanup below. **Only `FIRECRAWL_API_KEY` destroyed
 2. ⚠️ `MERCURY_API_KEY` — do NOT destroy (bound to 3 live functions; see above).
 3. ⚠️ `PAGEINDEX_API_KEY` — do NOT destroy (bound to chatAi; see above).
 4. ⚠️ `VERTEX_AI_KEY` — do NOT destroy (bound to 3 live functions; the code declaration was removed in `3fe6a45` but the DEPLOYED revisions still bind it — firebase didn't strip it).
-5. 🔴 STILL OPEN: `firebase deploy --only firestore:rules` (drops the dead pageindex_docs rule — unrelated to the secret incident, still safe to do).
-6. 🔴 STILL OPEN: Smoke-test: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`.
+5. ✅ DONE (2026-06-02): `firebase deploy --only firestore:rules` — compiled + released; the dead `pageindex_docs` block is gone from live rules. Verified diff was that block only (no other rule changes since the Carmela deploy).
+6. 🔴 STILL OPEN (needs Adam in the live UI): Smoke-test: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`. Also worth a quick generate-a-document check given the secret incident recovery above.
 
 ### Optional follow-ups
 - **❌ AssemblyAI → Whisper — DO NOT REMOVE (verified 2026-06-02).** The removal was predicated on AssemblyAI being redundant + the firm defaulting to Whisper. Both are false: (1) read-only Firestore check shows `elias-counsel` is **actively set to `transcriptionProvider: 'assemblyai'`** with a key present — it's the live provider, removing it breaks/downgrades transcription; (2) AssemblyAI is **not** redundant — it provides speaker diarization, entity extraction, speaker count, and confidence (`transcribe-audio.ts:202-219`) that Whisper doesn't. Keep AssemblyAI unless Adam explicitly switches the firm to Whisper first.
