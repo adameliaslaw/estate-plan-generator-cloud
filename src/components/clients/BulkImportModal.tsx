@@ -145,7 +145,7 @@ function parseCSV(text: string): ParsedRow[] {
 // ── Template download ────────────────────────────────────────────────────────
 
 function downloadTemplate() {
-  const csv = 'firstName,lastName,email,phone,packageType\nJohn,Doe,john@example.com,(555) 123-4567,foundation\nJane,Smith,jane@example.com,(555) 987-6543,guardian\n';
+  const csv = 'firstName,lastName,email,phone\nJohn,Doe,john@example.com,(555) 123-4567\nJane,Smith,jane@example.com,(555) 987-6543\n';
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -309,7 +309,7 @@ export default function BulkImportModal({
                     Click to upload or drag a CSV file
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
-                    Expected columns: firstName, lastName, email, phone, packageType
+                    Expected columns: firstName, lastName, email, phone
                   </p>
                 </div>
                 <input

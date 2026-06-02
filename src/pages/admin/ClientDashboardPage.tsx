@@ -72,7 +72,6 @@ import { cn } from '@/lib/utils';
 import { SECTION_META } from '@/types/questionnaire';
 
 import DocumentVault from '@/components/documents/DocumentVault';
-import GenerateDocumentsButton from '@/components/documents/GenerateDocumentsButton';
 import DeadlinesCard from '@/components/clients/DeadlinesCard';
 import NotesTab from '@/components/dashboard/NotesTab';
 import PaymentsTab from '@/components/dashboard/PaymentsTab';
@@ -696,24 +695,6 @@ export default function ClientDashboardPage() {
           </div>
         </div>
 
-        {/* Generate docs prompt if questionnaire complete but no docs generated yet */}
-        {isQuestionnaireComplete && (
-          <div className="mt-4 border-t border-gray-100 pt-4">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <GenerateDocumentsButton
-                  firmId={firmId}
-                  clientId={clientId ?? ''}
-                  packageType={packageType}
-                  trustTypes={client.trusts?.map((t) => t.trustType)}
-                  clientName={displayHeading}
-                  disabled={!isQuestionnaireComplete}
-                  isMarried={isMarried}
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Five-tab content ───────────────────────────────────────────────── */}

@@ -22,14 +22,12 @@ import { sanitizeNameField } from '@/utils/sanitize';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type PackageType = 'foundation' | 'guardian' | 'fortress';
 
 interface FormValues {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
-  packageType: PackageType | '';
 }
 
 interface FormErrors {
@@ -112,7 +110,6 @@ export default function NewClientPage() {
     lastName: '',
     email: '',
     phone: '',
-    packageType: '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -152,7 +149,7 @@ export default function NewClientPage() {
       const docRef = await addDoc(colRef, {
         firmId,
         status: 'prospect',
-        packageType: values.packageType || null,
+        packageType: null,
         personalInfo: {
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
@@ -294,24 +291,6 @@ export default function NewClientPage() {
                 disabled={submitting}
                 className={inputBase}
               />
-            </Field>
-
-            {/* Package Type */}
-            <Field id="packageType" label="Estate Plan Package">
-              <select
-                id="packageType"
-                name="packageType"
-                title="Estate Plan Package"
-                value={values.packageType}
-                onChange={handleChange}
-                disabled={submitting}
-                className={cn(inputBase, 'cursor-pointer')}
-              >
-                <option value="">— Select a package (optional) —</option>
-                <option value="foundation">Basic Estate Plan Package — Will, POA, Living Will</option>
-                <option value="guardian">Revocable Trust Package — Trust-centered estate plan</option>
-                <option value="fortress">Irrevocable Trust Package — Advanced asset protection</option>
-              </select>
             </Field>
 
           </div>

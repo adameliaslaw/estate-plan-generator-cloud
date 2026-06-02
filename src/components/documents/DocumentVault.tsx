@@ -51,10 +51,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -683,6 +679,19 @@ export default function DocumentVault({
             docCount={documents.length}
           />
 
+          {/* Package generation — sits between Export all and Generate Custom */}
+          {questionnaireComplete && (
+            <GenerateDocumentsButton
+              firmId={firmId}
+              clientId={clientId}
+              packageType={packageType}
+              trustTypes={trustTypes}
+              clientName={clientName}
+              variant="compact"
+              isMarried={isMarried}
+            />
+          )}
+
           {/* Single-doc generation surfaced as its own button (was previously
               buried inside an 'Additional Document' dropdown — users
               consistently missed it and ended up regenerating the entire
@@ -706,36 +715,6 @@ export default function DocumentVault({
             <Sparkles className="h-4 w-4" />
             Generate Supplementary Document
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 text-gray-600 hover:border-[#2b6cb0] hover:text-[#2b6cb0]"
-              >
-                <PlusCircle className="h-4 w-4" />
-                More
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowUploadDraft(true)}>
-                <Upload className="mr-2 h-4 w-4 text-gray-500" />
-                Upload existing draft
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {questionnaireComplete && (
-            <GenerateDocumentsButton
-              firmId={firmId}
-              clientId={clientId}
-              packageType={packageType}
-              trustTypes={trustTypes}
-              clientName={clientName}
-              variant="compact"
-              isMarried={isMarried}
-            />
-          )}
         </div>
       </div>
 

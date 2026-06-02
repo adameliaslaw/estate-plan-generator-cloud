@@ -165,9 +165,12 @@ export default function GenerateDocumentsButton({
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generationMode, setGenerationMode] = useState('hybrid');
+  // Package is chosen in the dialog (not fixed per client). Seeded from the
+  // passed-in default, freely changeable before generating.
+  const [chosenPackage, setChosenPackage] = useState<'foundation' | 'guardian' | 'fortress'>(packageType);
 
-  const packageLabel = PACKAGE_LABELS[packageType] ?? packageType;
-  const selectableDocs = getSelectableDocs(packageType, isMarried);
+  const packageLabel = PACKAGE_LABELS[chosenPackage] ?? chosenPackage;
+  const selectableDocs = getSelectableDocs(chosenPackage, isMarried);
   const packageDocs = selectableDocs.map((d) => d.label);
 
   // Selection state — defaults to all docs selected. Re-initialized whenever
@@ -182,9 +185,10 @@ export default function GenerateDocumentsButton({
       setSelectedKeys(new Set(selectableDocs.map((d) => d.key)));
     }
     // selectableDocs is recomputed every render but is value-stable per
-    // (packageType, isMarried), so depending on those is sufficient.
+    // (chosenPackage, isMarried). Including chosenPackage re-selects all docs
+    // whenever the user switches packages mid-dialog.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, packageType, isMarried]);
+  }, [phase, chosenPackage, isMarried]);
 
   const allSelected = selectedKeys.size === selectableDocs.length && selectableDocs.length > 0;
   const noneSelected = selectedKeys.size === 0;
@@ -240,7 +244,7 @@ export default function GenerateDocumentsButton({
         response = await documentService.generateAll({
           firmId,
           clientId,
-          packageType,
+          packageType: chosenPackage,
           trustTypes,
           generationMode: generationMode as 'template' | 'ai' | 'hybrid',
           softwareSource: softwareSource === 'none' ? '' : softwareSource,
@@ -292,7 +296,7 @@ export default function GenerateDocumentsButton({
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
         clientId,
         clientName,
-        packageType,
+        packageType: chosenPackage,
       });
 
       stopProgress();
@@ -329,7 +333,7 @@ export default function GenerateDocumentsButton({
         className="gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white"
       >
         <Sparkles className="h-3.5 w-3.5" />
-        Generate
+        Generate Package
       </Button>
     ) : (
       <button
@@ -345,7 +349,7 @@ export default function GenerateDocumentsButton({
         )}
       >
         <Sparkles className="h-5 w-5 transition-transform group-hover:scale-110" />
-        Generate {packageLabel} Documents
+        Generate Package
         <span className="ml-auto rounded-lg bg-white/20 px-2 py-0.5 text-xs font-medium">
           {packageDocs.length} docs
         </span>
@@ -383,12 +387,32 @@ export default function GenerateDocumentsButton({
                 <span
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                    PACKAGE_BADGE[packageType],
+                    PACKAGE_BADGE[chosenPackage],
                   )}
                 >
                   {packageLabel}
                 </span>
               </div>
+            </div>
+
+            {/* Package selector — package is chosen here, not fixed per client */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Package
+              </label>
+              <Select
+                value={chosenPackage}
+                onValueChange={(v) => setChosenPackage(v as 'foundation' | 'guardian' | 'fortress')}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select package" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="foundation" className="text-xs">Basic Estate Plan — Will, POA, Living Will</SelectItem>
+                  <SelectItem value="guardian" className="text-xs">Revocable Trust — Trust-centered plan</SelectItem>
+                  <SelectItem value="fortress" className="text-xs">Irrevocable Trust — Advanced asset protection</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Document selection list */}
