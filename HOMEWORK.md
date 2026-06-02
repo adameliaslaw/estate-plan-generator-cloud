@@ -46,13 +46,27 @@ Items requiring human action or decisions before the next agent session can proc
 
 Fastcase (`d1cf32d`) + Mercury (`ca2570d`) + PageIndex (`bc56ed5`) all on `main`, CI auto-deploying. **Kept:** Vertex embeddings, Anthropic, OpenAI (+content-filter fallback), Perplexity, CourtListener, transcription (Whisper/AssemblyAI), SendGrid, LawPay, Google. **Cut:** Firecrawl, Fastcase, Mercury, PageIndex.
 
-🔴 **Manual cleanup queue for Adam (all need your `firebase`/`gcloud` auth):**
-1. `firebase functions:secrets:destroy FIRECRAWL_API_KEY` (from last session)
-2. `firebase functions:secrets:destroy MERCURY_API_KEY`
-3. `firebase functions:secrets:destroy PAGEINDEX_API_KEY`
-4. `firebase functions:secrets:destroy VERTEX_AI_KEY` (added 2026-06-02 — code declaration removed in `3fe6a45`; no consumers. Destroy only after that commit's CI deploy lands, so the running functions no longer reference it.)
-5. `firebase deploy --only firestore:rules` (drops the dead pageindex_docs rule)
-6. Smoke-test post-deploy: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`.
+### ⚠️ SECRET-DESTROY INCIDENT + RECOVERY (2026-06-02) — READ BEFORE TOUCHING SECRETS
+
+Attempted the secret-destroy cleanup below. **Only `FIRECRAWL_API_KEY` destroyed cleanly** (genuinely no consumers). Destroying `MERCURY_API_KEY`, `PAGEINDEX_API_KEY`, and `VERTEX_AI_KEY` **broke 7 functions** on cold start (generateDocuments, generateSingleDocument, generateEstateDocument, bulkProcessKnowledgeFiles, analyzeKnowledgeContent, summarizeTranscription, chatAi).
+
+**Root cause — the critical finding:** `firebase deploy` ADDS/updates secret bindings but **NEVER removes** a secret binding you delete from code. Every "successful" CI deploy (Mercury `ca2570d`, PageIndex `bc56ed5`, Vertex `3fe6a45`) left the dead `secrets:[]` bindings live on the deployed revisions. So the secrets were still mounted by running functions even though no code reads them — destroying the Secret Manager values made instance startup abort ("Secret Version … is in DESTROYED state" / "permission denied").
+
+**Recovery performed (all functions verified booting via cold-start curl → clean JSON 401):**
+- Recreated `VERTEX_AI_KEY` + `MERCURY_API_KEY` (placeholder values) and **manually granted `roles/secretmanager.secretAccessor`** to the runtime SAs `estate-plan-generator@appspot…` + `749324460027-compute@developer…` (firebase's `secrets:set` did NOT grant IAM — it deferred to "please deploy"). Gen2 functions mount these via a legacy Cloud Run alias annotation (`secret-…:projects/…/secrets/VERTEX_AI_KEY`); gen1 by literal name+version 1.
+- `PAGEINDEX_API_KEY`: chatAi pinned version **7** (which got destroyed). Can't un-destroy a version, and `firebase deploy` re-pins 7 (won't bump), so it kept failing. Fixed by **deleting + recreating the secret and adding 7 placeholder versions** so version 7 resolves again, + IAM grants. chatAi boots.
+
+**Net state:** all functions healthy. `FIRECRAWL_API_KEY` gone. `VERTEX_AI_KEY`/`MERCURY_API_KEY`/`PAGEINDEX_API_KEY` exist as **inert placeholders** — bound to functions but unread by any current code (zero functional impact).
+
+🔴 **To ACTUALLY destroy these 3 secrets (DON'T just re-run destroy — it will re-break the same 7 functions):** the deployed revisions must first stop binding them. firebase won't remove the bindings; options are (a) `gcloud run services update <svc> --remove-secrets=KEY` for the gen2 ones — currently **crashes** on the legacy alias annotation (`Invalid secret path … in annotation`), so the annotation must be cleaned first via `gcloud run services replace` with edited YAML; (b) recreate the gen1 functions cleanly. This is non-trivial surgery — leaving the inert placeholders is the low-risk default. See [[project_firebase_secret_binding_not_removed]].
+
+#### Original destroy queue (superseded by the incident block above)
+1. ✅ `firebase functions:secrets:destroy FIRECRAWL_API_KEY` — DONE (no consumers, clean).
+2. ⚠️ `MERCURY_API_KEY` — do NOT destroy (bound to 3 live functions; see above).
+3. ⚠️ `PAGEINDEX_API_KEY` — do NOT destroy (bound to chatAi; see above).
+4. ⚠️ `VERTEX_AI_KEY` — do NOT destroy (bound to 3 live functions; the code declaration was removed in `3fe6a45` but the DEPLOYED revisions still bind it — firebase didn't strip it).
+5. 🔴 STILL OPEN: `firebase deploy --only firestore:rules` (drops the dead pageindex_docs rule — unrelated to the secret incident, still safe to do).
+6. 🔴 STILL OPEN: Smoke-test: research chat (CourtListener), AI-widget Research mode (Perplexity), KB tagging / transcription summary on `gpt-4o-mini`.
 
 ### Optional follow-ups
 - **❌ AssemblyAI → Whisper — DO NOT REMOVE (verified 2026-06-02).** The removal was predicated on AssemblyAI being redundant + the firm defaulting to Whisper. Both are false: (1) read-only Firestore check shows `elias-counsel` is **actively set to `transcriptionProvider: 'assemblyai'`** with a key present — it's the live provider, removing it breaks/downgrades transcription; (2) AssemblyAI is **not** redundant — it provides speaker diarization, entity extraction, speaker count, and confidence (`transcribe-audio.ts:202-219`) that Whisper doesn't. Keep AssemblyAI unless Adam explicitly switches the firm to Whisper first.
