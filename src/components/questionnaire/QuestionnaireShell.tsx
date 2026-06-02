@@ -525,6 +525,7 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
 
       try {
         await logSystemActivity(firmId, userProfile, 'completing questionnaire', {
+          clientId,
           clientName
         });
       } catch (logErr) {

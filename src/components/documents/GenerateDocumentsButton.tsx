@@ -290,6 +290,7 @@ export default function GenerateDocumentsButton({
       }
 
       await logSystemActivity(firmId, userProfile, 'drafting documents', {
+        clientId,
         clientName,
         packageType,
       });

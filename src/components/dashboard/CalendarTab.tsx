@@ -1163,6 +1163,7 @@ function NewEventDialog({
       const eventId = await createDoc(collectionPath, payload);
 
       await logSystemActivity(firmId, userProfile, 'scheduling appointment', {
+        clientId,
         clientName,
         appointmentTitle: form.title.trim()
       });

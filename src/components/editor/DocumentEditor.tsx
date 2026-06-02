@@ -301,6 +301,7 @@ export default function DocumentEditor({
 
         // Log the activity
         await logSystemActivity(firmId, userProfile, 'editing document', {
+          clientId,
           documentName: document?.displayName ?? 'Document'
         });
       } catch (err) {
@@ -308,7 +309,7 @@ export default function DocumentEditor({
         throw err;
       }
     },
-    [document, versionsPath, docPath, userProfile, firmId],
+    [document, versionsPath, docPath, userProfile, firmId, clientId],
   );
 
   // ── Auto-save (debounced) ──

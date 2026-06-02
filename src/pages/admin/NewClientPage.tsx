@@ -173,6 +173,7 @@ export default function NewClientPage() {
 
       // Log activity
       await logSystemActivity(firmId, userProfile, 'adding client', {
+        clientId: docRef.id,
         clientName: `${values.firstName} ${values.lastName}`.trim(),
       });
 

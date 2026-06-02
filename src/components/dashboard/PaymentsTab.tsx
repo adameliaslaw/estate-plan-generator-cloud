@@ -369,6 +369,7 @@ function RecordPaymentDialog({
       await createDoc(COLLECTIONS.PAYMENTS(firmId, clientId), clean);
 
       await logSystemActivity(firmId, userProfile, 'logging payment', {
+        clientId,
         clientName,
         paymentAmount: `$${amountDollars}`
       });
@@ -574,6 +575,7 @@ function SendRequestDialog({
       toast.success('Payment request created! Link copied to clipboard.', { duration: 6000 });
 
       await logSystemActivity(firmId, userProfile, 'sending payment request', {
+        clientId,
         clientName,
         paymentAmount: `$${amountDollars}`
       });

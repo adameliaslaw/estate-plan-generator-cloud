@@ -74,6 +74,7 @@ export function TasksList({ clientId, clientName, activeClientIds }: TasksListPr
             await addDoc(collection(db, COLLECTIONS.TASKS(firmId)), taskData);
 
             await logSystemActivity(firmId, userProfile, 'entering task', {
+                clientId,
                 taskTitle: taskData.title
             });
 
@@ -101,6 +102,7 @@ export function TasksList({ clientId, clientName, activeClientIds }: TasksListPr
 
             if (newStatus === 'completed') {
                 await logSystemActivity(firmId, userProfile, 'completing task', {
+                    clientId: task.relatedClientId ?? clientId,
                     taskTitle: task.title
                 });
             }

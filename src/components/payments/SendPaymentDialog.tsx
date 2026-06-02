@@ -119,6 +119,7 @@ export function SendPaymentDialog({
             toast.success('Payment request created! Link copied to clipboard.', { duration: 6000 });
 
             await logSystemActivity(firmId, userProfile, 'sending payment request', {
+                clientId: selectedClientId,
                 clientName: cName,
                 paymentAmount: `$${amountDollars}`,
             });

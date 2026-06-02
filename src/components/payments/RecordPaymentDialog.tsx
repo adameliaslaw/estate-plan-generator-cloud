@@ -118,6 +118,7 @@ export function RecordPaymentDialog({
             await createDoc(`firms/${firmId}/clients/${selectedClientId}/payments`, clean);
 
             await logSystemActivity(firmId, userProfile, 'logging payment', {
+                clientId: selectedClientId,
                 clientName: cName,
                 paymentAmount: `$${amountDollars}`,
             });

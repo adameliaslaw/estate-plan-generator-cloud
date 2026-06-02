@@ -202,6 +202,7 @@ export default function BatchGenerateDialog({
         });
 
         await logSystemActivity(firmId, userProfile, 'drafting documents', {
+          clientId: client.id,
           clientName: clientDisplayName(client),
           packageType: pkg,
           batch: true,
