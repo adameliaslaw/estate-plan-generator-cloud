@@ -272,6 +272,15 @@ export async function saveDocumentToVault(
 
   if (existing.exists) {
     docData.versions = admin.firestore.FieldValue.arrayUnion(versionEntry);
+    // Clear stale quality flags on regeneration: update() preserves fields not
+    // present in docData, so a clean re-run (no findings/warnings) would leave
+    // an earlier run's flags lingering forever. Delete them when this run has none.
+    if (!('validationFindings' in docData)) {
+      docData.validationFindings = admin.firestore.FieldValue.delete();
+    }
+    if (!('warnings' in docData)) {
+      docData.warnings = admin.firestore.FieldValue.delete();
+    }
     await docRef.update(docData);
   } else {
     docData.versions = [versionEntry];
