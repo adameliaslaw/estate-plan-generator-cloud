@@ -4,6 +4,31 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-02 (everything below verified green + live)
+
+All shipped to `main`, CI green, and verified in the live app. No open blockers from this session.
+
+**Secret cleanup + incident (recovered):** Destroyed `FIRECRAWL_API_KEY` cleanly. Destroying `MERCURY`/`PAGEINDEX`/`VERTEX_AI` broke 7 functions on cold start — **firebase deploy never strips a secret dropped from code**, so deployed revisions still bound them. Recovered by recreating the secrets + granting runtime-SA accessor (and rebuilding PAGEINDEX to version 7 for chatAi's pin); all 7 verified booting. Those 3 remain **inert placeholders — do NOT destroy** (see [[project_firebase_secret_binding_not_removed]] / incident block below). `firestore:rules` deployed (dropped dead pageindex_docs block).
+
+**Stale validation findings (`0e2d079`):** `saveDocumentToVault` now clears `validationFindings`/`warnings` on a clean regen (was leaving ghosts via `update()`). Cleared Karen's stale flag.
+
+**Models:** Background tasks `gpt-4o-mini` → **`gpt-5.4-nano`** (`b9c4404`, verified live). Primary drafting model corrected — it's the per-firm `documentDraftingModel` field (was **claude-opus-4-6**, NOT the gpt-5.4 fallback), bumped to **`claude-opus-4-8`** (`dd76a73` allowlist+pricing; field set; verified via clean generation). See [[project_primary_drafting_model]].
+
+**CI (`ee09e61`):** workflow actions bumped off deprecated Node 20 — checkout@v6, setup-node@v6, auth@v3 (both workflows). Deploys verified green on new versions.
+
+**Research mode — fully fixed + verified in UI:**
+- Added **CourtListener API key field** to Settings → Integrations (`544b52a`) — it never existed, so the key was empty and case law returned 0. Adam added the key; case law now flows.
+- Perplexity hard-restricted to a **primary-law domain allowlist** (`c0a5d54`, tightened to `law.justia.com` in `5185525`) — no more law-firm marketing.
+- **CitationBlock** now renders case-law citations (was counting-but-hiding them) (`5185525`); reverted a citation reorder that misaligned the answer's `[N]` markers (`1ac0e77`).
+
+**`.env.example`:** corrected OpenAI-key reality (per-firm Firestore; unbound Secret Manager secret) + dead `VERTEX_AI_KEY` declaration removed.
+
+🔴 **Carry-forward (optional, none blocking):**
+- Research web results are now strict primary-law only — niche queries may get sparse web citations; widen the allowlist in `callPerplexityWithCitations` (`ai-client.ts`) if needed.
+- Off-topic-but-authoritative sources (e.g. an njcourts.gov contracts jury charge on an estate query) can still appear — domain filtering controls authority, not relevance. One-off; no fix applied.
+
+---
+
 ## ✅ API/LLM CONSOLIDATION — COMPLETE (2026-06-01). See the "COMPLETE" summary below for the manual cleanup queue.
 
 **To resume:** start a fresh session and say **"Resume with HOMEWORK.md"**. The consolidation is finished; the only open items are the 5 manual `firebase`/`gcloud` steps in the **API/LLM CONSOLIDATION — COMPLETE** block below. After those, the next real work is the **template-options** thread (further down) or the **optional follow-ups** (AssemblyAI→Whisper, `.env.example` drift).
