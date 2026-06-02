@@ -468,31 +468,6 @@ function buildResearchUserPrompt(
 }
 
 // ---------------------------------------------------------------------------
-// Research source authority — de-prioritize (not exclude) low-authority web
-// sources (law-firm marketing/blogs) in favor of primary/authoritative law.
-// ---------------------------------------------------------------------------
-
-/** Domains treated as authoritative (primary law + official .gov/edu sources). */
-const AUTHORITATIVE_DOMAINS = [
-  'law.cornell.edu', 'justia.com', 'courtlistener.com', 'govinfo.gov',
-  'congress.gov', 'irs.gov', 'nj.gov', 'njcourts.gov', 'uscourts.gov', '.gov/',
-];
-
-/** 0 = authoritative (rank first), 1 = everything else (de-prioritized). */
-function citationAuthorityRank(url: string): number {
-  const u = url.toLowerCase();
-  return AUTHORITATIVE_DOMAINS.some((d) => u.includes(d)) ? 0 : 1;
-}
-
-/** Stable sort that floats authoritative sources up and law-firm/marketing down. */
-function deprioritizeLowAuthority(citations: string[]): string[] {
-  return citations
-    .map((url, i) => ({ url, i }))
-    .sort((a, b) => citationAuthorityRank(a.url) - citationAuthorityRank(b.url) || a.i - b.i)
-    .map((x) => x.url);
-}
-
-// ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
 
@@ -693,13 +668,15 @@ SOURCE PRIORITY (apply when grounding and citing your answer):
           `${caseLawResult.results.length} cases, ${perplexityResult.citations.length} web citations (${Date.now() - t0}ms)`,
         );
 
-        // Merge all citation types. Case law (CourtListener) is authoritative
-        // by definition → list first; web citations are reordered so primary/
-        // .gov/authoritative sources rank above law-firm marketing (kept, not
-        // dropped — de-prioritized).
+        // Merge all citation types. Web citations MUST stay first and in
+        // Perplexity's original order — the answer's inline [N] markers index
+        // into them, so reordering misaligns the citation panel. Case law
+        // (CourtListener) is appended after as additional sources. Source
+        // quality is already enforced upstream by the search_domain_filter
+        // allowlist in callPerplexityWithCitations.
         const allCitations = [
+          ...perplexityResult.citations,
           ...formatCaseCitations(caseLawResult.results),
-          ...deprioritizeLowAuthority(perplexityResult.citations),
         ];
 
         const allMessages: ConversationMessage[] = [
