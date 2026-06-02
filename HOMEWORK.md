@@ -60,17 +60,11 @@ Fastcase (`d1cf32d`) + Mercury (`ca2570d`) + PageIndex (`bc56ed5`) all on `main`
 
 ---
 
-## (superseded) earlier resume pointer — "template options" thread
+## ✅ (CLOSED 2026-06-02) earlier resume pointer — "template options" thread
 
-**Note:** This thread is from the start of the prior session and is largely overtaken by events (template-default shipped, AI mode removed, modes simplified). Kept for history.
+**Closed per Adam's call (2026-06-02).** This was the resume pointer at the *start* of the prior session, but that session pivoted entirely into the API/LLM consolidation (which shipped). The template-options question was never actioned and no code was written for it. Adam is not actively adding a new document right now, so the thread is closed — not a pending blocker.
 
-**To resume:** start a fresh session and say **"Resume with HOMEWORK.md"** (that's how this session began). The active thread below was mid-conversation; no code was written for it.
-
-### Open thread: adding template options (in progress — awaiting Adam's answer)
-Adam wants to **add new document types / template variants** the tool can generate. (He'd tried using the Firecrawl scrape for this — wrong lever; the scrape only adds RAG *reference* content, not templates.) Where it landed:
-- **Add a template VARIANT of an existing doc type** (will, POA, trust, livingWill, pourOverWill, deed, affidavit, gitRep3, estatePlanSummary) = **NO code.** Upload a template doc to Firestore `firms/{firmId}/documentTemplates` via the existing UI: **Knowledge Base page → Templates tab → Add Template** (or Bulk Template Import). Key fields: `docType`, `variant`, `content` (Handlebars/HTML), `isActive`, `isDefault`, `complexity`. Engine `getTemplate()` (`template-engine.ts:1325`) resolves variants automatically. **This is almost certainly what he wants.** The real input needed is actual template documents (his own attorney-drafted `.docx`/clauses), not scraped marketing.
-- **Add a brand-new document TYPE** = heavyweight (~7-10 files: type unions `unified-generator.ts:25-39` + `src/types/index.ts` + `constants.ts` DOC_TYPES; new generator in `functions/src/generators/`; register in `loadGenerator()` `unified-generator.ts:250`; package config `generate-documents.ts:72`; deploy). Likely unnecessary — ~13 AI "flex" types already exist (engagementLetter, certificationOfTrust, trustAmendment, trustRestatement, petTrust, codicil, hipaaRelease, letterOfInstruction, memorandumOfPersonalProp, beneficiaryDesignation, …).
-- **🔴 OPEN QUESTION (ask Adam first, one question):** which specific document — a new *variant* of an existing doc (easy, UI upload of a real template), or a genuinely new doc type not in the list? He has NOT answered yet; his answer sets the path.
+**Reference (if it ever comes back up):** adding a template **VARIANT** of an existing doc type (will, POA, trust, livingWill, pourOverWill, deed, affidavit, gitRep3, estatePlanSummary) needs **NO code** — upload via **Knowledge Base → Templates tab → Add Template** (fields: `docType`, `variant`, `content`, `isActive`, `isDefault`, `complexity`; engine `getTemplate()` at `template-engine.ts:1325` resolves variants automatically). A brand-new doc **TYPE** is heavyweight (~7-10 files) and likely unnecessary given the ~13 existing AI "flex" types.
 
 ### 🔴 TODO: evaluate which scraped sites are genuinely useful to the tool
 Today's Firecrawl scrape put **30 competitor-software pages** (WealthCounsel, InterActive Legal, Smokeball, HotDocs, Wealth Docx — mostly **marketing/blog** content) into `firms/elias-counsel/knowledgeBase` as RAG resources (tagged `firecrawl-{source}`, `contentSource:'firecrawl'` — easy to query). **Evaluate per-page which (if any) genuinely help** document generation vs. dilute retrieval quality with competitor marketing fluff. Benchmark against the genuinely-useful KB content (NJ Title 3B statutes). Decide per page: keep / tag-down / deactivate / purge. Lean skeptical — "Best Document Automation Software" marketing has near-zero drafting value; a few practice-note pages ("RLT Drafting 101", "post-SECURE Act drafting") may be marginally useful.
