@@ -213,11 +213,13 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#1a365d]">
             <Wand2 className="h-5 w-5 text-[#2b6cb0]" />
-            Generate Individual Document
+            Generate Custom Document
           </DialogTitle>
           <DialogDescription>
-            Generate any single estate planning document for this client using
-            the same engine as full package generation.
+            Generate any single document — including types not in this client's
+            package — with optional custom drafting instructions. For building
+            the standard plan, use Generate Estate Plan Documents (where you can
+            deselect documents) instead.
           </DialogDescription>
         </DialogHeader>
 

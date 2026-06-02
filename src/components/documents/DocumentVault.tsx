@@ -568,7 +568,7 @@ export default function DocumentVault({
             onClick={() => setShowSingleGen(true)}
           >
             <Wand2 className="h-4 w-4" />
-            Generate Individual Document
+            Generate Custom Document
           </Button>
           <Button
             variant="outline"
@@ -695,7 +695,7 @@ export default function DocumentVault({
             onClick={() => setShowSingleGen(true)}
           >
             <Wand2 className="h-4 w-4" />
-            Generate Individual Document
+            Generate Custom Document
           </Button>
           <Button
             variant="outline"
