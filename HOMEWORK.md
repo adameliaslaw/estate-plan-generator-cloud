@@ -4,7 +4,46 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 🔜 RESUME HERE NEXT SESSION — continue the "template options" thread
+## 🔜 RESUME HERE NEXT SESSION — finish the API/LLM consolidation
+
+**To resume:** start a fresh session and say **"Resume with HOMEWORK.md"**.
+
+**Context:** Evaluated whether the tool still needs all its APIs/LLMs now that document generation defaults to **Template** (no LLM) and AI-from-scratch is removed. Verdict: core functionality needs only **Vertex embeddings + Anthropic + OpenAI (fallback)**; the rest is secondary or dead.
+
+**Adam's feature-usage answers (drive the cuts):** USES Research chat (Perplexity + CourtListener) and Audio transcription. Does NOT use client-file chat (PageIndex). → Keep: Vertex embeddings, Anthropic, OpenAI (+content-filter fallback), Perplexity, CourtListener, transcription, SendGrid, LawPay, Google. Cut: Firecrawl, Fastcase, Mercury, PageIndex.
+
+**✅ DONE this session:** Firecrawl removed entirely (commit `ee3d0cc`) — scraper fn, index export, frontend service+button, `.env.example` block; backfill script archived. (Its only output was the 29 competitor-marketing KB pages, which were also **deactivated then hard-deleted** this session.) `FIRECRAWL_API_KEY` GCP secret can be destroyed (no code consumers left).
+
+**🔜 REMAINING — three cuts. Do safest-first, commit + verify each (functions `npx tsc --noEmit` + root `npm run build`), push (CI auto-deploys):**
+
+### 1. Fastcase (clean, ~2 files) — non-functional stub
+- `functions/src/courtlistener-client.ts:~95` — `searchFastcase` is a TODO returning nothing. Remove.
+- `functions/src/chat-ai.ts:~638,644` — `fastcaseKey` read + passed to `searchCaseLaw`. Remove the fastcase param/branch; **keep CourtListener** (used).
+- Grep `fastcase`/`fastcaseApiKey` across repo (incl. per-firm settings UI + types) and remove. Remove `.env.example` Fastcase line.
+- Verify research chat (CourtListener) still answers after.
+
+### 2. Mercury (medium) — marginal background tasks, re-route off it
+- `functions/src/ai-client.ts`: remove `_callMercury` (~480-526), the `provider === 'mercury'` dispatch (~222), the `m.startsWith('mercury')` detection (~186), and the `mercury` entries in `KNOWN_MODELS` (~125) + `DEFAULT_MODELS` (~137).
+- Re-route the 4 remaining hard-coded `model:'mercury-2'` call sites to a cheap kept model (pick from the OpenAI/Gemini allowlist — e.g. a gpt-mini or gemini-flash): `transcribe-audio.ts`, `knowledge-base.ts:~343`, `bulk-knowledge-import.ts`, `ai-memory.ts`. (firecrawl-scraper site already gone.)
+- Remove `MERCURY_API_KEY` from any function `secrets:[...]` arrays + the `.env.example` Mercury block. Destroy the GCP secret separately.
+- Verify those background tasks (KB tagging, transcription summary, enrichment) still run on the new model.
+
+### 3. PageIndex (large; touches /chat — budget a careful session)
+- **Preserve the Perplexity-backed research mode (`chatAi`) — Adam uses it.** Only remove the PageIndex pieces.
+- Backend: delete `pageindex-retrieval.ts`, `pageindex-client-files-chat.ts`; strip PageIndex from `rag-chat.ts` (retrieval+synthesis) and `ingest-document.ts`; check `wills-processor.ts` (`/doc` upload). Remove the dead exports from `index.ts` (`pageIndexClientFilesChat`, `ingestDocument`, and `ragChat` if it's PageIndex-only — confirm it's not the Perplexity path first).
+- Frontend `ChatPage.tsx`: remove the emerald "From Client Files" bubble + the upload-to-PageIndex modal/namespace UI + client-files streaming state; keep the Research bubble. (The gray "Research Assistant" ragChat bubble queries PageIndex reference/work-product namespaces which have **0 docs** — always returns "nothing indexed" — so it's safe to drop too.)
+- Remove `PAGEINDEX_API_KEY` from `.env.example` + secrets arrays; destroy GCP secret.
+- Verify `/chat` research mode answers end-to-end after the teardown.
+
+### Optional follow-ups
+- **AssemblyAI → Whisper:** transcription is kept, but AssemblyAI is redundant with OpenAI Whisper. Before dropping, confirm the firm's `transcriptionProvider` isn't set to `assemblyai` (per-firm setting; default is Whisper). Then remove `assemblyai-transcribe.ts` + the dynamic-import branch in `transcribe-audio.ts` + `ASSEMBLYAI_API_KEY`.
+- **`.env.example` drift:** `VERTEX_AI_KEY`, Perplexity, and AssemblyAI keys are used in code but not mirrored in `.env.example` (against the repo's "mirror new vars" rule). Add them.
+
+---
+
+## (superseded) earlier resume pointer — "template options" thread
+
+**Note:** This thread is from the start of the prior session and is largely overtaken by events (template-default shipped, AI mode removed, modes simplified). Kept for history.
 
 **To resume:** start a fresh session and say **"Resume with HOMEWORK.md"** (that's how this session began). The active thread below was mid-conversation; no code was written for it.
 
