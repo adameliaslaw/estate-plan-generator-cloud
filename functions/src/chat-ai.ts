@@ -468,6 +468,31 @@ function buildResearchUserPrompt(
 }
 
 // ---------------------------------------------------------------------------
+// Research source authority — de-prioritize (not exclude) low-authority web
+// sources (law-firm marketing/blogs) in favor of primary/authoritative law.
+// ---------------------------------------------------------------------------
+
+/** Domains treated as authoritative (primary law + official .gov/edu sources). */
+const AUTHORITATIVE_DOMAINS = [
+  'law.cornell.edu', 'justia.com', 'courtlistener.com', 'govinfo.gov',
+  'congress.gov', 'irs.gov', 'nj.gov', 'njcourts.gov', 'uscourts.gov', '.gov/',
+];
+
+/** 0 = authoritative (rank first), 1 = everything else (de-prioritized). */
+function citationAuthorityRank(url: string): number {
+  const u = url.toLowerCase();
+  return AUTHORITATIVE_DOMAINS.some((d) => u.includes(d)) ? 0 : 1;
+}
+
+/** Stable sort that floats authoritative sources up and law-firm/marketing down. */
+function deprioritizeLowAuthority(citations: string[]): string[] {
+  return citations
+    .map((url, i) => ({ url, i }))
+    .sort((a, b) => citationAuthorityRank(a.url) - citationAuthorityRank(b.url) || a.i - b.i)
+    .map((x) => x.url);
+}
+
+// ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
 
@@ -649,7 +674,12 @@ RULES:
 • Always indicate the jurisdiction of cited authorities.
 • If information may be outdated, note the date context.
 • Never fabricate citations — if you cannot find a specific source, say so.
-• Provide practical implications for estate planning practitioners where applicable.`;
+• Provide practical implications for estate planning practitioners where applicable.
+
+SOURCE PRIORITY (apply when grounding and citing your answer):
+• Prioritize PRIMARY and AUTHORITATIVE sources — statutes, regulations, and court opinions, and official government/court/educational sites (e.g. law.cornell.edu, justia.com, courtlistener.com, govinfo.gov, congress.gov, irs.gov, nj.gov, njcourts.gov).
+• DE-PRIORITIZE non-authoritative web content — especially law-firm marketing pages, blog posts, and SEO articles. Do not rely on them when a primary or authoritative source is available; use them only to corroborate, and cite the primary source instead.
+• When sources conflict, defer to the primary/authoritative one.`;
 
         const perplexityResult = await callPerplexityWithCitations(
           researchSystemPrompt,
@@ -663,10 +693,13 @@ RULES:
           `${caseLawResult.results.length} cases, ${perplexityResult.citations.length} web citations (${Date.now() - t0}ms)`,
         );
 
-        // Merge all citation types
+        // Merge all citation types. Case law (CourtListener) is authoritative
+        // by definition → list first; web citations are reordered so primary/
+        // .gov/authoritative sources rank above law-firm marketing (kept, not
+        // dropped — de-prioritized).
         const allCitations = [
-          ...perplexityResult.citations,
           ...formatCaseCitations(caseLawResult.results),
+          ...deprioritizeLowAuthority(perplexityResult.citations),
         ];
 
         const allMessages: ConversationMessage[] = [
