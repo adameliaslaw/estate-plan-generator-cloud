@@ -184,7 +184,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
 
   try {
     const raw = await callAI(systemPrompt, userPrompt, firmData, {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-nano',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,

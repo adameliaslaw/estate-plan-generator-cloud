@@ -29,6 +29,7 @@ interface ModelPricing {
 const MODEL_PRICING: Record<string, ModelPricing> = {
   // OpenAI
   'gpt-5.4':       { inputPer1M: 2.00,  outputPer1M: 8.00,  label: 'GPT-5.4' },
+  'gpt-5.4-nano':  { inputPer1M: 0.20,  outputPer1M: 1.25,  label: 'GPT-5.4 Nano' },
   'gpt-5':         { inputPer1M: 2.00,  outputPer1M: 8.00,  label: 'GPT-5' },
   'gpt-5-mini':    { inputPer1M: 0.40,  outputPer1M: 1.60,  label: 'GPT-5 Mini' },
   'gpt-4.1':       { inputPer1M: 2.00,  outputPer1M: 8.00,  label: 'GPT-4.1' },

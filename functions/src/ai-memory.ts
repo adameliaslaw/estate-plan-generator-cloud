@@ -298,7 +298,7 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
 
   try {
     const raw = await callAI(systemPrompt, conversationText, firmData, {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-nano',
       temperature: 0.1,
       maxTokens: 2000,
     });
@@ -490,7 +490,7 @@ Respond ONLY with the JSON array, no markdown fences or extra text.`;
 
   try {
     const raw = await callAI(systemPrompt, conversationText, firmData, {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-nano',
       temperature: 0.1,
       maxTokens: 2000,
     });
