@@ -231,7 +231,7 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
   {
     document: 'firms/{firmId}/knowledgeBase/{resourceId}',
     region: 'us-east1',
-    memory: '1GiB',
+    memory: '2GiB',
     timeoutSeconds: 120,
   },
   async (event) => {
