@@ -4,6 +4,14 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-06-02 (health-check fix: KB embedding OOM loop)
+
+Session-start `firebase functions:log` health check caught a live OOM loop the UI never surfaces: **`onKnowledgeResourceWritten`** (KB re-vectorization trigger) was configured at `1GiB` but peaks **1107–1153 MiB** during embedding → container killed on signal 9 **before** writing `embeddedAt`, so the resource stayed unembedded and got reprocessed indefinitely (loop visible at 17:02 / 17:09 / 17:19…).
+
+**Fix (`5c28c07`, pushed to `main`, CI auto-deploying):** bumped trigger memory `1GiB → 2GiB` in `functions/src/kb-embeddings.ts:234`, matching its sibling `onTemplateWritten` (same embedding workload, same file, already at 2GiB). One-line change; functions `tsc --noEmit` clean. 🔴 Verify post-deploy: tail `functions:log` for `onknowledgeresourcewritten` — OOM lines should stop and `[kb-embeddings] Embedded resource …` should appear.
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-02 (everything below verified green + live)
 
 All shipped to `main`, CI green, and verified in the live app. No open blockers from this session.
