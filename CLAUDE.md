@@ -178,12 +178,17 @@ generate-single-document.ts    # Single doc entry point
 
 ### AI Routing (`functions/src/ai-client.ts`)
 
-Routes to four providers with automatic fallback. **Never hard-code a single provider.** Provider order and keys come from firm-level Firestore settings; global keys fall back to Firebase Secrets:
+Each firm selects one provider via `activeAiProvider` in Firestore. `callAI` reads that field and dispatches accordingly; it defaults to `openai` when unset. **Never hard-code a single provider.**
 
-1. **Anthropic** (Claude) — primary
-2. **OpenAI** (GPT) — first fallback
-3. **Google Gemini** (via `@google/genai`) — second fallback
-4. **Perplexity** — grounded research fallback
+Supported providers: `openai`, `anthropic`, `gemini`, `perplexity`.
+
+**There is no automatic cascade.** The one exception: if the firm uses Anthropic and the call is blocked by Anthropic's content filter, `callAI` automatically retries with OpenAI (if the firm also has an OpenAI key configured).
+
+**API key sources:**
+- `openai` — `firmData.openAiApiKey` → `firmData.settings.openAiApiKey` → `process.env.OPENAI_API_KEY`
+- `anthropic` / `gemini` / `perplexity` — per-firm Firestore only; no `process.env` fallback
+
+Per-firm keys are stored under `firms/{firmId}` (top-level fields or under `.settings`). Firms that do not configure a provider key will receive a thrown error, not a silent fallback to another provider.
 
 `vertex-ai-client.ts` is a separate adapter for Vertex AI workloads.
 
@@ -350,11 +355,11 @@ Two GitHub Actions workflows trigger on push to `main`:
 3. Build (`npm run build`)
 4. Deploy to https://estate-plan-generator.web.app
 
-**`firebase-functions-deploy.yml`** — triggers when `functions/`, `functions-backfill/`, or `firebase.json` change.
+**`firebase-functions-deploy.yml`** — triggers when `functions/**`, `firebase.json`, `.firebaserc`, or the workflow file itself changes. **`functions-backfill/**` is NOT in the trigger paths** — a backfill-only commit does not trigger CI. Use `workflow_dispatch` for manual backfill deploys.
 1. Node 22, frozen lockfile
-2. Type-check both packages
-3. Build both packages
-4. Deploy via Firebase CLI + Google Cloud auth
+2. Type-check + build `functions/`
+3. Install `functions-backfill/` deps (so predeploy `tsc` uses the pinned TypeScript version)
+4. Deploy via Firebase CLI + Google Cloud auth (deploys both function codebases)
 
 Both workflows use concurrency groups that cancel in-flight deploys when a new push arrives. **Merging a PR to `main` is sufficient to deploy — never instruct the user to run `firebase deploy` manually.**
 
@@ -384,7 +389,7 @@ Security rule tests run against the Firebase emulator. Start it before running t
 
 - **`firestore.rules` / `storage.rules`** — production access controls. Never loosen without explicit instruction; test with the emulator before deploying.
 - **`firestore.indexes.json`** — composite indexes back live queries; removing one breaks reads silently in prod.
-- **`functions/src/ai-client.ts` fallback chain** — keep all four providers wired (Anthropic → OpenAI → Gemini → Perplexity). Do not hard-code a single provider.
+- **`functions/src/ai-client.ts` provider dispatch** — keep all four providers wired (`openai`, `anthropic`, `gemini`, `perplexity`). Do not hard-code a single provider. Provider is firm-selected; only the Anthropic content-filter path has a one-step OpenAI fallback.
 - **`functions/src/client-data-serializer.ts`** — canonical prompt context. Schema changes ripple into every generator and break existing prompt caches.
 - **`functions/src/templates/*.hbs`** — attorney-reviewed prose. Do not edit without authorization.
 - **`src/types/index.ts`** — the data model contract. Changes here ripple into Firestore, all generators, and the serializer.
