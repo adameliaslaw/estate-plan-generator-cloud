@@ -195,15 +195,23 @@ export default function FlexDocumentGenerator({
   const succeededRef = useRef(false);
 
   useEffect(() => {
-    if (phase !== 'generating') {
-      setElapsedSeconds(0);
-      return;
-    }
-    succeededRef.current = false;
+    // Deliberate synchronous reset: the elapsed timer restarts on every phase
+    // change. The reset IS the effect's purpose, not derivable state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setElapsedSeconds(0);
+    if (phase !== 'generating') return;
+    succeededRef.current = false;
     const interval = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [phase]);
+
+  const markSuccess = (response: GenerateFlexDocumentResponse) => {
+    if (succeededRef.current) return;
+    succeededRef.current = true;
+    setResult(response);
+    setPhase('success');
+    onSuccess?.(response);
+  };
 
   // Firestore polling fallback: detects the saved doc even if the long-running
   // httpsCallable response is dropped silently by an intermediate proxy.
@@ -229,14 +237,6 @@ export default function FlexDocumentGenerator({
     });
     return () => unsub();
   }, [phase, firmId, clientId, selected]);
-
-  const markSuccess = (response: GenerateFlexDocumentResponse) => {
-    if (succeededRef.current) return;
-    succeededRef.current = true;
-    setResult(response);
-    setPhase('success');
-    onSuccess?.(response);
-  };
 
   const handleSelect = (option: FlexDocOption) => {
     setSelected(option);

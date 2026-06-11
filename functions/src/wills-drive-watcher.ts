@@ -160,7 +160,7 @@ export const willsDriveWebhook = onRequest(
     try {
       let token = pageToken;
 
-      // eslint-disable-next-line no-constant-condition
+       
       while (true) {
         const changesRes = await drive.changes.list({
           pageToken: token,

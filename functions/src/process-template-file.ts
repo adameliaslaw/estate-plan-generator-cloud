@@ -10,10 +10,14 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import mammoth from 'mammoth';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-if (typeof global !== 'undefined' && !(global as any).DOMMatrix) {
-  (global as any).DOMMatrix = class DOMMatrix {};
+ 
+const globalWithDom = global as typeof global & { DOMMatrix?: unknown };
+if (typeof global !== 'undefined' && !globalWithDom.DOMMatrix) {
+  globalWithDom.DOMMatrix = class DOMMatrix {};
 }
+// require (not import) is deliberate: ES imports hoist above the DOMMatrix
+// polyfill, and pdf-parse needs the polyfill at load time.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PDFParse } = require('pdf-parse');
 import { callAI, parseAIJson } from './ai-client';
 import { getLearningContext, formatLearningPrompt, recordCorrection, recordConfirmedVariables } from './template-learning';

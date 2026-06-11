@@ -12,7 +12,6 @@ import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import * as path from 'path';
 
 // ── Helper: sanitize a display name for use in a file name ───────────────────
 
@@ -275,7 +274,7 @@ export const exportDocumentPdf = functions
     memory: '2GB',
   })
   .region('us-east1')
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ── 1. Auth check ────────────────────────────────────────────────────────
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');

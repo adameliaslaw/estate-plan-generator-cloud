@@ -1009,7 +1009,7 @@ function repairAiArtifacts(html: string): string {
   // Capture letters / numbers / common punctuation but NOT underscores
   // (signature lines like ___________________ should keep their `<br />`).
   out = out.replace(
-    /([A-Za-z][A-Za-z0-9.,;:'\-]*)\s*<br\s*\/?>\s*<strong>/g,
+    /([A-Za-z][A-Za-z0-9.,;:'-]*)\s*<br\s*\/?>\s*<strong>/g,
     '$1 <strong>',
   );
 

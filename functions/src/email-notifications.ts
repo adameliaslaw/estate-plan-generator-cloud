@@ -650,7 +650,7 @@ export const sendPaymentReceipt = onCall(
     const branding = extractBranding(firmData);
 
     const formattedAmount = formatCurrency(amount);
-    let subject = `Payment Receipt — ${branding.firmName}`;
+    const subject = `Payment Receipt — ${branding.firmName}`;
     const receiptDate = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -658,7 +658,7 @@ export const sendPaymentReceipt = onCall(
       day: 'numeric',
     });
 
-    let bodyHtml = `
+    const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Payment Receipt</h2>
 <p style="margin:0 0 16px;">
   Dear ${clientName}, thank you for your payment. Please retain this receipt for your records.

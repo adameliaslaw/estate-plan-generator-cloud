@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // functions/lib and functions-backfill/lib are compiled tsc output, not
+  // hand-maintained code — linting them double-reports every source issue
+  // and flags generated patterns.
+  globalIgnores(['dist', 'functions/lib', 'functions-backfill/lib', 'coverage']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

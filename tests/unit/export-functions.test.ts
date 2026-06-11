@@ -15,7 +15,7 @@
  * - Package-to-document mapping is correct
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PACKAGE_DOCUMENTS } from '@/config/constants';
 import { MOCK_WILL_DOCUMENT, MOCK_APPROVED_DOCUMENT } from '../helpers/mock-data';
 
@@ -23,20 +23,6 @@ import { MOCK_WILL_DOCUMENT, MOCK_APPROVED_DOCUMENT } from '../helpers/mock-data
 // Helpers: DOM parsing
 // ============================================================================
 
-/**
- * Parse HTML string and return an element with the given selector.
- */
-function queryHTML(html: string, selector: string): Element | null {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  return doc.querySelector(selector);
-}
-
-function countElements(html: string, selector: string): number {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  return doc.querySelectorAll(selector).length;
-}
 
 // ============================================================================
 // SECTION: DRAFT watermark in generated document HTML
@@ -64,7 +50,7 @@ describe('DRAFT watermark — HTML output validation', () => {
 
   it('watermark text is "DRAFT — NOT YET EXECUTED"', () => {
     const { content } = MOCK_WILL_DOCUMENT;
-    expect(content).toMatch(/DRAFT\s*(&mdash;|—|[\-]+)\s*NOT\s+YET\s+EXECUTED/i);
+    expect(content).toMatch(/DRAFT\s*(&mdash;|—|[-]+)\s*NOT\s+YET\s+EXECUTED/i);
   });
 
   it('watermark has bold font styling', () => {

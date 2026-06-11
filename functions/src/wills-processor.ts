@@ -460,7 +460,7 @@ type BaseRecordArgs = {
 function _buildBaseRecord(args: BaseRecordArgs): WillsDocument {
   const {
     drive_file_id, drive_path, clientName, matterId, versionLabel,
-    fileFormat, fileSizeBytes, createdTime, modifiedTime, fileName,
+    fileFormat, fileSizeBytes, createdTime, modifiedTime, fileName: _fileName,
     pageCount, firmId, classification, requiresOcr, processing_status,
     extraction_confidence, field_confidence, type_fields, pageindex_doc_id,
     needs_human_review_override, needs_human_review_reasons_override,

@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sanitizeForPrompt, sanitizeInput } from '@/utils/sanitize';
-import { ROLES, SESSION_TIMEOUT_MS, SESSION_WARNING_MS } from '@/config/constants';
+import { SESSION_TIMEOUT_MS, SESSION_WARNING_MS } from '@/config/constants';
 import {
   MOCK_CLIENT_USER,
   MOCK_OTHER_CLIENT_USER,
@@ -434,7 +434,6 @@ describe('Security — CSRF protection headers (configuration check)', () => {
   it('firebase session cookies should use SameSite=Strict or Lax', () => {
     // Firebase Auth uses httpOnly session cookies by default with SameSite protections
     // This test documents the expected configuration
-    const expectedSameSiteValues = ['Strict', 'Lax', 'None'];
     // For our app, we expect Strict or Lax (not None without Secure)
     const acceptedValues = ['Strict', 'Lax'];
     // Document the expected behavior — actual enforcement is via Firebase/server config
