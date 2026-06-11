@@ -10,7 +10,7 @@
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import { GenerationMode } from './template-engine';
+import { z } from 'zod';
 import {
   generateDocumentWithPropertyExpansion,
   getDocTypeDisplayName,
@@ -19,22 +19,24 @@ import {
 import { aggregateClientContext } from './client-context-aggregator';
 
 // ---------------------------------------------------------------------------
-// Types
+// Input schema
 // ---------------------------------------------------------------------------
 
-interface GenerateRequest {
-  firmId: string;
-  clientId: string;
-  packageType: 'foundation' | 'guardian' | 'fortress';
-  trustTypes?: string[];
-  generationMode?: GenerationMode;
+const GenerateRequestSchema = z.object({
+  firmId: z.string().min(1),
+  clientId: z.string().min(1),
+  packageType: z.enum(['foundation', 'guardian', 'fortress']),
+  trustTypes: z.array(z.string()).optional(),
+  generationMode: z.enum(['template', 'ai', 'hybrid']).optional(),
   /** Optional model override (e.g. 'gpt-5.4', 'claude-sonnet-4-6') */
-  modelOverride?: string;
+  modelOverride: z.string().optional(),
   /** Optional software source filter for template selection */
-  softwareSource?: string;
+  softwareSource: z.string().optional(),
   /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
-  formattingPreset?: string;
-}
+  formattingPreset: z.string().optional(),
+});
+
+type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 
 export interface GeneratedDoc {
   docType: string;
@@ -171,14 +173,14 @@ export const generateDocuments = onCall(
       );
     }
 
-    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource, formattingPreset } = request.data;
-
-    if (!firmId || !clientId || !packageType) {
+    const parsed = GenerateRequestSchema.safeParse(request.data);
+    if (!parsed.success) {
       throw new HttpsError(
         'invalid-argument',
-        'firmId, clientId, and packageType are required.',
+        `Invalid request: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
       );
     }
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource, formattingPreset } = parsed.data;
 
     // Verify caller belongs to this firm
     const callerFirmId = auth.token.firmId as string | undefined;

@@ -11,38 +11,40 @@
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { z } from 'zod';
 
-import { GenerationMode } from './template-engine';
 import { generateDocument } from './unified-generator';
 
 // ---------------------------------------------------------------------------
-// Types
+// Input schema
 // ---------------------------------------------------------------------------
 
-interface GenerateSingleRequest {
-  firmId: string;
-  clientId: string;
-  docType: string;
+const GenerateSingleRequestSchema = z.object({
+  firmId: z.string().min(1),
+  clientId: z.string().min(1),
+  docType: z.string().min(1),
   /** Optional: for deed / affidavit / gitRep3, specify which property index (0-based) */
-  propertyIndex?: number;
+  propertyIndex: z.number().int().min(0).optional(),
   /** Optional custom instructions appended to the AI prompt */
-  customInstructions?: string;
-  trustTypes?: string[];
+  customInstructions: z.string().max(10000).optional(),
+  trustTypes: z.array(z.string()).optional(),
   /** Generation mode: template, ai, or hybrid */
-  generationMode?: GenerationMode;
+  generationMode: z.enum(['template', 'ai', 'hybrid']).optional(),
   /** Specific template variant ID to use */
-  templateId?: string;
+  templateId: z.string().optional(),
   /** Preferred software source for template selection */
-  softwareSource?: string;
+  softwareSource: z.string().optional(),
   /** Formatting preset — controls paragraph styling in exports (e.g. 'interactivelegal') */
-  formattingPreset?: string;
+  formattingPreset: z.string().optional(),
   /** Whose document is this — the client (testator), or their spouse?
    *  Defaults to 'client'. When 'spouse', the unified generator swaps
    *  testator/spouse identities so e.g. the will is generated FOR the
    *  spouse using the same client doc as the data source. The saved
    *  document gets a `_spouse` suffix to distinguish it. */
-  spouseRole?: 'client' | 'spouse';
-}
+  spouseRole: z.enum(['client', 'spouse']).optional(),
+});
+
+type GenerateSingleRequest = z.infer<typeof GenerateSingleRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Cloud Function
@@ -69,12 +71,15 @@ export const generateSingleDocument = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in to generate documents.');
     }
 
-    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'template', templateId, softwareSource, formattingPreset, spouseRole } =
-      request.data as GenerateSingleRequest;
-
-    if (!firmId || !clientId || !docType) {
-      throw new HttpsError('invalid-argument', 'firmId, clientId, and docType are required.');
+    const parsed = GenerateSingleRequestSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError(
+        'invalid-argument',
+        `Invalid request: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+      );
     }
+    const { firmId, clientId, docType, propertyIndex, customInstructions, trustTypes, generationMode = 'template', templateId, softwareSource, formattingPreset, spouseRole } =
+      parsed.data;
 
     const role = auth.token.role as string | undefined;
     const isStaff = role && ['admin', 'attorney', 'paralegal'].includes(role);

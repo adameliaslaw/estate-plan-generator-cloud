@@ -23,6 +23,14 @@ export const processQuestionnaireScan = functions
             throw new functions.https.HttpsError('permission-denied', 'Cannot process OCR for a different firm.');
         }
 
+        // Scan upload lives in the staff client-dashboard UI only. Without
+        // this check any authenticated user could burn the firm's OpenAI
+        // quota and overwrite client questionnaire data via OCR results.
+        const callerRole = context.auth.token.role as string | undefined;
+        if (!callerRole || !['admin', 'attorney', 'paralegal'].includes(callerRole)) {
+            throw new functions.https.HttpsError('permission-denied', 'Only staff members can process questionnaire scans.');
+        }
+
         const db = admin.firestore();
         const storage = admin.storage();
         const bucket = storage.bucket();
