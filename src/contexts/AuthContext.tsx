@@ -43,7 +43,6 @@ import {
   doc,
   getDoc,
   serverTimestamp,
-  setDoc,
   updateDoc,
 } from 'firebase/firestore';
 
@@ -266,21 +265,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           email,
           password,
         );
-        // Update the Firebase Auth display name.
+        // Update the Firebase Auth display name. Custom claims (role, firmId)
+        // are set server-side by linkClient when the client record is matched.
         await updateProfile(credential.user, { displayName });
-        // Create the Firestore profile stub; custom claims (role, firmId) are
-        // set server-side by a Cloud Function after the user is verified.
-        await setDoc(
-          doc(db, `users_pending/${credential.user.uid}`),
-          {
-            email,
-            displayName,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            onboarded: false,
-          },
-          { merge: true },
-        );
       } catch (err) {
         throw new Error(mapAuthError(err));
       }

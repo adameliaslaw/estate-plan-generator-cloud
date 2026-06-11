@@ -250,8 +250,10 @@ export default function DashboardPage() {
   const toggleExpanded = async () => {
     const nextState = !isExpanded;
     setIsExpanded(nextState);
-    if (user?.uid) {
-      const userRef = doc(db, 'users', user.uid);
+    // Profile docs live under firms/{firmId}/users — the top-level users
+    // collection has no Firestore rules, so writes there are denied.
+    if (user?.uid && firmId) {
+      const userRef = doc(db, COLLECTIONS.USERS(firmId), user.uid);
       await updateDoc(userRef, { recentActivityExpanded: nextState }).catch(console.error);
     }
   };

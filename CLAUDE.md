@@ -8,6 +8,7 @@
 4. **Define success criteria. Loop until verified.** State what "done" looks like before starting. Run tsc, build, and (when UI) manual browser verification. Type-checks prove correctness of code, not of the feature.
 5. **Never tell the user to deploy manually.** This repo has GitHub Actions that auto-deploy hosting and functions on every push to `main` (`.github/workflows/firebase-hosting-deploy.yml` and `firebase-functions-deploy.yml`). Merging a PR is sufficient — no `firebase deploy` command needed.
 6. **Always confirm when a push or merge completes.** After every `git push` or PR merge, explicitly tell the user it's done and that CI/CD is deploying automatically.
+7. **Auto-merge PRs once verified.** After opening a PR for requested work, merge it yourself (squash) once verification passes (tsc, build, tests) — don't wait for manual approval. Exception: changes touching the Never-Break List (security rules, indexes, templates, data model, CI workflows) still require explicit user sign-off before merging.
 
 ---
 
