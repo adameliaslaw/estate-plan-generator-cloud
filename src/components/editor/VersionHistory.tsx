@@ -106,6 +106,7 @@ const STATUS_BADGE: Record<DocStatus, string> = {
   final: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   incomplete: 'bg-gray-50 text-gray-700 border-gray-200',
   needs_review: 'bg-rose-50 text-rose-700 border-rose-200',
+  error: 'bg-red-50 text-red-700 border-red-200',
 };
 
 const STATUS_LABEL: Record<DocStatus, string> = {
@@ -114,6 +115,7 @@ const STATUS_LABEL: Record<DocStatus, string> = {
   final: 'Final',
   incomplete: 'Incomplete',
   needs_review: 'Needs Review',
+  error: 'Generation Failed',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -61,6 +61,12 @@ const STATUS_CONFIG: Record<
     icon: 'review',
     tooltip: 'Auto-validation detected structural issues (e.g., placeholder text, truncation). An attorney should review before finalizing.',
   },
+  error: {
+    label: 'Generation Failed',
+    classes: 'bg-red-100 text-red-800 ring-red-200',
+    icon: 'warning',
+    tooltip: 'Document generation failed. Review the error and regenerate.',
+  },
 };
 
 /** Build a detailed tooltip string from warnings or validation findings. */

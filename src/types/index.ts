@@ -48,7 +48,10 @@ export type DocType =
   | 'hipaaRelease'
   | 'custom';
 
-export type DocStatus = 'draft' | 'review' | 'final' | 'incomplete' | 'needs_review';
+// 'error' is written by the generation pipeline (functions/src/unified-generator.ts)
+// when a document fails to generate. Keep in sync with hasValidDocumentStatus()
+// in firestore.rules.
+export type DocStatus = 'draft' | 'review' | 'final' | 'incomplete' | 'needs_review' | 'error';
 
 export type QuestionnaireStatus = 'not_started' | 'in_progress' | 'completed';
 
