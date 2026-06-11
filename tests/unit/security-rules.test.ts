@@ -331,7 +331,7 @@ describe('Firestore Rules — collection hierarchy', () => {
   it('covers all 5 expected sub-collections under clients', () => {
     const subCollections = ['documents', 'notes', 'payments', 'calendar'];
     for (const coll of subCollections) {
-      expect(rulesContain(new RegExp(`match\\s+\/${coll}\/`))).toBe(true);
+      expect(rulesContain(new RegExp(`match\\s+/${coll}/`))).toBe(true);
     }
   });
 

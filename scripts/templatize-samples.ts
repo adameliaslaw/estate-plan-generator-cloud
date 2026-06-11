@@ -33,7 +33,6 @@ async function main() {
   }
 
   for (const file of files) {
-    const filePath = path.join(SAMPLE_DIR, file);
     console.log(`\n📄 Analyzing: ${file}`);
     
     // In a fully executed environment, this would call Mammoth.js extractHtml() -> processTemplateFile() logic

@@ -129,11 +129,12 @@ export default function BatchGenerateDialog({
   const [clientElapsed, setClientElapsed] = useState(0);
 
   useEffect(() => {
-    if (phase !== 'running') {
-      setClientElapsed(0);
-      return;
-    }
+    // Deliberate synchronous reset: the per-client timer restarts whenever the
+    // batch moves to the next client (currentIndex) or leaves the running
+    // phase. The reset IS the effect's purpose, not derivable state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClientElapsed(0);
+    if (phase !== 'running') return;
     const interval = setInterval(() => setClientElapsed((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [phase, currentIndex]);

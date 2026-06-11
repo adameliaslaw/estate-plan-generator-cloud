@@ -179,7 +179,7 @@ export function mockOnSnapshotQuery<T extends Record<string, unknown>>(
 /**
  * Create a mock for httpsCallable that returns a successful response.
  */
-export function mockHttpsCallable<TReq, TRes>(
+export function mockHttpsCallable<_TReq, TRes>(
   responseData: TRes,
 ): ReturnType<typeof vi.fn> {
   return vi.fn().mockReturnValue(vi.fn().mockResolvedValue({ data: responseData }));
@@ -282,10 +282,8 @@ export function createMockStorageRef(path: string) {
 }
 
 export function createMockUploadTask(progress = 100) {
-  let callback: ((snapshot: unknown) => void) | null = null;
   return {
-    on: vi.fn((event, progressCb, errorCb, completeCb) => {
-      callback = progressCb;
+    on: vi.fn((_event, _progressCb, _errorCb, completeCb) => {
       // Simulate completion
       setTimeout(() => completeCb?.(), 0);
     }),

@@ -74,6 +74,9 @@ jobs:
       - name: Install root dependencies (for the test suite)
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Run tests
         run: npm run test
 

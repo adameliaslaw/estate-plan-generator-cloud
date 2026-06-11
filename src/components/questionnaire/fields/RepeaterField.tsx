@@ -295,6 +295,9 @@ export function RepeaterField({
   // update survives — the previous 4 are overwritten because all dispatches
   // start from the same closure-captured `items`.
   const itemsRef = useRef(items);
+  // Render-time sync is required: syncing in useEffect would reintroduce the
+  // stale-closure clobbering described above for same-tick update bursts.
+  // eslint-disable-next-line react-hooks/refs
   itemsRef.current = items;
 
   function addItem() {

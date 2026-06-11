@@ -363,7 +363,7 @@ Two GitHub Actions workflows trigger on push to `main`:
 4. Run tests (`npm run test`, after a root `npm ci`) — a failing test aborts the deploy
 5. Deploy via Firebase CLI + Google Cloud auth (deploys functions **plus** `firestore:rules` and `storage` rules)
 
-> Note: deploys are gated on **tests**, not lint — the repo currently has a backlog of ~120 pre-existing eslint errors, so `npm run lint` is not yet a CI gate. Clearing that backlog and adding a lint gate is tracked as follow-up.
+> Deploys are gated on **lint and tests** — a lint error or failing test aborts the deploy. Lint warnings (react-refresh on shadcn `ui/` primitives, a few `exhaustive-deps`) do not block; don't add new ones.
 
 Both workflows use concurrency groups that cancel in-flight deploys when a new push arrives. **Merging a PR to `main` is sufficient to deploy — never instruct the user to run `firebase deploy` manually.**
 

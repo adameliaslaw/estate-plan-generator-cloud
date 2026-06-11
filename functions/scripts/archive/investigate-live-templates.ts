@@ -30,8 +30,9 @@ async function main() {
 
     console.log(`Found ${templatesSnapshot.size} total templates across the database.\n`);
 
-    const rawTemplates: any[] = [];
-    const templatizedTemplates: any[] = [];
+    interface TemplateSummary { id: string; name: string; firmId: string; vars?: number }
+    const rawTemplates: TemplateSummary[] = [];
+    const templatizedTemplates: TemplateSummary[] = [];
 
     templatesSnapshot.forEach(doc => {
       const data = doc.data();

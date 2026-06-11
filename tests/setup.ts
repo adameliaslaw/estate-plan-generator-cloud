@@ -181,7 +181,7 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 // ============================================================================
 // IntersectionObserver mock
 // ============================================================================
-global.IntersectionObserver = vi.fn().mockImplementation((callback) => ({
+global.IntersectionObserver = vi.fn().mockImplementation((_callback) => ({
   root: null,
   rootMargin: '',
   thresholds: [],

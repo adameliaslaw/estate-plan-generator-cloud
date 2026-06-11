@@ -16,12 +16,11 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import archiver from 'archiver';
-import { Readable, PassThrough } from 'stream';
+import { Readable } from 'stream';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { Packer } from 'docx';
 import { buildLegalDocumentHtml, sanitizeFileName } from './export-pdf';
-import * as path from 'path';
 import { buildDocxDocument } from './export-docx';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -153,7 +152,7 @@ export const exportBatchDocuments = functions
     memory: '2GB',
   })
   .region('us-east1')
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ── 1. Auth check ────────────────────────────────────────────────────────
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');

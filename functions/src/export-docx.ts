@@ -431,7 +431,7 @@ function extractInner(
 
 function parseAttrs(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
-  const re = /([a-zA-Z\-]+)\s*=\s*["']([^"']*)["']/g;
+  const re = /([a-zA-Z-]+)\s*=\s*["']([^"']*)["']/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(raw)) !== null) {
     attrs[m[1].toLowerCase()] = m[2];
@@ -1134,7 +1134,7 @@ export const exportDocumentDocx = functions
     memory: '512MB',
   })
   .region('us-east1')
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ── 1. Auth check ────────────────────────────────────────────────────────
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');

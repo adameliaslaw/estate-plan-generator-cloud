@@ -1,6 +1,5 @@
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import { HttpsError } from 'firebase-functions/v2/https';
 
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';

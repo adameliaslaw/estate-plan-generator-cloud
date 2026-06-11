@@ -96,7 +96,7 @@ describe('Auth Flow — email/password sign-in', () => {
   });
 
   it('handles auth/wrong-password error with friendly message', () => {
-    const error = createFirebaseError('auth/wrong-password', 'Wrong password.');
+    createFirebaseError('auth/wrong-password', 'Wrong password.');
     const message = AUTH_ERRORS['auth/wrong-password'];
     expect(message).toBeDefined();
     expect(message).toContain('Incorrect password');
@@ -347,7 +347,7 @@ describe('Auth error message coverage', () => {
   );
 
   it('all error messages are non-empty strings', () => {
-    for (const [code, message] of Object.entries(AUTH_ERRORS)) {
+    for (const [, message] of Object.entries(AUTH_ERRORS)) {
       expect(typeof message).toBe('string');
       expect(message.trim().length).toBeGreaterThan(0);
     }

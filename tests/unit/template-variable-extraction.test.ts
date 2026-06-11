@@ -30,7 +30,7 @@ vi.mock('firebase-admin', () => ({
 
 vi.mock('../../functions/src/ai-client', () => ({
   callAI: vi.fn(),
-  sanitizeObject: vi.fn((o: any) => o),
+  sanitizeObject: vi.fn((o: unknown) => o),
   parseAIJson: vi.fn(),
 }));
 

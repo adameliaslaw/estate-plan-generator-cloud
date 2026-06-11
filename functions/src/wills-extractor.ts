@@ -14,9 +14,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   DocumentType, ExtractionResult, TypeSpecificFields,
-  WillFields, PoaFinancialFields, PoaHealthcareFields,
-  HealthcareDirectiveFields, TrustFields, CodicilFields,
-  CorrespondenceFields, IntakeFields,
 } from './wills-schema';
 import {
   TRUST_STRUCTURES, BENEFICIARY_CATEGORIES, POWERS_GRANTED, DISTRIBUTION_STANDARDS,
@@ -362,7 +359,7 @@ function _stripConfidenceFields(raw: Record<string, unknown>): Record<string, un
   return rest;
 }
 
-function _stubResult(reasons: string[]): ExtractionResult {
+function _stubResult(_reasons: string[]): ExtractionResult {
   return {
     extraction_confidence: 0,
     field_confidence: {},

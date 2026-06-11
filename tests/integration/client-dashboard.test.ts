@@ -16,7 +16,7 @@
  * - Payment balance computation
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   MOCK_CLIENT_FOUNDATION,
   MOCK_CLIENT_GUARDIAN,

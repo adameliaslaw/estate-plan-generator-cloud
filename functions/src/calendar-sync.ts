@@ -367,7 +367,7 @@ export const pushEventToGoogleCalendar = functions
     memory: '256MB',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   })
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
@@ -558,7 +558,7 @@ export const pullGoogleCalendarEvents = functions
     memory: '256MB',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   })
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // ------------------------------------------------------------------
     // 1. Auth check
     // ------------------------------------------------------------------
@@ -925,7 +925,7 @@ export const triggerFirmCalendarSync = functions
     memory: '512MB',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   })
-  .https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  .https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
     // 1. Auth check
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to trigger a sync.');

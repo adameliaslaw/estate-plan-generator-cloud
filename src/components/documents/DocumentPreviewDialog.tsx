@@ -84,7 +84,7 @@ function PdfViewer({ bytes, downloadUrl, displayName }: PdfViewerProps) {
 
     return () => { cancelled = true; };
   // bytes identity is stable per open — eslint exhaustive-deps not needed here
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [bytes]);
 
   // Render the current page
@@ -193,7 +193,7 @@ function DocxViewer({ bytes }: DocxViewerProps) {
     })();
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [bytes]);
 
   if (loading) {

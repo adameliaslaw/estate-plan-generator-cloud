@@ -63,7 +63,7 @@ export const enhanceTemplate = onCall(
     memory: '512MiB',
     timeoutSeconds: 120,
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   async (request: CallableRequest<unknown>) => {
     // Auth check
     if (!request.auth) {
