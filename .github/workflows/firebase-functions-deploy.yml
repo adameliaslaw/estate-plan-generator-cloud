@@ -66,6 +66,17 @@ jobs:
         working-directory: functions-backfill
         run: npm ci
 
+      # Gate the deploy on the root test suite — it covers the security-rules
+      # text, the client-data serializer, and template formatting, so a rules
+      # or generator regression aborts the deploy before it ships. The suite
+      # needs root deps (vitest/jsdom) on top of the functions deps installed
+      # above for the tests that import functions/src.
+      - name: Install root dependencies (for the test suite)
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test
+
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v3
