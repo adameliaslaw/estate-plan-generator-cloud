@@ -58,6 +58,15 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: npm ci
 
+      # The root vitest suite imports some functions/src modules (serializer,
+      # template engine), which pull in firebase-admin/openai — those must be
+      # installed for the suite to resolve them.
+      - name: Install functions dependencies (for the test suite)
+        run: npm ci --prefix functions
+
+      - name: Run tests
+        run: npm run test
+
       - name: Type-check + build
         run: npm run build
         env:

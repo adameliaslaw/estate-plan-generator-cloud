@@ -19,8 +19,8 @@
 npm run dev                          # Vite dev server (http://localhost:5173)
 npm run build                        # tsc -b && vite build
 npm run lint                         # eslint .
-npm run test                         # vitest run
-npx tsc --noEmit                     # type check (root)
+npm run test                         # vitest run (needs `npm ci --prefix functions` first — suite imports functions/src)
+npx tsc -b                           # type check (root — use -b; bare `tsc --noEmit` is a no-op, root tsconfig has files:[])
 
 # Functions
 cd functions && npm install
@@ -352,15 +352,18 @@ Two GitHub Actions workflows trigger on push to `main`:
 
 **`firebase-hosting-deploy.yml`** — triggers when `src/`, `public/`, `index.html`, `vite.config.ts`, `tsconfig*`, `package*.json`, or `firebase.json` change.
 1. Node 22, frozen lockfile (`npm ci`)
-2. Type-check (`npx tsc --noEmit`)
-3. Build (`npm run build`)
+2. Run tests (`npm run test`, after installing `functions/` deps) — a failing test aborts the deploy
+3. Type-check + build (`npm run build`)
 4. Deploy to https://estate-plan-generator.web.app
 
-**`firebase-functions-deploy.yml`** — triggers when `functions/**`, `firebase.json`, `.firebaserc`, or the workflow file itself changes. **`functions-backfill/**` is NOT in the trigger paths** — a backfill-only commit does not trigger CI. Use `workflow_dispatch` for manual backfill deploys.
+**`firebase-functions-deploy.yml`** — triggers when `functions/**`, `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`, or the workflow file itself changes. **`functions-backfill/**` is NOT in the trigger paths** — a backfill-only commit does not trigger CI. Use `workflow_dispatch` for manual backfill deploys.
 1. Node 22, frozen lockfile
 2. Type-check + build `functions/`
 3. Install `functions-backfill/` deps (so predeploy `tsc` uses the pinned TypeScript version)
-4. Deploy via Firebase CLI + Google Cloud auth (deploys both function codebases)
+4. Run tests (`npm run test`, after a root `npm ci`) — a failing test aborts the deploy
+5. Deploy via Firebase CLI + Google Cloud auth (deploys functions **plus** `firestore:rules` and `storage` rules)
+
+> Note: deploys are gated on **tests**, not lint — the repo currently has a backlog of ~120 pre-existing eslint errors, so `npm run lint` is not yet a CI gate. Clearing that backlog and adding a lint gate is tracked as follow-up.
 
 Both workflows use concurrency groups that cancel in-flight deploys when a new push arrives. **Merging a PR to `main` is sufficient to deploy — never instruct the user to run `firebase deploy` manually.**
 
