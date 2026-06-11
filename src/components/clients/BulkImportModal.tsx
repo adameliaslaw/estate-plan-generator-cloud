@@ -232,7 +232,9 @@ export default function BulkImportModal({
           personalInfo: {
             firstName: row.firstName || '',
             lastName: row.lastName || '',
-            email: row.email || '',
+            // Lowercased so registerClientFromLink / linkClient email matching
+            // (compared against the auth token's lowercase email) finds this record.
+            email: (row.email || '').toLowerCase(),
             phone: row.phone || '',
           },
           firstName: row.firstName || '',
