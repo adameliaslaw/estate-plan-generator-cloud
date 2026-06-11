@@ -122,6 +122,14 @@ export const transcribeAudio = functions
       throw new functions.https.HttpsError('permission-denied', 'Cannot transcribe audio for a different firm.');
     }
 
+    // Note dictation is a staff feature; notes are staff-only per the
+    // Firestore rules. Without this check any authenticated client could
+    // burn the firm's OpenAI quota and write into note documents.
+    const callerRole = context.auth.token.role as string | undefined;
+    if (!callerRole || !['admin', 'attorney', 'paralegal'].includes(callerRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Only staff members can transcribe audio notes.');
+    }
+
     console.log(
       `[transcribeAudio] START firmId=${firmId} clientId=${clientId} noteId=${noteId} path=${storagePath}`,
     );
