@@ -216,7 +216,9 @@ function paymentRef(
  * Output: { paymentUrl, paymentDocId }
  */
 
-// LawPay Payment Page base URL (configured in LawPay dashboard → Payment Pages)
+// Default LawPay Payment Page base URL (configured in LawPay dashboard →
+// Payment Pages). Per-firm override: `lawpayPaymentPageUrl` on the
+// firms/{firmId} document (top level or under .settings).
 const LAWPAY_PAYMENT_PAGE_URL = 'https://secure.lawpay.com/pages/bolsterbrudereliasllc/operating';
 
 export const createPaymentRequest = functions
@@ -293,7 +295,15 @@ export const createPaymentRequest = functions
       params.set('email', clientEmail);
     }
 
-    const paymentUrl = `${LAWPAY_PAYMENT_PAGE_URL}?${params.toString()}`;
+    // Per-firm payment page (falls back to the default page if not configured).
+    const firmSnapForUrl = await admin.firestore().doc(`firms/${firmId}`).get();
+    const firmForUrl = firmSnapForUrl.exists ? firmSnapForUrl.data()! : {};
+    const pageUrl =
+      (firmForUrl.lawpayPaymentPageUrl as string | undefined)?.trim() ||
+      (firmForUrl.settings?.lawpayPaymentPageUrl as string | undefined)?.trim() ||
+      LAWPAY_PAYMENT_PAGE_URL;
+
+    const paymentUrl = `${pageUrl}?${params.toString()}`;
 
     console.log(`[createPaymentRequest] Generated payment URL: ${paymentUrl}`);
 

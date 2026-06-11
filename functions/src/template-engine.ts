@@ -285,15 +285,21 @@ function registerHelpers(): void {
   Handlebars.registerHelper('formatDate', (dateVal: unknown) => {
     if (!dateVal) return '_______________';
     let d: Date;
+    // Date-only strings (e.g. DOB "1980-05-12") parse as UTC midnight; format
+    // them in UTC so they never shift a day. Real timestamps are moments in
+    // time and must render as the New Jersey calendar date, not the server's
+    // UTC date (which is a day ahead of NJ every evening).
+    let timeZone = 'America/New_York';
     if (dateVal && typeof dateVal === 'object' && 'toDate' in dateVal && typeof (dateVal as Record<string, unknown>).toDate === 'function') {
       d = (dateVal as { toDate: () => Date }).toDate(); // Firestore Timestamp
     } else if (typeof dateVal === 'string') {
       d = new Date(dateVal);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal.trim())) timeZone = 'UTC';
     } else {
       d = new Date(dateVal as string | number);
     }
     if (isNaN(d.getTime())) return String(dateVal);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone });
   });
 
   // Full name from a person object { firstName, middleName, lastName, suffix }

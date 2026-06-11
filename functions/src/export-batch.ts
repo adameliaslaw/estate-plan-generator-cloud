@@ -312,7 +312,13 @@ export const exportBatchDocuments = functions
       );
 
       if (browser) {
-        await browser.close();
+        // The zip is already uploaded — a close() failure must not fail the export.
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.warn('[exportBatchDocuments] browser.close() failed:', closeErr);
+          browser.process()?.kill('SIGKILL');
+        }
         browser = null;
       }
 
@@ -329,7 +335,9 @@ export const exportBatchDocuments = functions
         try {
           await browser.close();
         } catch (_) {
-          // ignore
+          // close() failed — hard-kill so a zombie Chromium doesn't outlive
+          // this invocation in the reused container and leak memory.
+          browser.process()?.kill('SIGKILL');
         }
       }
 
