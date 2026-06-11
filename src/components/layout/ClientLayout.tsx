@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Scale, Lock, LogOut } from 'lucide-react';
 import { FIRM_DEFAULTS, ROUTES } from '@/config/constants';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,15 +18,24 @@ export function ClientLayout({ children }: ClientLayoutProps) {
   const { userProfile, signOut, loading, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { firmId } = useParams<{ firmId: string }>();
   const isClient = userProfile?.role === 'client';
 
   useEffect(() => {
     if (!loading && !user) {
+      // Clients receive questionnaire links by email but have no account, so the
+      // login page is a dead end for them. Send them to the public registration
+      // page instead — it signs them in anonymously and matches them back to
+      // their client record by email (registerClientFromLink).
+      if (firmId && location.pathname.startsWith('/questionnaire/')) {
+        navigate(`/questionnaire/${firmId}/register`, { replace: true });
+        return;
+      }
       // User is not logged in, redirect to login page and preserve the intended URL
       const redirectUrl = encodeURIComponent(location.pathname + location.search);
       navigate(`${ROUTES.LOGIN}?redirect=${redirectUrl}`, { replace: true });
     }
-  }, [loading, user, navigate, location]);
+  }, [loading, user, navigate, location, firmId]);
 
   const handleSignOut = async () => {
     try {
