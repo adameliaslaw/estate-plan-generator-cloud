@@ -270,6 +270,15 @@ describe('Firestore Rules — data validation helpers', () => {
     expect(rulesContain("'error'"       )).toBe(true);
   });
 
+  it('guards client identity fields (linkedUserId, firmId) against self-modification', () => {
+    expect(rulesContain('function clientIdentityUnchanged()')).toBe(true);
+    // Uses a diff-based affectedKeys check like the /users self-escalation guard.
+    expect(rulesContain('affectedKeys()')).toBe(true);
+    expect(rulesContain("hasAny(['linkedUserId', 'firmId'])")).toBe(true);
+    // The guard must be wired into the client-update rule.
+    expect(rulesContain('clientIdentityUnchanged()')).toBe(true);
+  });
+
   it('defines hasValidPaymentStatus() with allowed statuses', () => {
     expect(rulesContain('function hasValidPaymentStatus()')).toBe(true);
     expect(rulesContain("'pending'"   )).toBe(true);

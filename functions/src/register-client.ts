@@ -51,45 +51,90 @@ export const registerClientFromLink = onCall(
       throw new HttpsError('not-found', 'Firm not found.');
     }
 
+    const clientsCol = db.collection(`firms/${firmId}/clients`);
+
+    // Creates a fresh prospect stub linked to this anonymous session so the
+    // visitor can immediately start the questionnaire on their own record.
+    async function createStub(
+      extra: admin.firestore.DocumentData = {},
+    ): Promise<string> {
+      const ref = clientsCol.doc();
+      await ref.set({
+        firmId,
+        personalInfo: { firstName, lastName, email },
+        ...(anonymousUid ? { linkedUserId: anonymousUid } : {}),
+        status: 'prospect',
+        isArchived: false,
+        questionnaireProgress: {
+          status: 'not_started',
+          completedSections: [],
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdVia: 'questionnaire_link',
+        ...extra,
+      });
+      return ref.id;
+    }
+
     // Look for an existing client record with this email.
-    const existingSnap = await db
-      .collection(`firms/${firmId}/clients`)
+    const existingSnap = await clientsCol
       .where('personalInfo.email', '==', email)
       .limit(1)
       .get();
 
     if (!existingSnap.empty) {
-      const existingRef = existingSnap.docs[0].ref;
-      // Link the anonymous session to the existing record so the client can
-      // read/write it without a full login.
-      if (anonymousUid) {
-        await existingRef.update({ linkedUserId: anonymousUid, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      const existingDoc = existingSnap.docs[0];
+      const existingLink = existingDoc.get('linkedUserId') as string | undefined;
+
+      // The record is already linked to a DIFFERENT anonymous session. Email is
+      // not a verified identity here (anonymous registration), so silently
+      // overwriting the link would hand this visitor someone else's record — the
+      // account-hijack path. Instead, give the visitor their own fresh record so
+      // they're never locked out, and flag the collision for staff to reconcile.
+      if (existingLink && anonymousUid && existingLink !== anonymousUid) {
+        const newId = await createStub({
+          emailCollision: true,
+          collidesWithClientId: existingDoc.id,
+          status: 'prospect',
+        });
+
+        // Surface it in the dashboard activity feed (best-effort).
+        try {
+          await clientsCol.parent!.collection('activities').add({
+            firmId,
+            userId: 'system',
+            userName: 'System',
+            action: 'questionnaire registration needs review',
+            description:
+              `A questionnaire registration used an email already linked to another ` +
+              `client record. A separate record was created for "${firstName} ${lastName}" ` +
+              `(${email}); please reconcile with the existing record.`,
+            context: { clientId: newId, collidesWithClientId: existingDoc.id, email },
+            clientId: newId,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (logErr) {
+          console.warn('[registerClientFromLink] Failed to log collision activity:', logErr);
+        }
+
+        return { clientId: newId, isNew: true, needsReview: true };
       }
-      return { clientId: existingSnap.docs[0].id, isNew: false };
+
+      // Unlinked record (e.g. attorney-created or imported), or the same session
+      // returning: claim/keep the link so the visitor can read/write it.
+      if (anonymousUid && !existingLink) {
+        await existingDoc.ref.update({
+          linkedUserId: anonymousUid,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      return { clientId: existingDoc.id, isNew: false };
     }
 
-    // Create a new prospect stub so the client can fill in the questionnaire.
-    const newRef = db.collection(`firms/${firmId}/clients`).doc();
-    await newRef.set({
-      firmId,
-      personalInfo: {
-        firstName,
-        lastName,
-        email,
-      },
-      ...(anonymousUid ? { linkedUserId: anonymousUid } : {}),
-      status: 'prospect',
-      isArchived: false,
-      questionnaireProgress: {
-        status: 'not_started',
-        completedSections: [],
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdVia: 'questionnaire_link',
-    });
-
-    return { clientId: newRef.id, isNew: true };
+    // No existing record — create a fresh prospect stub.
+    const newId = await createStub();
+    return { clientId: newId, isNew: true };
   },
 );

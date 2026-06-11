@@ -102,6 +102,16 @@ service cloud.firestore {
                   && resource.data.linkedUserId == request.auth.uid));
     }
 
+    // Identity fields a client/linked session must never change on their own
+    // record. linkedUserId is the access key (changing it could re-point the
+    // record at another account or lock the owner out); firmId is the tenant
+    // boundary. Both are set only by the trusted admin SDK. Mirrors the
+    // self-escalation guard on /users/{userId}.
+    function clientIdentityUnchanged() {
+      return !request.resource.data.diff(resource.data)
+                  .affectedKeys().hasAny(['linkedUserId', 'firmId']);
+    }
+
     // ==========================================================
     // VALIDATION HELPER FUNCTIONS
     // ==========================================================
@@ -332,11 +342,13 @@ service cloud.firestore {
                       || (isClient()
                           && isOwnClientRecord(clientId)
                           && hasValidPersonalInfo()
-                          && hasValidClientStatus())
+                          && hasValidClientStatus()
+                          && clientIdentityUnchanged())
                       || (isAuthenticated()
                           && isOwnClientRecord(clientId)
                           && hasValidPersonalInfo()
-                          && hasValidClientStatus());
+                          && hasValidClientStatus()
+                          && clientIdentityUnchanged());
 
         // --- DELETE ---
         // Only admins and capabilities managers may delete client records 

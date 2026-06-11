@@ -29,11 +29,17 @@ export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
     }
 
     const uid = request.auth.uid;
-    const email = request.auth.token.email;
+    const rawEmail = request.auth.token.email;
 
-    if (!email) {
+    if (!rawEmail) {
         throw new HttpsError('failed-precondition', 'User does not have an email address associated with their account.');
     }
+
+    // Match on lowercase email — registerClientFromLink and the client-import
+    // flow both store personalInfo.email lowercased. Using the raw token email
+    // (which may be mixed-case from an OAuth provider) would miss the existing
+    // record and create a duplicate.
+    const email = rawEmail.toLowerCase();
 
     try {
         const db = admin.firestore();
