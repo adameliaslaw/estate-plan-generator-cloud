@@ -387,7 +387,13 @@ export const exportDocumentPdf = functions
         // Author: "Elias Counsel, LLC" (see buildLegalDocumentHtml <meta> tags).
       });
 
-      await browser.close();
+      // The PDF is already rendered — a close() failure must not fail the export.
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        console.warn('[exportDocumentPdf] browser.close() failed:', closeErr);
+        browser.process()?.kill('SIGKILL');
+      }
       browser = null;
 
       // ── 6. Upload to Cloud Storage ─────────────────────────────────────────
@@ -427,7 +433,9 @@ export const exportDocumentPdf = functions
         try {
           await browser.close();
         } catch (_) {
-          // ignore close errors
+          // close() failed — hard-kill so a zombie Chromium doesn't outlive
+          // this invocation in the reused container and leak memory.
+          browser.process()?.kill('SIGKILL');
         }
       }
 

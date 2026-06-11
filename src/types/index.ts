@@ -882,6 +882,18 @@ export interface Client {
   updatedAt: Timestamp;
   createdBy: string;
   updatedBy: string;
+
+  // Account linking & intake provenance (written by the backend; see
+  // functions/src/register-client.ts and link-client.ts). linkedUserId is the
+  // Firebase Auth UID granted access to this record by the Firestore
+  // "linked session" rules — set only via the admin SDK.
+  linkedUserId?: string;
+  /** Pipeline/intake status validated by firestore.rules hasValidClientStatus(). */
+  status?: 'prospect' | 'active' | 'pending_review' | 'completed' | 'archived';
+  createdVia?: string;
+  /** Set when a questionnaire registration collided with an already-linked record. */
+  emailCollision?: boolean;
+  collidesWithClientId?: string;
 }
 
 // ============================================================================

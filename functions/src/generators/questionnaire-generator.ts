@@ -103,7 +103,7 @@ export async function generateQuestionnaire(
       <div class="qs-header">
         <h1>Questionnaire Summary</h1>
         <p>Vaulted Entry for <strong>${clientFullName}</strong></p>
-        <p style="font-size:12px;color:#999;">Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+        <p style="font-size:12px;color:#999;">Generated on ${new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' })} at ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' })}</p>
       </div>
   `;
 

@@ -4,9 +4,14 @@ import * as admin from 'firebase-admin';
 /**
  * Exposes a minimal, unauthenticated endpoint to fetch the firm's branding
  * (logoUrl and firmName) for the login page without compromising security.
+ *
+ * The Google Maps key is only returned to authenticated callers (anonymous
+ * questionnaire sessions included) — the login page needs just logo/name,
+ * and unauthenticated bots should not be able to enumerate firm IDs and
+ * harvest the key.
  */
 export const getFirmBranding = functions.region('us-east1').https.onCall(
-    async (data) => {
+    async (data, context) => {
         try {
             // Default to 'elias-counsel' or use provided firmId
             const targetFirmId = data?.firmId || 'elias-counsel';
@@ -19,10 +24,12 @@ export const getFirmBranding = functions.region('us-east1').https.onCall(
             return {
                 logoUrl: firmData.logoUrl || null,
                 firmName: firmData.firmName || null,
-                // Browser-side key required for Google Places Autocomplete in the questionnaire.
-                // Restrict this key by HTTP referrer in GCP Console so it is only
-                // accepted from your firm's domains.
-                googleMapsApiKey: firmData.settings?.googleMapsApiKey || null,
+                // Browser-side key for Google Places Autocomplete in the
+                // questionnaire (runs under anonymous auth). Keep the key
+                // HTTP-referrer-restricted in GCP Console as defense in depth.
+                googleMapsApiKey: context.auth
+                    ? (firmData.settings?.googleMapsApiKey || null)
+                    : null,
             };
         } catch (error) {
             console.error('[getFirmBranding] Error fetching branding:', error);
