@@ -147,15 +147,18 @@ service cloud.firestore {
     }
 
     // Validate document status against the allowed enum values.
+    // Must stay in sync with DocStatus in src/types/index.ts — the editor
+    // and review flows write these via the client SDK, and the generation
+    // pipeline (admin SDK) writes draft/incomplete/needs_review/error.
     function hasValidDocumentStatus() {
       return !('status' in request.resource.data)
           || request.resource.data.status in [
                'draft',
-               'under_review',
-               'approved',
-               'signed',
-               'filed',
-               'archived'
+               'review',
+               'final',
+               'incomplete',
+               'needs_review',
+               'error'
              ];
     }
 

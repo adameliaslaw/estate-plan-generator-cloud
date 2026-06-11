@@ -258,10 +258,16 @@ describe('Firestore Rules — data validation helpers', () => {
     expect(rulesContain("'archived'")).toBe(true);
   });
 
-  it('defines hasValidDocumentStatus() with allowed statuses', () => {
+  it('defines hasValidDocumentStatus() with the DocStatus vocabulary', () => {
     expect(rulesContain('function hasValidDocumentStatus()')).toBe(true);
-    expect(rulesContain("'draft'"   )).toBe(true);
-    expect(rulesContain("'approved'")).toBe(true);
+    // Must match DocStatus in src/types/index.ts — the editor and review
+    // flows write these statuses through the client SDK.
+    expect(rulesContain("'draft'"       )).toBe(true);
+    expect(rulesContain("'review'"      )).toBe(true);
+    expect(rulesContain("'final'"       )).toBe(true);
+    expect(rulesContain("'incomplete'"  )).toBe(true);
+    expect(rulesContain("'needs_review'")).toBe(true);
+    expect(rulesContain("'error'"       )).toBe(true);
   });
 
   it('defines hasValidPaymentStatus() with allowed statuses', () => {
