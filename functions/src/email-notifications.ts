@@ -1191,7 +1191,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
  * 'client_created' email template.
  */
 export const onClientCreatedSendEmail = onDocumentCreated(
-  { document: 'firms/{firmId}/clients/{clientId}', region: 'us-east1' },
+  { document: 'firms/{firmId}/clients/{clientId}', region: 'us-east1', memory: '512MiB' },
   async (event) => {
     const snap = event.data;
     if (!snap) return;

@@ -893,7 +893,7 @@ export const recordTemplateCorrection = onCall(
 // ---------------------------------------------------------------------------
 
 export const confirmTemplateVariables = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 

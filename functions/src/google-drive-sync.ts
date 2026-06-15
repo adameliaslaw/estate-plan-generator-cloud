@@ -377,7 +377,7 @@ export const connectGoogleDrive = onCall(
   {
     region: 'us-east1',
     timeoutSeconds: 60,
-    memory: '256MiB',
+    memory: '512MiB',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   },
   async (request) => {

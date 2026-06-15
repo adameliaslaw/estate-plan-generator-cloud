@@ -257,7 +257,7 @@ export const listTemplates = onCall(
 // ---------------------------------------------------------------------------
 
 export const getTemplateContent = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, templateId } = request.data;

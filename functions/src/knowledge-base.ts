@@ -153,7 +153,7 @@ export const updateKnowledgeResource = onCall(
 // ---------------------------------------------------------------------------
 
 export const deleteKnowledgeResource = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, resourceId } = request.data as { firmId: string; resourceId: string };

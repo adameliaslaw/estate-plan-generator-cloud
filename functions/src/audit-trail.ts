@@ -278,6 +278,7 @@ export const onPaymentCreated = onDocumentCreated(
   {
     document: 'firms/{firmId}/clients/{clientId}/payments/{paymentId}',
     region: 'us-east1',
+    memory: '512MiB',
   },
   async (event: FirestoreEvent<QueryDocumentSnapshot | undefined>) => {
     const { firmId, clientId, paymentId } = event.params;

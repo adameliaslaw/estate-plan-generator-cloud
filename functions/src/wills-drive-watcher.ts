@@ -120,7 +120,7 @@ async function setupNewWatch(
 // ---------------------------------------------------------------------------
 
 export const willsDriveWebhook = onRequest(
-  { region: REGION, memory: '256MiB', timeoutSeconds: 60 },
+  { region: REGION, memory: '512MiB', timeoutSeconds: 60 },
   async (req, res) => {
     const state     = req.headers['x-goog-resource-state'] as string | undefined;
     const channelId = req.headers['x-goog-channel-id']     as string | undefined;
