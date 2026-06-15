@@ -137,9 +137,16 @@ export function chunkText(
     end = Math.min(end, text.length);
     chunks.push(text.slice(start, end).trim());
 
+    // Stop once a chunk reaches the end. The old guard `start >= text.length`
+    // could NEVER fire: end is capped at text.length, so start = end - overlap
+    // was always ≤ text.length - overlap. On the final segment the loop re-set
+    // start to the same value every pass, pushing the same tail chunk forever
+    // → unbounded array → OOM (which scaled to fill any memory limit). This
+    // break terminates the moment the whole text is consumed.
+    if (end >= text.length) break;
+
     // Advance with overlap
     start = end - overlap;
-    if (start >= text.length) break;
   }
 
   return chunks.filter((c) => c.length > 50); // drop tiny trailing chunks
@@ -231,15 +238,13 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
   {
     document: 'firms/{firmId}/knowledgeBase/{resourceId}',
     region: 'us-east1',
-    // A single large doc (~50K chars / 10 chunks) peaks ~2.3GiB embedding, so
-    // 2GiB OOMs on the biggest KB resources even one-at-a-time. 4GiB gives
-    // headroom for the largest single doc.
-    memory: '4GiB',
+    // A single embed peaks ~1.2GiB; 2GiB is ample now that the chunkText
+    // infinite loop (the real cause of the unbounded "OOM") is fixed.
+    memory: '2GiB',
     timeoutSeconds: 120,
     // One embed per instance: the default gen2 concurrency of 80 lets a write
     // burst (bulk import / backfill) stack multiple embeds on one instance and
-    // multiply the per-doc footprint. Serialize per instance and let Cloud Run
-    // scale horizontally for throughput.
+    // exceed 2GiB. Serialize per instance and let Cloud Run scale horizontally.
     concurrency: 1,
   },
   async (event) => {
@@ -333,11 +338,10 @@ export const onTemplateWritten = onDocumentWritten(
   {
     document: 'firms/{firmId}/documentTemplates/{templateId}',
     region: 'us-east1',
-    // See onKnowledgeResourceWritten: large templates embed at the same scale.
-    memory: '4GiB',
+    memory: '2GiB',
     timeoutSeconds: 120,
     // Serialize per instance so a bulk template write burst can't stack embeds
-    // and multiply the per-doc footprint.
+    // and exceed 2GiB.
     concurrency: 1,
   },
   async (event) => {
