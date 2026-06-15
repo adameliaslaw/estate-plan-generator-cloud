@@ -233,6 +233,11 @@ export const onKnowledgeResourceWritten = onDocumentWritten(
     region: 'us-east1',
     memory: '2GiB',
     timeoutSeconds: 120,
+    // One embed per instance: a single doc peaks ~1.2GiB, so the default gen2
+    // concurrency of 80 lets a write burst (bulk import / backfill) stack
+    // multiple embeds on one instance and blow past 2GiB. Serialize per
+    // instance and let Cloud Run scale horizontally for throughput.
+    concurrency: 1,
   },
   async (event) => {
     const { firmId, resourceId } = event.params;
@@ -327,6 +332,9 @@ export const onTemplateWritten = onDocumentWritten(
     region: 'us-east1',
     memory: '2GiB',
     timeoutSeconds: 120,
+    // See onKnowledgeResourceWritten: serialize per instance so a bulk
+    // template write burst can't stack embeds and exceed 2GiB.
+    concurrency: 1,
   },
   async (event) => {
     const { firmId, templateId } = event.params;
