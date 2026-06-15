@@ -92,6 +92,11 @@ jobs:
       - name: Deploy functions + security rules
         # `google-github-actions/auth@v3` sets GOOGLE_APPLICATION_CREDENTIALS
         # automatically for subsequent steps; firebase-tools picks it up.
-        # firestore:rules / storage are included because no other workflow
-        # deploys them — without this, rules merged to main never reach prod.
-        run: firebase deploy --only functions,firestore:rules,storage --project estate-plan-generator --non-interactive --force
+        # firestore:rules is included because no other workflow deploys it.
+        # `storage` is intentionally NOT here: Firebase Storage's defaultBucket
+        # resource is not registered for this project (the GCS bucket exists and
+        # the app uses it, but `firebase deploy --only storage` errors with
+        # "Firebase Storage has not been set up"), which aborted the ENTIRE
+        # deploy. Deploy storage.rules manually (`firebase deploy --only storage`)
+        # after provisioning Storage if/when that's done.
+        run: firebase deploy --only functions,firestore:rules --project estate-plan-generator --non-interactive --force
