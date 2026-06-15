@@ -23,6 +23,12 @@ Started as a one-line verification of the 6/02 OOM fix; the drain check uncovere
 - ✅ **Stale footgun deleted (2026-06-15).** `functions/scripts/embed-unembedded-kb.cjs` embedded with `gemini-embedding-001` (the wrong model — it's what put 18 docs in the wrong vector space); re-running it re-contaminated the KB. The production trigger now handles all embedding correctly, so it was obsolete. Removed. (`functions-backfill` remains the correct path for any future bulk backfill.)
 - **`functions-backfill/src/kb-embeddings.ts`** has the correct `chunkText` (capped + forward-progress guard) — no change needed, noted for awareness that the two copies had diverged.
 
+### Health sweep (same session) — two more live issues caught
+
+**256MiB cold-start OOMs from the Node 22 bump — fixed (`5da585b`).** `firebase functions:log` showed a cluster OOMing right after deploys, each barely over (256 → 257/258 MiB used). PR #33's runtime bump (Node 20→22) raised the memory baseline enough to push edge-of-256 functions over on cold start. Bumped the **7 observed** to 512MiB: `onPaymentCreated` + `onClientCreatedSendEmail` (event triggers — no retry, so a cold-start OOM **silently drops a payment/welcome email**), `willsDriveWebhook`, `deleteKnowledgeResource`, `confirmTemplateVariables`, `getTemplateContent`, `connectGoogleDrive`. All verified at 512Mi live. **~26 other functions still sit at 256MiB** — deliberately NOT blanket-bumped (most have headroom; over-provisioning is waste). Posture: bump reactively as future `functions:log` sweeps show specific functions OOM. See [[project_function_oom_256mib]].
+
+🔴 **Google Calendar sync DOWN — needs Adam (recurring).** `syncGoogleCalendar` throwing `invalid_grant` every 5 min for elias-counsel ("authorisation revoked — reconnect via Settings → Integrations → Google Calendar"). Same failure as the 2026-06-01 fix; the firm's stored refresh token is invalid again. **User action:** Settings → Integrations → Google Calendar → reconnect. `GOOGLE_CLIENT_ID`/`SECRET` are on version 5 now, so something rotated them — if it keeps recurring after reconnect, investigate OAuth-client churn (same root-cause pattern as the 2026-06-01 and 2026-05-27 Google auth breakages).
+
 ---
 
 ## 📍 SESSION — 2026-06-02 (health-check fix: KB embedding OOM loop)
