@@ -80,6 +80,12 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: "749324460027"
           VITE_FIREBASE_APP_ID: 1:749324460027:web:410d9c51785e6c0dd8b55e
           VITE_USE_EMULATORS: "false"
+          # Public OAuth client ID (baked into the client bundle; matches the
+          # backend GOOGLE_CLIENT_ID secret). Without this, Settings →
+          # Integrations renders "Missing VITE_GOOGLE_CLIENT_ID" and the
+          # Google Calendar/Drive connect buttons don't work. Was absent here,
+          # so every CI hosting deploy stripped it from the bundle.
+          VITE_GOOGLE_CLIENT_ID: 749324460027-donln8vkprbol5uk7hhui19fbnc7ff7j.apps.googleusercontent.com
 
       - name: Deploy to Firebase Hosting (live channel)
         uses: FirebaseExtended/action-hosting-deploy@v0
