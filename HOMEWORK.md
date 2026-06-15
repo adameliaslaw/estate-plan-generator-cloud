@@ -4,11 +4,34 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-06-15 (KB embedding fully fixed + 4-day CI-deploy outage fixed)
+
+Started as a one-line verification of the 6/02 OOM fix; the drain check uncovered a much deeper problem. All shipped to `main`, CI green, verified live. **KB embedding is now fully healthy: 151/151 active resources embedded, 100% `text-embedding-005`, 0 unembedded.**
+
+**ROOT CAUSE (the real bug) — `chunkText` infinite loop (`8bdf4eb`).** `functions/src/kb-embeddings.ts` `chunkText` had a termination bug: the guard `if (start >= text.length) break` can never fire (end is capped at `text.length`, so `start = end - overlap` is always ≤ `length - overlap`). On the final segment it re-set `start` to the same value every pass and pushed the same tail chunk **forever** → unbounded array → heap OOM that **scaled to fill any memory limit** (2GiB→2.3GB, 4GiB→4.5GB both died). Only docs > 12000 chars hit the chunked path, and the embed error is caught non-fatally — so large KB resources/templates **silently never embedded**. Reproduced locally (identical heap OOM) to prove it was logic, not Cloud Run memory. Fix = `break` when a chunk reaches `text.length` (matches the already-correct `functions-backfill` copy, which has both this guard and a `MAX_CHUNKS=200` cap). The 6/02 "2GiB OOM loop" fix treated a symptom; this is the disease.
+
+**3-model embedding contamination — fixed.** Of 151 active KB docs, only **51** were on the canonical query model (`text-embedding-005`, 768-dim, used by `kb-vector-search`). The rest were retrieval-dead: **34** on OpenAI `text-embedding-3-small` (**1536-dim** → invisible to a 768-dim `findNearest`), **18** on `gemini-embedding-001` (768-dim but wrong vector space → mis-ranked), **48** unembedded. So RAG saw only **34%** of the KB. Re-embedded all 100 non-canonical docs by clearing `embeddedAt`/`embeddingModel` to re-fire the production trigger → now uniformly `text-embedding-005`.
+
+**`concurrency:1` on both embedding triggers (`83e3c2a`).** Default gen2 concurrency (80/instance) let a write burst (bulk import / this backfill) stack embeds and exceed 2GiB. Serialize per instance; Cloud Run scales horizontally. (Memory briefly bumped 2→4GiB in `9e5a479` as a stop-gap, then reverted to 2GiB in `8bdf4eb` once the loop — the true cause — was fixed.)
+
+**CI functions-deploy was BROKEN since 2026-06-11 (4 days) — fixed.** PR #31 added `storage` to `firebase deploy --only functions,firestore:rules,storage`; the deployer SA `github-action-1189038360` had **no storage and no firebaserules permissions**, and any one target failing aborts the **whole** deploy. So #32's function changes (**Zod validation + staff-role auth checks on transcribe/OCR**) never reached prod either. Fixes:
+- Granted deployer SA **`roles/firebasestorage.admin`** + **`roles/firebaserules.admin`** (both reversible; same least-privilege pattern as the original CI bootstrap).
+- Dropped `storage` from the CI deploy command (`a165225`) — Firebase Storage's `defaultBucket` resource isn't registered for this project (see open item), so the storage target can't deploy rules regardless of IAM. `firestore:rules` stays in CI (the IAM grant fixed it).
+
+🔴 **Open follow-ups (none blocking):**
+- **Firebase Storage not provisioned.** The GCS bucket `estate-plan-generator.firebasestorage.app` exists and the app uses it, but `firebase deploy --only storage` errors "Firebase Storage has not been set up" (defaultBucket resource unregistered). `storage.rules` is therefore **manual-deploy only** and currently NOT auto-deployed. To restore CI auto-deploy of storage rules: provision Storage (Firebase console → Storage → Get Started, or `firebase init storage`), then re-add `storage` to the workflow deploy command. Storage rules are already live and change rarely, so low priority.
+- **Stale footgun: `functions/scripts/embed-unembedded-kb.cjs`** embeds with `gemini-embedding-001` (the wrong model — it's what put 18 docs in the wrong vector space). Running it again re-contaminates the KB. The production trigger now handles all embedding correctly, so this script is obsolete — **recommend deleting it** (left in place this session; not my code to delete unilaterally).
+- **`functions-backfill/src/kb-embeddings.ts`** has the correct `chunkText` (capped + forward-progress guard) — no change needed, noted for awareness that the two copies had diverged.
+
+---
+
 ## 📍 SESSION — 2026-06-02 (health-check fix: KB embedding OOM loop)
 
 Session-start `firebase functions:log` health check caught a live OOM loop the UI never surfaces: **`onKnowledgeResourceWritten`** (KB re-vectorization trigger) was configured at `1GiB` but peaks **1107–1153 MiB** during embedding → container killed on signal 9 **before** writing `embeddedAt`, so the resource stayed unembedded and got reprocessed indefinitely (loop visible at 17:02 / 17:09 / 17:19…).
 
-**Fix (`5c28c07`, pushed to `main`, CI auto-deploying):** bumped trigger memory `1GiB → 2GiB` in `functions/src/kb-embeddings.ts:234`, matching its sibling `onTemplateWritten` (same embedding workload, same file, already at 2GiB). One-line change; functions `tsc --noEmit` clean. 🔴 Verify post-deploy: tail `functions:log` for `onknowledgeresourcewritten` — OOM lines should stop and `[kb-embeddings] Embedded resource …` should appear.
+**Fix (`5c28c07`, pushed to `main`, CI auto-deploying):** bumped trigger memory `1GiB → 2GiB` in `functions/src/kb-embeddings.ts:234`, matching its sibling `onTemplateWritten` (same embedding workload, same file, already at 2GiB). One-line change; functions `tsc --noEmit` clean.
+
+✅ **VERIFIED 2026-06-15.** Deployed revision `onknowledgeresourcewritten-00033-dax` confirmed running at **2Gi** (deployed 2026-06-03 01:35 UTC, right after the fix push). No OOM / signal-9 / reprocessing lines in recent `functions:log` — the every-~7-10-min loop activity is gone. Item closed.
 
 ---
 
