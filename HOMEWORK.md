@@ -20,7 +20,7 @@ Started as a one-line verification of the 6/02 OOM fix; the drain check uncovere
 
 🔴 **Open follow-ups (none blocking):**
 - **Firebase Storage not provisioned.** The GCS bucket `estate-plan-generator.firebasestorage.app` exists and the app uses it, but `firebase deploy --only storage` errors "Firebase Storage has not been set up" (defaultBucket resource unregistered). `storage.rules` is therefore **manual-deploy only** and currently NOT auto-deployed. To restore CI auto-deploy of storage rules: provision Storage (Firebase console → Storage → Get Started, or `firebase init storage`), then re-add `storage` to the workflow deploy command. Storage rules are already live and change rarely, so low priority.
-- **Stale footgun: `functions/scripts/embed-unembedded-kb.cjs`** embeds with `gemini-embedding-001` (the wrong model — it's what put 18 docs in the wrong vector space). Running it again re-contaminates the KB. The production trigger now handles all embedding correctly, so this script is obsolete — **recommend deleting it** (left in place this session; not my code to delete unilaterally).
+- ✅ **Stale footgun deleted (2026-06-15).** `functions/scripts/embed-unembedded-kb.cjs` embedded with `gemini-embedding-001` (the wrong model — it's what put 18 docs in the wrong vector space); re-running it re-contaminated the KB. The production trigger now handles all embedding correctly, so it was obsolete. Removed. (`functions-backfill` remains the correct path for any future bulk backfill.)
 - **`functions-backfill/src/kb-embeddings.ts`** has the correct `chunkText` (capped + forward-progress guard) — no change needed, noted for awareness that the two copies had diverged.
 
 ---
