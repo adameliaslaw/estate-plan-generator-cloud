@@ -11,7 +11,9 @@ This project's recurring weakness was **silent failures found late** (Calendar d
 - `5934839025673898700` — **Function boot failure** (readiness/STARTUP probe; the "internal/CORS" masquerade). *Watch for deploy-time-transient noise; disable if it cries wolf.*
 - `15160115989436873871` — **syncGoogleCalendar invalid_grant** (OAuth — see below).
 
-No email = healthy. Manage at console.cloud.google.com/monitoring/alerting. Full detail + how to add more: [[project_gcp_alerting]]. **Not covered:** CI deploy failures (GitHub Actions, not GCP logs — GitHub emails the actor by default; harden via an on-failure workflow step if desired, Never-Break sign-off needed).
+No email = healthy. Manage at console.cloud.google.com/monitoring/alerting. Full detail + how to add more: [[project_gcp_alerting]].
+
+**CI deploy failures — now covered too (PR #37, merged).** Both deploy workflows open a GitHub **issue assigned to @adameliaslaw** on any failed step (lint/test/build/deploy), appending to the existing open issue rather than duplicating. Closes the gap behind the 4-day June outage (commits authored by "AI Bot" → GitHub's default failure email never reached Adam). No new secret (built-in `GITHUB_TOKEN` + `permissions: issues:write`); verified both deploys still go green post-merge. Between the GCP alerts (OOM/boot/OAuth → email) and this (CI failures → assigned issue), every silent-failure class that's bitten this project is now auto-surfaced.
 
 ## 🔔 AUTOMATIC ALERT — Google OAuth durability (no manual review needed)
 
