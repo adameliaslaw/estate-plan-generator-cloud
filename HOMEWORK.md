@@ -4,6 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## ⏰ SCHEDULED REVIEW — 2026-06-30 (Google OAuth durability check)
+
+**On/after 2026-06-30, verify the Google Calendar OAuth fix held.** The recurring `invalid_grant` ("Token has been expired or revoked") was root-caused 2026-06-16 to an External OAuth app stuck in "Testing" publishing status (7-day-ish refresh-token expiry); Adam published the consent screen to production + reconnected on 6/16. The prior token died ~14 days after the 6/01 reconnect, so **6/30 is the checkpoint** — if Calendar is still connected past it, the production fix is permanently confirmed.
+
+**How to check (one command):**
+```bash
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="syncgooglecalendar" AND textPayload:"invalid_grant" AND timestamp>="2026-06-17T00:00:00Z"' --limit=5 --format="value(timestamp)"
+```
+- **Empty output** → fix held → close [[project_google_oauth_refresh_token_expiry]], remove this scheduled item.
+- **Any rows** → it died AGAIN despite production status → the cause is NOT testing-mode expiry; reinvestigate (token superseded by re-auth / account-level revocation). **Do NOT just reconnect** — that's the band-aid this whole investigation replaced.
+
+---
+
 ## 📍 SESSION — 2026-06-16 (health audit clean + Google OAuth churn root-caused)
 
 Picked up from HOMEWORK. Health check + the two open Google/Storage carry-forwards. No code shipped (findings + one memory). Tree clean, `main` at `289025e`.
