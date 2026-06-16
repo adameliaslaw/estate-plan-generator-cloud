@@ -92,14 +92,13 @@ jobs:
       - name: Deploy functions + security rules
         # `google-github-actions/auth@v3` sets GOOGLE_APPLICATION_CREDENTIALS
         # automatically for subsequent steps; firebase-tools picks it up.
-        # firestore:rules is included because no other workflow deploys it.
-        # `storage` is intentionally NOT here. Storage WAS provisioned 2026-06-16
-        # (defaultBucket now registered; `firebase deploy --only storage` succeeds
-        # locally as an owner), BUT under the CI deployer SA the deploy STILL fails
-        # "Firebase Storage has not been set up" — the SA's `defaultBucket` GET on
-        # firebasestorage.googleapis.com is denied even with roles/firebasestorage.admin,
-        # so the CLI mistakes it for unprovisioned and aborts the ENTIRE deploy
-        # (same blast radius as the 6/11 outage). Until the SA's storage-read path
-        # is fixed, deploy storage.rules manually (`firebase deploy --only storage`)
-        # — they change rarely and live rules already match the repo.
-        run: firebase deploy --only functions,firestore:rules --project estate-plan-generator --non-interactive --force
+        # firestore:rules and storage are included because no other workflow
+        # deploys them. Storage was provisioned 2026-06-16 (defaultBucket
+        # registered). The CI deployer SA initially still failed the storage
+        # setup-check with "Firebase Storage has not been set up": its
+        # `defaultBucket` GET returned 404 (not 403) because the SA had only the
+        # narrow firebase*.admin roles and lacked `firebase.projects.get`, which
+        # firebasestorage needs to resolve the defaultBucket. Fixed by granting
+        # the SA `roles/firebase.viewer` (read-only) — verified the GET flips
+        # 404->200 under SA impersonation. storage.rules now auto-deploys in CI.
+        run: firebase deploy --only functions,firestore:rules,storage --project estate-plan-generator --non-interactive --force
