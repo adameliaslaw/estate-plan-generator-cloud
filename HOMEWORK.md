@@ -4,16 +4,13 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## ⏰ SCHEDULED REVIEW — 2026-06-30 (Google OAuth durability check)
+## 🔔 AUTOMATIC ALERT — Google OAuth durability (no manual review needed)
 
-**On/after 2026-06-30, verify the Google Calendar OAuth fix held.** The recurring `invalid_grant` ("Token has been expired or revoked") was root-caused 2026-06-16 to an External OAuth app stuck in "Testing" publishing status (7-day-ish refresh-token expiry); Adam published the consent screen to production + reconnected on 6/16. The prior token died ~14 days after the 6/01 reconnect, so **6/30 is the checkpoint** — if Calendar is still connected past it, the production fix is permanently confirmed.
-
-**How to check (one command):**
-```bash
-gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="syncgooglecalendar" AND textPayload:"invalid_grant" AND timestamp>="2026-06-17T00:00:00Z"' --limit=5 --format="value(timestamp)"
-```
-- **Empty output** → fix held → close [[project_google_oauth_refresh_token_expiry]], remove this scheduled item.
-- **Any rows** → it died AGAIN despite production status → the cause is NOT testing-mode expiry; reinvestigate (token superseded by re-auth / account-level revocation). **Do NOT just reconnect** — that's the band-aid this whole investigation replaced.
+**A GCP log-based alert now watches for the recurring failure automatically** — replaces the manual 2026-06-30 poll (catches it whenever it happens, not just one date; no credentials stored anywhere).
+- **Alert policy:** `projects/estate-plan-generator/alertPolicies/15160115989436873871` ("syncGoogleCalendar invalid_grant — Google OAuth token died"). Condition = any new log matching `resource.type="cloud_run_revision" AND resource.labels.service_name="syncgooglecalendar" AND textPayload:"invalid_grant"`; rate-limited 1/day.
+- **Notification channel:** email → `adam@adameliaslaw.com` (channel `10320474330459174565`, **VERIFIED** 2026-06-16).
+- **If the alert fires:** the token died again. Root cause was an External OAuth app in "Testing" status (fixed by publishing to production 6/16). A fresh failure despite production status means a DIFFERENT cause (token superseded by re-auth / account-level revocation) — **reinvestigate, do NOT just reconnect** (the band-aid this investigation replaced). See [[project_google_oauth_refresh_token_expiry]].
+- **If no alert by ~2026-06-30** (past the ~14-day window where it died before): fix confirmed permanent; can close the OAuth item. No action otherwise — silence = healthy.
 
 ---
 
