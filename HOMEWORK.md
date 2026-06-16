@@ -4,6 +4,25 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-16 (all green, all shipped; board clean + self-monitoring)
+
+Started from the 6/15 carry-forwards; a deep health audit + two root-cause investigations closed everything and added permanent monitoring. All on `main` (HEAD `75bf900`), CI green (both functions + hosting deploys verified green post-merge), tree clean, no open issues.
+
+**Shipped + verified this session:**
+- **Health audit — clean.** Wider `gcloud logging` pull (past the calendar-cron noise) showed the 256MiB OOMs were all **pre-deploy stragglers** before the 03:00 UTC global-512 deploy; zero errors since. 512 floor holds.
+- **Google Calendar OAuth — root-caused + fixed (corrects the 6/15 premise).** NOT secret rotation (secrets stable since 4/23). Project has no GCP org → OAuth app forced **External** → stuck in **"Testing"** status → Google expired the refresh token every ~1–2 wks. Adam published consent screen to **production** (status WAS Testing — confirmed) + reconnected; sync healthy. Verification banner correctly ignored. [[project_google_oauth_refresh_token_expiry]]
+- **Storage CI auto-deploy — root-caused + fixed (PRs #34 revert → #35).** Storage was provisioned, but the deployer SA's `defaultBucket` GET returned **404 not 403** — it lacked **`firebase.projects.get`** (had only narrow `firebase*.admin` roles). Proven via SA impersonation. Granted **`roles/firebase.viewer`** (read-only); deploy run `27619432044` green with `storage.rules` released. [[project_ci_deploy]]
+- **Silent-failure monitoring stood up** (the session's theme — every prior outage was invisible except in `functions:log`):
+  - **GCP log-based alerts** → email `adam@adameliaslaw.com` (verified channel): Function OOM, Function boot failure, syncGoogleCalendar invalid_grant. [[project_gcp_alerting]]
+  - **GitHub CI-failure notifications** (PR #37): both deploy workflows open an **issue assigned to @adameliaslaw** on any failed step — closes the 4-day-outage gap (AI-Bot-authored commits meant GitHub's failure email never reached Adam).
+
+🟢 **No blocking carry-forwards.** Standing watch-items (passive, no action unless they fire):
+1. **OAuth durability** — if no `invalid_grant` alert email by ~6/30, the production fix is confirmed permanent. Silence = healthy. If it DOES fire, reinvestigate (token superseded / account revoke), don't just reconnect.
+2. **Boot-failure alert noise** — watch for deploy-time-transient false positives; disable that one policy if it cries wolf.
+3. **`backfillClientEmailLowercase`** 512 bump still rides the next backfill deploy (dormant console-only tool; unchanged from 6/15).
+
+---
+
 ## 🔔 AUTOMATIC ALERTS — silent-failure monitoring (set up 2026-06-16)
 
 This project's recurring weakness was **silent failures found late** (Calendar down 5+ wks, CI broken 4 days, OOM loops — all only in `functions:log`, never the UI). Now auto-paged via GCP log-based alert policies → email `adam@adameliaslaw.com` (verified channel `10320474330459174565`), each rate-limited 1/day:
