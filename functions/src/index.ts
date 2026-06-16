@@ -3,6 +3,10 @@
  * Main entry point — initialises Firebase Admin and exports all Cloud Functions.
  */
 
+// MUST be first: sets the 512MiB global memory default before any function
+// module evaluates (v2 captures options at definition time).
+import './global-options';
+
 import * as admin from 'firebase-admin';
 
 // Initialise the Admin SDK once for all functions in this deployment.

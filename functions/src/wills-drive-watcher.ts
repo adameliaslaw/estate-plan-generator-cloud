@@ -223,7 +223,7 @@ export const willsDriveWebhook = onRequest(
 // ---------------------------------------------------------------------------
 
 export const willsDriveWatchRenew = onSchedule(
-  { region: REGION, schedule: 'every 24 hours', memory: '256MiB', timeoutSeconds: 60 },
+  { region: REGION, schedule: 'every 24 hours', memory: '512MiB', timeoutSeconds: 60 },
   async () => {
     const db = admin.firestore();
 
@@ -282,7 +282,7 @@ export const willsDriveWatchRenew = onSchedule(
 // ---------------------------------------------------------------------------
 
 export const willsSetupDriveWatch = onCall(
-  { region: REGION, memory: '256MiB', timeoutSeconds: 60 },
+  { region: REGION, memory: '512MiB', timeoutSeconds: 60 },
   async (request) => {
     if (request.auth?.token?.['role'] !== 'admin') {
       throw new HttpsError('permission-denied', 'Admin role required');

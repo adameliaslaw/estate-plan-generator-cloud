@@ -196,7 +196,7 @@ export async function lookupPropertyByAddress(
 export const lookupPropertyData = onCall(
   {
     region: 'us-east1',
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
   },
   async (request) => {

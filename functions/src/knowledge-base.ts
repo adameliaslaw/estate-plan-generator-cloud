@@ -69,7 +69,7 @@ function kbCollection(firmId: string) {
 // ---------------------------------------------------------------------------
 
 export const addKnowledgeResource = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, category, title, citation, content, tags, docTypes, jurisdiction, source, sourceUrl } = request.data as {
@@ -116,7 +116,7 @@ export const addKnowledgeResource = onCall(
 // ---------------------------------------------------------------------------
 
 export const updateKnowledgeResource = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, resourceId, ...updates } = request.data as { firmId: string; resourceId: string; [key: string]: unknown };

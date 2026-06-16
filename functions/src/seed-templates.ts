@@ -36,7 +36,7 @@ function templateCollection(firmId: string) {
 // ---------------------------------------------------------------------------
 
 export const uploadTemplate = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
 
@@ -166,7 +166,7 @@ export const uploadTemplate = onCall(
 // ---------------------------------------------------------------------------
 
 export const deleteTemplate = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, templateId } = request.data;
@@ -198,7 +198,7 @@ export const deleteTemplate = onCall(
 // ---------------------------------------------------------------------------
 
 export const listTemplates = onCall(
-  { region: 'us-east1', memory: '256MiB' },
+  { region: 'us-east1', memory: '512MiB' },
   async (request: CallableRequest) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { firmId, docType, softwareSource, folder } = request.data;

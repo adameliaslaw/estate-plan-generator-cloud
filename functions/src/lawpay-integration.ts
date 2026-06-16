@@ -496,7 +496,7 @@ export const lawpayWebhook = onRequest(
   {
     region: 'us-east1',
     timeoutSeconds: 60,
-    memory: '256MiB',
+    memory: '512MiB',
     // CORS: allow requests from LawPay / AffiniPay domains
     cors: [
       'https://secure.lawpay.com',
