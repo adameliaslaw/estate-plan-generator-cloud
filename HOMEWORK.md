@@ -4,6 +4,15 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔔 AUTOMATIC ALERTS — silent-failure monitoring (set up 2026-06-16)
+
+This project's recurring weakness was **silent failures found late** (Calendar down 5+ wks, CI broken 4 days, OOM loops — all only in `functions:log`, never the UI). Now auto-paged via GCP log-based alert policies → email `adam@adameliaslaw.com` (verified channel `10320474330459174565`), each rate-limited 1/day:
+- `12830096979394786379` — **Function OOM** (memory limit exceeded; the 256MiB/Node-22 class).
+- `5934839025673898700` — **Function boot failure** (readiness/STARTUP probe; the "internal/CORS" masquerade). *Watch for deploy-time-transient noise; disable if it cries wolf.*
+- `15160115989436873871` — **syncGoogleCalendar invalid_grant** (OAuth — see below).
+
+No email = healthy. Manage at console.cloud.google.com/monitoring/alerting. Full detail + how to add more: [[project_gcp_alerting]]. **Not covered:** CI deploy failures (GitHub Actions, not GCP logs — GitHub emails the actor by default; harden via an on-failure workflow step if desired, Never-Break sign-off needed).
+
 ## 🔔 AUTOMATIC ALERT — Google OAuth durability (no manual review needed)
 
 **A GCP log-based alert now watches for the recurring failure automatically** — replaces the manual 2026-06-30 poll (catches it whenever it happens, not just one date; no credentials stored anywhere).
