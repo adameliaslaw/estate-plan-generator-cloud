@@ -21,7 +21,10 @@ import * as logger from 'firebase-functions/logger';
 const COMMIT_BATCH_SIZE = 400;
 
 export const backfillClientEmailLowercase = onCall(
-  { region: 'us-east1', timeoutSeconds: 300 },
+  // 512MiB: batches up to 400 client records; the 256MiB default OOMs on cold
+  // start under Node 22. (Separate backfill codebase, so the main functions
+  // global default doesn't reach it.)
+  { region: 'us-east1', timeoutSeconds: 300, memory: '512MiB' },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign in required.');
