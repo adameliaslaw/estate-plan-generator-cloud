@@ -4,6 +4,24 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-15 (all green, all pushed)
+
+Began as a one-line verification of the 6/02 KB-embedding OOM fix; cascaded into several real root-cause fixes. All commits on `main` (HEAD `81e2ff9`), CI green, working tree clean. Full detail in the session block below.
+
+**Shipped + verified this session:**
+- **KB embedding** — root cause was a `chunkText` infinite loop (not memory), fixed (`8bdf4eb`). Re-embedded the whole KB to one model: **151/151 active resources on `text-embedding-005`** (was 34% retrievable). Added `concurrency:1` to embedding triggers.
+- **CI functions-deploy** — broken since 6/11 (storage target + missing rules IAM); fixed by dropping `storage` from the CI command (`a165225`) + granting the deployer SA `firebaserules.admin` + `firebasestorage.admin`. #32's security changes finally deployed.
+- **Node 22 256MiB cold-start OOMs** — fixed project-wide with a **512MiB global default** (`setGlobalOptions` in `global-options.ts`); zero functions remain at 256MiB.
+- **`Missing VITE_GOOGLE_CLIENT_ID`** — CI hosting build never injected it; added (`afc0e29`). Permanent.
+- **Google Calendar** — `exchangeGoogleAuthCode` OOM (masquerading as CORS) bumped to 512; Adam reconnected; **sync verified live (56 events).**
+
+🔴 **Carry-forward for next session (none blocking):**
+1. **Firebase Storage provisioning** — Adam's console click (Storage → Get Started). Then re-add `storage` to `firebase-hosting`/`functions` deploy command so storage.rules auto-deploys again. Bucket exists + app works; only rules auto-deploy is affected.
+2. **`backfillClientEmailLowercase`** bumped to 512 in code but lives in the `functions-backfill` codebase (not in the main workflow `paths:`) — goes live on the next backfill deploy. Dormant console-only tool; no urgency.
+3. **Google auth churn** — Calendar/Sign-In OAuth has now broken 3× the same way (5/27, 6/01, 6/15: stale refresh token / rotated client). If it recurs, investigate WHY the OAuth client/secrets keep rotating (secrets are on v5) instead of just reconnecting.
+
+---
+
 ## 📍 SESSION — 2026-06-15 (KB embedding fully fixed + 4-day CI-deploy outage fixed)
 
 Started as a one-line verification of the 6/02 OOM fix; the drain check uncovered a much deeper problem. All shipped to `main`, CI green, verified live. **KB embedding is now fully healthy: 151/151 active resources embedded, 100% `text-embedding-005`, 0 unembedded.**
