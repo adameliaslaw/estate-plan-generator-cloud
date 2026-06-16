@@ -4,6 +4,20 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-06-16 (health audit clean + Google OAuth churn root-caused)
+
+Picked up from HOMEWORK. Health check + the two open Google/Storage carry-forwards. No code shipped (findings + one memory). Tree clean, `main` at `289025e`.
+
+**✅ Deep health audit — CLEAN.** Default `firebase functions:log` is dominated by the 5-min calendar cron and hides everything else, so pulled a wider `gcloud logging read severity>=ERROR` window. Initially looked alarming — ~13 functions OOMing at 256MiB on 6/15 23:xx–6/16 00:26 (incl. `exchangeGoogleAuthCode`, which 6/15 claimed was bumped to 512). **But it's NOT a contradiction:** every function got rebuilt to 512Mi in one comprehensive global-default deploy at **2026-06-16T03:00:24Z** (gen 38/39). All the OOM errors predate 03:00 — they're stale stragglers from last session's incremental whack-a-mole before the global `setGlobalOptions(512MiB)` fully propagated. **Zero errors of ANY kind after the 03:00 deploy** (~9h clean). Last session's conclusion holds; the 512 floor is genuinely effective.
+
+**✅ Google Calendar OAuth churn — ROOT-CAUSED (corrects the 6/15 premise).** Item #3 was "investigate WHY the OAuth client/secrets keep rotating." **They don't rotate** — `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are stable on **version 5 since 2026-04-23** (~2 months, across all 3 breakages). The premise was wrong. Real cause: the firm's **refresh token keeps dying** (`"Token has been expired or revoked"`). The GCP project belongs to **no organization** (`gcloud projects describe` → empty `parent`), so the OAuth consent screen User type **cannot be Internal** → it's **External**. An External app with a **sensitive scope** (Calendar) left in **"Testing" publishing status** has refresh tokens **periodically expired by Google** (~7-day window). Every reconnect was a band-aid. **Permanent fix (Adam, console): OAuth consent screen → Publish App (Testing → In production), then reconnect once.** Confidence 7/10; weak point = current publishing status (Testing vs Prod) can't be read via CLI (IAP oauth-brands API deprecated + needs an org), and observed gap was ~14d vs documented ~7d. Saved [[project_google_oauth_refresh_token_expiry]].
+
+🔴 **Open for Adam (both console-only, neither blocking):**
+1. **Publish OAuth consent screen to production** (the permanent Calendar fix above). Console → APIs & Services → OAuth consent screen → Publish App → then Settings → Integrations → reconnect Calendar once. If status is ALREADY "In production," tell me — the cause is different and I'll reinvestigate.
+2. **Firebase Storage provisioning** (carried from 6/15) — console → Storage → Get Started; then I re-add `storage` to the CI deploy command so `storage.rules` auto-deploys again.
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-15 (all green, all pushed)
 
 Began as a one-line verification of the 6/02 KB-embedding OOM fix; cascaded into several real root-cause fixes. All commits on `main` (HEAD `81e2ff9`), CI green, working tree clean. Full detail in the session block below.
