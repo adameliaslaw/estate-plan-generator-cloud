@@ -4,6 +4,24 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-23 PM (SendGrid unauthorized fix)
+
+### 🔴 Open user actions
+
+1. **Deploy functions** — run `firebase deploy --only functions` from the project root. The IAM `Service Account User` role was just added to `adam@adameliaslaw.com` on `estate-plan-generator@appspot.gserviceaccount.com`; wait ~2 minutes for propagation if the deploy still fails. This deploys the new `testSendGridConnection` function and the improved 401 error message.
+2. **Rotate the SendGrid API key** — the key was shared in chat (potentially logged). Go to app.sendgrid.com/settings/api_keys, delete the current key, create a new one with **Mail Send** permission, and save it in Settings → Integrations. Then click **Test Connection** to confirm it's valid before sending the next questionnaire.
+
+### ✅ 2026-06-23 PM — SendGrid unauthorized fix
+
+- **Root cause:** SendGrid API key stored in Firestore was invalid/expired, causing 401 on all questionnaire sends.
+- **Contributing bug fixed:** The "Test Connection" button in Settings → Integrations was fake — always showed success after 800ms without touching SendGrid. This hid the bad key.
+- **New cloud function `testSendGridConnection`** (`functions/src/email-notifications.ts`): calls `GET https://api.sendgrid.com/v3/scopes` to validate the stored key. No email sent. Returns `failed-precondition` with actionable message on 401/403.
+- **Improved 401/403 error** in `sendViaSendGrid`: now surfaces "SendGrid API key is invalid or lacks Mail Send permission. Please update it in Settings → Integrations." instead of raw HTTP status.
+- **Frontend wired up** (`SettingsPage.tsx`): Test Connection button for SendGrid now calls the real function and shows error/success toast based on actual result.
+- **tsc clean** on both `functions/` and root.
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-16 (all green, all shipped; board clean + self-monitoring)
 
 Started from the 6/15 carry-forwards; a deep health audit + two root-cause investigations closed everything and added permanent monitoring. All on `main` (HEAD `75bf900`), CI green (both functions + hosting deploys verified green post-merge), tree clean, no open issues.
