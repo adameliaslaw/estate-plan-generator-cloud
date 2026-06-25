@@ -17,16 +17,25 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
     const firmId = userProfile?.firmId;
     const navigate = useNavigate();
 
-    // Query events that haven't happened yet, ordered by start time
+    // Query events that haven't happened yet, ordered by start time. Fetch a
+    // wider window than we display so the client-side activeClientIds filter
+    // below doesn't leave us with fewer than 5 (the filter ran after limit(5)).
     const queryConstraints = useMemo(() => [
         where('startAt', '>=', Timestamp.now()),
         orderBy('startAt', 'asc'),
-        limit(5)
+        limit(25)
     ], []);
 
     const { data: upcomingEvents, loading } = useCollection<CalendarEvent>(
         firmId ? COLLECTIONS.CALENDAR_EVENTS(firmId) : null,
         queryConstraints
+    );
+
+    const visibleEvents = useMemo(
+        () => (upcomingEvents ?? [])
+            .filter(event => !activeClientIds || !event.clientId || activeClientIds.includes(event.clientId))
+            .slice(0, 5),
+        [upcomingEvents, activeClientIds],
     );
 
     const formatEventTime = (timestamp: Timestamp, allDay: boolean) => {
@@ -80,7 +89,7 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
                             </div>
                         ))}
                     </div>
-                ) : upcomingEvents?.length === 0 ? (
+                ) : visibleEvents.length === 0 ? (
                     <div className="flex h-48 flex-col items-center justify-center text-center px-4">
                         <div className="rounded-full bg-gray-50 p-4 mb-3 border border-gray-100">
                             <CalendarIcon className="h-6 w-6 text-gray-400" />
@@ -90,9 +99,7 @@ export function UpcomingAppointments({ activeClientIds }: UpcomingAppointmentsPr
                     </div>
                 ) : (
                     <div className="space-y-3 p-3">
-                        {upcomingEvents?.filter(event =>
-                            !activeClientIds || !event.clientId || activeClientIds.includes(event.clientId)
-                        ).map(event => (
+                        {visibleEvents.map(event => (
                             <div
                                 key={event.id}
                                 className="group flex gap-4 rounded-xl border border-gray-100 bg-white p-4 transition-all hover:border-blue-100 hover:shadow-md hover:shadow-blue-50/50"

@@ -136,7 +136,7 @@ export default function DocumentEditorPage() {
 
   // ── Breadcrumb data ──
   const clientDisplayName = client
-    ? `${client.personalInfo.firstName} ${client.personalInfo.lastName}`
+    ? `${client.personalInfo?.firstName ?? ''} ${client.personalInfo?.lastName ?? ''}`.trim() || 'Client'
     : clientLoading
     ? '…'
     : 'Client';

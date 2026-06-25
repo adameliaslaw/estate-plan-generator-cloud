@@ -45,7 +45,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useCollection, createDoc, updateDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, arrayUnion } from 'firebase/firestore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -404,9 +404,10 @@ export default function CommentsPanel({
       createdAt: null, // Will be replaced on next Firestore read with server time
     };
     try {
-      // Append to the replies array by updating the document
-      await updateDoc(`${commentsPath}/${comment.id}`, {
-        replies: [...(comment.replies ?? []), newReply],
+      // Append atomically so concurrent replies don't clobber each other
+      // (a render-captured [...comment.replies] read-modify-write would).
+      await updateDoc<DocumentComment>(`${commentsPath}/${comment.id}`, {
+        replies: arrayUnion(newReply) as unknown as CommentReply[],
       });
     } catch (err) {
       console.error('[CommentsPanel] Reply error:', err);

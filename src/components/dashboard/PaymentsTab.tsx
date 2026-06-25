@@ -170,6 +170,11 @@ const STATUS_CONFIG: Record<
     className: 'bg-gray-100 text-gray-400 border-gray-200',
     icon: Ban,
   },
+  failed: {
+    label: 'Failed',
+    className: 'bg-red-50 text-red-700 border-red-200',
+    icon: AlertCircle,
+  },
 };
 
 function StatusBadge({ status }: { status: PaymentStatus }) {

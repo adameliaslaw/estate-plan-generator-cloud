@@ -147,7 +147,11 @@ export default function PaymentsPage() {
             let overdue = 0;
 
             for (const p of allPayments) {
-                fees += p.amount || 0;
+                // Exclude voided/refunded/failed from billed fees — they were
+                // never collectable and inflate the total.
+                if (p.status !== 'voided' && p.status !== 'refunded' && p.status !== 'failed') {
+                    fees += p.amount || 0;
+                }
                 if (p.status === 'paid') {
                     received += p.amountPaid || p.amount || 0;
                     paid++;

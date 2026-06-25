@@ -1302,7 +1302,10 @@ export default function CalendarTab({
     () => {
       const base: QueryConstraint[] = [orderBy('startAt', 'asc')];
       if (clientId) {
-        base.unshift(where('relatedClientId', '==', clientId));
+        // Events are written with `clientId` (see NewEventDialog); the prior
+        // `relatedClientId` filter matched no events, so per-client views were
+        // always empty. The clientId+startAt composite index already exists.
+        base.unshift(where('clientId', '==', clientId));
       }
       return base;
     },

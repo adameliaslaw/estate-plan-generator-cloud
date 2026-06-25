@@ -38,6 +38,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { type Document } from '@/types';
+import { serverTimestamp } from 'firebase/firestore';
 import { updateDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
 import { COLLECTIONS } from '@/config/constants';
@@ -134,8 +135,12 @@ export default function AttorneyReviewGate({ document, open, onApprove, onClose 
 
     try {
       const docPath = `${COLLECTIONS.DOCUMENTS(document.firmId, document.clientId)}/${document.id}`;
+      // Approval marks the document 'final' — that is the export-eligible,
+      // client-visible state (ClientPortalPage only surfaces status === 'final').
+      // reviewedAt is written here per this gate's documented contract.
       const updates = {
-        status: 'review' as const,
+        status: 'final' as const,
+        reviewedAt: serverTimestamp(),
         reviewedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
         reviewNotes: reviewNotes.trim() || null,
         updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
@@ -145,7 +150,7 @@ export default function AttorneyReviewGate({ document, open, onApprove, onClose 
 
       onApprove({
         ...document,
-        status: 'review',
+        status: 'final',
         reviewedBy: updates.reviewedBy,
         reviewNotes: updates.reviewNotes ?? undefined,
       });

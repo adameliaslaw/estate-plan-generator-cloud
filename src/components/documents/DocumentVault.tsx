@@ -93,10 +93,10 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   invoice: 'Invoice',
   estatePlanSummary: 'Estate Plan Summary',
   certificationOfTrust: 'Certification of Trust',
-  beneficiaryDesignationLetter: 'Beneficiary Designation Letter',
+  beneficiaryDesignation: 'Beneficiary Designation Letter',
   trustAmendment: 'Trust Amendment',
   trustRestatement: 'Trust Restatement',
-  memorandumOfPersonalProperty: 'Memorandum of Personal Property',
+  memorandumOfPersonalProp: 'Memorandum of Personal Property',
   letterOfInstruction: 'Letter of Instruction',
   custom: 'Custom Document',
 };

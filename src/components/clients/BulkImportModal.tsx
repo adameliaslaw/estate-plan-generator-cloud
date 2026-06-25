@@ -86,6 +86,35 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   plan: 'packageType',
 };
 
+// Split a single CSV line, honoring double-quoted fields that contain commas
+// and escaped quotes (""). A naive line.split(',') corrupts values like
+// "Smith, Jr." by shifting every subsequent column.
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } // escaped quote
+        else inQuotes = false;
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      cells.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells.map((c) => c.trim());
+}
+
 function parseCSV(text: string): ParsedRow[] {
   const lines = text
     .split(/\r?\n/)
@@ -95,7 +124,7 @@ function parseCSV(text: string): ParsedRow[] {
   if (lines.length < 2) return [];
 
   // Parse header
-  const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, '').toLowerCase());
+  const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
   const colMap: Map<number, keyof ParsedRow> = new Map();
   headers.forEach((h, i) => {
     const mapped = HEADER_MAP[h];
@@ -105,7 +134,7 @@ function parseCSV(text: string): ParsedRow[] {
   // Parse data rows
   const rows: ParsedRow[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+    const cells = parseCsvLine(lines[i]);
     const row: ParsedRow = {
       firstName: '',
       lastName: '',
@@ -204,6 +233,11 @@ export default function BulkImportModal({
         const parsed = parseCSV(reader.result as string);
         setRows(parsed);
         setPhase('preview');
+      };
+      reader.onerror = () => {
+        console.error('[BulkImportModal] Failed to read file:', reader.error);
+        // Reset the input so re-selecting the same file fires onChange again.
+        e.target.value = '';
       };
       reader.readAsText(file);
     },

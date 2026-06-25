@@ -221,15 +221,31 @@ export async function callAI(
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   let attempt = 0;
   while (true) {
-    const response = await fetch(url, { ...options, dispatcher: LONG_REQUEST_AGENT } as unknown as RequestInit);
-    if (!response.ok && response.status === 429 && attempt < maxRetries) {
-      const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-      console.warn(`[callAI] Rate limited (429). Retrying in ${Math.round(waitTime)}ms...`);
-      await new Promise(r => setTimeout(r, waitTime));
-      attempt++;
-      continue;
+    try {
+      const response = await fetch(url, { ...options, dispatcher: LONG_REQUEST_AGENT } as unknown as RequestInit);
+      // Retry on rate limits (429) and transient server errors (5xx) — the most
+      // common recoverable failures on long-running AI calls.
+      const retryable = response.status === 429 || (response.status >= 500 && response.status <= 599);
+      if (!response.ok && retryable && attempt < maxRetries) {
+        const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+        console.warn(`[callAI] Provider returned ${response.status}. Retrying in ${Math.round(waitTime)}ms...`);
+        await new Promise(r => setTimeout(r, waitTime));
+        attempt++;
+        continue;
+      }
+      return response;
+    } catch (err) {
+      // Network-level failure (ECONNRESET, dropped connection, DNS, etc.).
+      // fetch() rejects rather than returning a Response, so retry here too.
+      if (attempt < maxRetries) {
+        const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+        console.warn(`[callAI] Network error (${err instanceof Error ? err.message : String(err)}). Retrying in ${Math.round(waitTime)}ms...`);
+        await new Promise(r => setTimeout(r, waitTime));
+        attempt++;
+        continue;
+      }
+      throw err;
     }
-    return response;
   }
 }
 

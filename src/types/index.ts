@@ -46,6 +46,8 @@ export type DocType =
   | 'memorandumOfPersonalProp'
   | 'codicil'
   | 'hipaaRelease'
+  // Auto-filled questionnaire document (functions/src/generators/questionnaire-generator.ts)
+  | 'questionnaire'
   | 'custom';
 
 // 'error' is written by the generation pipeline (functions/src/unified-generator.ts)
@@ -139,7 +141,9 @@ export type PaymentStatus =
   | 'partial'
   | 'overdue'
   | 'refunded'
-  | 'voided';
+  | 'voided'
+  // Written by lawpay-integration when a direct charge fails.
+  | 'failed';
 
 export type EventType =
   | 'consultation'
@@ -302,9 +306,24 @@ export interface User {
   updatedAt: Timestamp;
 }
 
-export interface UserProfile extends Omit<User, 'createdAt' | 'updatedAt' | 'lastLoginAt'> {
+/**
+ * Extended user profile — merges Firebase Auth, Firestore /firms/{firmId}/users/{uid},
+ * and custom JWT claims (role, firmId). Built by AuthContext.buildProfile().
+ * This is the single source of truth; fields that the /users document carries but
+ * the profile builder does not populate (firstName, lastName, isActive, barNumber)
+ * live on the `User` type, not here.
+ */
+export interface UserProfile {
   uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  firmId: string;
+  photoURL?: string;
+  phone?: string;
   onboarded: boolean;
+  recentActivityExpanded?: boolean;
+  customCapabilities?: UserCapability[];
   createdAt: Date;
   updatedAt: Date;
   lastLoginAt?: Date;
@@ -864,6 +883,8 @@ export interface Client {
 
   // Documents array, fetched manually or populated by joining
   documents?: Document[];
+  /** Set true by the generation pipeline once documents have been generated. */
+  documentsGenerated?: boolean;
 
   // Matter deadlines (signing ceremonies, filings, follow-ups)
   deadlines?: ClientDeadline[];
@@ -969,12 +990,23 @@ export interface Document {
 
   // Content (loaded via Firestore listener)
   content?: string;
+  /** Editor copy of content; DocumentEditor prefers this over `content`. */
+  editorContent?: string;
   changeNotes?: string;
   generationMode?: 'batch' | 'chat-draft';
   /** Pre-enhancement template HTML for side-by-side comparison (hybrid mode only) */
   templateBaseline?: string;
   /** Short hash identifying the prompt version used for generation */
   promptVersion?: string;
+
+  // Generation provenance (written by document-save-helper)
+  triggerSource?: 'batch' | 'single' | 'chat-draft' | 'flex' | 'retemplatize';
+  templateSourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | null;
+  softwareSource?: string | null;
+  /** True when the canonical artifact is a binary (DOCX) in Storage. */
+  hasBinary?: boolean;
+  /** Structured data extracted from an uploaded/source document. */
+  extractedData?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -1019,7 +1051,9 @@ export interface Note {
 // Payment — /firms/{firmId}/clients/{clientId}/payments/{paymentId}
 // ============================================================================
 
-export type AccountDesignation = 'operating';  // Only operating account used
+// Defaults to 'operating'; the createPaymentRequest callable also accepts and
+// persists 'trust', so the persisted type must allow both.
+export type AccountDesignation = 'operating' | 'trust';
 
 export interface Payment {
   id: string;
@@ -1147,24 +1181,6 @@ export interface AuthUser {
   photoURL: string | null;
   role?: UserRole;
   firmId?: string;
-}
-
-/**
- * Extended user profile — merges Firebase Auth, Firestore /firms/{firmId}/users/{uid},
- * and custom JWT claims (role, firmId).
- */
-export interface UserProfile {
-  uid: string;
-  email: string;
-  displayName: string;
-  role: UserRole;
-  firmId: string;
-  photoURL?: string;
-  phone?: string;
-  onboarded: boolean;
-  recentActivityExpanded?: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 /** App-level error */
