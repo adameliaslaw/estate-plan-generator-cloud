@@ -1,8 +1,11 @@
-﻿/**
- * SendPaymentDialog.tsx â€” extracted from PaymentsPage.tsx
+/**
+ * SendPaymentDialog.tsx — extracted from PaymentsPage.tsx
  */
 
 import { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { CheckCircle2 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
@@ -37,6 +40,18 @@ const callCreatePaymentRequest = httpsCallable<
     { paymentUrl: string; paymentDocId: string }
 >(functions, 'createPaymentRequest');
 
+const sendPaymentSchema = z.object({
+    selectedClientId: z.string().min(1, 'Please select a client.'),
+    description: z.string().trim().min(1, 'Description is required.'),
+    amountDollars: z.string().refine(
+        (v) => { const n = parseFloat(v); return !Number.isNaN(n) && n > 0; },
+        'Please enter a valid amount greater than $0.',
+    ),
+    dueDate: z.string().optional(),
+});
+
+type SendFormValues = z.infer<typeof sendPaymentSchema>;
+
 export function SendPaymentDialog({
     open,
     onClose,
@@ -49,27 +64,24 @@ export function SendPaymentDialog({
     clients: (Client & { id: string })[];
 }) {
     const { userProfile } = useAuth();
-    const [selectedClientId, setSelectedClientId] = useState('');
-    const [description, setDescription] = useState('');
-    const [amountDollars, setAmountDollars] = useState('');
-    const [dueDate, setDueDate] = useState('');
-    const [saving, setSaving] = useState(false);
     const [resultUrl, setResultUrl] = useState<string | null>(null);
 
-    function resetForm() {
-        setSelectedClientId('');
-        setDescription('');
-        setAmountDollars('');
-        setDueDate('');
-        setResultUrl(null);
-    }
+    const {
+        register,
+        handleSubmit,
+        control,
+        reset,
+        formState: { errors, isSubmitting },
+    } = useForm<SendFormValues>({
+        resolver: zodResolver(sendPaymentSchema),
+        defaultValues: { selectedClientId: '', description: '', amountDollars: '', dueDate: '' },
+    });
 
     function handleClose() {
-        resetForm();
+        reset();
+        setResultUrl(null);
         onClose();
     }
-
-    const selectedClient = clients.find((c) => c.id === selectedClientId);
 
     const clientDisplayName = (c: Client & { id: string }) => {
         const pi = c.personalInfo;
@@ -78,33 +90,17 @@ export function SendPaymentDialog({
             : c.id;
     };
 
-    const clientEmail = selectedClient?.personalInfo?.email ?? '';
-
-    async function handleSend() {
-        const cleanDescription = sanitizeInput(description.trim());
-        const parsedDollars = parseFloat(amountDollars);
-
-        if (!selectedClientId) {
-            toast.error('Please select a client.');
-            return;
-        }
-        if (!cleanDescription) {
-            toast.error('Description is required.');
-            return;
-        }
-        if (isNaN(parsedDollars) || parsedDollars <= 0) {
-            toast.error('Please enter a valid amount greater than $0.');
-            return;
-        }
-
-        const amountCents = Math.round(parsedDollars * 100);
+    async function onSubmit(values: SendFormValues) {
+        const cleanDescription = sanitizeInput(values.description.trim());
+        const amountCents = Math.round(parseFloat(values.amountDollars) * 100);
+        const selectedClient = clients.find((c) => c.id === values.selectedClientId);
         const cName = selectedClient ? clientDisplayName(selectedClient) : '';
+        const clientEmail = selectedClient?.personalInfo?.email ?? '';
 
-        setSaving(true);
         try {
             const result = await callCreatePaymentRequest({
                 firmId,
-                clientId: selectedClientId,
+                clientId: values.selectedClientId,
                 amount: amountCents,
                 description: cleanDescription,
                 accountDesignation: 'operating',
@@ -119,15 +115,13 @@ export function SendPaymentDialog({
             toast.success('Payment request created! Link copied to clipboard.', { duration: 6000 });
 
             await logSystemActivity(firmId, userProfile, 'sending payment request', {
-                clientId: selectedClientId,
+                clientId: values.selectedClientId,
                 clientName: cName,
-                paymentAmount: `$${amountDollars}`,
+                paymentAmount: `$${values.amountDollars}`,
             });
         } catch (err) {
             console.error('[SendPaymentDialog] error:', err);
             toast.error('Failed to create payment request. Please try again.');
-        } finally {
-            setSaving(false);
         }
     }
 
@@ -141,98 +135,104 @@ export function SendPaymentDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-1">
-                    {/* Client Selector */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="sp-client">Client <span className="text-red-500">*</span></Label>
-                        <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                            <SelectTrigger id="sp-client">
-                                <SelectValue placeholder="Select a client…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {clients.map((c) => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        {clientDisplayName(c)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <form onSubmit={handleSubmit(onSubmit)}>
+                    <div className="space-y-4 py-1">
+                        {/* Client Selector */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="sp-client">Client <span className="text-red-500">*</span></Label>
+                            <Controller
+                                control={control}
+                                name="selectedClientId"
+                                render={({ field }) => (
+                                    <Select value={field.value} onValueChange={field.onChange}>
+                                        <SelectTrigger id="sp-client">
+                                            <SelectValue placeholder="Select a client…" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {clients.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>
+                                                    {clientDisplayName(c)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
+                            {errors.selectedClientId && <p className="text-xs text-red-500">{errors.selectedClientId.message}</p>}
+                        </div>
 
-                    {/* Description */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="sp-desc">Description <span className="text-red-500">*</span></Label>
-                        <Input
-                            id="sp-desc"
-                            placeholder="e.g. Estate Plan Balance Due"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            maxLength={200}
-                        />
-                    </div>
-
-                    {/* Amount */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="sp-amount">Amount (USD) <span className="text-red-500">*</span></Label>
-                        <div className="relative">
-                            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm">$</span>
+                        {/* Description */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="sp-desc">Description <span className="text-red-500">*</span></Label>
                             <Input
-                                id="sp-amount"
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                placeholder="0.00"
-                                className="pl-7"
-                                value={amountDollars}
-                                onChange={(e) => setAmountDollars(e.target.value)}
+                                id="sp-desc"
+                                placeholder="e.g. Estate Plan Balance Due"
+                                maxLength={200}
+                                {...register('description')}
+                            />
+                            {errors.description && <p className="text-xs text-red-500">{errors.description.message}</p>}
+                        </div>
+
+                        {/* Amount */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="sp-amount">Amount (USD) <span className="text-red-500">*</span></Label>
+                            <div className="relative">
+                                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm">$</span>
+                                <Input
+                                    id="sp-amount"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    className="pl-7"
+                                    {...register('amountDollars')}
+                                />
+                            </div>
+                            {errors.amountDollars && <p className="text-xs text-red-500">{errors.amountDollars.message}</p>}
+                        </div>
+
+                        {/* Due Date */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="sp-due">Due Date (optional)</Label>
+                            <Input
+                                id="sp-due"
+                                type="date"
+                                {...register('dueDate')}
                             />
                         </div>
                     </div>
 
+                    {resultUrl ? (
+                        <Alert className="border-emerald-200 bg-emerald-50">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            <AlertDescription className="text-xs text-emerald-800">
+                                Payment link created!{' '}
+                                <a
+                                    href={resultUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold underline"
+                                >
+                                    Open payment page
+                                </a>
+                                {' '}(link also copied to clipboard)
+                            </AlertDescription>
+                        </Alert>
+                    ) : null}
 
-
-                    {/* Due Date */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="sp-due">Due Date (optional)</Label>
-                        <Input
-                            id="sp-due"
-                            type="date"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {resultUrl ? (
-                    <Alert className="border-emerald-200 bg-emerald-50">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        <AlertDescription className="text-xs text-emerald-800">
-                            Payment link created!{' '}
-                            <a
-                                href={resultUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-semibold underline"
-                            >
-                                Open payment page
-                            </a>
-                            {' '}(link also copied to clipboard)
-                        </AlertDescription>
-                    </Alert>
-                ) : null}
-
-                <DialogFooter>
-                    <Button variant="outline" onClick={handleClose} disabled={saving}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleSend}
-                        disabled={saving || !!resultUrl}
-                        className="bg-[#2b6cb0] text-white hover:bg-[#2563a8]"
-                    >
-                        {saving ? 'Creating…' : 'Create Request'}
-                    </Button>
-                </DialogFooter>
+                    <DialogFooter className="mt-4">
+                        <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={isSubmitting || !!resultUrl}
+                            className="bg-[#2b6cb0] text-white hover:bg-[#2563a8]"
+                        >
+                            {isSubmitting ? 'Creating…' : 'Create Request'}
+                        </Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );
