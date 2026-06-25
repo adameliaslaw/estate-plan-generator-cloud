@@ -145,12 +145,14 @@ export function AnalyticsWidgets({ clients, documents, loading }: Props) {
 
     // Client creation by month (last 6 months)
     const now = new Date();
-    const months: { label: string; count: number }[] = [];
+    const months: { label: string; count: number; year: number; month: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({
         label: d.toLocaleDateString('en-US', { month: 'short' }),
         count: 0,
+        year: d.getFullYear(),
+        month: d.getMonth(),
       });
     }
     for (const c of active) {
@@ -158,11 +160,10 @@ export function AnalyticsWidgets({ clients, documents, loading }: Props) {
       if (!ts?.seconds) continue;
       const created = new Date(ts.seconds * 1000);
       for (const m of months) {
-        const mDate = new Date(`1 ${m.label} ${now.getFullYear()}`);
-        if (
-          created.getMonth() === mDate.getMonth() &&
-          created.getFullYear() === mDate.getFullYear()
-        ) {
+        // Match on the bucket's real year+month, not a label re-parsed with the
+        // current year — otherwise prior-year months (e.g. Dec viewed in Jan)
+        // never match and get undercounted.
+        if (created.getFullYear() === m.year && created.getMonth() === m.month) {
           m.count++;
           break;
         }

@@ -113,23 +113,32 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   }, [generating]);
 
   // Firestore polling fallback: detects the saved doc even if the long-running
-  // httpsCallable response is dropped silently by an intermediate proxy. Filters
-  // on `updatedAt >= startTime` so prior drafts with the same docType aren't
-  // matched, and so re-generations (which preserve createdAt) still trigger.
+  // httpsCallable response is dropped silently by an intermediate proxy. Query
+  // on docType equality only (served by the automatic single-field index — no
+  // composite index needed) and apply the `updatedAt >= startTime` filter
+  // client-side so prior drafts with the same docType aren't matched and
+  // re-generations (which preserve createdAt) still trigger.
   useEffect(() => {
     if (!generating || !firmId || !clientId || !selectedDocType) return;
-    const startTime = Timestamp.now();
+    const startMs = Timestamp.now().toMillis();
     const q = query(
       collection(getFirestore(), COLLECTIONS.DOCUMENTS(firmId, clientId)),
       where('docType', '==', selectedDocType),
-      where('updatedAt', '>=', startTime),
     );
-    const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) return;
-      const data = snap.docs[0].data();
-      const title = (data.displayName as string) || (data.title as string) || selectedDocType;
-      markSuccess(title);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const match = snap.docs.find((d) => {
+          const ts = d.data().updatedAt as Timestamp | undefined;
+          return ts != null && ts.toMillis() >= startMs;
+        });
+        if (!match) return;
+        const data = match.data();
+        const title = (data.displayName as string) || (data.title as string) || selectedDocType;
+        markSuccess(title);
+      },
+      (err) => console.error('[SingleDocumentGenerator] poll listener error:', err),
+    );
     return () => unsub();
   }, [generating, firmId, clientId, selectedDocType]);
 

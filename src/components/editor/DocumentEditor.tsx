@@ -147,6 +147,14 @@ export default function DocumentEditor({
   // Refs for debounced auto-save
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveCountRef = useRef(0);
+  // useEditor's onUpdate closure is created once on mount, before userProfile /
+  // document have loaded. Route auto-save through a ref so edits always use the
+  // latest closure (correct updatedBy + current document) instead of a stale one
+  // that writes updatedBy:'unknown' and snapshots a stale document.
+  const scheduleAutoSaveRef = useRef<(html: string) => void>(() => {});
+  // Set true after a regenerate so the next document delivery reloads the new
+  // content into the editor even though contentLoaded is already true.
+  const forceReloadRef = useRef(false);
 
   // ── Derived state ──
   const isReadOnly =
@@ -211,7 +219,7 @@ export default function DocumentEditor({
     onUpdate: ({ editor: ed }) => {
       setHasUnsavedChanges(true);
       setSaveStatus('unsaved');
-      scheduleAutoSave(ed.getHTML());
+      scheduleAutoSaveRef.current(ed.getHTML());
     },
     editorProps: {
       attributes: {
@@ -239,7 +247,7 @@ export default function DocumentEditor({
 
   // ── Load document content on mount / doc change ──
   useEffect(() => {
-    if (!document || contentLoaded) return;
+    if (!document || (contentLoaded && !forceReloadRef.current)) return;
     setLocalTitle(document.displayName ?? '');
 
     const docWithContent = document as Document & { editorContent?: string; content?: string };
@@ -260,6 +268,8 @@ export default function DocumentEditor({
     if (htmlContent && editor) {
       editor.commands.setContent(htmlContent, { emitUpdate: false });
       setContentLoaded(true);
+      forceReloadRef.current = false;
+      setHasUnsavedChanges(false);
       setSaveStatus('saved');
       setLastSavedAt(
         document.updatedAt
@@ -346,6 +356,12 @@ export default function DocumentEditor({
     [docPath, userProfile, saveVersion],
   );
 
+  // Keep the onUpdate-facing ref pointed at the latest scheduleAutoSave so the
+  // editor's one-time onUpdate closure never auto-saves with a stale userProfile.
+  useEffect(() => {
+    scheduleAutoSaveRef.current = scheduleAutoSave;
+  }, [scheduleAutoSave]);
+
   // ── Manual save version (called from VersionHistory) ──
   const handleSaveVersion = useCallback(
     async (changeNotes: string) => {
@@ -402,7 +418,10 @@ export default function DocumentEditor({
         docType: document.docType,
         spouseRole: inferredSpouseRole,
       });
-      // Document data auto-refreshes via the useDocument subscription.
+      // Document data auto-refreshes via the useDocument subscription; force the
+      // load effect to pull the regenerated content into the editor (contentLoaded
+      // is already true, so without this the editor would keep the stale draft).
+      forceReloadRef.current = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setRegenError(msg);

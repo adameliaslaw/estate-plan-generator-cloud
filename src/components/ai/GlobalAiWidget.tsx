@@ -262,7 +262,9 @@ export function GlobalAiWidget() {
   // Resume a past conversation
   const resumeConversation = (conv: ConversationSummary) => {
     setConversationId(conv.id);
-    setMode(conv.mode as 'chat' | 'draft');
+    // conv.mode is a free-form string; preserve 'research' (the bare
+    // 'chat' | 'draft' cast silently dropped it back to chat).
+    setMode(conv.mode === 'draft' || conv.mode === 'research' ? conv.mode : 'chat');
     setMessages([{
       id: 'loading',
       role: 'assistant',

@@ -35,6 +35,11 @@ export default function ESignatureDialog({
             setError('Name and email are required');
             return;
         }
+        // Validate email format before hitting the Cloud Function.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail.trim())) {
+            setError('Please enter a valid email address');
+            return;
+        }
 
         setSending(true);
         setError('');

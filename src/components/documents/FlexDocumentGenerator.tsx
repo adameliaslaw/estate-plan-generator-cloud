@@ -115,7 +115,7 @@ const FLEX_DOC_OPTIONS: FlexDocOption[] = [
     iconColor: 'text-purple-700',
   },
   {
-    docType: 'beneficiaryDesignationLetter',
+    docType: 'beneficiaryDesignation',
     label: 'Beneficiary Designation Change Letter',
     description: 'Letter instructing financial institutions to update beneficiary designations.',
     icon: UserCheck,
@@ -139,7 +139,7 @@ const FLEX_DOC_OPTIONS: FlexDocOption[] = [
     iconColor: 'text-orange-700',
   },
   {
-    docType: 'memorandumOfPersonalProperty',
+    docType: 'memorandumOfPersonalProp',
     label: 'Memorandum of Personal Property',
     description: 'Informal memo listing specific bequests of personal/tangible property.',
     icon: ListTodo,
@@ -217,24 +217,32 @@ export default function FlexDocumentGenerator({
   // httpsCallable response is dropped silently by an intermediate proxy.
   useEffect(() => {
     if (phase !== 'generating' || !firmId || !clientId || !selected) return;
-    const startTime = Timestamp.now();
+    const startMs = Timestamp.now().toMillis();
+    // docType equality only (automatic single-field index); apply the
+    // updatedAt >= start filter client-side to avoid a composite index.
     const q = query(
       collection(getFirestore(), COLLECTIONS.DOCUMENTS(firmId, clientId)),
       where('docType', '==', selected.docType),
-      where('updatedAt', '>=', startTime),
     );
-    const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) return;
-      const docSnap = snap.docs[0];
-      const data = docSnap.data();
-      markSuccess({
-        success: true,
-        docType: (data.docType as string) ?? selected.docType,
-        title: (data.displayName as string) ?? (data.title as string) ?? selected.docType,
-        documentId: docSnap.id,
-        status: (data.status as string) ?? 'draft',
-      });
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const docSnap = snap.docs.find((d) => {
+          const ts = d.data().updatedAt as Timestamp | undefined;
+          return ts != null && ts.toMillis() >= startMs;
+        });
+        if (!docSnap) return;
+        const data = docSnap.data();
+        markSuccess({
+          success: true,
+          docType: (data.docType as string) ?? selected.docType,
+          title: (data.displayName as string) ?? (data.title as string) ?? selected.docType,
+          documentId: docSnap.id,
+          status: (data.status as string) ?? 'draft',
+        });
+      },
+      (err) => console.error('[FlexDocumentGenerator] poll listener error:', err),
+    );
     return () => unsub();
   }, [phase, firmId, clientId, selected]);
 
