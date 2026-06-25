@@ -16,7 +16,7 @@
 
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { callAI, FirmData } from './ai-client';
+import { callAI, parseAIJson, FirmData } from './ai-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,7 +140,7 @@ export async function runGroundedReview(
 
   // Parse the response
   try {
-    const parsed = JSON.parse(response) as GroundedReviewResult;
+    const parsed = parseAIJson<GroundedReviewResult>(response);
     return {
       status: parsed.status ?? 'pass',
       issues: Array.isArray(parsed.issues) ? parsed.issues : [],

@@ -395,18 +395,19 @@ async function _callGemini(
     }
   };
 
-  if (options.jsonSchema) {
-    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
-    (requestBody.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema.schema;
-  } else if (options.jsonMode) {
-    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
-  }
-
-  // Google Search Grounding — enables real-time web grounding
+  // Gemini rejects (HTTP 400) structured-output config (responseMimeType /
+  // responseSchema) when the google_search grounding tool is enabled. When
+  // grounding is on, rely on the system prompt to request JSON and parse the
+  // response defensively (parseAIJson) instead.
   if (options.groundingEnabled) {
     (requestBody as Record<string, unknown>).tools = [
       { google_search: {} }
     ];
+  } else if (options.jsonSchema) {
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
+    (requestBody.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema.schema;
+  } else if (options.jsonMode) {
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
   }
 
   const response = await fetchWithRetry(endpoint, {

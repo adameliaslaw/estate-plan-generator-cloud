@@ -195,11 +195,13 @@ export const knowledgeBaseService = {
           (error) => reject(error),
           () => {
             const range = ocrRanges?.[index];
-            uploadResults.push({
+            // Assign by index (not push) so results stay aligned with the
+            // input file order regardless of upload-completion order.
+            uploadResults[index] = {
               storagePath,
               fileName: file.name,
               ...(range ? { ocrPageStart: range.start, ocrPageEnd: range.end } : {}),
-            });
+            };
             resolve();
           },
         );

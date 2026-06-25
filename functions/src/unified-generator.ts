@@ -752,6 +752,11 @@ export async function generateDocument(
   const genStartTime = Date.now();
   let generatedDoc: GeneratedDoc;
   let propertyIndexFallback = false;
+  // Hoisted to function scope so the structural-validation retry below can
+  // forward the resolved property to per-property generators (deed/affidavit/
+  // gitRep3). Without it, the retry regenerates these docs with no property and
+  // silently drops the address, block/lot, county, etc.
+  let property: admin.firestore.DocumentData | undefined;
 
   if (isDocType(docType)) {
     // Unified dispatch — loads standard generator or flex adapter wrapper
@@ -790,7 +795,6 @@ export async function generateDocument(
       }
     } else {
       // Resolve property for per-property docs
-      let property: admin.firestore.DocumentData | undefined;
       if ((PER_PROPERTY_DOCS as Set<string>).has(docType)) {
         const properties: admin.firestore.DocumentData[] =
           (clientData.assets?.realEstate ?? []).filter(
@@ -933,8 +937,10 @@ export async function generateDocument(
 
           // Re-use loadGenerator (Node caches the module after first import)
           const retryGeneratorFn = await loadGenerator(docType as DocType);
+          // Forward the resolved `property` for per-property docs; it is
+          // undefined (and ignored) for all other generators.
           const retryDoc = await retryGeneratorFn!(
-            retryClientData, firmData, packageType, trustTypes,
+            retryClientData, firmData, packageType, trustTypes, property,
           );
 
           // Validate the retry

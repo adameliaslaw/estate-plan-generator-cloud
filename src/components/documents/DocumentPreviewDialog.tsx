@@ -273,17 +273,6 @@ export default function DocumentPreviewDialog({ doc, open, onClose }: Props) {
   const needsFirestoreFetch = !isPdf && !isDocx && !inlineHtml && !doc?.storagePath && !!doc?.id && isHtmlFile;
 
   useEffect(() => {
-    console.log('[DocumentPreviewDialog DEBUG]', {
-      open,
-      docId: doc?.id,
-      docType: doc?.docType,
-      fileName: doc?.fileName,
-      storagePath: doc?.storagePath,
-      hasInlineHtml: !!inlineHtml,
-      needsStorageDownload,
-      needsFirestoreFetch,
-    });
-
     if (!open) {
       setFileBytes(null);
       setDownloadUrl(null);

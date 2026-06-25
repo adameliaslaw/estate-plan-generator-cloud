@@ -134,6 +134,39 @@ export interface SendForSignatureResponse {
   signatureRequestId: string;
 }
 
+export interface DocumentVersionsResponse {
+  success: boolean;
+  documentId: string;
+  versions: Array<{
+    versionNumber: number;
+    displayName: string;
+    status: string;
+    changeNotes: string;
+    createdBy: string;
+    createdAt: string | null;
+    contentPreview: string;
+    hasFullContent: boolean;
+  }>;
+}
+
+export interface DocumentVersionContentResponse {
+  success: boolean;
+  versionNumber: number;
+  content: string;
+  displayName: string;
+  changeNotes: string;
+  createdBy: string;
+  createdAt: string | null;
+}
+
+export interface RevertDocumentVersionResponse {
+  success: boolean;
+  documentId: string;
+  restoredVersion: number;
+  newVersion: number;
+  message: string;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export const documentService = {
@@ -450,21 +483,8 @@ export const documentService = {
     firmId: string;
     clientId: string;
     documentId: string;
-  }): Promise<{
-    success: boolean;
-    documentId: string;
-    versions: Array<{
-      versionNumber: number;
-      displayName: string;
-      status: string;
-      changeNotes: string;
-      createdBy: string;
-      createdAt: string | null;
-      contentPreview: string;
-      hasFullContent: boolean;
-    }>;
-  }> {
-    const fn = httpsCallable<typeof params, ReturnType<typeof this.getDocumentVersions> extends Promise<infer T> ? T : never>(
+  }): Promise<DocumentVersionsResponse> {
+    const fn = httpsCallable<typeof params, DocumentVersionsResponse>(
       functions,
       'getDocumentVersions',
     );
@@ -477,16 +497,8 @@ export const documentService = {
     clientId: string;
     documentId: string;
     versionNumber: number;
-  }): Promise<{
-    success: boolean;
-    versionNumber: number;
-    content: string;
-    displayName: string;
-    changeNotes: string;
-    createdBy: string;
-    createdAt: string | null;
-  }> {
-    const fn = httpsCallable<typeof params, ReturnType<typeof this.getDocumentVersionContent> extends Promise<infer T> ? T : never>(
+  }): Promise<DocumentVersionContentResponse> {
+    const fn = httpsCallable<typeof params, DocumentVersionContentResponse>(
       functions,
       'getDocumentVersionContent',
     );
@@ -499,14 +511,8 @@ export const documentService = {
     clientId: string;
     documentId: string;
     targetVersion: number;
-  }): Promise<{
-    success: boolean;
-    documentId: string;
-    restoredVersion: number;
-    newVersion: number;
-    message: string;
-  }> {
-    const fn = httpsCallable<typeof params, ReturnType<typeof this.revertDocumentVersion> extends Promise<infer T> ? T : never>(
+  }): Promise<RevertDocumentVersionResponse> {
+    const fn = httpsCallable<typeof params, RevertDocumentVersionResponse>(
       functions,
       'revertDocumentVersion',
     );

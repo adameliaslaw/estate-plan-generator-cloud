@@ -67,8 +67,8 @@ export const registerClientFromLink = onCall(
         isArchived: false,
         questionnaireProgress: {
           status: 'not_started',
-          completedSections: [],
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+          sectionsCompleted: [],
+          lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
