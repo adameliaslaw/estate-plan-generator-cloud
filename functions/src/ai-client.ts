@@ -190,23 +190,31 @@ export async function callAI(
     try {
       return await _callAnthropic(systemPrompt, userPrompt, firmData, options);
     } catch (err) {
-      // Detect Anthropic content-filter rejections and fall back to Gemini.
-      // POA and healthcare directive language commonly triggers Claude's safety filter.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('content filtering policy') || msg.includes('Output blocked')) {
+      // Detect Anthropic content-filter rejections / refusals and fall back to
+      // OpenAI. POA and healthcare directive language commonly triggers Claude's
+      // safety filter; real blocks surface as a refusal stop_reason or an empty
+      // response, not only the literal "content filtering policy" string.
+      const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+      const isContentBlock = msg.includes('content filtering policy')
+        || msg.includes('output blocked')
+        || msg.includes('refusal')
+        || msg.includes('no text content');
+      if (isContentBlock) {
         console.warn(
-          `[callAI] Anthropic content filter blocked output. Falling back to OpenAI. ` +
+          `[callAI] Anthropic blocked/empty output. Falling back to OpenAI. ` +
           `Error: ${msg.slice(0, 200)}`,
         );
         const openaiKey = firmData?.openAiApiKey ?? firmData?.settings?.openAiApiKey;
         if (openaiKey) {
+          // model: undefined — the caller's model is an Anthropic id OpenAI
+          // cannot use, so let OpenAI pick its default.
           return _callOpenAI(systemPrompt, userPrompt, firmData, {
             ...options,
-            model: undefined, // Use OpenAI default
+            model: undefined,
           });
         }
       }
-      throw err; // Re-throw if not a content-filter issue or no Gemini key
+      throw err; // Re-throw if not a content-filter issue or no OpenAI key
     }
   } else if (provider === 'gemini') {
     return _callGemini(systemPrompt, userPrompt, firmData, options);
@@ -295,10 +303,14 @@ async function _callOpenAI(
   const response = await client.chat.completions.create(requestParams);
   const finishReason = response.choices[0]?.finish_reason;
   if (finishReason === 'length') {
-    console.warn(
-      `[ai-client] OpenAI response truncated (finish_reason=length). ` +
-      `Model: ${model}, maxTokens: ${maxTokens}. Consider increasing maxTokens.`,
-    );
+    const detail = `OpenAI response truncated (finish_reason=length, model=${model}, maxTokens=${maxTokens}).`;
+    // In JSON modes a truncated response is invalid JSON downstream, so fail
+    // loudly rather than returning half an object. Prose output may still be
+    // usable, so only warn there.
+    if (options.jsonMode || options.jsonSchema) {
+      throw new Error(`${detail} Increase maxTokens.`);
+    }
+    console.warn(`[ai-client] ${detail} Consider increasing maxTokens.`);
   }
   return response.choices[0]?.message?.content ?? '';
 }
@@ -373,7 +385,33 @@ async function _callAnthropic(
     }
   }
 
-  return data.content[0]?.text ?? '';
+  // A refusal stop_reason means the safety filter blocked the output. Surface it
+  // as a content-block error so callAI's OpenAI fallback engages instead of
+  // returning '' to the generator.
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Anthropic content filtering policy: output blocked (stop_reason=refusal)');
+  }
+
+  // Concatenate every text block — a response can carry multiple blocks or a
+  // non-text block, so content[0].text is not reliable.
+  const text = Array.isArray(data.content)
+    ? data.content.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('')
+    : '';
+
+  if (!text.trim()) {
+    // Empty output (refusal or otherwise) — treat as a content block so the
+    // fallback engages rather than silently returning an empty document.
+    throw new Error('Anthropic content filtering policy: empty response (no text content)');
+  }
+
+  // Truncated JSON is unusable downstream — fail loudly. (Not phrased as a
+  // content-block error, so it does NOT trigger the OpenAI fallback, which
+  // would likely truncate too.)
+  if (data.stop_reason === 'max_tokens' && (options.jsonMode || options.jsonSchema)) {
+    throw new Error(`Anthropic response truncated (stop_reason=max_tokens, max_tokens=${maxTokens}). Increase maxTokens.`);
+  }
+
+  return text;
 }
 
 async function _callGemini(
