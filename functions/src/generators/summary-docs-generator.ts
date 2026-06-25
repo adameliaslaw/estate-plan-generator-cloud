@@ -182,6 +182,7 @@ const NJ_COUNTY_RECORDING_INFO: Record<string, {
 };
 
 function getCountyRecordingInfo(county: string) {
+  county = typeof county === 'string' ? county : '';
   const key = county.toLowerCase().replace(/\s+county$/i, '').trim().replace(/\s+/g, '_');
   return NJ_COUNTY_RECORDING_INFO[key] ?? {
     office: `${county} County Clerk`,

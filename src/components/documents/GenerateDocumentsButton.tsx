@@ -302,6 +302,16 @@ export default function GenerateDocumentsButton({
       stopProgress();
       setProgress(100);
       setCurrentDoc('');
+
+      // If nothing generated successfully, surface the failure instead of a
+      // misleading "Documents Generated" success screen.
+      if (!response.documentsGenerated) {
+        setResult(response);
+        setErrorMessage('No documents could be generated. Please review the client data and try again.');
+        setPhase('error');
+        return;
+      }
+
       setResult(response);
       setPhase('success');
       onSuccess?.(response);

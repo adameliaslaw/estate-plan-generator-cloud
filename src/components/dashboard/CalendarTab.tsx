@@ -854,7 +854,7 @@ function EventDetailDialog({
       try {
         await documentService.pushEventToGoogleCalendar({ firmId, eventId: event.id });
       } catch (gcalErr) {
-        console.error('[CalendarTab] Google Calendar sync failed:', gcalErr); alert('GCAL ERROR: ' + (gcalErr instanceof Error ? gcalErr.message : String(gcalErr)));
+        console.error('[CalendarTab] Google Calendar sync failed:', gcalErr);
       }
 
       toast.success('Event updated.');
@@ -1172,7 +1172,7 @@ function NewEventDialog({
       try {
         await documentService.pushEventToGoogleCalendar({ firmId, eventId });
       } catch (gcalErr) {
-        console.error('[CalendarTab] Google Calendar sync failed:', gcalErr); alert('GCAL ERROR: ' + (gcalErr instanceof Error ? gcalErr.message : String(gcalErr)));
+        console.error('[CalendarTab] Google Calendar sync failed:', gcalErr);
       }
 
       toast.success('Appointment scheduled.');

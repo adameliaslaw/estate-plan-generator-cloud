@@ -149,15 +149,17 @@ export default function NewClientPage() {
       const docRef = await addDoc(colRef, {
         firmId,
         status: 'prospect',
-        packageType: null,
+        packageDetails: { packageType: null },
         personalInfo: {
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
           email: values.email.trim().toLowerCase(),
           phone: values.phone.trim() || null,
         },
-        questionnaire: {
+        questionnaireProgress: {
           status: 'not_started',
+          percentComplete: 0,
+          sectionsCompleted: [],
         },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
