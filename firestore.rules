@@ -63,7 +63,9 @@ service cloud.firestore {
     }
 
     function canManageUsers() {
-      return isAdmin() || hasRole('attorney') || hasRole('paralegal') || hasCapability('manage_users');
+      // User management (create/delete/modify staff profiles) is limited to
+      // admins and attorneys; paralegals are excluded by policy.
+      return isAdmin() || hasRole('attorney') || hasCapability('manage_users');
     }
 
     function canManageClients() {

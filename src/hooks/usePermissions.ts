@@ -27,7 +27,7 @@ export function usePermissions() {
   
   return {
     canManageFirmSettings: role === 'attorney' || role === 'paralegal' || hasCapability('manage_firm_settings'),
-    canManageUsers: role === 'attorney' || role === 'paralegal' || hasCapability('manage_users'),
+    canManageUsers: role === 'attorney' || hasCapability('manage_users'),
     canManageClients: role === 'attorney' || role === 'paralegal' || hasCapability('manage_clients'),
     canManageDocuments: role === 'attorney' || role === 'paralegal' || hasCapability('manage_documents'),
     canManageBilling: role === 'attorney' || role === 'paralegal' || hasCapability('manage_billing'),
