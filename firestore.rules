@@ -102,6 +102,19 @@ service cloud.firestore {
                   && resource.data.linkedUserId == request.auth.uid));
     }
 
+    // Verify a client-role session owns the client record identified by the
+    // path. The `clientId` custom claim is set (alongside role/firmId) only by
+    // the trusted admin SDK in linkClient, and equals the client document id.
+    // Use this for sub-collection docs (documents/notes/payments/calendar),
+    // where `resource` is the CHILD doc and therefore carries no linkedUserId —
+    // so isOwnClientRecord() can never match and clients would otherwise be
+    // denied read of their own records.
+    function isLinkedClient(firmId, clientId) {
+      return isAuthenticated()
+          && request.auth.token.firmId == firmId
+          && request.auth.token.clientId == clientId;
+    }
+
     // Identity fields a client/linked session must never change on their own
     // record. linkedUserId is the access key (changing it could re-point the
     // record at another account or lock the owner out); firmId is the tenant
@@ -256,7 +269,13 @@ service cloud.firestore {
       // Firm-wide calendar events
       // ========================================================
       match /calendarEvents/{eventId} {
-        allow read: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        // Staff read all firm events. A client may read only events tied to their
+        // own client record (the portal queries where('clientId','==',clientId));
+        // resource.data.clientId == token.clientId enforces that boundary even if
+        // the URL clientId is tampered with.
+        allow read: if isAdmin()
+                    || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
+                    || (isClient() && belongsToFirm(firmId) && resource.data.clientId == request.auth.token.clientId);
         allow write: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
       }
 
@@ -368,7 +387,7 @@ service cloud.firestore {
           // Client: read-only access to their own documents.
           allow read: if isAdmin()
                       || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId))
-                      || (isClient() && isOwnClientRecord(clientId));
+                      || (isClient() && isLinkedClient(firmId, clientId));
 
           // Admin: always.
           // Attorney or Paralegal: within their firm; docType, title,
@@ -405,7 +424,7 @@ service cloud.firestore {
           //         case updates shared by the attorney).
           allow read: if isAdmin()
                       || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
-                      || (isClient() && isOwnClientRecord(clientId));
+                      || (isClient() && isLinkedClient(firmId, clientId));
 
           // Admin: always.
           // Attorney or Paralegal: within their firm.
@@ -435,7 +454,7 @@ service cloud.firestore {
           // Client: read-only access to their own payment records.
           allow read: if isAdmin()
                       || ((hasRole('attorney') || hasRole('paralegal') || canManageBilling()) && belongsToFirm(firmId))
-                      || (isClient() && isOwnClientRecord(clientId));
+                      || (isClient() && isLinkedClient(firmId, clientId));
 
           // Admin: always.
           // Attorney: within their firm; amount and status validated.
@@ -470,7 +489,7 @@ service cloud.firestore {
           // Client: read-only access to their own calendar events.
           allow read: if isAdmin()
                       || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
-                      || (isClient() && isOwnClientRecord(clientId));
+                      || (isClient() && isLinkedClient(firmId, clientId));
 
           // Admin: always.
           // Attorney or Paralegal: within their firm; event status validated.
