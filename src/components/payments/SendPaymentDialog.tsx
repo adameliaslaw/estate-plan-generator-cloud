@@ -57,11 +57,20 @@ export function SendPaymentDialog({
     onClose,
     firmId,
     clients,
+    clientId,
+    clientName,
+    clientEmail,
 }: {
     open: boolean;
     onClose: () => void;
     firmId: string;
-    clients: (Client & { id: string })[];
+    // Selector mode (PaymentsPage): pass `clients`. Fixed-client mode
+    // (PaymentsTab): pass `clientId` (+ `clientName`/`clientEmail`) and the
+    // client selector is hidden.
+    clients?: (Client & { id: string })[];
+    clientId?: string;
+    clientName?: string;
+    clientEmail?: string;
 }) {
     const { userProfile } = useAuth();
     const [resultUrl, setResultUrl] = useState<string | null>(null);
@@ -74,7 +83,7 @@ export function SendPaymentDialog({
         formState: { errors, isSubmitting },
     } = useForm<SendFormValues>({
         resolver: zodResolver(sendPaymentSchema),
-        defaultValues: { selectedClientId: '', description: '', amountDollars: '', dueDate: '' },
+        defaultValues: { selectedClientId: clientId ?? '', description: '', amountDollars: '', dueDate: '' },
     });
 
     function handleClose() {
@@ -93,9 +102,9 @@ export function SendPaymentDialog({
     async function onSubmit(values: SendFormValues) {
         const cleanDescription = sanitizeInput(values.description.trim());
         const amountCents = Math.round(parseFloat(values.amountDollars) * 100);
-        const selectedClient = clients.find((c) => c.id === values.selectedClientId);
-        const cName = selectedClient ? clientDisplayName(selectedClient) : '';
-        const clientEmail = selectedClient?.personalInfo?.email ?? '';
+        const selectedClient = clients?.find((c) => c.id === values.selectedClientId);
+        const cName = selectedClient ? clientDisplayName(selectedClient) : (clientName ?? '');
+        const email = selectedClient?.personalInfo?.email ?? clientEmail ?? '';
 
         try {
             const result = await callCreatePaymentRequest({
@@ -104,7 +113,7 @@ export function SendPaymentDialog({
                 amount: amountCents,
                 description: cleanDescription,
                 accountDesignation: 'operating',
-                clientEmail,
+                clientEmail: email,
                 clientName: cName,
             });
 
@@ -137,29 +146,31 @@ export function SendPaymentDialog({
 
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-4 py-1">
-                        {/* Client Selector */}
-                        <div className="space-y-1.5">
-                            <Label htmlFor="sp-client">Client <span className="text-red-500">*</span></Label>
-                            <Controller
-                                control={control}
-                                name="selectedClientId"
-                                render={({ field }) => (
-                                    <Select value={field.value} onValueChange={field.onChange}>
-                                        <SelectTrigger id="sp-client">
-                                            <SelectValue placeholder="Select a client…" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {clients.map((c) => (
-                                                <SelectItem key={c.id} value={c.id}>
-                                                    {clientDisplayName(c)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                            {errors.selectedClientId && <p className="text-xs text-red-500">{errors.selectedClientId.message}</p>}
-                        </div>
+                        {/* Client Selector — only in selector mode */}
+                        {clients && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="sp-client">Client <span className="text-red-500">*</span></Label>
+                                <Controller
+                                    control={control}
+                                    name="selectedClientId"
+                                    render={({ field }) => (
+                                        <Select value={field.value} onValueChange={field.onChange}>
+                                            <SelectTrigger id="sp-client">
+                                                <SelectValue placeholder="Select a client…" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {clients.map((c) => (
+                                                    <SelectItem key={c.id} value={c.id}>
+                                                        {clientDisplayName(c)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                {errors.selectedClientId && <p className="text-xs text-red-500">{errors.selectedClientId.message}</p>}
+                            </div>
+                        )}
 
                         {/* Description */}
                         <div className="space-y-1.5">
