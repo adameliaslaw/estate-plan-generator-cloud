@@ -17,7 +17,6 @@
 
 import { useMemo, useState } from 'react';
 import { orderBy } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import {
   DollarSign,
   Plus,
@@ -39,23 +38,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,16 +47,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-import { useCollection, useDocument, createDoc, deleteDoc } from '@/hooks/useFirestore';
-import { useAuth } from '@/hooks/useAuth';
+import { useCollection, useDocument, deleteDoc } from '@/hooks/useFirestore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { COLLECTIONS } from '@/config/constants';
-import { sanitizeInput } from '@/utils/sanitize';
-import type { Payment, PaymentMethod, PaymentStatus } from '@/types';
+import type { Payment, PaymentStatus } from '@/types';
 import { cn } from '@/lib/utils';
-import { logSystemActivity } from '@/utils/activity-logger';
-import { functions } from '@/config/firebase';
 import { ChargePaymentDialog } from '@/components/payments/ChargePaymentDialog';
+import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog';
+import { SendPaymentDialog } from '@/components/payments/SendPaymentDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,16 +68,6 @@ interface PaymentsTabProps {
 type FilterStatus = 'all' | 'paid' | 'pending' | 'overdue';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const PAYMENT_METHODS: PaymentMethod[] = [
-  'Credit Card',
-  'Debit Card',
-  'ACH / Bank Transfer',
-  'Check',
-  'Cash',
-  'Wire Transfer',
-  'Other',
-];
 
 const FILTER_TABS: { value: FilterStatus; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -196,21 +166,6 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
   );
 }
 
-// ── LawPay Cloud Function call ────────────────────────────────────────────────
-
-const callCreatePaymentRequest = httpsCallable<
-  {
-    firmId: string;
-    clientId: string;
-    amount: number;
-    description: string;
-    accountDesignation: 'operating';
-    clientEmail: string;
-    clientName: string;
-  },
-  { paymentUrl: string; paymentDocId: string }
->(functions, 'createPaymentRequest');
-
 // ── Summary card ─────────────────────────────────────────────────────────────
 
 function SummaryCard({
@@ -285,413 +240,6 @@ function PaymentsSkeleton() {
   );
 }
 
-// ── Record Manual Payment dialog ──────────────────────────────────────────────
-
-interface RecordPaymentDialogProps {
-  open: boolean;
-  onClose: () => void;
-  firmId: string;
-  clientId: string;
-  clientName?: string;
-  createdBy: string;
-}
-
-function RecordPaymentDialog({
-  open,
-  onClose,
-  firmId,
-  clientId,
-  clientName,
-  createdBy,
-}: RecordPaymentDialogProps) {
-  const { userProfile } = useAuth();
-  const [description, setDescription] = useState('');
-  const [amountDollars, setAmountDollars] = useState('');
-  const [method, setMethod] = useState<PaymentMethod | ''>('');
-  const [checkNumber, setCheckNumber] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  function resetForm() {
-    setDescription('');
-    setAmountDollars('');
-    setMethod('');
-    setCheckNumber('');
-    setDate(new Date().toISOString().slice(0, 10));
-    setNotes('');
-  }
-
-  function handleClose() {
-    resetForm();
-    onClose();
-  }
-
-  async function handleSave() {
-    const cleanDescription = sanitizeInput(description.trim());
-    const cleanNotes = sanitizeInput(notes.trim());
-    const parsedDollars = parseFloat(amountDollars);
-
-    if (!cleanDescription) {
-      toast.error('Description is required.');
-      return;
-    }
-    if (isNaN(parsedDollars) || parsedDollars <= 0) {
-      toast.error('Please enter a valid amount greater than $0.');
-      return;
-    }
-    if (!method) {
-      toast.error('Please select a payment method.');
-      return;
-    }
-
-    const amountCents = Math.round(parsedDollars * 100);
-
-    setSaving(true);
-    try {
-      const payload: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'> = {
-        firmId,
-        clientId,
-        description: cleanDescription,
-        amount: amountCents,
-        amountPaid: amountCents,
-        balanceDue: 0,
-        paymentMethod: method as PaymentMethod,
-        status: 'paid',
-        accountDesignation: 'operating',
-        checkNumber: method === 'Check' ? sanitizeInput(checkNumber.trim()) : undefined,
-        dueDate: date || '',
-        notes: cleanNotes || '',
-        createdBy,
-        updatedBy: createdBy,
-      };
-
-      // Remove undefined keys to keep Firestore clean
-      const clean = Object.fromEntries(
-        Object.entries(payload).filter(([, v]) => v !== undefined),
-      );
-
-      await createDoc(COLLECTIONS.PAYMENTS(firmId, clientId), clean);
-
-      await logSystemActivity(firmId, userProfile, 'logging payment', {
-        clientId,
-        clientName,
-        paymentAmount: `$${amountDollars}`
-      });
-
-      toast.success('Payment recorded successfully.');
-      handleClose();
-    } catch (err) {
-      console.error('[RecordPaymentDialog] save error:', err);
-      toast.error('Failed to record payment. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-[#1a365d]">Record Manual Payment</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 py-1">
-          {/* Description */}
-          <div className="space-y-1.5">
-            <Label htmlFor="rp-description">Description <span className="text-red-500">*</span></Label>
-            <Input
-              id="rp-description"
-              placeholder="e.g. Retainer — Estate Planning Package"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={200}
-            />
-          </div>
-
-          {/* Amount */}
-          <div className="space-y-1.5">
-            <Label htmlFor="rp-amount">Amount (USD) <span className="text-red-500">*</span></Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm">
-                $
-              </span>
-              <Input
-                id="rp-amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                className="pl-7"
-                value={amountDollars}
-                onChange={(e) => setAmountDollars(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Payment Method */}
-          <div className="space-y-1.5">
-            <Label htmlFor="rp-method">Payment Method <span className="text-red-500">*</span></Label>
-            <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-              <SelectTrigger id="rp-method">
-                <SelectValue placeholder="Select method…" />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Check # — conditional */}
-          {method === 'Check' && (
-            <div className="space-y-1.5">
-              <Label htmlFor="rp-check">Check Number</Label>
-              <Input
-                id="rp-check"
-                placeholder="e.g. 1042"
-                value={checkNumber}
-                onChange={(e) => setCheckNumber(e.target.value)}
-                maxLength={20}
-              />
-            </div>
-          )}
-
-
-
-          {/* Date */}
-          <div className="space-y-1.5">
-            <Label htmlFor="rp-date">Date</Label>
-            <Input
-              id="rp-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-1.5">
-            <Label htmlFor="rp-notes">Notes</Label>
-            <Textarea
-              id="rp-notes"
-              placeholder="Optional internal notes…"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={1000}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-[#1a365d] text-white hover:bg-[#1e407a]"
-          >
-            {saving ? 'Saving…' : 'Record Payment'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Send Payment Request dialog ───────────────────────────────────────────────
-
-interface SendRequestDialogProps {
-  open: boolean;
-  onClose: () => void;
-  firmId: string;
-  clientId: string;
-  clientEmail?: string;
-  clientName?: string;
-  createdBy: string;
-}
-
-function SendRequestDialog({
-  open,
-  onClose,
-  firmId,
-  clientId,
-  clientEmail,
-  clientName,
-}: SendRequestDialogProps) {
-  const { userProfile } = useAuth();
-  const [description, setDescription] = useState('');
-  const [amountDollars, setAmountDollars] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
-
-  function resetForm() {
-    setDescription('');
-    setAmountDollars('');
-    setDueDate('');
-    setResultUrl(null);
-  }
-
-  function handleClose() {
-    resetForm();
-    onClose();
-  }
-
-  async function handleSend() {
-    const cleanDescription = sanitizeInput(description.trim());
-    const parsedDollars = parseFloat(amountDollars);
-
-    if (!cleanDescription) {
-      toast.error('Description is required.');
-      return;
-    }
-    if (isNaN(parsedDollars) || parsedDollars <= 0) {
-      toast.error('Please enter a valid amount greater than $0.');
-      return;
-    }
-
-    const amountCents = Math.round(parsedDollars * 100);
-
-    setSaving(true);
-    try {
-      // Call the Cloud Function to create a LawPay charge
-      const result = await callCreatePaymentRequest({
-        firmId,
-        clientId,
-        amount: amountCents,
-        description: cleanDescription,
-        accountDesignation: 'operating',
-        clientEmail: clientEmail ?? '',
-        clientName: clientName ?? '',
-      });
-
-      const { paymentUrl } = result.data;
-      setResultUrl(paymentUrl);
-
-      // Copy to clipboard
-      try { await navigator.clipboard.writeText(paymentUrl); } catch { /* ignore */ }
-
-      toast.success('Payment request created! Link copied to clipboard.', { duration: 6000 });
-
-      await logSystemActivity(firmId, userProfile, 'sending payment request', {
-        clientId,
-        clientName,
-        paymentAmount: `$${amountDollars}`
-      });
-
-      handleClose();
-    } catch (err) {
-      console.error('[SendRequestDialog] save error:', err);
-      toast.error('Failed to create payment request. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-[#1a365d]">Send Payment Request</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-1 pb-1">
-          <p className="text-sm text-gray-500">
-            {clientName
-              ? `Create a payment request for ${clientName}.`
-              : 'Create a payment request for this client.'}{' '}
-            A LawPay payment link will be generated.
-          </p>
-        </div>
-
-        <div className="space-y-4 py-1">
-          {/* Description */}
-          <div className="space-y-1.5">
-            <Label htmlFor="sr-description">Description <span className="text-red-500">*</span></Label>
-            <Input
-              id="sr-description"
-              placeholder="e.g. Estate Plan Balance Due"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={200}
-            />
-          </div>
-
-          {/* Amount */}
-          <div className="space-y-1.5">
-            <Label htmlFor="sr-amount">Amount (USD) <span className="text-red-500">*</span></Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm">
-                $
-              </span>
-              <Input
-                id="sr-amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                className="pl-7"
-                value={amountDollars}
-                onChange={(e) => setAmountDollars(e.target.value)}
-              />
-            </div>
-          </div>
-
-
-
-          {/* Due Date */}
-          <div className="space-y-1.5">
-            <Label htmlFor="sr-due">Due Date (optional)</Label>
-            <Input
-              id="sr-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {resultUrl ? (
-          <Alert className="border-emerald-200 bg-emerald-50">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <AlertDescription className="text-xs text-emerald-800">
-              Payment link created!{' '}
-              <a
-                href={resultUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold underline"
-              >
-                Open payment page
-              </a>
-              {' '}(link also copied to clipboard)
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSend}
-            disabled={saving}
-            className="bg-[#2b6cb0] text-white hover:bg-[#2563a8]"
-          >
-            {saving ? 'Creating…' : 'Create Request'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PaymentsTab({
@@ -700,8 +248,6 @@ export default function PaymentsTab({
   clientEmail,
   clientName,
 }: PaymentsTabProps) {
-  const { userProfile } = useAuth();
-  const uid = userProfile?.uid ?? '';
   const { canManageBilling } = usePermissions();
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -1106,16 +652,14 @@ export default function PaymentsTab({
         firmId={firmId}
         clientId={clientId}
         clientName={clientName}
-        createdBy={uid}
       />
-      <SendRequestDialog
+      <SendPaymentDialog
         open={showRequestDialog}
         onClose={() => setShowRequestDialog(false)}
         firmId={firmId}
         clientId={clientId}
         clientEmail={clientEmail}
         clientName={clientName}
-        createdBy={uid}
       />
       <ChargePaymentDialog
         open={showChargeDialog}

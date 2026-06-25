@@ -46,11 +46,18 @@ export function RecordPaymentDialog({
     onClose,
     firmId,
     clients,
+    clientId,
+    clientName,
 }: {
     open: boolean;
     onClose: () => void;
     firmId: string;
-    clients: (Client & { id: string })[];
+    // Selector mode (PaymentsPage): pass `clients`. Fixed-client mode
+    // (PaymentsTab): pass `clientId` (+ `clientName` for the activity log) and
+    // the client selector is hidden.
+    clients?: (Client & { id: string })[];
+    clientId?: string;
+    clientName?: string;
 }) {
     const { userProfile } = useAuth();
 
@@ -63,7 +70,7 @@ export function RecordPaymentDialog({
     } = useForm<RecordFormValues>({
         resolver: zodResolver(recordPaymentSchema),
         defaultValues: {
-            selectedClientId: '',
+            selectedClientId: clientId ?? '',
             description: '',
             amountDollars: '',
             method: '',
@@ -91,8 +98,8 @@ export function RecordPaymentDialog({
         const cleanDescription = sanitizeInput(values.description.trim());
         const cleanNotes = sanitizeInput((values.notes ?? '').trim());
         const amountCents = Math.round(parseFloat(values.amountDollars) * 100);
-        const selected = clients.find((c) => c.id === values.selectedClientId);
-        const cName = selected ? clientDisplayName(selected) : '';
+        const selected = clients?.find((c) => c.id === values.selectedClientId);
+        const cName = selected ? clientDisplayName(selected) : (clientName ?? '');
 
         try {
             const payload: Record<string, unknown> = {
@@ -144,29 +151,31 @@ export function RecordPaymentDialog({
 
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-4 py-1">
-                        {/* Client Selector */}
-                        <div className="space-y-1.5">
-                            <Label htmlFor="rp2-client">Client <span className="text-red-500">*</span></Label>
-                            <Controller
-                                control={control}
-                                name="selectedClientId"
-                                render={({ field }) => (
-                                    <Select value={field.value} onValueChange={field.onChange}>
-                                        <SelectTrigger id="rp2-client">
-                                            <SelectValue placeholder="Select a client…" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {clients.map((c) => (
-                                                <SelectItem key={c.id} value={c.id}>
-                                                    {clientDisplayName(c)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                            {errors.selectedClientId && <p className="text-xs text-red-500">{errors.selectedClientId.message}</p>}
-                        </div>
+                        {/* Client Selector — only in selector mode */}
+                        {clients && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="rp2-client">Client <span className="text-red-500">*</span></Label>
+                                <Controller
+                                    control={control}
+                                    name="selectedClientId"
+                                    render={({ field }) => (
+                                        <Select value={field.value} onValueChange={field.onChange}>
+                                            <SelectTrigger id="rp2-client">
+                                                <SelectValue placeholder="Select a client…" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {clients.map((c) => (
+                                                    <SelectItem key={c.id} value={c.id}>
+                                                        {clientDisplayName(c)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                {errors.selectedClientId && <p className="text-xs text-red-500">{errors.selectedClientId.message}</p>}
+                            </div>
+                        )}
 
                         {/* Description */}
                         <div className="space-y-1.5">
