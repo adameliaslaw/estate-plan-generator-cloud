@@ -130,6 +130,13 @@ export const transcribeAudio = functions
       throw new functions.https.HttpsError('permission-denied', 'Only staff members can transcribe audio notes.');
     }
 
+    // Prevent cross-tenant file read: the admin SDK bypasses Storage rules, so
+    // the caller-supplied path must be scoped to this firm (audit theme T8).
+    const expectedPrefix = `firms/${firmId}/`;
+    if (!storagePath.startsWith(expectedPrefix) || storagePath.includes('..')) {
+      throw new functions.https.HttpsError('permission-denied', 'Storage path is not within the expected firm directory.');
+    }
+
     console.log(
       `[transcribeAudio] START firmId=${firmId} clientId=${clientId} noteId=${noteId} path=${storagePath}`,
     );

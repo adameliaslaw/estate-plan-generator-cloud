@@ -254,6 +254,15 @@ export const bulkProcessKnowledgeFiles = onCall(
       throw new HttpsError('permission-denied', 'Cannot import knowledge resources for a different firm.');
     }
 
+    // Prevent cross-tenant file read: the admin SDK bypasses Storage rules, so
+    // every caller-supplied path must be scoped to this firm (audit theme T8).
+    const expectedPrefix = `firms/${firmId}/`;
+    for (const file of files) {
+      if (!file.storagePath || !file.storagePath.startsWith(expectedPrefix) || file.storagePath.includes('..')) {
+        throw new HttpsError('permission-denied', 'A storage path is not within the expected firm directory.');
+      }
+    }
+
     // Fetch firm data for AI provider keys
     const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
     const firmData = firmSnap.data() ?? {};

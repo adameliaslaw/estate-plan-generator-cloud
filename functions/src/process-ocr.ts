@@ -64,6 +64,16 @@ export const processQuestionnaireScan = functions
             throw new functions.https.HttpsError('permission-denied', 'Only staff members can process questionnaire scans.');
         }
 
+        // Prevent cross-tenant file read: the admin SDK bypasses Storage rules,
+        // so every caller-supplied image path must be scoped to this firm
+        // (audit theme T8).
+        const expectedPrefix = `firms/${firmId}/`;
+        for (const path of imagePaths) {
+            if (!path || !path.startsWith(expectedPrefix) || path.includes('..')) {
+                throw new functions.https.HttpsError('permission-denied', 'An image path is not within the expected firm directory.');
+            }
+        }
+
         const db = admin.firestore();
         const storage = admin.storage();
         const bucket = storage.bucket();
