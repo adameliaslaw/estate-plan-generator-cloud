@@ -4,6 +4,29 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-29 PM (frontend audit Round 4 + reconciliation against shipped fixes)
+
+Finished the audit-only sweep (Round 4 = frontend) and then **discovered this machine's local `main` had diverged from `origin/main` at `ce9a466`.** A **parallel Claude session** (`session_01KLDZSGMLWiv6...`) had been shipping audit fixes to the real `main` — **PRs #38, #40, #42, #43, #44, #45, #46** (now HEAD `5879857`). My audit ran against the stale `ce9a466` tree, so I integrated `origin/main`, then **re-verified every affected finding against current code** (3 verification subagents + diffstat). Full ledger + reconciliation: **`docs/AUDIT-findings.md`** → read the top **"⚖️ RECONCILIATION"** section first. Memory: [[project_codebase_audit]].
+
+**The full 4-round audit is complete (~126 findings). After reconciling with the shipped fixes: ~24 fixed, ~5 partial, the rest open. 8 of 9 criticals still OPEN.**
+
+**🔴 The 8 criticals still open** (their files were never touched by #38–#46):
+- **AF** — 5000-char `sanitizeForPrompt` cap truncates the canonical client-data block in all 9 generators (B1; the #1 ROI fix, still not done).
+- **AP / AQ** — any staff can still mint an `admin` / self-grant capabilities. ⚠️ Note: #43 *looks* like it closed this but only removed paralegals from the **rules-level** `canManageUsers` — the `createFirmUser`/`updateUserCapabilities` **callables are untouched** and still set the request-supplied role with no admin gate. The B0 cluster is only **partially** addressed.
+- **AZ / BA** — cross-tenant template/KB reads (broken firm-scope predicate).
+- **BN** — LawPay payment-page payments never reconciled (client pays, app shows "pending").
+- **BT** — OCR null-merge wipes existing client data.
+- **CH** — questionnaire intake silently fails to save while the UI shows "Saved" (`QuestionnaireContext` primary `setDoc` has no catch/retry).
+- ✅ **DF** (the 9th) was fixed by #40.
+
+**Notable: the parallel session caught a real cross-tenant leak my Round 4 missed** — `useFirmBranding`'s global cache leaked one firm's branding incl. Maps API key to every other firm (fixed in #38). Good cross-check.
+
+**▶️ Next session — fixing only (audit is done).** Recommended order, all still unfixed: **AF (B1)** → **B0 security callables (AP/AQ + AZ/BA)** → **BT** → **BN** → **CH**. Then the truth-in-status remainder (CR/CU + the open halves of CS/CW) and the rest. Never-Break gate still applies (rules, templates, `types/index.ts`, indexes, CI = show Adam the diff first).
+
+> Process note: this machine's local branch was stale. **Always `git fetch` and check divergence at session start** before auditing or committing — the real work was happening on `origin/main` via PRs.
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-23 PM (SendGrid unauthorized fix)
 
 ### 🔴 Open user actions
