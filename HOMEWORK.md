@@ -10,18 +10,19 @@ Finished the audit-only sweep (Round 4 = frontend) and then **discovered this ma
 
 **The full 4-round audit is complete (~126 findings). After reconciling with the shipped fixes: ~24 fixed, ~5 partial, the rest open. 8 of 9 criticals still OPEN.**
 
-**🔴 The 8 criticals still open** (their files were never touched by #38–#46):
-- **AF** — 5000-char `sanitizeForPrompt` cap truncates the canonical client-data block in all 9 generators (B1; the #1 ROI fix, still not done).
+**✅ AF FIXED this session (PR #47, merged → `1555d27`, functions CI auto-deploying).** `sanitizeObject` no longer re-truncates the canonical `_serializedClientData` block at 5,000 chars (cap lifted to 100k; still injection-stripped). One surgical edit in `ai-client.ts` fixed all 9 generators; regression test added; 621 tests pass. Provider dispatch + serializer schema untouched.
+
+**🔴 The 7 criticals still open** (their files were never touched by #38–#46):
 - **AP / AQ** — any staff can still mint an `admin` / self-grant capabilities. ⚠️ Note: #43 *looks* like it closed this but only removed paralegals from the **rules-level** `canManageUsers` — the `createFirmUser`/`updateUserCapabilities` **callables are untouched** and still set the request-supplied role with no admin gate. The B0 cluster is only **partially** addressed.
 - **AZ / BA** — cross-tenant template/KB reads (broken firm-scope predicate).
 - **BN** — LawPay payment-page payments never reconciled (client pays, app shows "pending").
 - **BT** — OCR null-merge wipes existing client data.
 - **CH** — questionnaire intake silently fails to save while the UI shows "Saved" (`QuestionnaireContext` primary `setDoc` has no catch/retry).
-- ✅ **DF** (the 9th) was fixed by #40.
+- ✅ Already fixed: **AF** (#47), **DF** (#40).
 
 **Notable: the parallel session caught a real cross-tenant leak my Round 4 missed** — `useFirmBranding`'s global cache leaked one firm's branding incl. Maps API key to every other firm (fixed in #38). Good cross-check.
 
-**▶️ Next session — fixing only (audit is done).** Recommended order, all still unfixed: **AF (B1)** → **B0 security callables (AP/AQ + AZ/BA)** → **BT** → **BN** → **CH**. Then the truth-in-status remainder (CR/CU + the open halves of CS/CW) and the rest. Never-Break gate still applies (rules, templates, `types/index.ts`, indexes, CI = show Adam the diff first).
+**▶️ Next — keep fixing.** Recommended order, all still unfixed: **BT** (OCR data-loss — self-contained, high impact) → **CH** (questionnaire save reliability) → **BN** (payments reconciliation). The **B0 security callables (AP/AQ + AZ/BA)** touch `firestore.rules`/auth = **show Adam the diff before merge** (Never-Break). Then the truth-in-status remainder (CR/CU + the open halves of CS/CW). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI.
 
 > Process note: this machine's local branch was stale. **Always `git fetch` and check divergence at session start** before auditing or committing — the real work was happening on `origin/main` via PRs.
 
