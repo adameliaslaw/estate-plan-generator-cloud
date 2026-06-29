@@ -635,11 +635,18 @@ const INJECTION_PATTERNS: RegExp[] = [
  * - Applies all injection-stripping patterns (see INJECTION_PATTERNS)
  * - Strips role prefixes ("system:", "user:", "assistant:")
  * - Escapes backticks so the value can't break a markdown fence
- * - Hard-caps the string at 5,000 characters at a word boundary
+ * - Hard-caps the string at `maxLength` characters at a word boundary
+ *
+ * `options.maxLength` defaults to 5,000 (the per-field cap). Pass a larger value
+ * for already-aggregated content; pass `null` to disable the cap entirely.
  */
-export function sanitizeForPrompt(text: string | undefined | null): string {
+export function sanitizeForPrompt(
+  text: string | undefined | null,
+  options?: { maxLength?: number | null },
+): string {
   if (!text) return '';
 
+  const maxLength = options?.maxLength === undefined ? 5000 : options.maxLength;
   let result = text;
 
   // Apply all injection-stripping patterns.
@@ -655,8 +662,8 @@ export function sanitizeForPrompt(text: string | undefined | null): string {
 
   // Hard length cap — do NOT silently truncate in the middle of a word;
   // find the last whitespace before the limit.
-  if (result.length > 5000) {
-    const truncated = result.slice(0, 5000);
+  if (maxLength !== null && result.length > maxLength) {
+    const truncated = result.slice(0, maxLength);
     const lastSpace = truncated.lastIndexOf(' ');
     result = (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + '…';
   }
@@ -667,6 +674,25 @@ export function sanitizeForPrompt(text: string | undefined | null): string {
 // ---------------------------------------------------------------------------
 // Firestore-safe client data extractor
 // ---------------------------------------------------------------------------
+
+/**
+ * Canonical pre-serialized prompt-context fields produced by
+ * client-data-serializer. They are already field-level sanitized (and
+ * length-capped per field) at build time, and the aggregated block routinely
+ * exceeds the 5,000-char per-field cap. Re-applying that cap here silently
+ * truncated the client-data block fed to every AI generator (audit finding AF),
+ * dropping legal input. These keys still get injection-stripped (so the
+ * serialization-failure path, where the value may be a raw client-supplied
+ * string, stays safe) but are not length-capped to 5,000.
+ */
+const UNCAPPED_PROMPT_KEYS = new Set([
+  '_serializedClientData',
+  '_clientFullName',
+  '_spouseFullName',
+]);
+
+/** Generous ceiling for aggregated prompt-context fields (bounds abuse without truncating real data). */
+const AGGREGATED_FIELD_MAX = 100_000;
 
 /**
  * Sanitize all free-text string values inside an arbitrary Firestore document
@@ -684,7 +710,12 @@ export function sanitizeObject<T>(obj: T): T {
   if (obj !== null && typeof obj === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      result[key] = sanitizeObject(value);
+      if (UNCAPPED_PROMPT_KEYS.has(key) && typeof value === 'string') {
+        // Already sanitized at serialization time — strip injection but keep full length.
+        result[key] = sanitizeForPrompt(value, { maxLength: AGGREGATED_FIELD_MAX });
+      } else {
+        result[key] = sanitizeObject(value);
+      }
     }
     return result as T;
   }
