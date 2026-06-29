@@ -22,6 +22,7 @@
 import { onRequest, HttpsError } from 'firebase-functions/v2/https';
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import * as crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
@@ -369,7 +370,9 @@ export const createPaymentRequest = functions
     if (clientEmail) {
       try {
         const firmDoc = await db.doc(`firms/${firmId}`).get();
-        const firmData = firmDoc.exists ? firmDoc.data()! : null;
+        const firmData = firmDoc.exists
+          ? { ...firmDoc.data()!, ...(await loadFirmSecrets(firmId)) }
+          : null;
         const sendGridKey = (firmData?.sendGridApiKey as string || '').trim();
 
         if (sendGridKey && firmData) {

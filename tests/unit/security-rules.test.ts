@@ -149,6 +149,25 @@ describe('Firestore Rules — /firms/{firmId} collection', () => {
 });
 
 // ============================================================================
+// SECTION: Firm secrets sub-collection (audit finding AR)
+// Provider API keys must never be client-readable — the secrets doc is
+// Functions/admin-SDK only.
+// ============================================================================
+
+describe('Firestore Rules — /firms/{firmId}/secrets (provider keys)', () => {
+  it('has a match rule for the secrets sub-collection', () => {
+    expect(rulesContain(/match\s+\/secrets\/\{docId\}/)).toBe(true);
+  });
+
+  it('denies all client-SDK read and write to firm secrets', () => {
+    const secretsBlock = rulesContent.match(
+      /match\s+\/secrets\/\{docId\}\s*\{[\s\S]*?\}/
+    )?.[0] ?? '';
+    expect(secretsBlock).toMatch(/allow\s+read\s*,\s*write\s*:\s*if\s+false/);
+  });
+});
+
+// ============================================================================
 // SECTION: Client collection rules
 // ============================================================================
 

@@ -15,6 +15,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { callAI, parseAIJson, FirmData } from './ai-client';
 import { assertStaff } from './auth-guards';
@@ -203,7 +204,7 @@ export const groundedReviewDocument = onCall(
     if (!firmSnap.exists) {
       throw new HttpsError('not-found', `Firm ${firmId} not found.`);
     }
-    const firmData = firmSnap.data() as FirmData;
+    const firmData = { ...firmSnap.data(), ...(await loadFirmSecrets(firmId)) } as FirmData;
 
     // Check for Gemini API key
     if (!firmData.geminiApiKey && !firmData.settings?.geminiApiKey) {

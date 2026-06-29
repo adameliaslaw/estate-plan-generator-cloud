@@ -11,6 +11,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import mammoth from 'mammoth';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PDFParse } = require('pdf-parse');
@@ -265,7 +266,7 @@ export const bulkProcessKnowledgeFiles = onCall(
 
     // Fetch firm data for AI provider keys
     const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() ?? {};
+    const firmData = { ...(firmSnap.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
 
     const bucket = admin.storage().bucket();
     const db = admin.firestore();

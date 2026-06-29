@@ -13,6 +13,7 @@
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
 import { searchCaseLaw, formatCaseCitations } from './courtlistener-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot, DocSnapshot } from './client-context-aggregator';
@@ -512,7 +513,7 @@ export const chatAi = functions
       if (!firmDoc.exists) {
         throw new functions.https.HttpsError('not-found', 'Firm not found.');
       }
-      const firmData = firmDoc.data() as FirmData;
+      const firmData = { ...firmDoc.data(), ...(await loadFirmSecrets(firmId)) } as FirmData;
       console.log(`[chatAi] Firm fetch: ${Date.now() - t0}ms`);
 
       // 3. Load existing conversation if resuming

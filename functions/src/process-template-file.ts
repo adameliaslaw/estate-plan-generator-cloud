@@ -9,6 +9,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import mammoth from 'mammoth';
  
 const globalWithDom = global as typeof global & { DOMMatrix?: unknown };
@@ -370,7 +371,7 @@ export const processTemplateFile = onCall(
 
     // Fetch firm data for LLM-agnostic routing
     const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() ?? {};
+    const firmData = { ...(firmSnap.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
 
     // Fetch learning context (corrections, dictionary, few-shot examples)
     const learningCtx = await getLearningContext(firmId);

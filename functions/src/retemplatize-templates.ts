@@ -10,6 +10,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import { callAI } from './ai-client';
 import { applyTemplateFormattingStyles, extractTemplateVariables } from './template-engine';
 import { compareHtmlStructure, buildFidelityRetryInstruction } from './template-fidelity-validator';
@@ -217,7 +218,7 @@ export const retemplatizeTemplates = onCall(
 
     // Fetch firm data for AI routing
     const firmSnap = await db.collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() ?? {};
+    const firmData = { ...(firmSnap.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
 
     const results: {
       templateId: string;

@@ -10,6 +10,7 @@
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import { callAI, parseAIJson } from './ai-client';
 
 // ---------------------------------------------------------------------------
@@ -331,7 +332,7 @@ export const analyzeKnowledgeContent = onCall(
     const firmId = request.auth.token.firmId as string | undefined;
     if (!firmId) throw new HttpsError('permission-denied', 'No firm associated with this account.');
     const firmSnap = await admin.firestore().collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() ?? {};
+    const firmData = { ...(firmSnap.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
 
     const systemPrompt = `You are a legal research assistant specializing in New Jersey estate planning law.
 Analyze the following text and extract structured metadata. Return a valid JSON object with these fields:
