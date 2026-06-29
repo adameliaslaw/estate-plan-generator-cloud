@@ -104,15 +104,30 @@ jobs:
         run: npm install -g firebase-tools@latest
 
       - name: Deploy to Firebase Hosting (live channel)
-        # Mirrors the (reliably green) functions workflow's auth path. The old
-        # FirebaseExtended/action-hosting-deploy@v0 exited non-zero on transient
-        # googleapis keep-alive resets ("premature close") even when the release
-        # actually succeeded, and hard-failed re-runs of unchanged content with
-        # "supplied version … is the current active version". google-github-
-        # actions/auth@v3 sets GOOGLE_APPLICATION_CREDENTIALS automatically;
-        # firebase-tools picks it up. `firebase deploy --only hosting` tolerates
-        # unchanged content gracefully.
-        run: firebase deploy --only hosting --project estate-plan-generator --non-interactive
+        # Auth path mirrors the functions workflow: google-github-actions/auth@v3
+        # sets GOOGLE_APPLICATION_CREDENTIALS; firebase-tools picks it up.
+        #
+        # Idempotency guard: when a hosting-triggering push doesn't change the
+        # built bundle (a workflow/firebase.json/.firebaserc edit, a lockfile bump
+        # that doesn't alter output), `dist` is byte-identical to the live version.
+        # Firebase then rejects the release with HTTP 400 "is the current active
+        # version" and firebase-tools exits 1 — a false failure, since the site
+        # already serves this content. Treat ONLY that message as success; any
+        # other error (auth, permission, build, a real network abort) still fails
+        # the job so genuine problems stay visible.
+        # GitHub's default shell is `bash -eo pipefail`; `|| code=$?` keeps the
+        # step from aborting on `-e` so we can inspect the failure ourselves.
+        run: |
+          set -o pipefail
+          code=0
+          firebase deploy --only hosting --project estate-plan-generator --non-interactive 2>&1 | tee deploy.log || code=$?
+          if [ "$code" -ne 0 ]; then
+            if grep -q "is the current active version" deploy.log; then
+              echo "::notice::No frontend change — content already live; treating as success."
+              exit 0
+            fi
+            exit "$code"
+          fi
 
       # Surface CI/deploy failures that would otherwise go unnoticed — commits
       # here are authored by "AI Bot", so GitHub's default failure email doesn't
