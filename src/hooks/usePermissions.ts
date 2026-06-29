@@ -26,11 +26,14 @@ export function usePermissions() {
   };
   
   return {
-    canManageFirmSettings: role === 'attorney' || role === 'paralegal' || hasCapability('manage_firm_settings'),
+    // Firm settings + billing are admin/attorney only (paralegals excluded by
+    // policy — finding AS); mirrors firestore.rules canManageFirmSettings/
+    // canManageBilling. Explicit capability grants still apply.
+    canManageFirmSettings: role === 'attorney' || hasCapability('manage_firm_settings'),
     canManageUsers: role === 'attorney' || hasCapability('manage_users'),
     canManageClients: role === 'attorney' || role === 'paralegal' || hasCapability('manage_clients'),
     canManageDocuments: role === 'attorney' || role === 'paralegal' || hasCapability('manage_documents'),
-    canManageBilling: role === 'attorney' || role === 'paralegal' || hasCapability('manage_billing'),
+    canManageBilling: role === 'attorney' || hasCapability('manage_billing'),
     hasCapability,
     isAdmin,
     isAttorney: role === 'attorney',
