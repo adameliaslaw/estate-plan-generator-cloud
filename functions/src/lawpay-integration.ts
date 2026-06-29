@@ -283,10 +283,28 @@ export const createPaymentRequest = functions
     // 3. Construct pre-filled LawPay Payment Page URL
     //    Docs: https://developers.8am.com (Payment Pages → URL Parameters)
     // ------------------------------------------------------------------
+    // Create the Payment doc ref up-front so its id can be embedded in the
+    // LawPay `reference`. The webhook parses that reference to locate THIS exact
+    // doc and mark it paid; without the doc id it could not reconcile, so
+    // payment-page payments stayed "pending" forever (finding BN). `.doc()` only
+    // generates an id here — the write happens below.
+    const db = admin.firestore();
+    const paymentDocRef = db
+      .collection('firms')
+      .doc(firmId)
+      .collection('clients')
+      .doc(clientId)
+      .collection('payments')
+      .doc(); // auto-generated ID
+
+    // reference = "{firmId}::{clientId}::{paymentDocId}" — round-trips through
+    // LawPay and comes back on the webhook as data.reference.
+    const paymentReference = `${firmId}::${clientId}::${paymentDocRef.id}`;
+
     const params = new URLSearchParams({
       amount: amount.toString(),
       description: description.trim(),
-      reference: `${firmId}::${clientId}`,
+      reference: paymentReference,
       readOnlyFields: 'amount,description',
     });
 
@@ -310,15 +328,6 @@ export const createPaymentRequest = functions
     // ------------------------------------------------------------------
     // 4. Persist Payment document in Firestore
     // ------------------------------------------------------------------
-    const db = admin.firestore();
-    const paymentDocRef = db
-      .collection('firms')
-      .doc(firmId)
-      .collection('clients')
-      .doc(clientId)
-      .collection('payments')
-      .doc(); // auto-generated ID
-
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     await paymentDocRef.set({
@@ -327,7 +336,7 @@ export const createPaymentRequest = functions
       clientId,
       // LawPay fields
       lawPayPaymentUrl: paymentUrl,
-      lawPayReference: `${firmId}-${clientId}`,
+      lawPayReference: paymentReference,
       // Financial details
       amount,                  // in cents
       amountFormatted: (amount / 100).toFixed(2),
@@ -564,12 +573,15 @@ export const lawpayWebhook = onRequest(
 
       let paymentDocRef: admin.firestore.DocumentReference | null = null;
 
-      if (refParts.length >= 2) {
-        // reference = "firmId::clientId"
-        const firmId = refParts[0];
-        const clientId = refParts[1];
-        paymentDocRef = paymentRef(db, firmId, clientId, transactionId);
+      if (refParts.length >= 3) {
+        // reference = "firmId::clientId::paymentDocId" — locate the exact doc
+        // created by createPaymentRequest. (Its id is the doc id, NOT the
+        // transactionId, which LawPay only assigns at payment time.)
+        const [firmId, clientId, paymentDocId] = refParts;
+        paymentDocRef = paymentRef(db, firmId, clientId, paymentDocId);
       }
+      // A 2-part legacy reference (or none) falls through to the
+      // lawPayTransactionId fallback query below.
 
       // Fallback: collectionGroup query across all firms (slower but safe)
       if (!paymentDocRef) {
@@ -630,7 +642,10 @@ export const lawpayWebhook = onRequest(
 
         switch (type) {
           case 'charge.completed':
-            updatePayload = { ...updatePayload, status: 'paid', amountPaid: data.amount, balanceDue: 0, paidAt: now };
+            // Persist the transactionId so a later charge.refunded (which may
+            // arrive with only data.id and no reference) can be matched via the
+            // fallback collectionGroup query.
+            updatePayload = { ...updatePayload, status: 'paid', amountPaid: data.amount, balanceDue: 0, paidAt: now, lawPayTransactionId: transactionId };
             console.log(`[lawpayWebhook] Marking payment PAID — transactionId=${transactionId}`);
             break;
           case 'charge.failed':
