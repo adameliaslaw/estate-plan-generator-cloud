@@ -19,6 +19,11 @@ export const generateEstateDocument = functions
       throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
 
+    const genRole = context.auth.token.role as string | undefined;
+    if (!genRole || !['admin', 'attorney', 'paralegal'].includes(genRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
+    }
+
     const { firmId, clientId, docType = 'will' } = data as {
       firmId?: string;
       clientId?: string;

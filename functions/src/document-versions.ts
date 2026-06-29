@@ -9,6 +9,7 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { getVersionHistory, revertToVersion } from './document-save-helper';
+import { assertStaff } from './auth-guards';
 
 // ---------------------------------------------------------------------------
 // Get version history
@@ -19,6 +20,7 @@ export const getDocumentVersions = onCall(
   async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
+    assertStaff(request);
 
     const { firmId, clientId, documentId } = request.data as {
       firmId: string;
@@ -63,6 +65,7 @@ export const getDocumentVersionContent = onCall(
   async (request: CallableRequest<unknown>) => {
     const auth = request.auth;
     if (!auth) throw new HttpsError('unauthenticated', 'Login required.');
+    assertStaff(request);
 
     const { firmId, clientId, documentId, versionNumber } = request.data as {
       firmId: string;

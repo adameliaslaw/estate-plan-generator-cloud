@@ -17,6 +17,7 @@
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { callAI, parseAIJson, FirmData } from './ai-client';
+import { assertStaff } from './auth-guards';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -176,6 +177,7 @@ export const groundedReviewDocument = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in.');
     }
+    assertStaff(request);
 
     const { firmId, clientId, documentId } = request.data as {
       firmId?: string;

@@ -483,6 +483,13 @@ export const chatAi = functions
         'You must be signed in to use the AI Assistant.',
       );
     }
+    // Staff-only: the AI assistant exposes client notes, vault docs, and KB and
+    // burns the firm's AI quota. A client-role session carries a firmId claim,
+    // so the firm check below is not sufficient on its own.
+    const chatRole = context.auth.token.role as string | undefined;
+    if (!chatRole || !['admin', 'attorney', 'paralegal'].includes(chatRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
+    }
 
     const { firmId, clientId, message, contextParams, history = [], mode = 'chat', draftDocType, conversationId: inConvId } = data;
 
@@ -909,6 +916,10 @@ export const listAiConversations = functions
       if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
       }
+      const listRole = context.auth.token.role as string | undefined;
+      if (!listRole || !['admin', 'attorney', 'paralegal'].includes(listRole)) {
+        throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
+      }
       const { firmId, clientId, limit: lim = 20 } = data;
       if (!firmId) {
         throw new functions.https.HttpsError('invalid-argument', 'firmId is required.');
@@ -934,6 +945,10 @@ export const saveMessageAsNote = functions
     ) => {
       if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+      }
+      const saveRole = context.auth.token.role as string | undefined;
+      if (!saveRole || !['admin', 'attorney', 'paralegal'].includes(saveRole)) {
+        throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
       }
       const { firmId, clientId, messageContent, messageRole, conversationId: convId } = data;
       if (!firmId || !clientId || !messageContent) {

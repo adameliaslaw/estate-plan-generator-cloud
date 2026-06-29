@@ -15,6 +15,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { assertStaff } from './auth-guards';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -204,6 +205,7 @@ export const lookupPropertyData = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in.');
     }
+    assertStaff(request);
 
     const { firmId, address, city, state, zip } = request.data as {
       firmId?: string;

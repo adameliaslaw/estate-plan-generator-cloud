@@ -15,6 +15,7 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { callAI } from './ai-client';
+import { assertStaff } from './auth-guards';
 
 // ---------------------------------------------------------------------------
 // System prompt for template enhancement
@@ -69,6 +70,7 @@ export const enhanceTemplate = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
+    assertStaff(request);
 
     const { firmId, templateId, templateContent, templateName, enhancementFocus } = request.data as {
       firmId: string; templateId?: string; templateContent: string; templateName?: string; enhancementFocus?: string;

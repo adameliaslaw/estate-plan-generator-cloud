@@ -7,6 +7,11 @@ export const sendForSignature = functions.region('us-east1').https.onCall(async 
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
     }
 
+    const signRole = context.auth.token.role as string | undefined;
+    if (!signRole || !['admin', 'attorney', 'paralegal'].includes(signRole)) {
+        throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
+    }
+
     const { firmId, clientId, documentId, signerName, signerEmail } = data;
 
     if (!firmId || !clientId || !documentId || !signerName || !signerEmail) {
