@@ -209,7 +209,11 @@ export const listTemplates = onCall(
 
     // Read access for all firm members
     const callerFirmId = request.auth.token.firmId as string | undefined;
-    if (callerFirmId && callerFirmId !== firmId && request.auth.token.role !== 'admin') {
+    // Require a firm claim that matches the requested firm. The old predicate
+    // (`callerFirmId && callerFirmId !== firmId && role !== 'admin'`) let a caller
+    // with NO firm claim through, and let any firm admin read another firm's data
+    // (findings AZ/BB — cross-tenant template read). Match the assertOwner helper.
+    if (!callerFirmId || callerFirmId !== firmId) {
       throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
     }
 
@@ -267,7 +271,11 @@ export const getTemplateContent = onCall(
     }
 
     const callerFirmId = request.auth.token.firmId as string | undefined;
-    if (callerFirmId && callerFirmId !== firmId && request.auth.token.role !== 'admin') {
+    // Require a firm claim that matches the requested firm. The old predicate
+    // (`callerFirmId && callerFirmId !== firmId && role !== 'admin'`) let a caller
+    // with NO firm claim through, and let any firm admin read another firm's data
+    // (findings AZ/BB — cross-tenant template read). Match the assertOwner helper.
+    if (!callerFirmId || callerFirmId !== firmId) {
       throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
     }
 
