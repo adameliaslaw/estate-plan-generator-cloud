@@ -22,7 +22,9 @@ Status key: `open` · `confirmed` · `wontfix` · `fixed`
 - ❌ Still OPEN (the files were never touched): **AP/AQ** (`user-management.ts` unchanged — #43 only removed paralegals from the rules-level `canManageUsers`; the callable still sets the request-supplied `role` with no admin gate, so minting an admin / self-granting capabilities still works), **AZ/BA** (`seed-templates.ts`/`knowledge-base.ts` unchanged — cross-tenant template/KB reads stand), **BN** (`lawpay-integration.ts` unchanged — payment-page payments still never reconciled).
 
 **✅ FIXED (verified against current code):**
-F (#38), S (#40), U (#44), AH *(OpenAI/Anthropic only — see partial)* (#44), T16/register-client (#38), CT (#38/#40), CV (#40), CX (#40), CY (#40), DD (#38), DF (#40), DH (#38), DI (#40), DJ (#40), DL (#46), DY (#38), EN *(the two simple dialogs; ChargePaymentDialog intentionally not)* (#45), EO (#38), and the **storage side of AU/T8** (#42 — storage.rules client reads now require `firmId`+`clientId`).
+F (#38), S (#40), U (#44), AH *(OpenAI/Anthropic only — see partial)* (#44), T16/register-client (#38), CT (#38/#40), CV (#40), CX (#40), CY (#40), DD (#38), DF (#40), DH (#38), DI (#40), DJ (#40), DL (#46), DY (#38), EN *(the two simple dialogs; ChargePaymentDialog intentionally not)* (#45), EO (#38), the **storage side of AU/T8** (#42 — storage.rules client reads now require `firmId`+`clientId`), and **this session:** AF (#47), BT (#50), CH (#51), **E + A + AE + B** (#52 — honest `success` from status/counts, best-effort bookkeeping, preserve HttpsError codes).
+
+**🔎 IN REVIEW (open PR, not merged):** **BN** (#53) — payment-page reconciliation via doc id in the LawPay reference; held for sign-off (money/IOLTA path, not end-to-end testable without a LawPay sandbox).
 
 **◑ PARTIAL (half fixed, half still open):**
 - **CS** — docType strings fixed (#40); the fallback listener still declares success regardless of `status:'error'` → still over-reports. OPEN half.
@@ -31,13 +33,13 @@ F (#38), S (#40), U (#44), AH *(OpenAI/Anthropic only — see partial)* (#44), T
 - **AH** — truncation now throws in JSON mode for OpenAI/Anthropic; **Gemini & Perplexity still return truncated text silently** (`_callGemini`/`_callPerplexity` ignore finishReason). OPEN half.
 - **AU** — storage identity tightened, but **AT** (client can still write `packageDetails.packageType`/fees on their own record) remains OPEN.
 
-**❌ Verified STILL OPEN in changed files (PRs touched the file but not this finding):** E (save-failure still returns `success:true`), H (dead branches), T (OpenAI path still bypasses the long-timeout dispatcher), V (fabricated will/POA metadata on truncation recovery), AO (un-sanitized `firmData`), CR (SingleDoc success ignores `status:'error'`), CU (ESign shows "Sent" without checking `res.success` — only added a pre-call email check), CZ (editor `setContent` still unsanitized), DA (dead regenerate action), DK/DP/DQ/DR (bulk-import: swallowed catch / invalid package / no email validation / dead results map), DM (row-vs-summary amount mismatch), DZ (PaymentsPage `limit(500)` totals), DT (no "in cents" comment), AT (broad client self-update).
+**❌ Verified STILL OPEN in changed files (PRs touched the file but not this finding):** H (dead branches), T (OpenAI path still bypasses the long-timeout dispatcher), V (fabricated will/POA metadata on truncation recovery), AO (un-sanitized `firmData`), CR (SingleDoc success ignores `status:'error'`), CU (ESign shows "Sent" without checking `res.success` — only added a pre-call email check), CZ (editor `setContent` still unsanitized), DA (dead regenerate action), DK/DP/DQ/DR (bulk-import: swallowed catch / invalid package / no email validation / dead results map), DM (row-vs-summary amount mismatch), DZ (PaymentsPage `limit(500)` totals), DT (no "in cents" comment), AT (broad client self-update).
 
-**Everything else in the ledger body is in an untouched file → still OPEN** (rounds 1-3: A–D, G, I, J–R, W, X–AB, AC, AE, AG, AI–AN, AR, AV, AW–AY, BB–BM, BO–BS, BU–CG; round 4: CI, CJ, CK, CL, CM, CN, CO, CP, CQ, DB, DC, DE, DG, DN, DO, DS, DU, DV, DW, DX, EA, EB, EC, ED, EE, EF, EG, EH, EJ, EK, EL, EM, EP, EQ, ER, ES, ET).
+**Everything else in the ledger body is in an untouched file → still OPEN** (rounds 1-3: C, D, G, I, J–R, W, X–AB, AC, AG, AI–AN, AR, AV, AW–AY, BB–BM, BO–BS, BU–CG; round 4: CI, CJ, CK, CL, CM, CN, CO, CP, CQ, DB, DC, DE, DG, DN, DO, DS, DU, DV, DW, DX, EA, EB, EC, ED, EE, EF, EG, EH, EJ, EK, EL, EM, EP, EQ, ER, ES, ET).
 
 **Bonus — the parallel session also caught real bugs this audit MISSED (now fixed):** `useFirmBranding` global cache leaking one firm's branding incl. **Maps API key** cross-firm (#38 — a genuine cross-tenant leak my Round 4 missed), FlexDocumentGenerator wrong docType strings → "Unsupported document type" (#40), Single/Flex post-gen poll using a non-existent composite index → fallback never fired (#40), UpcomingAppointments `limit(5)`-then-filter (#40), PaymentsPage "Total Fees" summing voided/refunded/failed (#40), Gemini grounding JSON-mode 400 (#38), grounded-review fenced-JSON parse (#38), knowledge-base-service result-ordering (#38), UploadDraftDialog `onOpenChange` (#38).
 
-**Net after reconciliation + #47/#50/#51:** of ~126 findings, **~27 fixed, ~5 partial, the rest open**; **5 of 9 criticals remain** — all in the **B0 security cluster + BN**: **AP/AQ** (admin-mint / capability self-grant callables), **AZ/BA** (cross-tenant template/KB reads), **BN** (LawPay reconciliation). AP/AQ/AZ/BA touch `firestore.rules`/auth = Never-Break → need Adam's diff sign-off. (Fixed this session: AF #47, BT #50, CH #51; DF #40.) Note: **E** (save-failure still returns `success:true`) remains an open critical-class backend bug tracked separately below.
+**Net after reconciliation + #47/#50/#51/#52 (+ #53 in review):** of ~126 findings, **~31 fixed, ~5 partial, the rest open**. Criticals: **BN** fixed in PR **#53 (awaiting sign-off)**; once merged, the only remaining criticals are the **B0 security cluster — AP/AQ** (admin-mint / capability self-grant callables) and **AZ/BA** (cross-tenant template/KB reads), both touching `firestore.rules`/auth = Never-Break → need Adam's diff sign-off. (Fixed this session: AF #47, BT #50, CH #51, E/A/AE/B #52; DF #40.)
 
 ---
 
@@ -169,8 +171,8 @@ Tenant isolation is broadly solid — firm-scoping is present almost everywhere;
 
 | ID | Sev | Status | Summary |
 |----|-----|--------|---------|
-| A | 🟠 | open | Post-save `updatedAt`/`updatedBy` `.update()` (L131) is inside the same try as generation; a transient failure there makes a *successful* generation report as `internal` failure → attorney retries → duplicate doc. Make it best-effort (own try/catch). Path confirmed correct (subcollection). |
-| B | 🟡 | open | All errors rewrapped as `'internal'` (L148-151), discarding meaningful `HttpsError` codes thrown deeper (`not-found`, `failed-precondition`). Also masks OOM root cause (cf. memory `project_function_oom_256mib`). Fix: `if (error instanceof HttpsError) throw error;` before generic wrap. Part of **T1**. |
+| A | 🟠 | **fixed (#52)** | Post-save `updatedAt`/`updatedBy` `.update()` (L131) is inside the same try as generation; a transient failure there makes a *successful* generation report as `internal` failure → attorney retries → duplicate doc. Make it best-effort (own try/catch). Path confirmed correct (subcollection). |
+| B | 🟡 | **fixed (#52)** | All errors rewrapped as `'internal'` (L148-151), discarding meaningful `HttpsError` codes thrown deeper (`not-found`, `failed-precondition`). Also masks OOM root cause (cf. memory `project_function_oom_256mib`). Fix: `if (error instanceof HttpsError) throw error;` before generic wrap. Part of **T1**. |
 | C | 🟡 | open | Default `generationMode = 'template'` (L81) contradicts orchestrator default `'hybrid'` (unified-generator L427) and CLAUDE.md "hybrid is default". Single-doc regen silently runs a different mode than batch unless caller specifies. Decide intended default. |
 | D | ⚪ | open | Log prints `propertyIndex=undefined` when omitted (L107). Cosmetic. |
 
@@ -178,7 +180,7 @@ Tenant isolation is broadly solid — firm-scoping is present almost everywhere;
 
 | ID | Sev | Status | Summary |
 |----|-----|--------|---------|
-| E | 🔴 | open | **Save failure reported as success.** `saveDocumentToVault` throw is caught and *returned* as `{status:'error', currentVersion:0}` without re-throwing (L1091-1105); wrapper returns `success:true` regardless (single-doc L138). Attorney believes doc saved; vault has nothing. Re-throw on save failure, or derive `success` from `result.status`. Part of **T1**. |
+| E | 🔴 | **fixed (#52)** | **Save failure reported as success.** `saveDocumentToVault` throw is caught and *returned* as `{status:'error', currentVersion:0}` without re-throwing (L1091-1105); wrapper returns `success:true` regardless (single-doc L138). Attorney believes doc saved; vault has nothing. Re-throw on save failure, or derive `success` from `result.status`. Part of **T1**. |
 | F | 🟠 | open | Auto-retry for per-property docs drops the `property` arg (L936 vs original L844). A failed deed/affidavit/gitRep3 retries *without* property data → retry is worse than original. Thread `property` into retry. |
 | G | 🟡 | open | Spouse-swap logic duplicated: field-backfill + gender-inversion runs separately for `clientData` (L525-538) and `clientContext` (L623-634); `HOUSEHOLD_REL` declared twice (L547, L679). Drift risk — a rule fixed in one copy, missed in other, makes generator and template engine see different data. Extract shared helper. Part of **T2**. |
 | H | 🟡 | open | Dead/redundant: L1075 `finalStatus === 'error' ? 'error' : finalStatus` (both branches identical); L1011/1030/1116 `generationMode ?? 'hybrid'` can't fire (already defaulted L427). Part of **T2**. |
@@ -223,7 +225,7 @@ Tenant isolation is broadly solid — firm-scoping is present almost everywhere;
 | ID | Sev | Status | Summary |
 |----|-----|--------|---------|
 | AC | 🟡 | open | **Spouse-variant docs can be silent duplicates.** `expandForMarriedCouple` (L126-144) queues a `spouseRole:'spouse'` copy of will/poa/livingWill/pourOverWill for married clients. But the spouse swap in unified-generator only fires when `clientData.spouseInfo` exists (L511). If the couple is married but spouse data was never entered, the swap no-ops and the `_spouse` doc is generated from the **client's** identity → the spouse's will names the client as testator. Skip (or hard-warn) the spouse variant when `spouseInfo` is empty. |
-| AE | 🟡 | open | Final client `.update()` (L306) is **not** wrapped — throwing after all docs are generated and saved reports the whole batch as failed though the vault is populated (same class as A, **T1**). Also `return { success: true }` (L325) is unconditional even when `documentsErrored === total` (all failed). Derive `success` from counts. |
+| AE | 🟡 | **fixed (#52)** | Final client `.update()` (L306) is **not** wrapped — throwing after all docs are generated and saved reports the whole batch as failed though the vault is populated (same class as A, **T1**). Also `return { success: true }` (L325) is unconditional even when `documentsErrored === total` (all failed). Derive `success` from counts. |
 
 ### `generators/*.ts` (10 document generators)
 

@@ -8,25 +8,27 @@ Items requiring human action or decisions before the next agent session can proc
 
 Finished the audit-only sweep (Round 4 = frontend) and then **discovered this machine's local `main` had diverged from `origin/main` at `ce9a466`.** A **parallel Claude session** (`session_01KLDZSGMLWiv6...`) had been shipping audit fixes to the real `main` — **PRs #38, #40, #42, #43, #44, #45, #46** (now HEAD `5879857`). My audit ran against the stale `ce9a466` tree, so I integrated `origin/main`, then **re-verified every affected finding against current code** (3 verification subagents + diffstat). Full ledger + reconciliation: **`docs/AUDIT-findings.md`** → read the top **"⚖️ RECONCILIATION"** section first. Memory: [[project_codebase_audit]].
 
-**The full 4-round audit is complete (~126 findings). After reconciling with the shipped fixes: ~24 fixed, ~5 partial, the rest open. 8 of 9 criticals still OPEN.**
+**The full 4-round audit is complete (~126 findings). Fixed so far: ~31; ~5 partial; rest open. Of 9 criticals: 5 fixed (AF/BT/CH/E/DF), 1 in review (BN #53), 3 open (AP/AQ + AZ/BA — the B0 security cluster, need sign-off).**
 
 **✅ FIXED this session (both merged + deployed green):**
 - **AF** (PR #47, `1555d27`) — `sanitizeObject` no longer re-truncates the canonical `_serializedClientData` block at 5,000 chars (cap 100k; still injection-stripped). One edit in `ai-client.ts` fixed all 9 generators.
 - **BT** (PR #50, `4a9f7a8`) — `process-ocr.ts` strips null/empty before the Firestore merge (`stripEmpty`), so a partial OCR scan can't null out existing client data; skips the write when nothing extracted.
-- **CH** (PR #51, `fed4229`) — `QuestionnaireContext.performSave` now puts the primary `setDoc` inside the retry loop (+ defensive outer catch), so a failed autosave is retried and surfaced via `SET_ERROR` instead of rejecting silently while the UI shows "Saved." Deployed green (real content change → exercised the normal hosting release path).
-- AF/BT have regression tests; **627 tests pass**; functions + hosting deploys green.
-- Also fixed the **hosting CI false-failure** (PRs #48 → #49): build-identical pushes were redding the deploy on Firebase's benign "is the current active version" 400; the workflow now treats only that case as success. Hosting deploy green again; issues #39/#41 closed. The live frontend was current the whole time (verified).
+- **CH** (PR #51, `fed4229`) — `QuestionnaireContext.performSave` now puts the primary `setDoc` inside the retry loop (+ defensive outer catch), so a failed autosave is retried and surfaced via `SET_ERROR` instead of rejecting silently while the UI shows "Saved." Deployed green.
+- **E + A + AE + B** (PR #52, `8f8a5b6`) — doc-generation entry points now derive `success` from real status/counts (single: `status!=='error'`; batch: `errorCount===0`), make the post-gen client `.update()` best-effort, and re-throw `HttpsError` instead of flattening to `internal`. Deployed green.
+- Regression tests added for AF/BT; **627 tests pass**; functions + hosting deploys all green.
+- Also fixed the **hosting CI false-failure** (PRs #48 → #49): build-identical pushes were redding the deploy on Firebase's benign "is the current active version" 400; the workflow now treats only that case as success. Issues #39/#41 closed. The live frontend was current the whole time (verified).
 
-**🔴 The 5 criticals still open:**
-- **AP / AQ** — any staff can still mint an `admin` / self-grant capabilities. ⚠️ Note: #43 *looks* like it closed this but only removed paralegals from the **rules-level** `canManageUsers` — the `createFirmUser`/`updateUserCapabilities` **callables are untouched** and still set the request-supplied role with no admin gate. The B0 cluster is only **partially** addressed.
-- **AZ / BA** — cross-tenant template/KB reads (broken firm-scope predicate).
-- **BN** — LawPay payment-page payments never reconciled (client pays, app shows "pending").
-- ✅ Already fixed: **AF** (#47), **BT** (#50), **CH** (#51), **DF** (#40).
-- (Also still open, critical-class: **E** — single-doc/batch wrappers return `success:true` even when the vault save failed. Backend; self-contained.)
+**🔎 IN REVIEW (open PR, NOT merged) — needs Adam:**
+- **BN** (PR #53) — LawPay payment-page reconciliation: embed the payment doc id in the LawPay `reference` so `charge.completed` can find + mark the pending doc paid (today it stays "pending" forever). Held for sign-off: money/IOLTA path, not end-to-end testable without a LawPay sandbox. Scope is BN only; BO/BP/BQ remain B8 follow-ups.
+
+**🔴 Criticals still open — all require Adam's sign-off (Never-Break: `firestore.rules`/auth):**
+- **AP / AQ** — any staff can still mint an `admin` / self-grant capabilities. ⚠️ #43 only removed paralegals from the **rules-level** `canManageUsers`; the `createFirmUser`/`updateUserCapabilities` **callables are untouched** and still set the request-supplied role with no admin gate. B0 only **partially** addressed.
+- **AZ / BA** — cross-tenant template/KB reads (broken firm-scope predicate in `seed-templates.ts`/`knowledge-base.ts`).
+- ✅ Already fixed: **AF** (#47), **BT** (#50), **CH** (#51), **E** (#52), **DF** (#40). BN in review (#53).
 
 **Notable: the parallel session caught a real cross-tenant leak my Round 4 missed** — `useFirmBranding`'s global cache leaked one firm's branding incl. Maps API key to every other firm (fixed in #38). Good cross-check.
 
-**▶️ Next — keep fixing.** Self-contained, not Never-Break: **BN** (payments reconciliation) and **E** (save-failure reported as success). The **B0 security cluster (AP/AQ + AZ/BA)** touches `firestore.rules`/auth = **show Adam the diff before merge** (Never-Break) — this is the highest-severity remaining work but needs sign-off. Then the truth-in-status remainder (CR/CU + the open halves of CS/CW). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI.
+**▶️ Next — everything mergeable without sign-off is done.** Remaining: **merge BN (#53)** after review, then the **B0 security cluster (AP/AQ + AZ/BA)** — highest-severity remaining, but it touches `firestore.rules`/auth = **show Adam the diff before merge** (Never-Break). After B0: the truth-in-status remainder (CR/CU + open halves of CS/CW), then mediums. Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI.
 
 > Process note: this machine's local branch was stale. **Always `git fetch` and check divergence at session start** before auditing or committing — the real work was happening on `origin/main` via PRs.
 
