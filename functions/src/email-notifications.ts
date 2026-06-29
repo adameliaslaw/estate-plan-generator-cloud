@@ -20,6 +20,7 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { assertStaff } from './auth-guards';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 
@@ -323,6 +324,11 @@ export const sendQuestionnaireInvitation = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // Staff-only: these send firm-branded email from the firm's SendGrid sender.
+    // A client-role session carries a firmId claim, so the firm check alone is
+    // insufficient (finding BJ — T6 role gate). Recipient-resolution + HTML
+    // sanitization of caller-supplied fields are a separate follow-up.
+    assertStaff(request);
 
     const {
       firmId,
@@ -429,6 +435,11 @@ export const sendQuestionnaireCompleteNotification = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // NOTE: intentionally NOT staff-gated — this fires when a CLIENT submits
+    // their questionnaire (QuestionnaireShell), so a client/linked session must
+    // be able to call it. The firmId-claim check below is the tenant boundary.
+    // BJ hardening for this sender (server-resolve attorneyEmail + sanitize) is
+    // a follow-up; do NOT add assertStaff here.
 
     const { firmId, clientId, clientName, attorneyEmail } =
       request.data as QuestionnaireCompleteRequest;
@@ -520,6 +531,11 @@ export const sendDocumentReadyNotification = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // Staff-only: these send firm-branded email from the firm's SendGrid sender.
+    // A client-role session carries a firmId claim, so the firm check alone is
+    // insufficient (finding BJ — T6 role gate). Recipient-resolution + HTML
+    // sanitization of caller-supplied fields are a separate follow-up.
+    assertStaff(request);
 
     const { firmId, clientId, clientName, documentTypes, recipientEmail } =
       request.data as DocumentReadyRequest;
@@ -630,6 +646,11 @@ export const sendPaymentReceipt = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // Staff-only: these send firm-branded email from the firm's SendGrid sender.
+    // A client-role session carries a firmId claim, so the firm check alone is
+    // insufficient (finding BJ — T6 role gate). Recipient-resolution + HTML
+    // sanitization of caller-supplied fields are a separate follow-up.
+    assertStaff(request);
 
     const { firmId, clientId, clientEmail, clientName, amount, description } =
       request.data as PaymentReceiptRequest;
@@ -753,6 +774,11 @@ export const sendPaymentReceivedNotification = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // Staff-only: these send firm-branded email from the firm's SendGrid sender.
+    // A client-role session carries a firmId claim, so the firm check alone is
+    // insufficient (finding BJ — T6 role gate). Recipient-resolution + HTML
+    // sanitization of caller-supplied fields are a separate follow-up.
+    assertStaff(request);
 
     const { firmId, clientId, clientName, amount, attorneyEmail } =
       request.data as PaymentReceivedNotificationRequest;
@@ -857,6 +883,11 @@ export const sendAppointmentReminder = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // Staff-only: these send firm-branded email from the firm's SendGrid sender.
+    // A client-role session carries a firmId claim, so the firm check alone is
+    // insufficient (finding BJ — T6 role gate). Recipient-resolution + HTML
+    // sanitization of caller-supplied fields are a separate follow-up.
+    assertStaff(request);
 
     const {
       firmId,
@@ -1012,6 +1043,11 @@ export const sendFollowUpReminder = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in to send notifications.');
     }
+    // Staff-only: these send firm-branded email from the firm's SendGrid sender.
+    // A client-role session carries a firmId claim, so the firm check alone is
+    // insufficient (finding BJ — T6 role gate). Recipient-resolution + HTML
+    // sanitization of caller-supplied fields are a separate follow-up.
+    assertStaff(request);
 
     const { firmId, clientId, clientEmail, clientName, daysSinceInvitation } =
       request.data as FollowUpReminderRequest;
@@ -1275,6 +1311,7 @@ export const testSendGridConnection = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be logged in.');
     }
+    assertStaff(request); // staff-only: validates the firm's SendGrid key (BJ/T6)
 
     const { firmId } = request.data as { firmId?: string };
     if (!firmId) {
