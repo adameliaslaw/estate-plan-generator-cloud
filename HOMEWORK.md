@@ -13,19 +13,20 @@ Finished the audit-only sweep (Round 4 = frontend) and then **discovered this ma
 **✅ FIXED this session (both merged + deployed green):**
 - **AF** (PR #47, `1555d27`) — `sanitizeObject` no longer re-truncates the canonical `_serializedClientData` block at 5,000 chars (cap 100k; still injection-stripped). One edit in `ai-client.ts` fixed all 9 generators.
 - **BT** (PR #50, `4a9f7a8`) — `process-ocr.ts` strips null/empty before the Firestore merge (`stripEmpty`), so a partial OCR scan can't null out existing client data; skips the write when nothing extracted.
-- Both have regression tests; **627 tests pass**; functions deploy green.
+- **CH** (PR #51, `fed4229`) — `QuestionnaireContext.performSave` now puts the primary `setDoc` inside the retry loop (+ defensive outer catch), so a failed autosave is retried and surfaced via `SET_ERROR` instead of rejecting silently while the UI shows "Saved." Deployed green (real content change → exercised the normal hosting release path).
+- AF/BT have regression tests; **627 tests pass**; functions + hosting deploys green.
 - Also fixed the **hosting CI false-failure** (PRs #48 → #49): build-identical pushes were redding the deploy on Firebase's benign "is the current active version" 400; the workflow now treats only that case as success. Hosting deploy green again; issues #39/#41 closed. The live frontend was current the whole time (verified).
 
-**🔴 The 6 criticals still open** (their files were never touched by #38–#46):
+**🔴 The 5 criticals still open:**
 - **AP / AQ** — any staff can still mint an `admin` / self-grant capabilities. ⚠️ Note: #43 *looks* like it closed this but only removed paralegals from the **rules-level** `canManageUsers` — the `createFirmUser`/`updateUserCapabilities` **callables are untouched** and still set the request-supplied role with no admin gate. The B0 cluster is only **partially** addressed.
 - **AZ / BA** — cross-tenant template/KB reads (broken firm-scope predicate).
 - **BN** — LawPay payment-page payments never reconciled (client pays, app shows "pending").
-- **CH** — questionnaire intake silently fails to save while the UI shows "Saved" (`QuestionnaireContext` primary `setDoc` has no catch/retry).
-- ✅ Already fixed: **AF** (#47), **BT** (#50), **DF** (#40).
+- ✅ Already fixed: **AF** (#47), **BT** (#50), **CH** (#51), **DF** (#40).
+- (Also still open, critical-class: **E** — single-doc/batch wrappers return `success:true` even when the vault save failed. Backend; self-contained.)
 
 **Notable: the parallel session caught a real cross-tenant leak my Round 4 missed** — `useFirmBranding`'s global cache leaked one firm's branding incl. Maps API key to every other firm (fixed in #38). Good cross-check.
 
-**▶️ Next — keep fixing.** Recommended order, all still unfixed: **CH** (questionnaire save reliability — frontend, self-contained) → **BN** (payments reconciliation). The **B0 security callables (AP/AQ + AZ/BA)** touch `firestore.rules`/auth = **show Adam the diff before merge** (Never-Break). Then the truth-in-status remainder (CR/CU + the open halves of CS/CW). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI.
+**▶️ Next — keep fixing.** Self-contained, not Never-Break: **BN** (payments reconciliation) and **E** (save-failure reported as success). The **B0 security cluster (AP/AQ + AZ/BA)** touches `firestore.rules`/auth = **show Adam the diff before merge** (Never-Break) — this is the highest-severity remaining work but needs sign-off. Then the truth-in-status remainder (CR/CU + the open halves of CS/CW). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI.
 
 > Process note: this machine's local branch was stale. **Always `git fetch` and check divergence at session start** before auditing or committing — the real work was happening on `origin/main` via PRs.
 
