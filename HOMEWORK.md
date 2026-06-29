@@ -4,6 +4,21 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔴 OPEN CARRY-FORWARD (start here next session)
+
+1. **Smoke test — pending Adam (1 click).** Confirm live key resolution after the AR migration: **Settings → Integrations → SendGrid card → "Test Connection."** It reads the key through the new merge path (`getFirmData` → `secrets/apiKeys`). **Green/"verified" = AR conclusively closed.** If it errors, the merge isn't resolving the migrated key — re-check `loadFirmSecrets` and that the SendGrid function redeployed with new code. (All integrations resolve the same way, so SendGrid is representative; optionally also generate a doc to exercise the AI keys.)
+
+2. **Remaining audit items (no open criticals; ledger `docs/AUDIT-findings.md`):**
+   - **T9 (recommended next)** — Zod length caps at the callable boundaries that still lack them (chatAi, enhanceTemplate, generateFlexDocument, saveMessageAsNote, createFirmUser/updateUserCapabilities) + the T6/BJ residual: server-resolve email recipients and HTML-escape user strings interpolated into firm-branded email HTML.
+   - **App Check** — `registerClientFromLink` is public; add App Check / rate-limit (BM).
+   - **Truth-in-status remainder** — CR/CU + the open halves of CS/CW.
+   - **Medium cleanups** — DK/DP/DQ/DR (bulk-import), DM, DZ, H/T/V/AO (backend leftovers).
+   - Never-Break gate (explicit sign-off) applies to: `firestore.rules`, `storage.rules`, `firestore.indexes.json`, `functions/src/templates/*.hbs`, `src/types/index.ts`, CI workflows.
+
+3. **Standing watch-item (passive):** OAuth durability alert — silence = healthy (see AUTOMATIC ALERTS section below).
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-29 (AR — firm API keys moved off the client-readable doc; DONE + migrated)
 
 **✅ AR DONE (#59 + #60, deployed; elias-counsel migrated + verified).** Per-firm provider keys lived as top-level fields on `firms/{firmId}`, which `firestore.rules` lets any in-firm attorney/paralegal `read` via the client SDK → fetchable in any staff browser, XSS-exfiltratable. Firestore can't field-level-hide, and the browser must read the firm doc, so the secrets were moved out:
