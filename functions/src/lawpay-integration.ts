@@ -63,7 +63,7 @@ interface LawPayWebhookEvent {
     id: string;             // AffiniPay transaction ID
     amount: number;         // in cents
     status: string;
-    reference: string;      // We set this to `${firmId}-${clientId}-${paymentId}`
+    reference: string;      // We set this to `${firmId}::${clientId}::${paymentDocId}`
     [key: string]: unknown;
   };
 }
@@ -180,13 +180,15 @@ function verifyWebhookSignature(
 
 /**
  * Build the Firestore reference for a Payment document.
- * Document ID is the AffiniPay transaction ID for easy lookup from webhooks.
+ * The doc id is the Firestore-generated payment id (created in
+ * createPaymentRequest); webhooks resolve it from the `reference` they echo
+ * back ("firmId::clientId::paymentDocId"), not from the AffiniPay transaction id.
  */
 function paymentRef(
   db: admin.firestore.Firestore,
   firmId: string,
   clientId: string,
-  transactionId: string,
+  paymentDocId: string,
 ): admin.firestore.DocumentReference {
   return db
     .collection('firms')
@@ -194,7 +196,7 @@ function paymentRef(
     .collection('clients')
     .doc(clientId)
     .collection('payments')
-    .doc(transactionId);
+    .doc(paymentDocId);
 }
 
 // ---------------------------------------------------------------------------
