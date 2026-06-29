@@ -348,7 +348,9 @@ export function QuestionnaireProvider({
     async (data: QuestionnaireData, stepIndex: number) => {
       dispatch({ type: 'SET_SAVING', value: true });
       try {
-        await setDoc(doc(db, docPath), {
+        // The actual questionnaire answers. Built once; reused across retries
+        // (serverTimestamp() is a reusable sentinel).
+        const primaryData = {
           personalInfo: data.personalInfo,
           spouseInfo: data.spouseInfo ?? null,
           hasChildren: data.hasChildren,
@@ -379,18 +381,27 @@ export function QuestionnaireProvider({
           completedSteps: data.completedSteps,
           sectionProgress: data.sectionProgress,
           updatedAt: serverTimestamp(),
-        }, { merge: true }); // Use merge in case the document is strictly a questionnaire stub
+        };
 
-        // Also update the questionnaireProgress tracker specifically
+        // Name shown in the dashboard progress tracker.
         const updaterName = userProfile?.role === 'client'
           ? 'Client'
           : `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
 
-        // Retry with exponential backoff for transient Firestore/network errors
+        // Retry with exponential backoff for transient Firestore/network errors.
+        // CH: the primary client-data write lives INSIDE this loop alongside the
+        // progress tracker, so a failure of EITHER is retried and then surfaced
+        // via SET_ERROR. Previously the primary setDoc sat outside any catch —
+        // an autosave (`void performSave(...)`) that failed rejected silently
+        // while the UI still showed "Saved" and the client's intake was lost.
         const MAX_RETRIES = 3;
         let lastError: unknown = null;
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
           try {
+            // Primary write: the questionnaire answers themselves.
+            // merge in case the document is strictly a questionnaire stub.
+            await setDoc(doc(db, docPath), primaryData, { merge: true });
+
             // Compute progress fields for dashboard display
             const currentlyVisibleSteps = QUESTIONNAIRE_STEPS.filter((step) => {
               if (!step.condition) return true;
@@ -456,9 +467,15 @@ export function QuestionnaireProvider({
           }
         }
         if (lastError) {
-          const message = lastError instanceof Error ? lastError.message : 'Failed to save progress after retries';
+          const message = lastError instanceof Error ? lastError.message : 'Failed to save after retries';
           dispatch({ type: 'SET_ERROR', message });
         }
+      } catch (err) {
+        // Defensive: performSave is invoked as `void performSave(...)` by the
+        // autosave timer, so it must never reject (an unhandled rejection would
+        // be invisible). Surface anything the retry loop didn't handle.
+        const message = err instanceof Error ? err.message : 'Failed to save';
+        dispatch({ type: 'SET_ERROR', message });
       } finally {
         dispatch({ type: 'SET_SAVING', value: false });
       }
