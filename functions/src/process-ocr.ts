@@ -2,6 +2,39 @@ import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { OpenAI } from 'openai';
 
+/**
+ * Recursively drop null/undefined/empty-string values, empty arrays, and empty
+ * objects from an OCR extraction.
+ *
+ * The OCR prompt tells the model to return `null` for any field it can't read
+ * and `[]` for empty arrays. Writing that straight back with `set(..., { merge:
+ * true })` overwrites existing client data with blanks — scanning a single
+ * page would null out spouse/children/contact info already on the record (the
+ * source of every generated document). Stripping empties first means only the
+ * fields the model actually extracted are merged. (Audit finding BT.)
+ *
+ * Note: Firestore `merge` replaces arrays wholesale rather than element-merging,
+ * so a non-empty extracted array still replaces the existing one — that is the
+ * intended "this scan covered that section" behavior; only empty arrays are
+ * dropped so a partial scan can't erase a populated section.
+ */
+export function stripEmpty(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        const cleaned = value.map(stripEmpty).filter((v) => v !== undefined);
+        return cleaned.length ? cleaned : undefined;
+    }
+    if (value !== null && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            const cleaned = stripEmpty(v);
+            if (cleaned !== undefined) out[k] = cleaned;
+        }
+        return Object.keys(out).length ? out : undefined;
+    }
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === 'string' && value.trim() === '') return undefined;
+    return value;
+}
 
 export const processQuestionnaireScan = functions
     .region('us-east1')
@@ -119,11 +152,17 @@ Schema:
                 throw new functions.https.HttpsError('internal', 'Failed to parse JSON from OpenAI.');
             }
 
-            // Update client document
-            const clientRef = db.doc(`firms/${firmId}/clients/${clientId}`);
-            await clientRef.set(extractedData, { merge: true });
+            // Strip blanks so a partial scan can't overwrite existing client
+            // data with nulls/empties (audit finding BT), then merge only the
+            // fields the model actually read.
+            const cleaned = (stripEmpty(extractedData) ?? {}) as Record<string, unknown>;
 
-            return { success: true, extractedData };
+            const clientRef = db.doc(`firms/${firmId}/clients/${clientId}`);
+            if (Object.keys(cleaned).length > 0) {
+                await clientRef.set(cleaned, { merge: true });
+            }
+
+            return { success: true, extractedData: cleaned, fieldsExtracted: Object.keys(cleaned).length };
 
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Failed to process OCR.';
