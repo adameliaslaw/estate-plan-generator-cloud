@@ -4,6 +4,14 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-29 (T8 storage-path IDOR fixed + deployed)
+
+**✅ T8 / BH DONE (#58 `5a628db`).** The three callables that download a caller-supplied storage path via the admin SDK — `bulkProcessKnowledgeFiles` (`bulk-knowledge-import.ts`), `processQuestionnaireScan` (`process-ocr.ts`), `transcribeAudio` (`transcribe-audio.ts`) — now validate the prefix themselves (`path.startsWith('firms/{firmId}/')` + reject `..`), matching the `processTemplateFile` template. The admin SDK bypasses Storage rules, so a staffer passing their own `firmId` (which passed the firm-claim check) plus a path into another firm's directory could read/OCR/transcribe a cross-tenant file. All four legitimate upload paths (audio, scans, knowledgeBase, templates) are already firm-scoped → no client change. Guard inlined per call site, NOT via `auth-guards.ts`, because `process-ocr`/`transcribe-audio` are **v1** callables where a v2 `HttpsError` gets swallowed → re-wrapped as generic `internal` (loses the `permission-denied` code). `tsc` clean; **627 tests pass**; functions deploy CI in progress (run `28384686930`).
+
+**▶️ Next — remaining 🟠/🟡/⚪ (no open criticals).** AR (firm API keys readable in-browser — move off the client-readable firm doc), T9 (Zod length caps at callable boundaries + the email recipient-resolution/HTML-escape residual from T6/BJ), App Check. Then truth-in-status remainder (CR/CU + open halves of CS/CW), then medium cleanups (DK/DP/DQ/DR bulk-import, DM, DZ, H/T/V/AO backend leftovers). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI. **Recommended next: AR (firm API keys in-browser) or T9 (Zod boundaries).** Ledger: `docs/AUDIT-findings.md`.
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-29 PM (frontend audit Round 4 + reconciliation against shipped fixes)
 
 Finished the audit-only sweep (Round 4 = frontend) and then **discovered this machine's local `main` had diverged from `origin/main` at `ce9a466`.** A **parallel Claude session** (`session_01KLDZSGMLWiv6...`) had been shipping audit fixes to the real `main` — **PRs #38, #40, #42, #43, #44, #45, #46** (now HEAD `5879857`). My audit ran against the stale `ce9a466` tree, so I integrated `origin/main`, then **re-verified every affected finding against current code** (3 verification subagents + diffstat). Full ledger + reconciliation: **`docs/AUDIT-findings.md`** → read the top **"⚖️ RECONCILIATION"** section first. Memory: [[project_codebase_audit]].
