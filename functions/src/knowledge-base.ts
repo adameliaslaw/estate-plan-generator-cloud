@@ -199,9 +199,12 @@ export const searchKnowledgeResources = onCall(
       throw new HttpsError('invalid-argument', 'firmId is required.');
     }
 
-    // Read access for all firm members
+    // Read access for in-firm members only. The old predicate
+    // (`callerFirmId && callerFirmId !== firmId && role !== 'admin'`) let a
+    // no-firm-claim caller through and let any firm admin read another firm's
+    // up-to-200 KB resources (finding BA). Require a matching firm claim.
     const callerFirmId = request.auth.token.firmId as string | undefined;
-    if (callerFirmId && callerFirmId !== firmId && request.auth.token.role !== 'admin') {
+    if (!callerFirmId || callerFirmId !== firmId) {
       throw new HttpsError('permission-denied', 'Cross-firm access is not permitted.');
     }
 

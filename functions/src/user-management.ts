@@ -11,12 +11,26 @@ import {
   sendViaSendGrid,
 } from './email-notifications';
 
+// Roles a firm user may be assigned. 'staff' was in the old type but is not
+// recognized by firestore.rules — reject it (finding AV).
+const ASSIGNABLE_ROLES: readonly string[] = ['admin', 'attorney', 'paralegal'];
+
+// The only capabilities firestore.rules / usePermissions honor. Anything else is
+// rejected so a caller can't write bogus or future-privileged claims (AP/AQ).
+const ALLOWED_CAPABILITIES: readonly string[] = [
+  'manage_users',
+  'manage_billing',
+  'manage_firm_settings',
+  'manage_clients',
+  'manage_documents',
+];
+
 interface CreateFirmUserRequest {
   firmId: string;
   email: string;
   firstName: string;
   lastName: string;
-  role: 'admin' | 'attorney' | 'paralegal' | 'staff';
+  role: 'admin' | 'attorney' | 'paralegal';
   capabilities?: string[];
 }
 
@@ -35,6 +49,13 @@ export const createFirmUser = onCall(
 
     if (!firmId || !email || !firstName || !lastName || !role) {
       throw new HttpsError('invalid-argument', 'Missing required fields: firmId, email, firstName, lastName, role.');
+    }
+
+    if (!ASSIGNABLE_ROLES.includes(role)) {
+      throw new HttpsError('invalid-argument', `Invalid role "${role}". Must be one of: ${ASSIGNABLE_ROLES.join(', ')}.`);
+    }
+    if (capabilities && !capabilities.every((c) => ALLOWED_CAPABILITIES.includes(c))) {
+      throw new HttpsError('invalid-argument', 'capabilities contains an unrecognized value.');
     }
 
     const callerUid = request.auth.uid;
@@ -64,13 +85,23 @@ export const createFirmUser = onCall(
     }
 
     const effectiveCallerFirmId = callerData?.firmId || callerData?.firm_id; // in case of snake_case legacy
-    
-    // Authorization: Must belong to the same firm, and must be an admin.
+    const callerRole = callerData?.role as string | undefined;
+
+    // Authorization: same firm + user-management privilege. Admins and attorneys
+    // may create users; paralegals may not (matches #43 / firestore.rules
+    // canManageUsers — paralegals are scoped to notes/calendar/documents).
     if (effectiveCallerFirmId !== firmId) {
       throw new HttpsError('permission-denied', `Cannot create users for a different firm. (Caller Firm: ${effectiveCallerFirmId})`);
     }
-    if (!callerData?.role || !['admin', 'attorney', 'paralegal'].includes(callerData.role)) {
-      throw new HttpsError('permission-denied', 'Only staff members can create new users.');
+    if (callerRole !== 'admin' && callerRole !== 'attorney') {
+      throw new HttpsError('permission-denied', 'Only an admin or attorney can create users.');
+    }
+    // Only an admin may mint another admin (finding AP). Previously any staff
+    // caller could create role:'admin' for an address they control, and because
+    // firestore.rules isAdmin() bypasses belongsToFirm(), that admin could read
+    // every firm's client data — a cross-tenant breach.
+    if (role === 'admin' && callerRole !== 'admin') {
+      throw new HttpsError('permission-denied', 'Only an admin can grant the admin role.');
     }
 
     const auth = admin.auth();
@@ -206,8 +237,15 @@ export const updateUserCapabilities = onCall(
     if (effectiveCallerFirmId !== firmId) {
       throw new HttpsError('permission-denied', 'Cannot update users for a different firm.');
     }
-    if (!callerData?.role || !['admin', 'attorney', 'paralegal'].includes(callerData.role)) {
-      throw new HttpsError('permission-denied', 'Only staff members can update user capabilities.');
+    // Admin-only. Capability writes are a direct escalation vector (finding AQ):
+    // previously any staff caller could grant arbitrary capabilities to anyone
+    // in the firm — including themselves — e.g. manage_users → then mint an admin.
+    if (callerData?.role !== 'admin') {
+      throw new HttpsError('permission-denied', 'Only an admin can update user capabilities.');
+    }
+    // Reject capabilities outside the known allowlist.
+    if (!capabilities.every((c) => ALLOWED_CAPABILITIES.includes(c))) {
+      throw new HttpsError('invalid-argument', 'capabilities contains an unrecognized value.');
     }
 
     try {
