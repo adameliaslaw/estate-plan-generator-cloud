@@ -9,13 +9,25 @@ Items requiring human action or decisions before the next agent session can proc
 1. **Smoke test — pending Adam (1 click).** Confirm live key resolution after the AR migration: **Settings → Integrations → SendGrid card → "Test Connection."** It reads the key through the new merge path (`getFirmData` → `secrets/apiKeys`). **Green/"verified" = AR conclusively closed.** If it errors, the merge isn't resolving the migrated key — re-check `loadFirmSecrets` and that the SendGrid function redeployed with new code. (All integrations resolve the same way, so SendGrid is representative; optionally also generate a doc to exercise the AI keys.)
 
 2. **Remaining audit items (no open criticals; ledger `docs/AUDIT-findings.md`):**
-   - **T9 (recommended next)** — Zod length caps at the callable boundaries that still lack them (chatAi, enhanceTemplate, generateFlexDocument, saveMessageAsNote, createFirmUser/updateUserCapabilities) + the T6/BJ residual: server-resolve email recipients and HTML-escape user strings interpolated into firm-branded email HTML.
+   - **T9 — mostly done (#62).** Zod length caps shipped on all 6 callables; HTML-escaping shipped on all email senders. **Deferred half:** "server-resolve email recipients" (ignore caller-supplied `to:` address, look it up from clientId server-side) — Adam chose to skip it: callable-contract + frontend change for marginal gain post-T6 staff-gating. Revisit only if that residual matters.
    - **App Check** — `registerClientFromLink` is public; add App Check / rate-limit (BM).
    - **Truth-in-status remainder** — CR/CU + the open halves of CS/CW.
    - **Medium cleanups** — DK/DP/DQ/DR (bulk-import), DM, DZ, H/T/V/AO (backend leftovers).
    - Never-Break gate (explicit sign-off) applies to: `firestore.rules`, `storage.rules`, `firestore.indexes.json`, `functions/src/templates/*.hbs`, `src/types/index.ts`, CI workflows.
 
 3. **Standing watch-item (passive):** OAuth durability alert — silence = healthy (see AUTOMATIC ALERTS section below).
+
+---
+
+## 📍 SESSION CLOSE — 2026-06-29 (T9 — input caps + email HTML-escape; DONE + deploying)
+
+**✅ T9 mostly DONE (#62 `75fea30`, functions deploy run `28397761835` in progress).** Two API-compatible defense-in-depth hardenings:
+- **Zod length caps** at the 6 callable boundaries that lacked them: `chatAi`/`saveMessageAsNote` (chat-ai.ts, v1), `enhanceTemplate`, `generateFlexDocument`, `createFirmUser`/`updateUserCapabilities`. `safeParse` replaces the manual presence checks; caps bound the free-form text feeding AI prompts (message 50k, customPrompt 20k, templateContent 500k, messageContent 100k). The createFirmUser role **enum** also rejects the legacy `'staff'` role (finding AV); capability allowlist unchanged. Removed the now-dead `ASSIGNABLE_ROLES` const + `FlexDocumentRequest` interface.
+- **HTML-escape (finding BJ):** shared `escapeHtml()` in `email-notifications.ts`, applied to every caller-supplied scalar interpolated into firm-branded email HTML across all 7 senders + the createFirmUser welcome email + `ctaButton` href (names, descriptions, event details, doc-type list, link URLs). SendGrid recipient/display-name + audit fields keep raw values (not HTML contexts).
+- **Deferred (Adam's call):** the "server-resolve email recipients" half of the BJ residual — rewrites the callable contract + frontend for marginal gain now that T6 gates every sender to staff. Not a blocker.
+- Verify: functions `tsc` + root `tsc -b`/build clean; eslint **0 errors**; **634 tests** (added `tests/unit/email-escape-html.test.ts`, 5 cases).
+
+**▶️ Next — no open criticals. Remaining 🟠/🟡/⚪:** App Check on `registerClientFromLink` (BM), truth-in-status remainder (CR/CU + open halves of CS/CW), medium cleanups (DK/DP/DQ/DR bulk-import, DM, DZ, H/T/V/AO). Ledger: `docs/AUDIT-findings.md`.
 
 ---
 
