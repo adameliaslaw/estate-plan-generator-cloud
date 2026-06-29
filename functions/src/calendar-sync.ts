@@ -378,6 +378,11 @@ export const pushEventToGoogleCalendar = functions
       );
     }
 
+    const pushRole = context.auth.token.role as string | undefined;
+    if (!pushRole || !['admin', 'attorney', 'paralegal'].includes(pushRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
+    }
+
     const { firmId, eventId } = data as PushEventRequest;
 
     if (!firmId || !eventId) {
@@ -567,6 +572,11 @@ export const pullGoogleCalendarEvents = functions
         'unauthenticated',
         'You must be logged in to pull calendar events.',
       );
+    }
+
+    const pullRole = context.auth.token.role as string | undefined;
+    if (!pullRole || !['admin', 'attorney', 'paralegal'].includes(pullRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
     }
 
     const { firmId, clientName, timeMin, timeMax } =
@@ -929,6 +939,11 @@ export const triggerFirmCalendarSync = functions
     // 1. Auth check
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to trigger a sync.');
+    }
+
+    const triggerRole = context.auth.token.role as string | undefined;
+    if (!triggerRole || !['admin', 'attorney', 'paralegal'].includes(triggerRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
     }
 
     const firmId = context.auth.token.firmId as string;

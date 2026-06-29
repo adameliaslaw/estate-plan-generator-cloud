@@ -188,6 +188,11 @@ export const estimateGenerationCost = functions
         throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
       }
 
+      const estimateRole = context.auth.token.role as string | undefined;
+      if (!estimateRole || !['admin', 'attorney', 'paralegal'].includes(estimateRole)) {
+        throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
+      }
+
       const { firmId, clientId, docTypes, modelOverride } = data;
       if (!firmId || !clientId || !docTypes?.length) {
         throw new functions.https.HttpsError(

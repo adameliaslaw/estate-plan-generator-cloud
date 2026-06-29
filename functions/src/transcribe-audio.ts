@@ -336,6 +336,12 @@ export const summarizeTranscription = functions
       throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to summarize transcriptions.');
     }
 
+    // Notes are staff-only per Firestore rules; gate the AI summary call too.
+    const summaryRole = context.auth.token.role as string | undefined;
+    if (!summaryRole || !['admin', 'attorney', 'paralegal'].includes(summaryRole)) {
+      throw new functions.https.HttpsError('permission-denied', 'Only staff members can summarize transcriptions.');
+    }
+
     const { firmId, clientId, noteId } = data as SummarizeTranscriptionRequest;
 
     if (!firmId || !clientId || !noteId) {

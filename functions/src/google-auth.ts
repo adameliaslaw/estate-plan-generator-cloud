@@ -10,6 +10,7 @@ interface GoogleTokenResponse {
   error_description?: string;
 }
 import * as admin from 'firebase-admin';
+import { assertStaff } from './auth-guards';
 
 export const exchangeGoogleAuthCode = onCall(
     {
@@ -22,6 +23,7 @@ export const exchangeGoogleAuthCode = onCall(
         if (!request.auth) {
             throw new HttpsError('unauthenticated', 'Must be logged in to connect Google Calendar.');
         }
+        assertStaff(request);
 
         const { code, redirectUri, firmId } = request.data as { code: string; redirectUri: string; firmId: string };
 

@@ -19,6 +19,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, parseAIJson, sanitizeObject } from './ai-client';
 import { COMPLIANCE_CHECK_SCHEMA } from './document-schemas';
+import { assertStaff } from './auth-guards';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -154,6 +155,7 @@ export const checkDocumentCompliance = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Authentication required.');
     }
+    assertStaff(request);
 
     const { firmId, clientId, documentId } = request.data as CheckComplianceRequest;
 

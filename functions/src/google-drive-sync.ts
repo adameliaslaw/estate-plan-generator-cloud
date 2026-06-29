@@ -35,6 +35,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { buildLegalDocumentHtml, sanitizeFileName } from './export-pdf';
+import { assertStaff } from './auth-guards';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -384,6 +385,7 @@ export const connectGoogleDrive = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in to connect Google Drive.');
     }
+    assertStaff(request);
 
     const { code, redirectUri, firmId } = request.data as {
       code: string;
