@@ -4,6 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## ⏸️ PAUSED 2026-06-29 PM — pick up here tomorrow (CI deploy convergence)
+
+**State at pause — PROD IS HEALTHY + FULLY CONVERGED.** An authoritative `gcloud functions list` sweep (gen1+gen2) shows **0 stale functions** except the 3 dormant `functions-backfill` jobs (separate codebase, console-only, expected). Every security fix (T6/T7/AR/T8/T9/#62) is now live on every function. SendGrid verified green. **Nothing user-facing is broken.**
+
+**The one OPEN item — CI functions-deploy is RED and needs a chunked-deploy rework.** What we learned the hard way this session:
+- The merged fail-loud guardrail (#63) **works correctly** — it caught non-convergence and failed the job (run `28405004871`) instead of going silent-green, and opened a CI-failure GitHub issue (assigned to @adameliaslaw).
+- **But a full `firebase deploy --only functions` of this many (~70) functions gets 0 through** — every per-function update fails with HTTP 409 "unable to queue the operation" (Cloud Functions v2 shares one build/sourceToken; the op-queue cascades). Retrying the *full* deploy plateaus (8→8→4→4→4 failures, 0 successes). So "retry the full deploy" can't converge.
+- **Small batches (≤5 functions per `firebase deploy --only functions:a,b,c,d`) succeed 100%** — that's how prod got converged this session (done manually, locally, batch by batch).
+- **→ TOMORROW'S TASK: rewrite the functions-deploy step to deploy in small batches** instead of one big deploy. Plan: enumerate function names via `gcloud functions list --format="value(name)"` (clean; `firebase functions:list` is ANSI-table-noisy), deploy in chunks of ~4 (`firebase deploy --only functions:<chunk>` + `firestore:rules,storage` once), retry a failed chunk a couple times, then a final `firebase deploy --only functions` to catch any brand-new function (now all others are "unchanged" → no storm). Keep the fail-on-non-convergence check. This is a **Never-Break CI file → needs Adam's explicit sign-off before merge** (he pre-approved the *direction* this session). Once merged, the triggered CI run does one batched converge from CI's build → green + becomes the stable baseline (ends the local-build-vs-CI-build hash churn that makes CI want to redeploy everything).
+- Interim: CI red is **expected and non-blocking** — prod is current. Don't panic-deploy; the next functions PR will go red the same way until the chunked rework lands. The open CI-failure issue can stay open until then.
+
+---
+
 ## 🔴 OPEN CARRY-FORWARD (start here next session)
 
 1. **✅ Smoke test — DONE/VERIFIED 2026-06-29.** "Test Connection" now returns **"API key is valid."** This conclusively closes **AR** and validates the full live path (migrated key → `loadFirmSecrets` merge → `testSendGridConnection`). The earlier *"not configured"* failure was NOT a data problem — the migration was fine; the live function + every email sender were frozen on **2026-06-25 pre-AR code** by the silent 409 deploy storm (see MAJOR FINDING below). Fixed by force-redeploying all stale functions from current `main` in small batches.
