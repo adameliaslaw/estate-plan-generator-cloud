@@ -23,6 +23,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { assertStaff } from './auth-guards';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 
 import { logAuditEvent } from './audit-trail';
 
@@ -69,7 +70,9 @@ export async function getFirmData(firmId: string): Promise<admin.firestore.Docum
   if (!snap.exists) {
     throw new HttpsError('not-found', `Firm ${firmId} not found.`);
   }
-  return snap.data()!;
+  // Merge Functions-only secrets (e.g. sendGridApiKey) so getSendGridKey sees
+  // the key — they no longer live on the client-readable firm doc (finding AR).
+  return { ...snap.data()!, ...(await loadFirmSecrets(firmId)) };
 }
 
 /**

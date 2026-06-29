@@ -1,5 +1,6 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 
 // Triggered when a new client is created
 export const syncClientToLevitate = functions.region('us-east1').firestore
@@ -14,7 +15,7 @@ export const syncClientToLevitate = functions.region('us-east1').firestore
         const firmDoc = await admin.firestore().collection('firms').doc(firmId).get();
         if (!firmDoc.exists) return;
 
-        const firmSettings = firmDoc.data();
+        const firmSettings = { ...(firmDoc.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
         const levitateWebhookUrl = firmSettings?.levitateWebhookUrl || firmSettings?.settings?.levitateWebhookUrl;
         const levitateApiKey = firmSettings?.levitateApiKey || firmSettings?.settings?.levitateApiKey;
 

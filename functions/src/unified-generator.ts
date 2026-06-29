@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import * as crypto from 'crypto';
 
 import { GeneratedDoc } from './generate-documents';
@@ -465,7 +466,7 @@ export async function generateDocument(
     }
 
     clientData = clientSnap.data()!;
-    firmData = firmSnap.data()!;
+    firmData = { ...firmSnap.data()!, ...(await loadFirmSecrets(firmId)) };
   }
 
   // Inject model override if specified

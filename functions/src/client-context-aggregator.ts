@@ -13,6 +13,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import { searchKnowledgeBase, buildContextQuery, VectorSearchResult } from './kb-vector-search';
 
 // ---------------------------------------------------------------------------
@@ -134,7 +135,7 @@ export async function aggregateClientContext(
   }
 
   const client = clientSnap.data()!;
-  const firm = firmSnap.data()!;
+  const firm = { ...firmSnap.data()!, ...(await loadFirmSecrets(firmId)) };
 
   // 2. Fetch notes, existing documents, and knowledge base (parallel)
   const notesQuery = db
@@ -625,7 +626,7 @@ export async function aggregateMinimalContext(
   }
 
   return {
-    firm: firmSnap.data()!,
+    firm: { ...firmSnap.data()!, ...(await loadFirmSecrets(firmId)) },
     knowledgeResources,
   };
 }

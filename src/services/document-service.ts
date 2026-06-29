@@ -429,6 +429,42 @@ export const documentService = {
     return result.data;
   },
 
+  /**
+   * Save per-firm third-party API keys. Keys are written to the Functions-only
+   * `firms/{firmId}/secrets/apiKeys` doc server-side (never the client-readable
+   * firm doc — audit finding AR); the firm doc only gets masked presence
+   * indicators ({field}Set / {field}Last4). An empty value clears a key.
+   */
+  async updateFirmApiKeys(
+    firmId: string,
+    updates: Record<string, string>,
+  ): Promise<{ success: boolean; updated: string[] }> {
+    const fn = httpsCallable<
+      { firmId: string; updates: Record<string, string> },
+      { success: boolean; updated: string[] }
+    >(functions, 'updateFirmApiKeys');
+    const result = await fn({ firmId, updates });
+    return result.data;
+  },
+
+  /**
+   * One-time migration that moves provider keys still stored on the firm doc
+   * into the Functions-only secrets store and deletes the exposed copies
+   * (finding AR). Admin-only, idempotent.
+   */
+  async migrateFirmApiKeysToSecrets(): Promise<{
+    success: boolean;
+    migrated: string[];
+    removedFromFirmDoc: string[];
+  }> {
+    const fn = httpsCallable<
+      Record<string, never>,
+      { success: boolean; migrated: string[]; removedFromFirmDoc: string[] }
+    >(functions, 'migrateFirmApiKeysToSecrets');
+    const result = await fn({});
+    return result.data;
+  },
+
   async sendQuestionnaireCompleteNotification(params: {
     firmId: string;
     clientId: string;

@@ -161,6 +161,23 @@ interface FirmSettings {
   levitateApiKey?: string;
   levitateWebhookUrl?: string;
 
+  // Masked presence indicators for the secret keys above. The full keys now
+  // live in the Functions-only firms/{firmId}/secrets/apiKeys doc (finding AR);
+  // the browser only ever sees these `{field}Set` / `{field}Last4` indicators,
+  // written by the updateFirmApiKeys callable. `lawPayPublicKey` is exempt — it
+  // is a publishable key the browser legitimately reads.
+  openAiApiKeySet?: boolean; openAiApiKeyLast4?: string;
+  anthropicApiKeySet?: boolean; anthropicApiKeyLast4?: string;
+  geminiApiKeySet?: boolean; geminiApiKeyLast4?: string;
+  perplexityApiKeySet?: boolean; perplexityApiKeyLast4?: string;
+  courtlistenerApiKeySet?: boolean; courtlistenerApiKeyLast4?: string;
+  assemblyaiApiKeySet?: boolean; assemblyaiApiKeyLast4?: string;
+  sendGridApiKeySet?: boolean; sendGridApiKeyLast4?: string;
+  levitateApiKeySet?: boolean; levitateApiKeyLast4?: string;
+  levitateWebhookUrlSet?: boolean; levitateWebhookUrlLast4?: string;
+  lawPayApiKeySet?: boolean; lawPayApiKeyLast4?: string;
+  lawPayMerchantIdSet?: boolean; lawPayMerchantIdLast4?: string;
+
   // Google Calendar OAuth
   googleCalendar?: {
     connected: boolean;
@@ -302,6 +319,7 @@ export default function SettingsPage() {
   const [savingChatbotModel, setSavingChatbotModel] = useState(false);
   const [savingDocumentDraftingModel, setSavingDocumentDraftingModel] = useState(false);
   const [savingLawPay, setSavingLawPay] = useState(false);
+  const [migratingSecrets, setMigratingSecrets] = useState(false);
   const [savingSendGrid, setSavingSendGrid] = useState(false);
   const [savingLevitate, setSavingLevitate] = useState(false);
   const [savingLevitateWebhook, setSavingLevitateWebhook] = useState(false);
@@ -478,13 +496,12 @@ export default function SettingsPage() {
       setLoading: (v: boolean) => void,
       clearField: () => void,
     ) => {
-      if (!firmDocPath || !value.trim()) return;
+      if (!firmId || !value.trim()) return;
       setLoading(true);
       try {
-        await updateDoc(firmDocPath, {
-          [field]: value.trim(),
-          updatedBy: userProfile?.uid ?? '',
-        });
+        // Keys are saved server-side to the Functions-only secrets doc, not
+        // written to the client-readable firm doc (finding AR).
+        await documentService.updateFirmApiKeys(firmId, { [field]: value.trim() });
         clearField();
         toast.success('API key updated.');
       } catch (err) {
@@ -494,8 +511,36 @@ export default function SettingsPage() {
         setLoading(false);
       }
     },
-    [firmDocPath, userProfile],
+    [firmId],
   );
+
+  // Raw provider keys still on the (client-readable) firm doc → migration needed
+  // (finding AR). This list disappears once the migration moves & deletes them.
+  const legacyKeyFields: (keyof FirmSettings)[] = [
+    'openAiApiKey', 'anthropicApiKey', 'geminiApiKey', 'perplexityApiKey',
+    'courtlistenerApiKey', 'assemblyaiApiKey', 'sendGridApiKey',
+    'lawPayApiKey', 'lawPayMerchantId', 'levitateApiKey', 'levitateWebhookUrl',
+  ];
+  const needsSecretMigration =
+    userProfile?.role === 'admin' &&
+    legacyKeyFields.some((f) => Boolean(firmDoc?.[f]));
+
+  const handleMigrateSecrets = useCallback(async () => {
+    setMigratingSecrets(true);
+    try {
+      const res = await documentService.migrateFirmApiKeysToSecrets();
+      toast.success(
+        res.migrated.length
+          ? `Secured ${res.migrated.length} API key(s) and removed them from the firm record.`
+          : 'No keys needed migrating.',
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Migration failed.');
+    } finally {
+      setMigratingSecrets(false);
+    }
+  }, []);
 
   const handleSaveAiProvider = useCallback(
     async (
@@ -570,14 +615,24 @@ export default function SettingsPage() {
   );
 
   const handleSaveLawPay = useCallback(async () => {
-    if (!firmDocPath) return;
+    if (!firmDocPath || !firmId) return;
     setSavingLawPay(true);
     try {
-      const updates: Partial<FirmSettings> = { updatedBy: userProfile?.uid ?? '' };
-      if (lawPayKey.trim()) updates.lawPayApiKey = lawPayKey.trim();
-      if (lawPayPublicKey.trim()) updates.lawPayPublicKey = lawPayPublicKey.trim();
-      if (lawPayMerchantId.trim()) updates.lawPayMerchantId = lawPayMerchantId.trim();
-      await updateDoc(firmDocPath, updates);
+      // Secret credentials (API key + merchant id) go to the Functions-only
+      // secrets store; lawPayPublicKey is LawPay's publishable key, read in the
+      // browser by ChargePaymentDialog, so it stays on the firm doc (finding AR).
+      const secretUpdates: Record<string, string> = {};
+      if (lawPayKey.trim()) secretUpdates.lawPayApiKey = lawPayKey.trim();
+      if (lawPayMerchantId.trim()) secretUpdates.lawPayMerchantId = lawPayMerchantId.trim();
+      if (Object.keys(secretUpdates).length > 0) {
+        await documentService.updateFirmApiKeys(firmId, secretUpdates);
+      }
+      if (lawPayPublicKey.trim()) {
+        await updateDoc(firmDocPath, {
+          lawPayPublicKey: lawPayPublicKey.trim(),
+          updatedBy: userProfile?.uid ?? '',
+        });
+      }
       setLawPayKey('');
       setLawPayPublicKey('');
       setLawPayMerchantId('');
@@ -588,7 +643,7 @@ export default function SettingsPage() {
     } finally {
       setSavingLawPay(false);
     }
-  }, [firmDocPath, lawPayKey, lawPayPublicKey, lawPayMerchantId, userProfile]);
+  }, [firmDocPath, firmId, lawPayKey, lawPayPublicKey, lawPayMerchantId, userProfile]);
 
   const handleSaveTranscriptionProvider = useCallback(
     async (provider: 'openai' | 'assemblyai') => {
@@ -1341,6 +1396,29 @@ export default function SettingsPage() {
             ════════════════════════════════════════════════════════════ */}
             {activeTab === 'integrations' && (
               <div className="space-y-5">
+                {needsSecretMigration && (
+                  <Card className="border-amber-300 bg-amber-50 shadow-sm">
+                    <CardContent className="flex items-center justify-between gap-4 py-4">
+                      <div>
+                        <p className="text-sm font-semibold text-amber-900">
+                          Secure your stored API keys
+                        </p>
+                        <p className="text-xs text-amber-800">
+                          Some provider keys are still stored on the firm record where staff
+                          browsers can read them. Move them to encrypted server-only storage.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handleMigrateSecrets}
+                        disabled={migratingSecrets}
+                        className="shrink-0 bg-amber-600 hover:bg-amber-700"
+                      >
+                        {migratingSecrets ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Secure keys now'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
                 {/* OpenAI */}
                 <Card className="border-gray-200 shadow-sm">
                   <CardHeader>
@@ -1354,7 +1432,7 @@ export default function SettingsPage() {
                           Powers AI document drafting and analysis.
                         </CardDescription>
                       </div>
-                      <StatusBadge connected={Boolean(firmDoc?.openAiApiKey || firmDoc?.anthropicApiKey || firmDoc?.geminiApiKey || firmDoc?.perplexityApiKey)} />
+                      <StatusBadge connected={Boolean(firmDoc?.openAiApiKeySet || firmDoc?.anthropicApiKeySet || firmDoc?.geminiApiKeySet || firmDoc?.perplexityApiKeySet)} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -1504,7 +1582,7 @@ export default function SettingsPage() {
                     <div className="grid gap-6">
                       <ApiKeyField
                         label="OpenAI API Key"
-                        storedKey={firmDoc?.openAiApiKey}
+                        storedKey={firmDoc?.openAiApiKeyLast4}
                         pendingKey={openAiKey}
                         onPendingChange={setOpenAiKey}
                         onSave={() =>
@@ -1523,7 +1601,7 @@ export default function SettingsPage() {
 
                       <ApiKeyField
                         label="Anthropic API Key"
-                        storedKey={firmDoc?.anthropicApiKey}
+                        storedKey={firmDoc?.anthropicApiKeyLast4}
                         pendingKey={anthropicKey}
                         onPendingChange={setAnthropicKey}
                         onSave={() =>
@@ -1542,7 +1620,7 @@ export default function SettingsPage() {
 
                       <ApiKeyField
                         label="Google Gemini API Key"
-                        storedKey={firmDoc?.geminiApiKey}
+                        storedKey={firmDoc?.geminiApiKeyLast4}
                         pendingKey={geminiKey}
                         onPendingChange={setGeminiKey}
                         onSave={() =>
@@ -1561,7 +1639,7 @@ export default function SettingsPage() {
 
                       <ApiKeyField
                         label="Perplexity API Key"
-                        storedKey={firmDoc?.perplexityApiKey}
+                        storedKey={firmDoc?.perplexityApiKeyLast4}
                         pendingKey={perplexityKey}
                         onPendingChange={setPerplexityKey}
                         onSave={() =>
@@ -1577,7 +1655,7 @@ export default function SettingsPage() {
                       />
                       <ApiKeyField
                         label="CourtListener API Key"
-                        storedKey={firmDoc?.courtlistenerApiKey}
+                        storedKey={firmDoc?.courtlistenerApiKeyLast4}
                         pendingKey={courtListenerKey}
                         onPendingChange={setCourtListenerKey}
                         onSave={() =>
@@ -1609,7 +1687,7 @@ export default function SettingsPage() {
                         </CardDescription>
                       </div>
                       <StatusBadge
-                        connected={Boolean(firmDoc?.lawPayApiKey && firmDoc?.lawPayMerchantId)}
+                        connected={Boolean(firmDoc?.lawPayApiKeySet && firmDoc?.lawPayMerchantIdSet)}
                       />
                     </div>
                   </CardHeader>
@@ -1620,8 +1698,8 @@ export default function SettingsPage() {
                         <Input
                           type="password"
                           placeholder={
-                            firmDoc?.lawPayApiKey
-                              ? maskApiKey(firmDoc.lawPayApiKey)
+                            firmDoc?.lawPayApiKeyLast4
+                              ? maskApiKey(firmDoc.lawPayApiKeyLast4)
                               : 'Enter LawPay API key…'
                           }
                           value={lawPayKey}
@@ -1651,7 +1729,7 @@ export default function SettingsPage() {
                       <Input
                         value={lawPayMerchantId}
                         onChange={(e) => setLawPayMerchantId(e.target.value)}
-                        placeholder={firmDoc?.lawPayMerchantId ?? 'Enter merchant ID…'}
+                        placeholder={firmDoc?.lawPayMerchantIdLast4 ? maskApiKey(firmDoc.lawPayMerchantIdLast4) : 'Enter merchant ID…'}
                         className="font-mono text-sm"
                       />
                     </div>
@@ -1700,13 +1778,13 @@ export default function SettingsPage() {
                           Sends transactional emails to clients.
                         </CardDescription>
                       </div>
-                      <StatusBadge connected={Boolean(firmDoc?.sendGridApiKey)} />
+                      <StatusBadge connected={Boolean(firmDoc?.sendGridApiKeySet)} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <ApiKeyField
                       label="API Key"
-                      storedKey={firmDoc?.sendGridApiKey}
+                      storedKey={firmDoc?.sendGridApiKeyLast4}
                       pendingKey={sendGridKey}
                       onPendingChange={setSendGridKey}
                       onSave={() =>
@@ -1750,13 +1828,13 @@ export default function SettingsPage() {
                           Automatically sync your clients to Levitate.
                         </CardDescription>
                       </div>
-                      <StatusBadge connected={Boolean(firmDoc?.levitateApiKey || firmDoc?.levitateWebhookUrl)} />
+                      <StatusBadge connected={Boolean(firmDoc?.levitateApiKeySet || firmDoc?.levitateWebhookUrlSet)} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <ApiKeyField
                       label="API Key"
-                      storedKey={firmDoc?.levitateApiKey}
+                      storedKey={firmDoc?.levitateApiKeyLast4}
                       pendingKey={levitateKey}
                       onPendingChange={setLevitateKey}
                       onSave={() =>
@@ -1773,7 +1851,7 @@ export default function SettingsPage() {
                     <Separator />
                     <ApiKeyField
                       label="Webhook URL (Zapier/Make)"
-                      storedKey={firmDoc?.levitateWebhookUrl}
+                      storedKey={firmDoc?.levitateWebhookUrlLast4}
                       pendingKey={levitateWebhook}
                       onPendingChange={setLevitateWebhook}
                       onSave={() =>
@@ -1806,8 +1884,8 @@ export default function SettingsPage() {
                       <StatusBadge
                         connected={
                           transcriptionProvider === 'openai'
-                            ? Boolean(firmDoc?.openAiApiKey)
-                            : Boolean(firmDoc?.assemblyaiApiKey)
+                            ? Boolean(firmDoc?.openAiApiKeySet)
+                            : Boolean(firmDoc?.assemblyaiApiKeySet)
                         }
                       />
                     </div>
@@ -1836,7 +1914,7 @@ export default function SettingsPage() {
                     {transcriptionProvider === 'assemblyai' && (
                       <ApiKeyField
                         label="AssemblyAI API Key"
-                        storedKey={firmDoc?.assemblyaiApiKey}
+                        storedKey={firmDoc?.assemblyaiApiKeyLast4}
                         pendingKey={assemblyaiKey}
                         onPendingChange={setAssemblyaiKey}
                         onSave={() =>

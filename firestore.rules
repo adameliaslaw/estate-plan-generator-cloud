@@ -241,6 +241,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       // ========================================================
+      // /firms/{firmId}/secrets/{docId}
+      // Per-firm third-party API keys (OpenAI/Anthropic/Gemini/Perplexity/
+      // CourtListener/AssemblyAI/SendGrid/LawPay/Levitate). NEVER client-
+      // readable: the firm doc itself is readable by in-firm staff, so secrets
+      // cannot live there (audit finding AR). Written/read only by Cloud
+      // Functions via the admin SDK; the Settings UI saves keys through the
+      // updateFirmApiKeys callable and shows masked presence indicators stored
+      // on the firm doc.
+      // ========================================================
+      match /secrets/{docId} {
+        allow read, write: if false; // Cloud Functions (admin SDK) only
+      }
+
+      // ========================================================
       // /firms/{firmId}/tasks/{taskId}
       // Firm-level to-dos and action items.
       // ========================================================

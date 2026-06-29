@@ -17,6 +17,7 @@
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 import OpenAI, { toFile } from 'openai';
 import { callAI } from './ai-client';
 
@@ -167,7 +168,7 @@ export const transcribeAudio = functions
     // 3b. Fetch Firm Settings for API Key Overrides
     // ------------------------------------------------------------------
     const firmSnap = await db.collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() || {};
+    const firmData = { ...(firmSnap.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
     const customApiKey = firmData.openAiApiKey ?? firmData.settings?.openAiApiKey;
 
     // Transcription provider toggle — 'openai' (default) or 'assemblyai'
@@ -396,7 +397,7 @@ export const summarizeTranscription = functions
     // 3. Generate AI summary (cheap background model)
     // ------------------------------------------------------------------
     const firmSnap = await db.collection('firms').doc(firmId).get();
-    const firmData = firmSnap.data() || {};
+    const firmData = { ...(firmSnap.data() ?? {}), ...(await loadFirmSecrets(firmId)) };
 
     const systemPrompt =
       'You are a legal assistant. Summarize the following transcription of a client ' +
