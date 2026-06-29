@@ -14,8 +14,20 @@
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { z } from 'zod';
 import { callAI } from './ai-client';
 import { assertStaff } from './auth-guards';
+
+// Length caps at the callable boundary (finding T9). templateContent is a full
+// HTML template, so the cap is generous but bounded; the free-form fields that
+// feed the AI prompt (templateName, enhancementFocus) are tightly capped.
+const EnhanceTemplateSchema = z.object({
+  firmId: z.string().min(1).max(200),
+  templateId: z.string().max(200).optional(),
+  templateContent: z.string().min(1).max(500_000),
+  templateName: z.string().max(300).optional(),
+  enhancementFocus: z.string().max(2_000).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // System prompt for template enhancement
@@ -72,13 +84,11 @@ export const enhanceTemplate = onCall(
     }
     assertStaff(request);
 
-    const { firmId, templateId, templateContent, templateName, enhancementFocus } = request.data as {
-      firmId: string; templateId?: string; templateContent: string; templateName?: string; enhancementFocus?: string;
-    };
-
-    if (!firmId || !templateContent) {
-      throw new HttpsError('invalid-argument', 'firmId and templateContent are required.');
+    const parsed = EnhanceTemplateSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError('invalid-argument', 'firmId and templateContent are required (and within size limits).');
     }
+    const { firmId, templateId, templateContent, templateName, enhancementFocus } = parsed.data;
 
     if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
       throw new HttpsError('permission-denied', 'Cannot enhance templates for a different firm.');

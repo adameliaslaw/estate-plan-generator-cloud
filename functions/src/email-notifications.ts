@@ -61,6 +61,21 @@ export interface SendGridPayload {
 // ---------------------------------------------------------------------------
 
 /**
+ * Escape a value for safe interpolation into HTML text or a double-quoted
+ * attribute. Caller-supplied request fields (client/recipient names, descriptions,
+ * event details, links) flow into firm-branded email bodies and must be escaped
+ * to prevent HTML/content injection (finding BJ / T9). Returns '' for nullish.
+ */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Read the firm document from Firestore. Throws `not-found` if it doesn't
  * exist, and `failed-precondition` if SendGrid is not configured.
  */
@@ -203,7 +218,7 @@ export function ctaButton(label: string, url: string, color: string): string {
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
   <tr>
     <td align="center" style="border-radius:6px;background-color:${color};">
-      <a href="${url}" target="_blank"
+      <a href="${escapeHtml(url)}" target="_blank"
          style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;
                 color:#ffffff;text-decoration:none;border-radius:6px;
                 background-color:${color};mso-padding-alt:14px 32px;"
@@ -358,7 +373,7 @@ export const sendQuestionnaireInvitation = onCall(
 
     let subject = `Complete Your Estate Planning Questionnaire — ${branding.firmName}`;
     let bodyHtml = `
-<h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Hello, ${clientName}!</h2>
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Hello, ${escapeHtml(clientName)}!</h2>
 <p style="margin:0 0 12px;">
   Thank you for choosing <strong>${branding.firmName}</strong> to assist with your estate planning.
   To get started, please complete a brief questionnaire that will allow us to prepare your
@@ -374,7 +389,7 @@ export const sendQuestionnaireInvitation = onCall(
 ${ctaButton('Complete My Questionnaire', questionnaireUrl, branding.primaryColor)}
 <p style="margin:24px 0 0;font-size:13px;color:#718096;">
   If the button does not work, copy and paste this link into your browser:<br />
-  <a href="${questionnaireUrl}" style="color:${branding.primaryColor};word-break:break-all;">${questionnaireUrl}</a>
+  <a href="${escapeHtml(questionnaireUrl)}" style="color:${branding.primaryColor};word-break:break-all;">${escapeHtml(questionnaireUrl)}</a>
 </p>
 <p style="margin:16px 0 0;font-size:13px;color:#718096;">
   If you have any questions, please do not hesitate to contact us at
@@ -467,7 +482,7 @@ export const sendQuestionnaireCompleteNotification = onCall(
     const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Questionnaire Complete</h2>
 <p style="margin:0 0 12px;">
-  Good news! <strong>${clientName}</strong> has completed their estate planning questionnaire.
+  Good news! <strong>${escapeHtml(clientName)}</strong> has completed their estate planning questionnaire.
   Their responses are now available in the client record and documents can be generated.
 </p>
 <p style="margin:0 0 12px;">
@@ -477,13 +492,13 @@ export const sendQuestionnaireCompleteNotification = onCall(
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;">
   <tr>
     <td style="padding:8px 16px;background:#f0f4f8;border-radius:6px;border-left:4px solid ${branding.primaryColor};">
-      <strong>Client:</strong> ${clientName}<br />
+      <strong>Client:</strong> ${escapeHtml(clientName)}<br />
       <strong>Completed:</strong> ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
     </td>
   </tr>
 </table>`;
 
-    const html = buildEmailHtml(bodyHtml, branding, `${clientName} has completed their estate planning questionnaire.`);
+    const html = buildEmailHtml(bodyHtml, branding, `${escapeHtml(clientName)} has completed their estate planning questionnaire.`);
 
     await sendViaSendGrid(apiKey, {
       personalizations: [{ to: [{ email: attorneyEmail }], subject }],
@@ -561,13 +576,13 @@ export const sendDocumentReadyNotification = onCall(
     const subject = `Estate plan documents ready for review — ${clientName}`;
 
     const docList = documentTypes
-      .map((d) => `<li style="margin-bottom:4px;">${d}</li>`)
+      .map((d) => `<li style="margin-bottom:4px;">${escapeHtml(d)}</li>`)
       .join('');
 
     const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Documents Ready for Review</h2>
 <p style="margin:0 0 12px;">
-  The following estate plan documents have been generated for <strong>${clientName}</strong>
+  The following estate plan documents have been generated for <strong>${escapeHtml(clientName)}</strong>
   and are ready for your review in the client portal:
 </p>
 <ul style="margin:12px 0 20px;padding-left:24px;color:#2d3748;">
@@ -580,7 +595,7 @@ export const sendDocumentReadyNotification = onCall(
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;">
   <tr>
     <td style="padding:8px 16px;background:#f0f4f8;border-radius:6px;border-left:4px solid ${branding.primaryColor};">
-      <strong>Client:</strong> ${clientName}<br />
+      <strong>Client:</strong> ${escapeHtml(clientName)}<br />
       <strong>Documents:</strong> ${documentTypes.length}<br />
       <strong>Generated:</strong> ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
     </td>
@@ -590,7 +605,7 @@ export const sendDocumentReadyNotification = onCall(
     const html = buildEmailHtml(
       bodyHtml,
       branding,
-      `${documentTypes.length} document(s) for ${clientName} are ready for review.`,
+      `${documentTypes.length} document(s) for ${escapeHtml(clientName)} are ready for review.`,
     );
 
     await sendViaSendGrid(apiKey, {
@@ -685,7 +700,7 @@ export const sendPaymentReceipt = onCall(
     const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Payment Receipt</h2>
 <p style="margin:0 0 16px;">
-  Dear ${clientName}, thank you for your payment. Please retain this receipt for your records.
+  Dear ${escapeHtml(clientName)}, thank you for your payment. Please retain this receipt for your records.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
        style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin:0 0 20px;">
@@ -701,11 +716,11 @@ export const sendPaymentReceipt = onCall(
         </tr>
         <tr>
           <td style="padding:4px 0;color:#718096;">Description</td>
-          <td style="padding:4px 0;color:#1a202c;">${description}</td>
+          <td style="padding:4px 0;color:#1a202c;">${escapeHtml(description)}</td>
         </tr>
         <tr>
           <td style="padding:4px 0;color:#718096;">Billed to</td>
-          <td style="padding:4px 0;color:#1a202c;">${clientName}</td>
+          <td style="padding:4px 0;color:#1a202c;">${escapeHtml(clientName)}</td>
         </tr>
         <tr style="border-top:1px solid #e2e8f0;">
           <td style="padding:12px 0 4px;color:#1a202c;font-weight:700;font-size:16px;">Amount Paid</td>
@@ -807,12 +822,12 @@ export const sendPaymentReceivedNotification = onCall(
     const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Payment Received</h2>
 <p style="margin:0 0 16px;">
-  A payment has been recorded from <strong>${clientName}</strong>.
+  A payment has been recorded from <strong>${escapeHtml(clientName)}</strong>.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;">
   <tr>
     <td style="padding:12px 20px;background:#f0f4f8;border-radius:6px;border-left:4px solid ${branding.primaryColor};">
-      <strong>Client:</strong> ${clientName}<br />
+      <strong>Client:</strong> ${escapeHtml(clientName)}<br />
       <strong>Amount:</strong> <span style="font-size:18px;font-weight:700;color:#1a202c;">${formattedAmount}</span><br />
       <strong>Date:</strong> ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
     </td>
@@ -825,7 +840,7 @@ export const sendPaymentReceivedNotification = onCall(
     const html = buildEmailHtml(
       bodyHtml,
       branding,
-      `Payment of ${formattedAmount} received from ${clientName}.`,
+      `Payment of ${formattedAmount} received from ${escapeHtml(clientName)}.`,
     );
 
     await sendViaSendGrid(apiKey, {
@@ -926,14 +941,14 @@ export const sendAppointmentReminder = onCall(
     const locationBlock = location
       ? `<tr>
            <td style="padding:4px 0;color:#718096;">Location</td>
-           <td style="padding:4px 0;color:#1a202c;">${location}</td>
+           <td style="padding:4px 0;color:#1a202c;">${escapeHtml(location)}</td>
          </tr>`
       : '';
 
     let bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Appointment Reminder</h2>
 <p style="margin:0 0 16px;">
-  Dear ${recipientName}, this is a friendly reminder about your upcoming appointment.
+  Dear ${escapeHtml(recipientName)}, this is a friendly reminder about your upcoming appointment.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
        style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin:0 0 20px;">
@@ -947,15 +962,15 @@ export const sendAppointmentReminder = onCall(
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="padding:4px 0;color:#718096;width:40%;">Event</td>
-          <td style="padding:4px 0;color:#1a202c;font-weight:600;">${eventTitle}</td>
+          <td style="padding:4px 0;color:#1a202c;font-weight:600;">${escapeHtml(eventTitle)}</td>
         </tr>
         <tr>
           <td style="padding:4px 0;color:#718096;">Date</td>
-          <td style="padding:4px 0;color:#1a202c;">${eventDate}</td>
+          <td style="padding:4px 0;color:#1a202c;">${escapeHtml(eventDate)}</td>
         </tr>
         <tr>
           <td style="padding:4px 0;color:#718096;">Time</td>
-          <td style="padding:4px 0;color:#1a202c;">${eventTime}</td>
+          <td style="padding:4px 0;color:#1a202c;">${escapeHtml(eventTime)}</td>
         </tr>
         ${locationBlock}
       </table>
@@ -986,7 +1001,7 @@ export const sendAppointmentReminder = onCall(
     const html = buildEmailHtml(
       bodyHtml,
       branding,
-      `Reminder: ${eventTitle} on ${eventDate} at ${eventTime}`,
+      `Reminder: ${escapeHtml(eventTitle)} on ${escapeHtml(eventDate)} at ${escapeHtml(eventTime)}`,
     );
 
     await sendViaSendGrid(apiKey, {
@@ -1094,14 +1109,14 @@ export const sendFollowUpReminder = onCall(
     const urlLine = questionnaireUrl
       ? `<p style="margin:16px 0 0;font-size:13px;color:#718096;">
            If the button does not work, copy and paste this link:<br />
-           <a href="${questionnaireUrl}" style="color:${branding.primaryColor};word-break:break-all;">${questionnaireUrl}</a>
+           <a href="${escapeHtml(questionnaireUrl)}" style="color:${branding.primaryColor};word-break:break-all;">${escapeHtml(questionnaireUrl)}</a>
          </p>`
       : '';
 
     const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">A Quick Reminder</h2>
 <p style="margin:0 0 12px;">
-  Dear ${clientName}, we noticed that your estate planning questionnaire has been waiting
+  Dear ${escapeHtml(clientName)}, we noticed that your estate planning questionnaire has been waiting
   for <strong>${daysPhrase}</strong>. We wanted to follow up and make sure everything is all right.
 </p>
 <p style="margin:0 0 12px;">
