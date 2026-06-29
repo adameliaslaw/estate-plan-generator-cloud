@@ -4,6 +4,20 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION CLOSE — 2026-06-29 (AR — firm API keys moved off the client-readable doc; DONE + migrated)
+
+**✅ AR DONE (#59 + #60, deployed; elias-counsel migrated + verified).** Per-firm provider keys lived as top-level fields on `firms/{firmId}`, which `firestore.rules` lets any in-firm attorney/paralegal `read` via the client SDK → fetchable in any staff browser, XSS-exfiltratable. Firestore can't field-level-hide, and the browser must read the firm doc, so the secrets were moved out:
+- **New Functions-only doc** `firms/{firmId}/secrets/apiKeys` (`allow read, write: if false`). Backend merges it onto firm data at ~13 load sites via `loadFirmSecrets()` (`functions/src/firm-secrets.ts`), so every reader (`firmData.openAiApiKey`, `getSendGridKey`, the 7 ai-client sites via callers, 9 email senders via `getFirmData`) is unchanged.
+- **`updateFirmApiKeys`** callable (Zod, `manage_firm_settings`-gated) saves keys server-side + writes non-secret `{field}Set`/`{field}Last4` indicators on the firm doc for the masked Settings display. `SettingsPage` saves via it.
+- **`migrateFirmApiKeysToSecrets`** (admin, idempotent) + self-hiding Settings banner moved elias-counsel's **9 keys** and deleted the raw copies. **Verified read-only:** 0 raw keys remain on the firm doc; secrets doc holds all 9; indicators set; `lawPayPublicKey` correctly kept (publishable, read in-browser by ChargePaymentDialog).
+- Functions `tsc` + frontend `tsc`/build clean; eslint 0 errors; **629 tests** (added a rules test asserting `/secrets` client-denied).
+
+**⚠️ Deploy saga (3 separate footguns hit — see [[project_new_callable_deploy_footguns]]):** (1) the CI functions deploy hit a **409 "unable to queue the operation" storm** — this PR changed shared modules imported by ~20 functions, exceeding the Cloud Functions v2 concurrent-op ceiling; `migrate` never created + several readers stayed on old code. Converged by deploying the stragglers in a **small batch** via `firebase deploy --only functions:a,b,...` (CI reruns are monotonic but slow). (2) New callables had **no `allUsers` run.invoker** (CORS on call) — root fix = declare `invoker:'public'` in the `onCall` options (not a manual gcloud grant); added in #60-followup. (3) Both callables OOM'd: I set `memory:'256MiB'`, overriding the global 512 floor → Node 22 cold-start OOM → generic `internal` 500. Fixed by omitting `memory` (#60).
+
+**▶️ Next — no open criticals; remaining 🟠/🟡/⚪:** T9 (Zod length caps at callable boundaries + email recipient-resolution/HTML-escape residual from T6/BJ), App Check, truth-in-status remainder (CR/CU + open halves of CS/CW), medium cleanups (DK/DP/DQ/DR bulk-import, DM, DZ, H/T/V/AO). Ledger: `docs/AUDIT-findings.md`. **Recommended next: T9.**
+
+---
+
 ## 📍 SESSION CLOSE — 2026-06-29 (T8 storage-path IDOR fixed + deployed)
 
 **✅ T8 / BH DONE (#58 `5a628db`).** The three callables that download a caller-supplied storage path via the admin SDK — `bulkProcessKnowledgeFiles` (`bulk-knowledge-import.ts`), `processQuestionnaireScan` (`process-ocr.ts`), `transcribeAudio` (`transcribe-audio.ts`) — now validate the prefix themselves (`path.startsWith('firms/{firmId}/')` + reject `..`), matching the `processTemplateFile` template. The admin SDK bypasses Storage rules, so a staffer passing their own `firmId` (which passed the firm-claim check) plus a path into another firm's directory could read/OCR/transcribe a cross-tenant file. All four legitimate upload paths (audio, scans, knowledgeBase, templates) are already firm-scoped → no client change. Guard inlined per call site, NOT via `auth-guards.ts`, because `process-ocr`/`transcribe-audio` are **v1** callables where a v2 `HttpsError` gets swallowed → re-wrapped as generic `internal` (loses the `permission-denied` code). `tsc` clean; **627 tests pass**; functions deploy CI in progress (run `28384686930`).

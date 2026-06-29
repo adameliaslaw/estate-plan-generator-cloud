@@ -32,7 +32,10 @@ function last4(value: string): string {
 }
 
 export const updateFirmApiKeys = onCall(
-  { region: 'us-east1' }, // inherits the global 512MiB floor (256MiB OOMs on Node 22 cold start)
+  // invoker:'public' makes the browser-callable binding declarative (auth is
+  // still enforced in-code below); memory inherits the global 512MiB floor
+  // (256MiB OOMs on Node 22 cold start).
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request) => {
     const caller = assertStaff(request);
 
@@ -109,7 +112,10 @@ export const updateFirmApiKeys = onCall(
  * showing keys as "not configured" until indicators exist.
  */
 export const migrateFirmApiKeysToSecrets = onCall(
-  { region: 'us-east1' }, // inherits the global 512MiB floor (256MiB OOMs on Node 22 cold start)
+  // invoker:'public' makes the browser-callable binding declarative (auth is
+  // still enforced in-code below); memory inherits the global 512MiB floor
+  // (256MiB OOMs on Node 22 cold start).
+  { region: 'us-east1', invoker: 'public', cors: true },
   async (request) => {
     const caller = assertStaff(request);
     if (caller.role !== 'admin') {
