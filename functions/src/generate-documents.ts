@@ -303,12 +303,19 @@ export const generateDocuments = onCall(
     // ------------------------------------------------------------------
     // 5. Update client record
     // ------------------------------------------------------------------
-    await db.doc(`firms/${firmId}/clients/${clientId}`).update({
-      documentsGenerated: true,
-      'packageDetails.packageType': packageType,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedBy: auth.uid,
-    });
+    // Bookkeeping — best-effort. The documents are already generated and saved;
+    // a failure updating the client record must not throw and report the whole
+    // batch as failed (finding AE).
+    try {
+      await db.doc(`firms/${firmId}/clients/${clientId}`).update({
+        documentsGenerated: true,
+        'packageDetails.packageType': packageType,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.uid,
+      });
+    } catch (updateErr) {
+      console.error('[generateDocuments] Non-fatal: client record update failed:', updateErr);
+    }
 
     const successCount = allResults.filter((r) => r.status !== 'error').length;
     const errorCount = allResults.filter((r) => r.status === 'error').length;
@@ -322,7 +329,9 @@ export const generateDocuments = onCall(
     // 6. Return summary
     // ------------------------------------------------------------------
     return {
-      success: true,
+      // Honest outcome: only a clean run (no per-doc errors) is success.
+      // Counts below let the caller render partial results (finding E/AE).
+      success: errorCount === 0,
       documentsGenerated: successCount,
       documentsErrored: errorCount,
       results: allResults.map((r) => ({

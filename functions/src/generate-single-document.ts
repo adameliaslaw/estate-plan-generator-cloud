@@ -127,16 +127,25 @@ export const generateSingleDocument = onCall(
         triggerSource: 'single',
       });
 
-      // Update client's updatedAt
-      await admin.firestore().doc(`firms/${firmId}/clients/${clientId}`).update({
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: auth.uid,
-      });
+      // Bookkeeping only (client updatedAt) — best-effort. A transient failure
+      // here must NOT turn a successfully generated+saved document into a
+      // reported failure that prompts a duplicate retry (finding A).
+      try {
+        await admin.firestore().doc(`firms/${firmId}/clients/${clientId}`).update({
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedBy: auth.uid,
+        });
+      } catch (updateErr) {
+        console.error('[generateSingleDocument] Non-fatal: client updatedAt write failed:', updateErr);
+      }
 
       console.log(`[generateSingleDocument] Saved ${result.docId} (version ${result.currentVersion})`);
 
+      // `success` must reflect the real outcome: the orchestrator returns
+      // status:'error' when the vault save failed, so don't report success:true
+      // and tell the attorney the doc saved when it didn't (finding E).
       return {
-        success: true,
+        success: result.status !== 'error',
         docId: result.docId,
         docType: result.docType,
         title: result.title,
@@ -145,6 +154,10 @@ export const generateSingleDocument = onCall(
       };
     } catch (error) {
       console.error(`[generateSingleDocument] Generation error for ${docType}:`, error);
+      // Preserve meaningful HttpsError codes (not-found, failed-precondition,
+      // resource-exhausted/OOM, …) instead of flattening everything to
+      // 'internal', which masks the real cause (finding B).
+      if (error instanceof HttpsError) throw error;
       throw new HttpsError(
         'internal',
         `Failed to generate ${docType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
