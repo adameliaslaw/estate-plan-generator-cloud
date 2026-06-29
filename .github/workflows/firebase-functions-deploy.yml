@@ -37,7 +37,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Raised 30→45 to accommodate the retry-and-verify deploy loop below
+    # (up to 5 attempts × ~5 min) on top of build/test (~5 min).
+    timeout-minutes: 45
     # contents:read for checkout; issues:write so the failure handler below can
     # open/append a GitHub issue. Deploy auth is via google-github-actions/auth
     # (a SA key), NOT GITHUB_TOKEN, so this restriction doesn't affect the deploy.
@@ -107,7 +109,48 @@ jobs:
         # firebasestorage needs to resolve the defaultBucket. Fixed by granting
         # the SA `roles/firebase.viewer` (read-only) — verified the GET flips
         # 404->200 under SA impersonation. storage.rules now auto-deploys in CI.
-        run: firebase deploy --only functions,firestore:rules,storage --project estate-plan-generator --non-interactive --force
+        #
+        # RETRY-AND-VERIFY LOOP (added 2026-06-29). A shared-module change makes
+        # Firebase deploy ~20+ functions at once, exceeding the Cloud Functions
+        # v2 concurrent-op ceiling → many updates fail with HTTP 409 "unable to
+        # queue the operation". `firebase deploy` logs these as WARNINGS and
+        # still EXITS 0, so CI reported green while ~36 functions silently stayed
+        # on old code (stranding T6/T7/AR/T8/#62 fixes — discovered when a
+        # SendGrid smoke test failed). We now re-run the deploy until it reports
+        # zero per-function failures (Firebase skips already-converged functions
+        # and retries only the stragglers — monotonic), and FAIL the job if it
+        # can't converge, which trips the "Notify on failure" issue below.
+        run: |
+          # GitHub runs this with `bash -e`; disable errexit so a failing deploy
+          # attempt doesn't abort before we read its exit code and retry.
+          set +e -uo pipefail
+          MAX_ATTEMPTS=5
+          FAIL_RE='failed to (update|create) function|unable to queue the operation'
+          attempt=1
+          while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+            echo "::group::firebase deploy — attempt $attempt/$MAX_ATTEMPTS"
+            firebase deploy --only functions,firestore:rules,storage \
+              --project estate-plan-generator --non-interactive --force 2>&1 | tee "deploy-$attempt.log"
+            code=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            fails=$(grep -ciE "$FAIL_RE" "deploy-$attempt.log" || true)
+            if [ "$code" -eq 0 ] && [ "$fails" -eq 0 ]; then
+              echo "✅ Deploy converged on attempt $attempt (exit 0, 0 per-function failures)."
+              exit 0
+            fi
+            echo "⚠️ Attempt $attempt did not converge (firebase exit=$code, per-function failures=$fails). Stragglers:"
+            grep -iE 'failed to (update|create) function' "deploy-$attempt.log" \
+              | sed -E 's#.*/functions/##; s/[^a-zA-Z0-9].*$//' | sort -u || true
+            attempt=$((attempt + 1))
+            if [ "$attempt" -le "$MAX_ATTEMPTS" ]; then
+              echo "Retrying in 30s (firebase skips already-converged functions)…"
+              sleep 30
+            fi
+          done
+          echo "❌ Deploy did NOT fully converge after $MAX_ATTEMPTS attempts — failing the job."
+          echo "   Some functions are still on old code. Re-run this workflow, or small-batch deploy"
+          echo "   the stragglers locally: firebase deploy --only functions:a,functions:b (≤5 at a time)."
+          exit 1
 
       # Surface CI/deploy failures that would otherwise go unnoticed — commits
       # here are authored by "AI Bot", so GitHub's default failure email doesn't
