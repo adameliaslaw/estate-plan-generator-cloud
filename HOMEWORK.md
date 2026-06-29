@@ -26,7 +26,9 @@ Finished the audit-only sweep (Round 4 = frontend) and then **discovered this ma
 
 **Notable: the parallel session caught a real cross-tenant leak my Round 4 missed** — `useFirmBranding`'s global cache leaked one firm's branding incl. Maps API key to every other firm (fixed in #38). Good cross-check.
 
-**▶️ Next — all criticals done + deployed; nothing pending review. Remaining work is 🟠/🟡/⚪:** the rest of B0 (T6 ~15 callables missing role checks → shared `assertStaff`, T8 storage-path IDOR, AR firm API keys readable in-browser, T9 Zod at boundaries, App Check), then the truth-in-status remainder (CR/CU + open halves of CS/CW), then medium cleanups (DK/DP/DQ/DR bulk-import, DM, DZ, the H/T/V/AO backend leftovers, etc.). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI. **Recommended start: T6 (`assertStaff` across ~15 callables) — highest remaining security value.**
+**✅ T6 DONE (#56, `124e75b`, deployed green):** shared `auth-guards.ts` (`assertStaff`/`assertFirmStaff`) gating 18 staff-only callables (every site reviewed). Only the 7 `email-notifications.ts` senders (BJ) remain — deferred to their own PR (also need recipient server-resolution + sanitization, T9).
+
+**▶️ Next — all criticals done + deployed; nothing pending review. Remaining 🟠/🟡/⚪:** BJ (email senders — role gate + server-resolve recipient + sanitize), T8 (storage-path IDOR in bulkProcessKnowledgeFiles/processQuestionnaireScan), AR (firm API keys readable in-browser — move off the client-readable firm doc), T9 (Zod at boundaries), App Check. Then truth-in-status remainder (CR/CU + open halves of CS/CW), then medium cleanups (DK/DP/DQ/DR bulk-import, DM, DZ, H/T/V/AO backend leftovers). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI. **Recommended next: BJ (finishes T6) or T8 (storage IDOR).**
 
 > Process note: this machine's local branch was stale. **Always `git fetch` and check divergence at session start** before auditing or committing — the real work was happening on `origin/main` via PRs.
 
