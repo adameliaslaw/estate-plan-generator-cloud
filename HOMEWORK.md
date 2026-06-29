@@ -8,7 +8,7 @@ Items requiring human action or decisions before the next agent session can proc
 
 Finished the audit-only sweep (Round 4 = frontend) and then **discovered this machine's local `main` had diverged from `origin/main` at `ce9a466`.** A **parallel Claude session** (`session_01KLDZSGMLWiv6...`) had been shipping audit fixes to the real `main` — **PRs #38, #40, #42, #43, #44, #45, #46** (now HEAD `5879857`). My audit ran against the stale `ce9a466` tree, so I integrated `origin/main`, then **re-verified every affected finding against current code** (3 verification subagents + diffstat). Full ledger + reconciliation: **`docs/AUDIT-findings.md`** → read the top **"⚖️ RECONCILIATION"** section first. Memory: [[project_codebase_audit]].
 
-**The full 4-round audit is complete (~126 findings). Fixed so far: ~37; ~3 partial; rest open. ALL 9 criticals resolved or in-review: 8 fixed + deployed (AF/BT/CH/E/DF + AP/AQ/AZ/BA via #54), and BN in review (#53). Zero open criticals.** Two PRs await Adam's sign-off: **#53** (BN payments), **#55** (AS — paralegal firm-settings/billing, `firestore.rules`).
+**The full 4-round audit is complete (~126 findings). Fixed + deployed: ~39; ~2 partial; rest open. 🎉 ALL 9 criticals fixed + deployed green (AF/BT/CH/E/DF + AP/AQ/AZ/BA #54 + BN #53), plus 🟠 AS #55. Zero open criticals; no PRs pending.** Remaining audit work is all 🟠/🟡/⚪.
 
 **✅ FIXED this session (both merged + deployed green):**
 - **AF** (PR #47, `1555d27`) — `sanitizeObject` no longer re-truncates the canonical `_serializedClientData` block at 5,000 chars (cap 100k; still injection-stripped). One edit in `ai-client.ts` fixed all 9 generators.
@@ -18,17 +18,15 @@ Finished the audit-only sweep (Round 4 = frontend) and then **discovered this ma
 - Regression tests added for AF/BT; **627 tests pass**; functions + hosting deploys all green.
 - Also fixed the **hosting CI false-failure** (PRs #48 → #49): build-identical pushes were redding the deploy on Firebase's benign "is the current active version" 400; the workflow now treats only that case as success. Issues #39/#41 closed. The live frontend was current the whole time (verified).
 
-**🔎 IN REVIEW (open PR, NOT merged) — needs Adam:**
-- **BN** (PR #53) — LawPay payment-page reconciliation: embed the payment doc id in the LawPay `reference` so `charge.completed` can find + mark the pending doc paid (today it stays "pending" forever). Held for sign-off: money/IOLTA path, not end-to-end testable without a LawPay sandbox. Scope is BN only; BO/BP/BQ remain B8 follow-ups.
-
-**🔴 Criticals — ALL closed or in-review:**
-- ✅ **AP / AQ / AZ / BA** (+ BB) — **fixed + deployed (#54):** `createFirmUser` admin/attorney-only with admin-only admin-minting; `updateUserCapabilities` admin-only; broken firm-scope predicate fixed in templates/KB reads.
-- ✅ **AF** (#47), **BT** (#50), **CH** (#51), **E** (#52), **DF** (#40) — all fixed + deployed.
-- 🔎 **BN** (#53) — in review (only critical not yet merged).
+**🔴 Criticals — ALL fixed + deployed green:**
+- ✅ **AP / AQ / AZ / BA** (+ BB) — **#54:** `createFirmUser` admin/attorney-only with admin-only admin-minting; `updateUserCapabilities` admin-only; broken firm-scope predicate fixed in templates/KB reads.
+- ✅ **BN** — **#53:** LawPay `reference` carries the payment doc id so `charge.completed` reconciles the pending doc (+ writes `lawPayTransactionId`).
+- ✅ **AS** (🟠) — **#55:** paralegal dropped from `canManageFirmSettings`/`canManageBilling` (rules + hook).
+- ✅ **AF** (#47), **BT** (#50), **CH** (#51), **E** (#52), **DF** (#40).
 
 **Notable: the parallel session caught a real cross-tenant leak my Round 4 missed** — `useFirmBranding`'s global cache leaked one firm's branding incl. Maps API key to every other firm (fixed in #38). Good cross-check.
 
-**▶️ Next — all criticals are done; remaining work is 🟠/🟡/⚪.** Awaiting Adam: merge **#53 (BN)** and **#55 (AS)**. Then the rest of B0 (non-critical): T6 (~15 callables missing role checks → shared `assertStaff`), T8 (storage-path IDOR), AR (firm API keys readable in-browser), T9 (Zod at boundaries), App Check. Then truth-in-status remainder (CR/CU + open halves of CS/CW), then medium cleanups. Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI.
+**▶️ Next — all criticals done + deployed; nothing pending review. Remaining work is 🟠/🟡/⚪:** the rest of B0 (T6 ~15 callables missing role checks → shared `assertStaff`, T8 storage-path IDOR, AR firm API keys readable in-browser, T9 Zod at boundaries, App Check), then the truth-in-status remainder (CR/CU + open halves of CS/CW), then medium cleanups (DK/DP/DQ/DR bulk-import, DM, DZ, the H/T/V/AO backend leftovers, etc.). Never-Break gate applies to rules, templates, `types/index.ts`, indexes, CI. **Recommended start: T6 (`assertStaff` across ~15 callables) — highest remaining security value.**
 
 > Process note: this machine's local branch was stale. **Always `git fetch` and check divergence at session start** before auditing or committing — the real work was happening on `origin/main` via PRs.
 
