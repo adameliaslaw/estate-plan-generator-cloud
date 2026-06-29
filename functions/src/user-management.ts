@@ -1,6 +1,7 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
+import { z } from 'zod';
 
 import {
   getFirmData,
@@ -9,11 +10,8 @@ import {
   buildEmailHtml,
   ctaButton,
   sendViaSendGrid,
+  escapeHtml,
 } from './email-notifications';
-
-// Roles a firm user may be assigned. 'staff' was in the old type but is not
-// recognized by firestore.rules — reject it (finding AV).
-const ASSIGNABLE_ROLES: readonly string[] = ['admin', 'attorney', 'paralegal'];
 
 // The only capabilities firestore.rules / usePermissions honor. Anything else is
 // rejected so a caller can't write bogus or future-privileged claims (AP/AQ).
@@ -25,14 +23,19 @@ const ALLOWED_CAPABILITIES: readonly string[] = [
   'manage_documents',
 ];
 
-interface CreateFirmUserRequest {
-  firmId: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: 'admin' | 'attorney' | 'paralegal';
-  capabilities?: string[];
-}
+// Length caps + shape validation at the callable boundary (finding T9). The
+// role enum rejects anything other than admin/attorney/paralegal (notably the
+// legacy 'staff' role firestore.rules doesn't recognize — finding AV); the
+// capabilities allowlist is still enforced separately below (zod caps
+// length/structure, not membership).
+const CreateFirmUserSchema = z.object({
+  firmId: z.string().min(1).max(200),
+  email: z.string().email().max(320),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  role: z.enum(['admin', 'attorney', 'paralegal']),
+  capabilities: z.array(z.string().max(100)).max(20).optional(),
+});
 
 /**
  * Creates a new user in Firebase Auth, assigns custom claims, creates a Firestore profile,
@@ -45,15 +48,12 @@ export const createFirmUser = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in to create users.');
     }
 
-    const { firmId, email, firstName, lastName, role, capabilities } = request.data as CreateFirmUserRequest;
-
-    if (!firmId || !email || !firstName || !lastName || !role) {
-      throw new HttpsError('invalid-argument', 'Missing required fields: firmId, email, firstName, lastName, role.');
+    const parsed = CreateFirmUserSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError('invalid-argument', 'Missing or invalid fields: firmId, email, firstName, lastName, role.');
     }
+    const { firmId, email, firstName, lastName, role, capabilities } = parsed.data;
 
-    if (!ASSIGNABLE_ROLES.includes(role)) {
-      throw new HttpsError('invalid-argument', `Invalid role "${role}". Must be one of: ${ASSIGNABLE_ROLES.join(', ')}.`);
-    }
     if (capabilities && !capabilities.every((c) => ALLOWED_CAPABILITIES.includes(c))) {
       throw new HttpsError('invalid-argument', 'capabilities contains an unrecognized value.');
     }
@@ -146,7 +146,7 @@ export const createFirmUser = onCall(
       const branding = extractBranding(firmData);
       const subject = `Welcome to ${branding.firmName} - Account Setup`;
       const bodyHtml = `
-<h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Welcome, ${firstName}!</h2>
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Welcome, ${escapeHtml(firstName)}!</h2>
 <p style="margin:0 0 12px;">
   An account has been created for you at <strong>${branding.firmName}</strong>. 
   To get started, please set your password by clicking the button below:
@@ -154,7 +154,7 @@ export const createFirmUser = onCall(
 ${ctaButton('Set Your Password', resetLink, branding.primaryColor)}
 <p style="margin:24px 0 0;font-size:13px;color:#718096;">
   If the button does not work, copy and paste this link into your browser:<br />
-  <a href="${resetLink}" style="color:${branding.primaryColor};word-break:break-all;">${resetLink}</a>
+  <a href="${escapeHtml(resetLink)}" style="color:${branding.primaryColor};word-break:break-all;">${escapeHtml(resetLink)}</a>
 </p>
 <p style="margin:16px 0 0;font-size:13px;color:#718096;">
   If you have any questions, please contact your firm administrator.
@@ -186,11 +186,11 @@ ${ctaButton('Set Your Password', resetLink, branding.primaryColor)}
   }
 );
 
-interface UpdateUserCapabilitiesRequest {
-  firmId: string;
-  userId: string;
-  capabilities: string[];
-}
+const UpdateUserCapabilitiesSchema = z.object({
+  firmId: z.string().min(1).max(200),
+  userId: z.string().min(1).max(200),
+  capabilities: z.array(z.string().max(100)).max(20),
+});
 
 /**
  * Updates an existing user's capabilities.
@@ -203,11 +203,11 @@ export const updateUserCapabilities = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in to update users.');
     }
 
-    const { firmId, userId, capabilities } = request.data as UpdateUserCapabilitiesRequest;
-
-    if (!firmId || !userId || !capabilities) {
-      throw new HttpsError('invalid-argument', 'Missing required fields: firmId, userId, capabilities.');
+    const parsed = UpdateUserCapabilitiesSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError('invalid-argument', 'Missing or invalid fields: firmId, userId, capabilities.');
     }
+    const { firmId, userId, capabilities } = parsed.data;
 
     const callerUid = request.auth.uid;
     const db = admin.firestore();

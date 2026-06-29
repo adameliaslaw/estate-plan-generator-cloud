@@ -13,6 +13,7 @@
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { z } from 'zod';
 import { loadFirmSecrets } from './firm-secrets';
 import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
 import { searchCaseLaw, formatCaseCitations } from './courtlistener-client';
@@ -46,6 +47,30 @@ interface ChatAiRequest {
   /** Resume an existing conversation */
   conversationId?: string;
 }
+
+// Length caps at the callable boundary (finding T9) — bound the text that flows
+// into the AI prompt so a single call can't burn unbounded tokens / cost.
+const ChatAiSchema = z.object({
+  firmId: z.string().min(1).max(200),
+  clientId: z.string().max(200).optional(),
+  message: z.string().min(1).max(50_000),
+  contextParams: z.record(z.string(), z.unknown()).optional(),
+  history: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(50_000) }))
+    .max(50)
+    .optional(),
+  mode: z.enum(['chat', 'draft', 'research']).optional(),
+  draftDocType: z.string().max(100).optional(),
+  conversationId: z.string().max(200).optional(),
+});
+
+const SaveMessageAsNoteSchema = z.object({
+  firmId: z.string().min(1).max(200),
+  clientId: z.string().min(1).max(200),
+  messageContent: z.string().min(1).max(100_000),
+  messageRole: z.enum(['user', 'assistant']),
+  conversationId: z.string().max(200).optional(),
+});
 
 interface ChatAiResponse {
   reply: string;
@@ -492,14 +517,12 @@ export const chatAi = functions
       throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
     }
 
-    const { firmId, clientId, message, contextParams, history = [], mode = 'chat', draftDocType, conversationId: inConvId } = data;
+    const parsed = ChatAiSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid or oversized chat request.');
+    }
 
-    if (!firmId) {
-      throw new functions.https.HttpsError('invalid-argument', 'firmId is required.');
-    }
-    if (!message) {
-      throw new functions.https.HttpsError('invalid-argument', 'message is required.');
-    }
+    const { firmId, clientId, message, contextParams, history = [], mode = 'chat', draftDocType, conversationId: inConvId } = data;
 
     if ((context.auth.token.firmId as string | undefined) !== firmId) {
       throw new functions.https.HttpsError('permission-denied', 'Cannot access AI assistant for a different firm.');
@@ -951,10 +974,11 @@ export const saveMessageAsNote = functions
       if (!saveRole || !['admin', 'attorney', 'paralegal'].includes(saveRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Staff access is required for this operation.');
       }
-      const { firmId, clientId, messageContent, messageRole, conversationId: convId } = data;
-      if (!firmId || !clientId || !messageContent) {
-        throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and messageContent are required.');
+      const parsed = SaveMessageAsNoteSchema.safeParse(data);
+      if (!parsed.success) {
+        throw new functions.https.HttpsError('invalid-argument', 'firmId, clientId, and messageContent are required (and within size limits).');
       }
+      const { firmId, clientId, messageContent, messageRole, conversationId: convId } = data;
       if ((context.auth.token.firmId as string | undefined) !== firmId) {
         throw new functions.https.HttpsError('permission-denied', 'Cannot save notes for a different firm.');
       }

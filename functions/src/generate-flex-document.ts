@@ -14,32 +14,25 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { z } from 'zod';
 
 import { generateDocument } from './unified-generator';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface FlexDocumentRequest {
-  firmId: string;
-  clientId: string;
-  docType: string;
-  /** Free-form additional instructions for the AI */
-  customPrompt?: string;
-  /** Additional data for specific doc types (e.g., amendment text) */
-  additionalData?: Record<string, unknown>;
-  /** Generation mode override. Defaults to 'ai'; pass 'template' or 'hybrid'
-   *  to opt into template-based rendering when a flex template has been
-   *  uploaded for this docType. Falls back to AI if no template exists. */
-  generationMode?: 'template' | 'ai' | 'hybrid';
-  /** Specific template ID to use (overrides resolution). */
-  templateId?: string;
-  /** Filter to a specific software source (e.g. firm letterhead variant). */
-  softwareSource?: string;
-  /** Optional formatting preset name. */
-  formattingPreset?: string;
-}
+// Length caps at the callable boundary (finding T9) — customPrompt feeds the AI
+// prompt directly, so bound it (and the other free-form fields) to prevent
+// unbounded token cost / DoS. additionalData stays a passthrough object (bounded
+// by the overall callable payload limit).
+const FlexDocumentSchema = z.object({
+  firmId: z.string().min(1).max(200),
+  clientId: z.string().min(1).max(200),
+  docType: z.string().min(1).max(100),
+  customPrompt: z.string().max(20_000).optional(),
+  additionalData: z.record(z.string(), z.unknown()).optional(),
+  generationMode: z.enum(['template', 'ai', 'hybrid']).optional(),
+  templateId: z.string().max(200).optional(),
+  softwareSource: z.string().max(200).optional(),
+  formattingPreset: z.string().max(200).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Cloud Function
@@ -66,6 +59,10 @@ export const generateFlexDocument = onCall(
       throw new HttpsError('permission-denied', 'Insufficient permissions.');
     }
 
+    const parsed = FlexDocumentSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError('invalid-argument', 'firmId, clientId, and docType are required (and within size limits).');
+    }
     const {
       firmId,
       clientId,
@@ -76,11 +73,7 @@ export const generateFlexDocument = onCall(
       templateId,
       softwareSource,
       formattingPreset,
-    } = request.data as FlexDocumentRequest;
-
-    if (!firmId || !clientId || !docType) {
-      throw new HttpsError('invalid-argument', 'firmId, clientId, and docType are required.');
-    }
+    } = parsed.data;
 
     // Verify firm access
     const callerFirmId = auth.token.firmId as string | undefined;
