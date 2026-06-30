@@ -37,12 +37,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Raised 45→60 to accommodate the chunked deploy below: ~70 functions are
-    # deployed in batches of 5 (~15 firebase invocations), each re-running the
-    # functions predeploy build. When nothing changed firebase skips unchanged
-    # functions fast, but the repeated builds + the final full-deploy gate need
-    # the extra headroom on top of build/test (~8 min).
-    timeout-minutes: 60
+    # 90 min headroom for the ONE-TIME full convergence: when every function is
+    # churned (local-build vs CI-build hash mismatch), all ~80 deploy in batches
+    # of 5, and each batch now waits for the op-queue to drain before the next
+    # (see the deploy step). Normal pushes change a few functions → batches skip
+    # the unchanged ones with no drain wait → ~10 min. The high ceiling only
+    # costs wall-clock on the rare full-convergence run.
+    timeout-minutes: 90
     # contents:read for checkout; issues:write so the failure handler below can
     # open/append a GitHub issue. Deploy auth is via google-github-actions/auth
     # (a SA key), NOT GITHUB_TOKEN, so this restriction doesn't affect the deploy.
@@ -113,40 +114,78 @@ jobs:
         # the SA `roles/firebase.viewer` (read-only) — verified the GET flips
         # 404->200 under SA impersonation. storage.rules now auto-deploys in CI.
         #
-        # CHUNKED DEPLOY (added 2026-06-30, supersedes the retry-the-full-deploy
-        # loop). A single `firebase deploy --only functions` of ~70 Cloud
-        # Functions v2 deploys them all at once, exceeding the v2 concurrent-op
-        # ceiling → updates fail with HTTP 409 "unable to queue the operation".
-        # `firebase deploy` logs those as WARNINGS and still EXITS 0, so CI used
-        # to report green while ~36 functions silently stayed on old code
-        # (stranding T6/T7/AR/T8/#62 — found when a SendGrid smoke test failed).
-        # Re-running the *full* deploy never converged (the op-queue cascades:
-        # 8→8→4→4→4 failures, 0 successes). What DOES work is deploying in small
-        # batches (≤5 functions per invocation succeeds 100% — that's how prod
-        # was converged by hand). So we now:
+        # CHUNKED DEPLOY WITH OP-QUEUE DRAIN (2026-06-30). A single
+        # `firebase deploy --only functions` of ~80 Cloud Functions v2 deploys
+        # them all at once, exceeding the v2 concurrent-op ceiling → updates fail
+        # with HTTP 409 "unable to queue the operation". `firebase deploy` logs
+        # those as WARNINGS and still EXITS 0, so CI used to report green while
+        # ~36 functions silently stayed on old code (stranding T6/T7/AR/T8/#62 —
+        # found when a SendGrid smoke test failed). Re-running the *full* deploy
+        # never converged (the op-queue cascades).
+        #
+        # The first chunked rework (#65) deployed in batches of 5 but fired them
+        # back-to-back, so each batch 409'd within ~3s — the PREVIOUS batch's
+        # operations were still in flight on the region's op-queue (its run timed
+        # out at 60 min, converging only ~22 of 80). Manual convergence had
+        # worked only because it was human-paced. So the real fix is to PACE the
+        # batches: drain() polls `firebase functions:list` until no function is
+        # left in a non-ACTIVE (DEPLOYING) state before starting the next batch.
+        # Now:
         #   1. deploy firestore:rules + storage once,
-        #   2. enumerate the deployed function names and redeploy them in batches
-        #      of 5 (with per-batch retries),
-        #   3. run a final full `firebase deploy --only functions` — it catches
-        #      brand-new functions not yet in the project and deletes any removed
-        #      from code; everything converged in step 2 is unchanged → skipped →
-        #      no 409 storm. This final deploy is the authoritative convergence
-        #      gate: we FAIL the job if it reports any per-function failure, which
-        #      trips the "Notify on failure" issue below.
+        #   2. redeploy the deployed default-codebase functions in batches of 5,
+        #      draining the op-queue before every batch + retry,
+        #   3. run a final full `firebase deploy --only functions` — catches
+        #      brand-new functions and deletes removed ones; everything converged
+        #      in step 2 is unchanged → skipped → no storm. This final deploy is
+        #      the authoritative gate: we FAIL the job on any per-function
+        #      failure, which trips the "Notify on failure" issue below.
+        # Both enumeration and the drain poll use `firebase functions:list`
+        # (already authed via GOOGLE_APPLICATION_CREDENTIALS — no gcloud).
         run: |
           # GitHub runs this with `bash -e`; disable errexit so a failing deploy
           # attempt doesn't abort before we read its exit code and retry.
           set +e -uo pipefail
           PROJECT=estate-plan-generator
           CHUNK_SIZE=5
+          RUNNER_TEMP="${RUNNER_TEMP:-/tmp}"
           FAIL_RE='failed to (update|create) function|unable to queue the operation'
 
-          # Deploy a set of --only targets with retries. Converged = exit 0 AND
-          # zero per-function failure lines in the log. Returns non-zero if it
-          # can't converge within $tries attempts.
+          # Small node helpers, written to files to avoid inline-quoting hell.
+          # count-busy: number of functions NOT in ACTIVE state (op in flight).
+          cat > "$RUNNER_TEMP/count-busy.js" <<'JS'
+          let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s).result||[];process.stdout.write(String(r.filter(f=>f.state&&f.state!=='ACTIVE').length));}catch(e){process.stdout.write('ERR');}});
+          JS
+          # list-default: ids of the `default`-codebase functions, one per line.
+          cat > "$RUNNER_TEMP/list-default.js" <<'JS'
+          let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s).result||[];for(const f of r){if(f.codebase==='default'&&f.id)console.log(f.id);}}catch(e){}});
+          JS
+
+          # Wait until the regional v2 op-queue has drained (no function mid-deploy)
+          # so the next batch doesn't 409. Caps at 6 min, then proceeds.
+          drain() {
+            local waited=0 max=360 busy
+            while [ "$waited" -lt "$max" ]; do
+              busy=$(firebase functions:list --project "$PROJECT" --json 2>/dev/null \
+                | node "$RUNNER_TEMP/count-busy.js")
+              if [ "$busy" = "0" ]; then
+                [ "$waited" -gt 0 ] && echo "   op-queue drained after ${waited}s."
+                return 0
+              fi
+              [ "$busy" = "ERR" ] || [ -z "$busy" ] && busy="?"
+              echo "   draining op-queue: $busy function(s) still deploying (${waited}s)…"
+              sleep 20; waited=$((waited + 20))
+            done
+            echo "   ⚠️ drain cap (${max}s) reached; proceeding anyway."
+            return 0
+          }
+
+          # Deploy a set of --only targets, draining the op-queue before each
+          # attempt so batches don't 409-cascade. Converged = exit 0 AND zero
+          # per-function failure lines. Non-zero if it can't converge in $tries.
           deploy_with_retry() {
             local label="$1" targets="$2" tries="$3" i=1 code fails
             while [ "$i" -le "$tries" ]; do
+              drain
               echo "::group::deploy $label — attempt $i/$tries"
               firebase deploy --only "$targets" \
                 --project "$PROJECT" --non-interactive --force 2>&1 | tee "deploy-$label-$i.log"
@@ -159,10 +198,7 @@ jobs:
               fi
               echo "⚠️ $label attempt $i did not converge (firebase exit=$code, per-function failures=$fails)."
               i=$((i + 1))
-              if [ "$i" -le "$tries" ]; then
-                echo "Retrying in 30s (firebase skips already-converged functions)…"
-                sleep 30
-              fi
+              [ "$i" -le "$tries" ] && { echo "Retrying after drain…"; sleep 20; }
             done
             return 1
           }
@@ -171,20 +207,19 @@ jobs:
           deploy_with_retry "rules" "firestore:rules,storage" 3 || {
             echo "❌ firestore:rules / storage failed to deploy."; exit 1; }
 
-          # 2. Redeploy every currently-deployed function in small batches.
-          #    gcloud `value(name)` returns the full resource path for gen2
-          #    functions; strip to the short name (basename).
-          mapfile -t FUNCS < <(gcloud functions list --project "$PROJECT" \
-            --format="value(name)" 2>/dev/null | sed -E 's#.*/##' | grep -v '^$' | sort -u)
-          echo "Discovered ${#FUNCS[@]} deployed functions; converging in batches of $CHUNK_SIZE."
+          # 2. Redeploy every deployed default-codebase function in small batches.
+          #    (The 3 dormant backfill-codebase jobs are left to the final deploy.)
+          mapfile -t FUNCS < <(firebase functions:list --project "$PROJECT" --json 2>/dev/null \
+            | node "$RUNNER_TEMP/list-default.js" | sort -u)
+          echo "Discovered ${#FUNCS[@]} default-codebase functions; converging in batches of $CHUNK_SIZE."
           if [ "${#FUNCS[@]}" -eq 0 ]; then
-            echo "⚠️ gcloud returned 0 functions — skipping batches, relying on the final full deploy."
+            echo "⚠️ Enumeration returned 0 functions — skipping batches, relying on the final full deploy."
           fi
           batch_warned=0
           i=0
           while [ "$i" -lt "${#FUNCS[@]}" ]; do
             chunk=("${FUNCS[@]:i:CHUNK_SIZE}")
-            targets=$(printf 'functions:%s,' "${chunk[@]}"); targets=${targets%,}
+            targets=$(printf 'functions:default:%s,' "${chunk[@]}"); targets=${targets%,}
             n=$((i / CHUNK_SIZE + 1))
             echo "Batch $n: ${chunk[*]}"
             deploy_with_retry "batch-$n" "$targets" 3 || {
@@ -199,7 +234,7 @@ jobs:
           deploy_with_retry "final" "functions,firestore:rules,storage" 5 || {
             echo "❌ Final full deploy did NOT converge — functions may be stale. Failing the job."
             echo "   Re-run this workflow, or small-batch deploy the stragglers locally:"
-            echo "   firebase deploy --only functions:a,functions:b (≤5 at a time)."
+            echo "   firebase deploy --only functions:default:a,functions:default:b (≤5 at a time)."
             exit 1; }
 
           if [ "$batch_warned" -ne 0 ]; then
