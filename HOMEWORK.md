@@ -6,7 +6,7 @@ Items requiring human action or decisions before the next agent session can proc
 
 ## 📍 SESSION — 2026-06-30 (CI chunked-deploy + drain; convergence still unsolved — DECISION: let it resolve naturally)
 
-**TL;DR — prod is healthy; the open item is cosmetic CI-green, deliberately left to resolve over normal deploys.**
+**TL;DR — #69 (chunked deploy) + #70 (BM security fix) both LIVE; prod is healthy. The one open item is cosmetic CI-green, deliberately left to resolve over normal deploys.**
 
 **Shipped:**
 - **#69 (merged)** — reworked the functions-deploy step: rules → redeploy `default` codebase in batches of 5 with a state-based `drain()` (poll `firebase functions:list --json` until no fn is non-ACTIVE) → final full deploy as the gate; timeout 60→90. Supersedes the never-converging retry-the-full-deploy loop. (My earlier #68, full-first variant, was closed — redundant with the parallel session's #65 which I missed by not fetching at session start. See [[feedback_fetch_before_building]].)
@@ -19,7 +19,7 @@ Items requiring human action or decisions before the next agent session can proc
 - **If it must be forced later:** deploy ONE function at a time, polling each to fully finalize before the next (no concurrent ops → no 409), ~3h timeout. Slow but deterministic. (Never-Break CI file → needs sign-off.)
 - ⚠️ **Caveat to watch:** because the chunked step re-attempts all 80 every run, a normal functions PR will likely also go red and *may* not cleanly deploy its own changed function through the storm. If a real deploy gets stuck, revisit (serialize, or settle-then-single-paced-run).
 
-**Held (Adam's call): PR #70** — BM fix (require auth + per-firm rate-limit on the public `registerClientFromLink`; binds linkedUserId to verified `auth.uid`). Verified (tsc/lint/634 tests), backend-only, NOT a Never-Break file. Merge whenever; note its CI run will go red from the same churn even though the function deploys.
+**✅ #70 (BM) — MERGED + LIVE (`4a54f56`).** Auth + per-firm rate-limit on the public `registerClientFromLink`: requires a session token, binds `linkedUserId` to the verified `request.auth.uid`, caps NEW stub creation at 50/firm/hour (transactional counter in the Functions-only `secrets` subcollection — no rules change). Verified tsc/lint/634 tests pre-merge. **Deployed directly, not via the merge's CI run:** that run (`28474985822`) would have churn-stormed, so I cancelled it while still in its build phase and ran `firebase deploy --only functions:default:registerClientFromLink` locally (clean queue, single function). **Verified live** — `registerClientFromLink` revision updated 2026-06-30T20:59Z, ACTIVE. The single-function direct deploy is the reliable pattern while the churn persists: cancel the CI run *before its deploy step starts* (no orphan ops), wait for the op-queue to settle (all ACTIVE), then deploy the one function. (App Check left as an optional follow-up — needs console + frontend setup; not bundled.)
 
 ---
 
