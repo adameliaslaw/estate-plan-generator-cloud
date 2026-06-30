@@ -4,6 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## ▶️ PICK UP HERE — 2026-06-30 (resume on PC after re-authorizing GitHub)
+
+Session paused while switching machines. The GitHub connector had dropped to an unauthenticated state (non-interactive session couldn't run the OAuth flow), which blocked PR creation / workflow triggering / merge. **prod is healthy + secure; only CI is red.** Resume in this order:
+
+1. **Re-authorize GitHub** — claude.ai → Settings → Connectors → reconnect GitHub (or `/mcp` in an interactive Claude Code session).
+2. **Re-run the existing functions-deploy workflow** (Actions → "Firebase Functions deploy" → Run workflow on `main`, or re-run run `28417078760`). It should converge now — the batches that finished are "unchanged" and skip fast, and the 409'd stragglers' in-flight ops have long since settled (monotonic). If it goes green, the baseline is established and v2 is optional.
+3. **If it times out again (~120 min), merge the v2 PR.** v2 hardening is already committed + pushed to `claude/homework-continuation-0241ub` (commit `b44ee1e`) but **NOT yet opened as a PR** (GitHub was down). Open the PR for that branch and merge it (Never-Break CI file → it's your sign-off). v2 raises `timeout-minutes` 60→120, lengthens retry backoff 30s→90s, and makes the Notify step fire on `cancelled()` so a timeout pages instead of going silent. Merging it triggers the converging run.
+4. After a green run: close the open CI-failure issue. Then the carry-forward audit items below (CW reply timestamps, CU e-sign status, etc.) are the next interim work.
+
+**Shipped + merged earlier this session (all on `main`):** #65 (chunked-deploy v1), #66 (CZ editor sanitize), #67 (DM/DZ payments reconcile). v2 deploy hardening is the only thing left un-merged.
+
+---
+
 ## 🔴 OPEN 2026-06-30 — chunked-deploy v1 TIMED OUT; v2 hardening pushed, needs sign-off + re-run
 
 **The merged chunked-deploy (#65) ran but was CANCELLED at the 60-min timeout** (run `28417078760`), mid-batch-10, **before reaching the final convergence gate.** Findings:
