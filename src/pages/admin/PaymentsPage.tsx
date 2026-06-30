@@ -52,6 +52,20 @@ function formatCents(cents: number): string {
     }).format(cents / 100);
 }
 
+// The figure to show on a row so it reconciles with the summary cards:
+// paid rows count toward "Received" via amountPaid; pending/overdue rows count
+// toward "Outstanding" via balanceDue. For fully-paid / not-yet-paid records
+// these equal `amount`, so only partially-paid records change.
+function statusAmountCents(p: Payment): number {
+    if (p.status === 'paid') return p.amountPaid || p.amount || 0;
+    if (p.status === 'pending' || p.status === 'overdue') return p.balanceDue || p.amount || 0;
+    return p.amount || 0;
+}
+
+// Cap on the cross-client collection-group query. If the firm ever exceeds it,
+// the summary cards would silently undercount, so we surface a note instead.
+const PAYMENTS_LIMIT = 500;
+
 function formatDate(
     value: { toDate?: () => Date } | Date | string | undefined | null,
     fallback = '—',
@@ -117,11 +131,13 @@ export default function PaymentsPage() {
             () => [
                 where('firmId', '==', firmId),
                 orderBy('createdAt', 'desc'),
-                limit(500),
+                limit(PAYMENTS_LIMIT),
             ],
             [firmId],
         ),
     );
+
+    const totalsCapped = allPayments.length >= PAYMENTS_LIMIT;
 
     // Build clientId → name lookup
     const clientNameMap = useMemo(() => {
@@ -276,6 +292,12 @@ export default function PaymentsPage() {
                 </div>
             </div>
 
+            {totalsCapped && (
+                <p className="-mt-2 text-xs text-amber-600">
+                    Showing the most recent {PAYMENTS_LIMIT} payments — totals may exclude older records.
+                </p>
+            )}
+
             {/* Payment history table */}
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
                 {/* Table header with filters */}
@@ -364,7 +386,7 @@ export default function PaymentsPage() {
                                                 {p.description || '—'}
                                             </td>
                                             <td className="whitespace-nowrap px-5 py-3.5 text-sm font-semibold text-gray-900">
-                                                {formatCents(p.amount)}
+                                                {formatCents(statusAmountCents(p))}
                                             </td>
                                             <td className="whitespace-nowrap px-5 py-3.5">
                                                 <span

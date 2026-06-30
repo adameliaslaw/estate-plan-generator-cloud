@@ -34,6 +34,20 @@ function formatCents(cents: number): string {
     }).format(cents / 100);
 }
 
+// The figure to show on a row so it reconciles with the summary cards:
+// paid rows count toward "Received" via amountPaid; pending/overdue rows count
+// toward "Outstanding" via balanceDue. For fully-paid / not-yet-paid records
+// these equal `amount`, so only partially-paid records change.
+function statusAmountCents(p: Payment): number {
+    if (p.status === 'paid') return p.amountPaid || p.amount || 0;
+    if (p.status === 'pending' || p.status === 'overdue') return p.balanceDue || p.amount || 0;
+    return p.amount || 0;
+}
+
+// Cap on the cross-client collection-group query. If the firm ever exceeds it,
+// the summary totals would silently undercount, so we surface a note instead.
+const RECENT_PAYMENTS_LIMIT = 200;
+
 function formatDate(
     value: { toDate?: () => Date } | Date | string | undefined | null,
     fallback = '—',
@@ -86,11 +100,13 @@ export function DashboardPayments({ clients = [] }: DashboardPaymentsProps) {
             () => [
                 where('firmId', '==', firmId),
                 orderBy('createdAt', 'desc'),
-                limit(200),
+                limit(RECENT_PAYMENTS_LIMIT),
             ],
             [firmId],
         ),
     );
+
+    const totalsCapped = allPayments.length >= RECENT_PAYMENTS_LIMIT;
 
     // Build clientId → name lookup
     const clientNameMap = useMemo(() => {
@@ -178,6 +194,12 @@ export function DashboardPayments({ clients = [] }: DashboardPaymentsProps) {
                 </div>
             </div>
 
+            {totalsCapped && (
+                <p className="px-4 pb-2 text-xs text-amber-600">
+                    Showing the most recent {RECENT_PAYMENTS_LIMIT} payments — totals may exclude older records.
+                </p>
+            )}
+
             {/* Filter tabs */}
             <div className="flex gap-1 border-b border-gray-100 px-4 pb-0">
                 {tabs.map((t) => (
@@ -237,7 +259,7 @@ export function DashboardPayments({ clients = [] }: DashboardPaymentsProps) {
                                                 {clientName}
                                             </button>
                                             <span className="shrink-0 text-sm font-semibold text-gray-900">
-                                                {formatCents(p.amount)}
+                                                {formatCents(statusAmountCents(p))}
                                             </span>
                                         </div>
                                         <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
