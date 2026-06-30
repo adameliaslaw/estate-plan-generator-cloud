@@ -4,6 +4,20 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-06-30 (CI chunked-deploy rework — PR open, awaiting Adam's sign-off)
+
+**✅ Implemented the chunked-deploy rework** for `.github/workflows/firebase-functions-deploy.yml` (the OPEN item below). The "Deploy functions + security rules" step now:
+1. deploys `firestore:rules` + `storage` once (with retries),
+2. enumerates deployed function short-names via `gcloud functions list --format="value(name)"` (basename-stripped for gen2 full paths) and redeploys them in **batches of 5** (`firebase deploy --only functions:a,functions:b,...`), each batch retried up to 3×,
+3. runs a **final full `firebase deploy --only functions,firestore:rules,storage`** that catches brand-new functions + deletes removed ones; everything converged in step 2 is unchanged → skipped → **no 409 storm**. This final deploy is the authoritative convergence gate and **fails the job** (tripping the Notify-on-failure issue) if any per-function update 409s — the #63 fail-loud guarantee is preserved.
+- `timeout-minutes` raised 45→60 for the ~15 batch invocations (each re-runs the predeploy build; unchanged functions skip fast).
+- A batch that can't converge after retries is non-fatal — the final full deploy picks up its stragglers; only the final deploy gates the job.
+- **Verified the bash control-flow locally** with mocked `gcloud`/`firebase`: happy path (13 fns → batches 5/5/3 → exit 0), final-deploy 409 storm → fail-loud exit 1, batch-fails-but-final-converges → exit 0 + info, gcloud-returns-0 → graceful fallback. YAML parses clean.
+
+**🔴 DO NOT MERGE without Adam's explicit sign-off** — Never-Break CI file. Adam pre-approved the *direction* (chunked batches) last session, but the file itself needs his OK before merge. Once merged, the triggered CI run does one batched converge from CI's build → green + becomes the stable baseline (ends the local-build-vs-CI-build hash churn). PR opened on `claude/homework-continuation-0241ub`.
+
+---
+
 ## ⏸️ PAUSED 2026-06-29 PM — pick up here tomorrow (CI deploy convergence)
 
 **State at pause — PROD IS HEALTHY + FULLY CONVERGED.** An authoritative `gcloud functions list` sweep (gen1+gen2) shows **0 stale functions** except the 3 dormant `functions-backfill` jobs (separate codebase, console-only, expected). Every security fix (T6/T7/AR/T8/T9/#62) is now live on every function. SendGrid verified green. **Nothing user-facing is broken.**
