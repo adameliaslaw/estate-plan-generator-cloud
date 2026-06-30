@@ -74,6 +74,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 // Project
 import { useDocument, updateDoc, createDoc } from '@/hooks/useFirestore';
@@ -266,7 +267,7 @@ export default function DocumentEditor({
     }
 
     if (htmlContent && editor) {
-      editor.commands.setContent(htmlContent, { emitUpdate: false });
+      editor.commands.setContent(sanitizeHtml(htmlContent), { emitUpdate: false });
       setContentLoaded(true);
       forceReloadRef.current = false;
       setHasUnsavedChanges(false);
@@ -435,10 +436,11 @@ export default function DocumentEditor({
   const handleRestoreVersion = useCallback(
     (content: string, _vn: number) => {
       if (!editor) return;
-      editor.commands.setContent(content, { emitUpdate: false });
+      const safeContent = sanitizeHtml(content);
+      editor.commands.setContent(safeContent, { emitUpdate: false });
       setHasUnsavedChanges(true);
       setSaveStatus('unsaved');
-      scheduleAutoSave(content);
+      scheduleAutoSave(safeContent);
     },
     [editor, scheduleAutoSave],
   );
