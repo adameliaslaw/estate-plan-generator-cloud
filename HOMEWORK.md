@@ -4,6 +4,25 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-06-30 (CI chunked-deploy + drain; convergence still unsolved — DECISION: let it resolve naturally)
+
+**TL;DR — prod is healthy; the open item is cosmetic CI-green, deliberately left to resolve over normal deploys.**
+
+**Shipped:**
+- **#69 (merged)** — reworked the functions-deploy step: rules → redeploy `default` codebase in batches of 5 with a state-based `drain()` (poll `firebase functions:list --json` until no fn is non-ACTIVE) → final full deploy as the gate; timeout 60→90. Supersedes the never-converging retry-the-full-deploy loop. (My earlier #68, full-first variant, was closed — redundant with the parallel session's #65 which I missed by not fetching at session start. See [[feedback_fetch_before_building]].)
+
+**Still OPEN (cosmetic) — CI functions-deploy is RED; the build-hash churn won't converge in CI:**
+- Root cause confirmed from run logs: Cloud Functions v2 returns `409 unable to queue the operation` because a function's prior update operation keeps **finalizing for MINUTES after it already serves `ACTIVE`**. The drain (waits for ACTIVE) is therefore insufficient — drained batches still 409. Manual convergence worked 6/29 only because it was paced **minutes** apart and never overlapped.
+- **I made it worse then stopped:** an auto-re-trigger loop fired 6 runs back-to-back; `cancel-in-progress` killed them mid-deploy, but cancelling a CI run does NOT stop the GCP ops it started → **orphaned in-flight ops 409-poisoned every later run**. ~2.5h of CI, zero converged. Loop killed, orphan run cancelled, system left to settle. **Lesson: never auto-loop deploy runs here.** [[project_new_callable_deploy_footguns]]
+- **Why it's cosmetic:** the ~51 "churned" functions already have the correct code (converged 6/29 — T6/T7/AR/T8/T9 all live). Only their build hash differs (CI's Linux build vs the 6/29 Windows-local build), so firebase wants to re-push them. **Nothing is broken for users.** Verified: 81 ACTIVE / 0 FAILED.
+- **DECISION (Adam, 6/30): stop forcing it.** Let the churn clear over normal future functions deploys (each clean, non-overlapping run converts a handful permanently). CI may show red meanwhile — cosmetic. Open issue **#64** stays open until it clears.
+- **If it must be forced later:** deploy ONE function at a time, polling each to fully finalize before the next (no concurrent ops → no 409), ~3h timeout. Slow but deterministic. (Never-Break CI file → needs sign-off.)
+- ⚠️ **Caveat to watch:** because the chunked step re-attempts all 80 every run, a normal functions PR will likely also go red and *may* not cleanly deploy its own changed function through the storm. If a real deploy gets stuck, revisit (serialize, or settle-then-single-paced-run).
+
+**Held (Adam's call): PR #70** — BM fix (require auth + per-firm rate-limit on the public `registerClientFromLink`; binds linkedUserId to verified `auth.uid`). Verified (tsc/lint/634 tests), backend-only, NOT a Never-Break file. Merge whenever; note its CI run will go red from the same churn even though the function deploys.
+
+---
+
 ## 📍 SESSION — 2026-06-30 (CI chunked-deploy rework — PR open, awaiting Adam's sign-off)
 
 **✅ Implemented the chunked-deploy rework** for `.github/workflows/firebase-functions-deploy.yml` (the OPEN item below). The "Deploy functions + security rules" step now:
