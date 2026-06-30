@@ -4,6 +4,23 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔴 OPEN 2026-06-30 — chunked-deploy v1 TIMED OUT; v2 hardening pushed, needs sign-off + re-run
+
+**The merged chunked-deploy (#65) ran but was CANCELLED at the 60-min timeout** (run `28417078760`), mid-batch-10, **before reaching the final convergence gate.** Findings:
+- **Didn't fit in 60 min.** Each batch re-pays firebase's predeploy build + source upload + API-enable + analyze (~50s) *before* deploying, ×~15 batches with retries. The *one-time* baseline converge (every function churning local-build→CI-build) is too big for 60 min. (Normal PRs change few functions → fast; this cost is one-time.)
+- **The timeout went SILENT.** "Notify on failure" was `if: failure()`, but a timeout is `cancelled` (not `failure`) → no alert issue opened. Fail-loud gap.
+- **30s retry too short** — a 409 means an op is already in flight on that function; retrying in 30s just 409s again (batch-10 burned all 3 attempts this way).
+- **prod is NOT broken or security-regressed.** Earlier manual convergence to current `main` holds; CI was re-deploying the *same source* (build-hash reconciliation only). App works, security fixes live. Only CI is red.
+
+**v2 hardening pushed to `claude/homework-continuation-0241ub` (NOT merged — Never-Break CI file, needs Adam's sign-off):**
+- `timeout-minutes` 60→**120** (headroom for the one-time converge).
+- retry backoff 30s→**90s** (let in-flight Cloud Functions ops settle before retrying a 409).
+- Notify step `if: failure()`→**`if: failure() || cancelled()`** (a timeout now pages instead of going silent).
+
+**Next:** GitHub MCP needs re-auth (was non-interactive this session) to open the PR / trigger a re-run. Once merged, the triggered run converges with 120-min headroom. **A plain re-run of the existing workflow would also likely converge now** (monotonic — finished batches skip fast, stragglers' ops have settled), but re-running also needs GitHub access.
+
+---
+
 ## 📍 SESSION — 2026-06-30 (CI chunked-deploy rework — PR open, awaiting Adam's sign-off)
 
 **✅ Implemented the chunked-deploy rework** for `.github/workflows/firebase-functions-deploy.yml` (the OPEN item below). The "Deploy functions + security rules" step now:

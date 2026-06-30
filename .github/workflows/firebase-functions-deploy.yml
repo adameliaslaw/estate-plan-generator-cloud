@@ -37,12 +37,15 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Raised 45→60 to accommodate the chunked deploy below: ~70 functions are
-    # deployed in batches of 5 (~15 firebase invocations), each re-running the
-    # functions predeploy build. When nothing changed firebase skips unchanged
-    # functions fast, but the repeated builds + the final full-deploy gate need
-    # the extra headroom on top of build/test (~8 min).
-    timeout-minutes: 60
+    # Raised 60→120 after the first real run timed out mid-batch (cancelled at
+    # the 60-min ceiling before reaching the final convergence gate). The
+    # one-time baseline converge — every function churning from local-build to
+    # CI-build — deploys ~70 functions in batches of 5 (~15 firebase
+    # invocations), each paying firebase's predeploy build + source upload +
+    # analyze overhead (~50s) plus the actual deploy, with 90s retry backoff for
+    # 409'd stragglers. Normal PRs change few functions and finish in well under
+    # 15 min; the 120 ceiling only matters for the one-time/full-churn converge.
+    timeout-minutes: 120
     # contents:read for checkout; issues:write so the failure handler below can
     # open/append a GitHub issue. Deploy auth is via google-github-actions/auth
     # (a SA key), NOT GITHUB_TOKEN, so this restriction doesn't affect the deploy.
@@ -160,8 +163,11 @@ jobs:
               echo "⚠️ $label attempt $i did not converge (firebase exit=$code, per-function failures=$fails)."
               i=$((i + 1))
               if [ "$i" -le "$tries" ]; then
-                echo "Retrying in 30s (firebase skips already-converged functions)…"
-                sleep 30
+                # 90s (not 30s): a 409 "unable to queue the operation" means an
+                # operation is already in flight on that function; retrying before
+                # it settles just 409s again. Give it time to clear.
+                echo "Retrying in 90s (firebase skips already-converged functions)…"
+                sleep 90
               fi
             done
             return 1
@@ -214,8 +220,17 @@ jobs:
       # reach Adam (this caused a 4-day silent deploy outage in June 2026).
       # Opens a GitHub issue assigned to Adam on ANY failed step (lint/test/
       # build/deploy); appends to the existing open issue instead of duplicating.
+      #
+      # `cancelled()` is included so a job TIMEOUT also pages: GitHub marks a
+      # timed-out job `cancelled`, not `failure`, so a bare `if: failure()` would
+      # let a deploy that ran out of time exit silently (this happened on the
+      # first chunked run — cancelled at 60 min before the convergence gate, with
+      # no alert). A concurrency-cancel (a newer push superseding this run) will
+      # also land here, but that's rare for this workflow and a spurious page is
+      # far cheaper than a missed timeout — this project's recurring failure mode
+      # is silent non-completion, so we err toward alerting.
       - name: Notify on failure
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/github-script@v7
         with:
           script: |
@@ -223,7 +238,7 @@ jobs:
             const sha = context.sha.slice(0, 7);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const title = `🚨 CI failing: ${wf}`;
-            const body = `**${wf}** failed on \`${sha}\` (${context.eventName}).\n\nRun: ${runUrl}\n\nThe deploy did not complete — functions/rules may be stale until this is fixed.`;
+            const body = `**${wf}** did not complete on \`${sha}\` (${context.eventName}) — failed or timed out.\n\nRun: ${runUrl}\n\nThe deploy did not finish — functions/rules may be stale until this is re-run.`;
             const { data: open } = await github.rest.issues.listForRepo({ owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100 });
             const existing = open.find(i => i.title === title);
             if (existing) {
