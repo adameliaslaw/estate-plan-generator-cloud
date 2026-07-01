@@ -366,6 +366,13 @@ export default function GenerateDocumentsButton({
       </button>
     );
 
+  // Truth-in-status: the success dialog can be reached with a partial result
+  // (some docs generated, some returned status:'error') — only a 0-count result
+  // routes to the error dialog. Derive the real failure count so we don't claim
+  // "All documents have been drafted" when some failed.
+  const failedResults = result?.results.filter((r) => r.status === 'error') ?? [];
+  const failedCount = failedResults.length;
+
   return (
     <>
       {triggerButton}
@@ -633,12 +640,18 @@ export default function GenerateDocumentsButton({
       <Dialog open={phase === 'success'} onOpenChange={(o) => !o && reset()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-700">
-              <CheckCircle2 className="h-5 w-5" />
-              Documents Generated
+            <DialogTitle
+              className={
+                'flex items-center gap-2 ' + (failedCount > 0 ? 'text-amber-700' : 'text-emerald-700')
+              }
+            >
+              {failedCount > 0 ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+              {failedCount > 0 ? 'Documents Partially Generated' : 'Documents Generated'}
             </DialogTitle>
             <DialogDescription>
-              All documents have been drafted and are ready for attorney review.
+              {failedCount > 0
+                ? `${result?.documentsGenerated ?? 0} of ${result?.results.length ?? 0} documents were drafted. ${failedCount} failed — retry those from the vault.`
+                : 'All documents have been drafted and are ready for attorney review.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -668,7 +681,12 @@ export default function GenerateDocumentsButton({
                       )}
                       <Badge
                         variant="outline"
-                        className="border-amber-200 bg-amber-50 text-amber-700 text-xs"
+                        className={
+                          'text-xs ' +
+                          (r.status === 'error'
+                            ? 'border-red-200 bg-red-50 text-red-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700')
+                        }
                       >
                         {r.status}
                       </Badge>

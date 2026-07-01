@@ -602,8 +602,12 @@ export default function SettingsPage() {
           await documentService.testSendGridConnection(firmId);
           toast.success('SendGrid connection verified — API key is valid.');
         } else {
-          await new Promise((r) => setTimeout(r, 800));
-          toast.success(`${service} connection test successful.`);
+          // No automated verification exists for this service — its secret key
+          // is server-only and there's no test callable. Don't fake a success
+          // toast for a check that never ran (finding DW); tell the truth.
+          toast.info(
+            `Automated connection testing isn't available for ${service} yet. Verify it by processing a test transaction.`,
+          );
         }
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : `${service} connection test failed.`);
