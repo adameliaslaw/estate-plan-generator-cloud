@@ -45,7 +45,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useCollection, createDoc, updateDoc } from '@/hooks/useFirestore';
 import { useAuth } from '@/hooks/useAuth';
-import { serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { serverTimestamp, arrayUnion, Timestamp } from 'firebase/firestore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -401,7 +401,11 @@ export default function CommentsPanel({
       authorId: userProfile?.uid ?? 'unknown',
       authorName: userProfile?.displayName ?? userProfile?.email ?? 'Unknown',
       content: replyText,
-      createdAt: null, // Will be replaced on next Firestore read with server time
+      // Firestore's serverTimestamp() sentinel can't be used inside an array
+      // element (arrayUnion), so a server-resolved time is impossible here.
+      // Stamp a client-side Timestamp.now() instead — otherwise createdAt stays
+      // null forever and every reply renders as "just now".
+      createdAt: Timestamp.now(),
     };
     try {
       // Append atomically so concurrent replies don't clobber each other
