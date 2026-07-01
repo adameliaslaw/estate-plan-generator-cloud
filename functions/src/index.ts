@@ -38,7 +38,7 @@ export {
 export { logAccess, onDocumentStatusChanged, onPaymentCreated } from './audit-trail';
 export { chatAi, listAiConversations, saveMessageAsNote } from './chat-ai';
 export { syncClientToLevitate } from './levitate-sync';
-export { sendForSignature } from './esign-service';
+export { sendForSignature, dropboxSignWebhook } from './esign-service';
 export { processQuestionnaireScan } from './process-ocr';
 export { getFirmBranding } from './branding';
 export { exchangeGoogleAuthCode } from './google-auth';

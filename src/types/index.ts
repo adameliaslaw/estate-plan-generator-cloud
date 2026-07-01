@@ -964,6 +964,21 @@ export interface Document {
   notarizedAt?: Timestamp;
   notaryName?: string;
 
+  // Electronic signature (Dropbox Sign). Status is driven by the provider
+  // webhook; distinct from the wet-signature fields above.
+  eSignature?: {
+    provider: 'dropbox-sign';
+    signatureRequestId: string;
+    status: 'sent' | 'viewed' | 'signed' | 'declined' | 'canceled';
+    testMode?: boolean;
+    signerName?: string;
+    signerEmail?: string;
+    sentAt?: Timestamp;
+    viewedAt?: Timestamp;
+    signedAt?: Timestamp;
+    declinedAt?: Timestamp;
+  };
+
   // Review
   reviewedAt?: Timestamp;
   reviewedBy?: string;

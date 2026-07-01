@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronRight,
   AlertCircle,
+  FileSignature,
   Image as ImageIcon,
   Key,
   Lock,
@@ -177,6 +178,8 @@ interface FirmSettings {
   levitateWebhookUrlSet?: boolean; levitateWebhookUrlLast4?: string;
   lawPayApiKeySet?: boolean; lawPayApiKeyLast4?: string;
   lawPayMerchantIdSet?: boolean; lawPayMerchantIdLast4?: string;
+  dropboxSignApiKeySet?: boolean; dropboxSignApiKeyLast4?: string;
+  dropboxSignTestMode?: boolean;
 
   // Google Calendar OAuth
   googleCalendar?: {
@@ -308,6 +311,7 @@ export default function SettingsPage() {
   const [sendGridKey, setSendGridKey] = useState('');
   const [levitateKey, setLevitateKey] = useState('');
   const [levitateWebhook, setLevitateWebhook] = useState('');
+  const [dropboxSignKey, setDropboxSignKey] = useState('');
 
   const [savingOpenAi, setSavingOpenAi] = useState(false);
   const [savingAnthropic, setSavingAnthropic] = useState(false);
@@ -323,6 +327,8 @@ export default function SettingsPage() {
   const [savingSendGrid, setSavingSendGrid] = useState(false);
   const [savingLevitate, setSavingLevitate] = useState(false);
   const [savingLevitateWebhook, setSavingLevitateWebhook] = useState(false);
+  const [savingDropboxSign, setSavingDropboxSign] = useState(false);
+  const [savingDropboxTestMode, setSavingDropboxTestMode] = useState(false);
   const [testingLawPay, setTestingLawPay] = useState(false);
   const [testingSendGrid, setTestingSendGrid] = useState(false);
 
@@ -592,6 +598,26 @@ export default function SettingsPage() {
       }
     },
     [firmDocPath, userProfile]
+  );
+
+  const handleSetDropboxTestMode = useCallback(
+    async (value: boolean) => {
+      if (!firmDocPath) return;
+      setSavingDropboxTestMode(true);
+      try {
+        await updateDoc(firmDocPath, {
+          dropboxSignTestMode: value,
+          updatedBy: userProfile?.uid ?? '',
+        });
+        toast.success(`Dropbox Sign set to ${value ? 'Test mode' : 'Live (binding)'}.`);
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to update Dropbox Sign mode.');
+      } finally {
+        setSavingDropboxTestMode(false);
+      }
+    },
+    [firmDocPath, userProfile],
   );
 
   const handleTestConnection = useCallback(
@@ -1816,6 +1842,77 @@ export default function SettingsPage() {
                       )}
                       Test Connection
                     </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Dropbox Sign (e-signature) */}
+                <Card className="border-gray-200 shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-[#1a365d]">
+                          <FileSignature className="h-5 w-5" />
+                          Dropbox Sign
+                        </CardTitle>
+                        <CardDescription>
+                          Sends documents to clients for electronic signature.
+                        </CardDescription>
+                      </div>
+                      <StatusBadge connected={Boolean(firmDoc?.dropboxSignApiKeySet)} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <ApiKeyField
+                      label="API Key"
+                      storedKey={firmDoc?.dropboxSignApiKeyLast4}
+                      pendingKey={dropboxSignKey}
+                      onPendingChange={setDropboxSignKey}
+                      onSave={() =>
+                        handleSaveApiKey(
+                          'dropboxSignApiKey',
+                          dropboxSignKey,
+                          setSavingDropboxSign,
+                          () => setDropboxSignKey(''),
+                        )
+                      }
+                      saving={savingDropboxSign}
+                      description="Dashboard → Settings → API. Binding sends require a paid API plan."
+                    />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-gray-700">Sending mode</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={savingDropboxTestMode}
+                          onClick={() => handleSetDropboxTestMode(true)}
+                          className={
+                            'flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ' +
+                            (firmDoc?.dropboxSignTestMode !== false
+                              ? 'border-[#2b6cb0] bg-[#ebf4ff] text-[#1a365d] font-medium'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-[#2b6cb0]/50')
+                          }
+                        >
+                          Test mode (safe)
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingDropboxTestMode}
+                          onClick={() => handleSetDropboxTestMode(false)}
+                          className={
+                            'flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ' +
+                            (firmDoc?.dropboxSignTestMode === false
+                              ? 'border-red-400 bg-red-50 text-red-700 font-medium'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-red-300')
+                          }
+                        >
+                          Live (binding)
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Test mode sends watermarked, non-binding requests (free, no paid plan).
+                        Switch to Live only when you&apos;re on a paid API plan.
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
 

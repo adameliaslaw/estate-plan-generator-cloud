@@ -30,6 +30,7 @@ export const SECRET_KEY_FIELDS = [
   'lawPayMerchantId',
   'levitateApiKey',
   'levitateWebhookUrl',
+  'dropboxSignApiKey',
 ] as const;
 
 // NOTE: `lawPayPublicKey` is deliberately NOT a secret — it is LawPay's
