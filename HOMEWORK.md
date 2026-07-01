@@ -43,6 +43,8 @@ Items requiring human action or decisions before the next agent session can proc
 - **CW — `CommentsPanel`** (open half): reply `createdAt` was `null` forever (`serverTimestamp()` can't live inside an `arrayUnion` element) → every reply rendered "just now". Now stamps client-side `Timestamp.now()`.
 - Verify: `tsc -b` clean, `vite build` clean, **634 tests pass**, no new lint warnings.
 
+**✅ SHIPPED 2026-07-01 (#79 `dcc3373`, direct-deployed) — signed-PDF retrieval (loop closed).** Verified live end-to-end: a test-mode send to Adam's own email succeeded (Dropbox Sign test mode only allows same-domain recipients — confirmed the send path incl. `file[0]` works). The `signature_request_downloadable` webhook now downloads the executed PDF via `GET /v3/signature_request/files/{id}`, stores it at `firms/{firmId}/clients/{clientId}/documents/signed_{documentId}_{sigReqId}.pdf` (staff+client readable per existing storage.rules), records `eSignature.signedStoragePath/signedFileName`, and DocumentVault shows a "Download signed document" action. Decided **non-embedded** signing (emailed link) is right for the solo practice; embedded is a paid-plan/phase-2 nicety.
+
 **✅ SHIPPED 2026-07-01 (#78 `7a5538a`, direct-deployed).** Dropbox Sign built end-to-end and live: `sendForSignature` (real multipart send + PDF render), new `dropboxSignWebhook` (HMAC-verified status callbacks), `Document.eSignature`, Settings card (key + Test/Live toggle), honest `ESignatureDialog`. 84 functions ACTIVE (webhook created); hosting deploy green; 640 tests. **CU + BU resolved.**
 > **🔴 ADAM — remaining setup before live use (do in this order):**
 > 1. **Rotate** the API key you pasted in chat (Dropbox Sign dashboard → Settings → API → generate new, delete old).
