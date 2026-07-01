@@ -148,6 +148,12 @@ export default function DocumentEditor({
   // Refs for debounced auto-save
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveCountRef = useRef(0);
+  // Highest version number produced this session, seeded from and kept >= the
+  // document's persisted currentVersion. saveVersion reads+increments this
+  // synchronously so rapid successive snapshots don't both read a stale
+  // document.currentVersion (which lags until the Firestore subscription
+  // re-delivers) and collide on versionNumber (CY).
+  const currentVersionRef = useRef(0);
   // useEditor's onUpdate closure is created once on mount, before userProfile /
   // document have loaded. Route auto-save through a ref so edits always use the
   // latest closure (correct updatedBy + current document) instead of a stale one
@@ -287,10 +293,21 @@ export default function DocumentEditor({
     // re-run when editor initializes (editor is in the dependency array).
   }, [document, editor, contentLoaded]);
 
+  // Keep the version counter at least as high as the persisted currentVersion so
+  // externally-driven bumps (e.g. a server-side regenerate) are picked up and a
+  // local snapshot never reuses a number.
+  useEffect(() => {
+    const persisted = document?.currentVersion ?? 0;
+    if (persisted > currentVersionRef.current) currentVersionRef.current = persisted;
+  }, [document]);
+
   // ── Save a version snapshot ──
   const saveVersion = useCallback(
     async (html: string, changeNotes?: string) => {
-      const newVersionNum = (document?.currentVersion ?? 0) + 1;
+      // Read + bump synchronously (before any await) so a concurrent saveVersion
+      // sees the incremented value and can't reuse this number (CY).
+      const newVersionNum = currentVersionRef.current + 1;
+      currentVersionRef.current = newVersionNum;
       try {
         await createDoc(versionsPath, {
           content: html,
