@@ -190,18 +190,16 @@ interface RowActionsProps {
   doc: Document;
   firmId: string;
   clientId: string;
-  isStale?: boolean;
   onPreview: (doc: Document) => void;
   onReview: (doc: Document) => void;
   onApprove: (doc: Document) => void;
   onDelete: (doc: Document) => void;
   onSendSignature: (doc: Document) => void;
   onEdit: (doc: Document) => void;
-  onRegenerate?: (doc: Document) => void;
   onVersionHistory: (doc: Document) => void;
 }
 
-function RowActions({ doc, firmId, clientId, isStale, onPreview, onReview, onApprove, onDelete, onSendSignature, onEdit, onRegenerate, onVersionHistory }: RowActionsProps) {
+function RowActions({ doc, firmId, clientId, onPreview, onReview, onApprove, onDelete, onSendSignature, onEdit, onVersionHistory }: RowActionsProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex items-center gap-1">
@@ -295,37 +293,6 @@ function RowActions({ doc, firmId, clientId, isStale, onPreview, onReview, onApp
               </Button>
             </TooltipTrigger>
             <TooltipContent>Version history</TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Regenerate (stale drafts only) */}
-        {isStale && doc.status === 'draft' && onRegenerate && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-orange-500 hover:text-orange-700 hover:bg-orange-50"
-                onClick={() => onRegenerate(doc)}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                >
-                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                  <path d="M16 21h5v-5" />
-                </svg>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Regenerate with updated data</TooltipContent>
           </Tooltip>
         )}
 
@@ -839,12 +806,6 @@ export default function DocumentVault({
                         doc={doc}
                         firmId={firmId}
                         clientId={clientId}
-                        isStale={
-                          doc.status === 'draft' &&
-                          !!clientUpdatedAt &&
-                          !!(doc.createdAt as { seconds: number } | undefined)?.seconds &&
-                          clientUpdatedAt.seconds > (doc.createdAt as { seconds: number }).seconds
-                        }
                         onPreview={(d) => setPreviewDoc(d)}
                         onReview={handleAiReview}
                         onApprove={(d) => setApproveDoc(d)}
