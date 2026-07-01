@@ -161,7 +161,10 @@ export default function DocumentEditor({
   const isReadOnly =
     readOnlyProp ||
     (document?.status === 'final' && !docUnlocked) ||
-    !canManageDocuments;
+    !canManageDocuments ||
+    // Lock the editor while a regenerate is in flight so a keystroke can't
+    // schedule an autosave that overwrites the incoming regenerated draft (CV).
+    regenerating;
 
   // ── TipTap editor ──
   const editor = useEditor({
@@ -404,6 +407,13 @@ export default function DocumentEditor({
 
     setRegenerating(true);
     setRegenError(null);
+    // Cancel any pending debounced autosave — otherwise a timer scheduled from a
+    // pre-regen keystroke could fire mid-regenerate and write stale editor HTML
+    // to editorContent after the new draft lands (CV data-loss window).
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
     try {
       // Snapshot current edits so they aren't lost (versions subcollection
       // already retains prior content, but make doubly sure).
