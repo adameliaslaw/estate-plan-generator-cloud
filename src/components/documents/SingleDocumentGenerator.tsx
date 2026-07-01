@@ -135,6 +135,12 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         if (!match) return;
         const data = match.data();
         const title = (data.displayName as string) || (data.title as string) || selectedDocType;
+        // A doc can be written with status:'error' when the generation ran but
+        // the vault save failed (backend finding E) — don't report that as saved.
+        if (data.status === 'error') {
+          markFailure(`${title} could not be generated. Please try again.`);
+          return;
+        }
         markSuccess(title);
       },
       (err) => console.error('[SingleDocumentGenerator] poll listener error:', err),
@@ -154,6 +160,16 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
       setSuccessMessage('');
       onClose();
     }, 1500);
+  };
+
+  // Settles the flow as a failure. Shares succeededRef with markSuccess so
+  // whichever of the callable result / listener settles first wins and the
+  // other is ignored (no success screen after a reported failure, or vice versa).
+  const markFailure = (message: string) => {
+    if (succeededRef.current) return;
+    succeededRef.current = true;
+    setError(message);
+    setGenerating(false);
   };
 
   // Pull client + spouse so the spouse-role selector shows real names.
@@ -191,6 +207,12 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
         softwareSource: softwareSource === 'none' ? '' : softwareSource,
         formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
       });
+      // The backend reports success:false / status:'error' when generation ran
+      // but the vault save failed — don't tell the attorney it's in the Vault.
+      if (!result.success || result.status === 'error') {
+        markFailure(`${result.title || 'The document'} could not be saved. Please try again.`);
+        return;
+      }
       markSuccess(result.title);
     } catch (err) {
       // If the Firestore listener already detected the saved doc, ignore the

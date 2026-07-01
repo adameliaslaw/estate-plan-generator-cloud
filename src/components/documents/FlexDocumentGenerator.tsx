@@ -208,6 +208,14 @@ export default function FlexDocumentGenerator({
   const markSuccess = (response: GenerateFlexDocumentResponse) => {
     if (succeededRef.current) return;
     succeededRef.current = true;
+    // The backend reports success:false / status:'error' when generation ran
+    // but the vault save failed — route to the error phase instead of showing
+    // "added to the Document Vault" for a document that wasn't saved.
+    if (!response.success || response.status === 'error') {
+      setError('The document was generated but could not be saved. Please try again.');
+      setPhase('error');
+      return;
+    }
     setResult(response);
     setPhase('success');
     onSuccess?.(response);
@@ -233,12 +241,13 @@ export default function FlexDocumentGenerator({
         });
         if (!docSnap) return;
         const data = docSnap.data();
+        const status = (data.status as string) ?? 'draft';
         markSuccess({
-          success: true,
+          success: status !== 'error',
           docType: (data.docType as string) ?? selected.docType,
           title: (data.displayName as string) ?? (data.title as string) ?? selected.docType,
           documentId: docSnap.id,
-          status: (data.status as string) ?? 'draft',
+          status,
         });
       },
       (err) => console.error('[FlexDocumentGenerator] poll listener error:', err),
