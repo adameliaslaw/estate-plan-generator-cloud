@@ -132,6 +132,7 @@ export interface SendForSignatureRequest {
 export interface SendForSignatureResponse {
   success: boolean;
   signatureRequestId: string;
+  testMode?: boolean;
 }
 
 export interface DocumentVersionsResponse {

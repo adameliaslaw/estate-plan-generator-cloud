@@ -29,6 +29,7 @@ export default function ESignatureDialog({
     const [sending, setSending] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+    const [testMode, setTestMode] = useState(false);
 
     const handleSend = async () => {
         if (!signerName.trim() || !signerEmail.trim()) {
@@ -45,14 +46,21 @@ export default function ESignatureDialog({
         setError('');
 
         try {
-            await documentService.sendForSignature({
+            const res = await documentService.sendForSignature({
                 firmId,
                 clientId,
                 documentId,
                 signerName: signerName.trim(),
                 signerEmail: signerEmail.trim(),
             });
-            setSuccess(true);
+            // Only claim success if the provider actually accepted the request
+            // (returns success + a real signatureRequestId).
+            if (res?.success && res.signatureRequestId) {
+                setTestMode(Boolean(res.testMode));
+                setSuccess(true);
+            } else {
+                setError('The e-signature request could not be sent. Please try again.');
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to send document for e-signature');
         } finally {
@@ -66,6 +74,7 @@ export default function ESignatureDialog({
             setSignerEmail('');
             setError('');
             setSuccess(false);
+            setTestMode(false);
         }, 200);
         onClose();
     };
@@ -92,6 +101,12 @@ export default function ESignatureDialog({
                         <p className="mt-2 text-sm text-gray-500">
                             The signature request has been emailed to {signerEmail}.
                         </p>
+                        {testMode && (
+                            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                Test mode: this is a watermarked, non-binding request. Turn off
+                                test mode in Settings → Integrations for legally binding signatures.
+                            </p>
+                        )}
                         <Button className="mt-6 w-full bg-[#2b6cb0] hover:bg-[#1a365d]" onClick={handleClose}>
                             Done
                         </Button>
