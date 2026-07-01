@@ -909,8 +909,11 @@ export function parseAIJson<T>(raw: string): T {
                 wordCount: 0,
                 estimatedPages: 0,
                 executionRequirements: [],
-                witnessRequired: false,
-                notarizationRequired: false,
+                // Don't assert witnessRequired/notarizationRequired here — this
+                // is a truncation-recovery stub for an unknown doc type, and
+                // hard-coding `false` is wrong for wills/POAs (which typically
+                // require both). Omit them (undefined = unknown); _truncated:true
+                // already routes the doc to needs_review for attorney verification.
               },
             };
             return result as T;
