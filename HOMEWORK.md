@@ -10,7 +10,9 @@ Items requiring human action or decisions before the next agent session can proc
 
 **Session start (clean):** `main` in sync at `9f3634c`; **83/83 functions ACTIVE, 0 FAILED** (prod healthy). No open criticals. Issue #64 (CI functions-deploy red) is still the cosmetic build-hash churn — deliberately left to clear over normal deploys (Adam's 6/30 decision); untouched this session. Deliberately picked **frontend-only** work so it deploys clean (hosting CI green) instead of tripping the functions churn.
 
-**✅ Shipped #2 (#72, merged `6479ddf`, hosting deploy auto-running):** rest of the T13 truth-in-status cluster, frontend-only —
+**✅ Shipped #3 (#73, merged `d2f16a7`):** CV regenerate data-loss — the **core** was already fixed in #40 (`forceReloadRef` reloads the regenerated `editorContent` with `emitUpdate:false` + resets `hasUnsavedChanges`; verified regen writes to both `content` and `editorContent`). #73 closed the residual same-class window: editor now locked while `regenerating` + pending autosave timer cancelled at regen start. Ledger CV → fixed. Remaining non-T13 frontend cleanups: CX (`reviewedAt`), CY (TipTap onUpdate stale-closure → dup versionNumber), DA (dead regenerate action).
+
+**✅ Shipped #2 (#72, merged `6479ddf`, hosting deployed green):** rest of the T13 truth-in-status cluster, frontend-only —
 - **CT** (`GenerateDocumentsButton`): full-package (`generateAll`) path only errored on 0-generated; a partial result still claimed "All documents have been drafted." Now shows "Documents Partially Generated" + "N of M drafted, K failed" + red badge on error rows.
 - **DG** (`ChargePaymentDialog`): "Payment Processed!" for any `success:true` ignored capture status. Now distinguishes captured/settled vs authorized-only (AffiniPay auto-captures daily → authorized isn't a failure, but isn't "processed" either).
 - **DW** (`SettingsPage`): LawPay "Test Connection" faked success via an 800ms setTimeout. Now a neutral info toast; a real LawPay test callable is deferred (needs a functions deploy → churn).
