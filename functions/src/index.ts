@@ -71,3 +71,4 @@ export { willsStartBackfill } from './wills-backfill';
 export { willsPilotRun } from './wills-pilot';
 
 export { registerClientFromLink } from './register-client';
+export { fileTranscriptToMatter } from './file-transcript-to-matter';
