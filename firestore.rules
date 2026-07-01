@@ -322,6 +322,21 @@ service cloud.firestore {
       }
 
       // ========================================================
+      // /firms/{firmId}/pendingTranscripts/{transcriptId}
+      // Consult transcripts written by an external, Admin-SDK authenticated
+      // transcription pipeline — this app never receives, stores, or plays
+      // audio. Staff review the queue and file each transcript into a client
+      // matter via the fileTranscriptToMatter callable, which is the only
+      // mutation path (admin SDK, bypasses these rules). No client-side
+      // writes; staff read-only.
+      // ========================================================
+      match /pendingTranscripts/{transcriptId} {
+        allow read: if isAdmin()
+                    || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow create, update, delete: if false; // Cloud Functions (admin SDK) only
+      }
+
+      // ========================================================
       // /firms/{firmId}/emailTemplates/{templateId}
       // Firm-wide email templates
       // ========================================================

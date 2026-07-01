@@ -29,6 +29,7 @@ const CalendarPage = lazy(() => import('@/pages/admin/CalendarPage'));
 const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
+const PendingTranscriptsPage = lazy(() => import('@/pages/admin/PendingTranscriptsPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 const NameSplitsReview = lazy(() => import('@/pages/admin/NameSplitsReview'));
 const QuestionnaireRegisterPage = lazy(() => import('@/pages/client/QuestionnaireRegisterPage'));
@@ -188,6 +189,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <NameSplitsReview />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.PENDING_TRANSCRIPTS}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <PendingTranscriptsPage />
                 </AppLayout>
               }
             />

@@ -30,6 +30,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  FileText,
   Lock,
   Mail,
   Mic,
@@ -124,6 +125,7 @@ function NoteTypeIcon({ type }: { type: NoteType }) {
     general: { icon: <StickyNote className="h-3.5 w-3.5" />, label: 'General' },
     task: { icon: <CheckSquare className="h-3.5 w-3.5" />, label: 'Task' },
     system: { icon: <Bot className="h-3.5 w-3.5" />, label: 'System' },
+    transcript: { icon: <FileText className="h-3.5 w-3.5" />, label: 'Transcript' },
   };
   const cfg = icons[type] ?? icons.general;
   return (

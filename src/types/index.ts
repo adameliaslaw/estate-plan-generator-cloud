@@ -158,7 +158,8 @@ export type NoteType =
   | 'email'
   | 'meeting'
   | 'task'
-  | 'system';
+  | 'system'
+  | 'transcript';
 
 export type NoteSource = 'manual' | 'ai' | 'system';
 
@@ -1064,6 +1065,40 @@ export interface Note {
   updatedAt: Timestamp;
   createdBy: string;
   updatedBy: string;
+}
+
+// ============================================================================
+// PendingTranscript — /firms/{firmId}/pendingTranscripts/{transcriptId}
+//
+// Written only by the external transcription pipeline (Admin SDK, service
+// account). The app never receives, stores, or plays audio — only the
+// finished text transcript. Staff review each pending transcript and file it
+// into a client matter (as a Note) via the fileTranscriptToMatter callable.
+// ============================================================================
+
+export interface TranscriptSegment {
+  speaker: string;
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface PendingTranscript {
+  id: string;
+  firmId: string;
+  sourceFilename: string;
+  transcriptText: string;
+  segments: TranscriptSegment[];
+  speakerCount: number;
+  durationSeconds: number;
+  language: string;
+  recordedAt: Timestamp | null;
+  createdAt: Timestamp;
+  createdBy: string;
+  status: 'pending' | 'filed';
+  filedToMatterId: string | null;
+  filedAt: Timestamp | null;
+  filedBy: string | null;
 }
 
 // ============================================================================
