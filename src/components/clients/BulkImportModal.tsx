@@ -51,8 +51,14 @@ interface ParsedRow {
   packageType: string;
   valid: boolean;
   error?: string;
+  /** Non-blocking issue (e.g. unknown package) — row still imports. */
+  warning?: string;
   imported?: boolean;
 }
+
+// Basic email shape check — a malformed address feeds client-link/auth matching
+// and breaks portal linking silently, so we block those rows (blank is allowed).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Phase = 'idle' | 'preview' | 'importing' | 'complete';
 
@@ -154,6 +160,10 @@ function parseCSV(text: string): ParsedRow[] {
     if (!row.firstName && !row.lastName) {
       row.valid = false;
       row.error = 'First or last name is required';
+    } else if (row.email && !EMAIL_RE.test(row.email)) {
+      // Present-but-malformed email blocks the row (blank is fine — optional).
+      row.valid = false;
+      row.error = 'Invalid email format';
     }
 
     // Normalize package type
@@ -162,6 +172,8 @@ function parseCSV(text: string): ParsedRow[] {
       if (['foundation', 'guardian', 'fortress'].includes(pkg)) {
         row.packageType = pkg;
       } else {
+        // Don't silently drop an unrecognized package — warn but still import.
+        row.warning = `Unknown package "${row.packageType}" — imported without a package`;
         row.packageType = '';
       }
     }
@@ -254,10 +266,13 @@ export default function BulkImportModal({
 
     let success = 0;
     let errors = 0;
-    const results = new Map<number, { imported: boolean; error?: string }>();
+    // Work on a copy of every row so we can record the per-row outcome and apply
+    // it back to state at the end (DR) — the preview then shows which rows failed.
+    const updated = [...rows];
 
-    for (let i = 0; i < validRows.length; i++) {
-      const row = validRows[i];
+    for (let i = 0; i < updated.length; i++) {
+      const row = updated[i];
+      if (!row.valid) continue;
       try {
         const clientsCol = collection(db, COLLECTIONS.CLIENTS(firmId));
         const newRef = doc(clientsCol);
@@ -293,24 +308,29 @@ export default function BulkImportModal({
         }
 
         await setDoc(newRef, clientData);
-        results.set(i, { imported: true });
+        updated[i] = { ...row, imported: true, error: undefined };
         success++;
-      } catch {
-        results.set(i, { imported: false, error: 'Failed to create' });
+      } catch (err) {
+        // Don't swallow the real Firestore error — log it so failures are
+        // debuggable (DK), and record the outcome on the row (DR).
+        console.error(`[BulkImportModal] Failed to import row ${i} (${row.email || row.lastName}):`, err);
+        updated[i] = { ...row, imported: false, error: 'Failed to create' };
         errors++;
       }
 
-      setImportProgress(Math.round(((i + 1) / validRows.length) * 100));
+      setImportProgress(Math.round(((success + errors) / validRows.length) * 100));
       setImportedCount(success);
       setErrorCount(errors);
     }
 
+    // Apply the per-row outcomes so the preview reflects imported/failed status.
+    setRows(updated);
     setPhase('complete');
     if (success > 0) {
       toast.success(`Successfully imported ${success} client${success !== 1 ? 's' : ''}`);
       onComplete?.();
     }
-  }, [firmId, userId, validRows, onComplete]);
+  }, [firmId, userId, rows, validRows, onComplete]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -368,8 +388,8 @@ export default function BulkImportModal({
             </>
           )}
 
-          {/* ── Preview: Parsed rows ── */}
-          {phase === 'preview' && rows.length > 0 && (
+          {/* ── Preview / Complete: Parsed rows (with import outcome) ── */}
+          {(phase === 'preview' || phase === 'complete') && rows.length > 0 && (
             <ScrollArea className="max-h-80">
               <table className="min-w-full divide-y divide-gray-100 text-sm">
                 <thead>
@@ -386,13 +406,23 @@ export default function BulkImportModal({
                   {rows.map((row, i) => (
                     <tr key={i} className={cn(!row.valid && 'bg-red-50/50')}>
                       <td className="px-3 py-2">
-                        {row.valid ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        ) : (
+                        {!row.valid ? (
                           <span className="flex items-center gap-1 text-xs text-red-600">
                             <AlertCircle className="h-3.5 w-3.5" />
                             {row.error}
                           </span>
+                        ) : row.imported ? (
+                          <span className="flex items-center gap-1 text-xs text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Imported
+                          </span>
+                        ) : row.error ? (
+                          <span className="flex items-center gap-1 text-xs text-red-600">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            {row.error}
+                          </span>
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                         )}
                       </td>
                       <td className="px-3 py-2 text-gray-700">{row.firstName}</td>
@@ -403,6 +433,14 @@ export default function BulkImportModal({
                         {row.packageType ? (
                           <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 capitalize">
                             {row.packageType}
+                          </span>
+                        ) : row.warning ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-xs text-amber-700"
+                            title={row.warning}
+                          >
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            {row.warning}
                           </span>
                         ) : (
                           <span className="text-xs text-gray-400">—</span>
