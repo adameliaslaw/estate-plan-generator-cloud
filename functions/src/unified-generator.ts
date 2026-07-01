@@ -1015,7 +1015,7 @@ export async function generateDocument(
   const genLog: Record<string, unknown> = {
     event: 'document_generated',
     docType,
-    mode: generationMode ?? 'hybrid',
+    mode: generationMode,
     status: finalStatus,
     contentLength,
     textLength,
@@ -1034,7 +1034,7 @@ export async function generateDocument(
     genLog.warning = 'empty_content';
     console.error(`[unifiedGenerator] 🚨 EMPTY DOCUMENT: ${docType} generated with no text content (${genElapsedMs}ms)`, genLog);
   } else {
-    console.info(`[unifiedGenerator] ✓ ${docType} generated: ${textLength} chars, ${genElapsedMs}ms, mode=${generationMode ?? 'hybrid'}, status=${finalStatus}`);
+    console.info(`[unifiedGenerator] ✓ ${docType} generated: ${textLength} chars, ${genElapsedMs}ms, mode=${generationMode}, status=${finalStatus}`);
   }
 
   // ------------------------------------------------------------------
@@ -1079,7 +1079,7 @@ export async function generateDocument(
       content: generatedDoc.content,
       binaryBuffer: generatedDoc._binaryBuffer,
       extractedData: generatedDoc._extractedData,
-      status: finalStatus === 'error' ? 'error' : finalStatus,
+      status: finalStatus,
       createdBy,
       documentId,
       generationMode: resolvedMode,
@@ -1120,7 +1120,7 @@ export async function generateDocument(
     generatedAt: new Date().toISOString(),
     customInstructions: customInstructions?.slice(0, 200),
     templateUsed: templateId,
-    generationMode: generationMode ?? 'hybrid',
+    generationMode,
   }).catch(console.error);
 
   return {
