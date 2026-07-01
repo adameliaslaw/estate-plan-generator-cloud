@@ -68,6 +68,72 @@ async function renderDocumentPdf(
   }
 }
 
+/**
+ * Download the executed PDF from Dropbox Sign and store it in the vault's
+ * Storage path (readable by staff + the client per storage.rules), then record
+ * the reference on the document. Idempotent — skips if already stored.
+ */
+async function storeSignedPdf(
+  apiKey: string,
+  signatureRequestId: string,
+  firmId: string,
+  clientId: string,
+  documentId: string,
+  title: string,
+  docRef: admin.firestore.DocumentReference,
+): Promise<void> {
+  if (!signatureRequestId) return;
+
+  const snap = await docRef.get();
+  const existing = (snap.data()?.eSignature ?? {}) as { signedStoragePath?: string };
+  if (existing.signedStoragePath) return; // already pulled in
+
+  const authHeader = 'Basic ' + Buffer.from(`${apiKey}:`).toString('base64');
+  const resp = await fetch(
+    `https://api.hellosign.com/v3/signature_request/files/${encodeURIComponent(signatureRequestId)}?file_type=pdf`,
+    { headers: { Authorization: authHeader } },
+  );
+  if (!resp.ok) {
+    throw new Error(`Dropbox Sign files download returned ${resp.status}`);
+  }
+  const pdfBuffer = Buffer.from(await resp.arrayBuffer());
+
+  // Flat filename under documents/ so it matches the single-segment storage rule.
+  const storagePath = `firms/${firmId}/clients/${clientId}/documents/signed_${documentId}_${signatureRequestId}.pdf`;
+  await admin.storage().bucket().file(storagePath).save(pdfBuffer, {
+    contentType: 'application/pdf',
+  });
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, '').trim().slice(0, 80) || 'Document';
+  await docRef.set(
+    {
+      eSignature: {
+        status: 'signed',
+        signedStoragePath: storagePath,
+        signedFileName: `${safeTitle} (signed).pdf`,
+        signedAt: now,
+      },
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  await admin
+    .firestore()
+    .collection('firms').doc(firmId)
+    .collection('clients').doc(clientId)
+    .collection('activityLogs')
+    .add({
+      type: 'esignature_signed_file',
+      title: 'Signed Document Received',
+      description: `The executed "${title}" was returned and saved to the Document Vault.`,
+      relatedDocumentId: documentId,
+      createdBy: 'dropbox-sign',
+      timestamp: now,
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Function 1 — sendForSignature (v1 callable)
 // ---------------------------------------------------------------------------
@@ -265,7 +331,11 @@ export const dropboxSignWebhook = onRequest(
     }
     let payload: {
       event?: { event_time?: string; event_type?: string; event_hash?: string };
-      signature_request?: { metadata?: Record<string, string> };
+      signature_request?: {
+        signature_request_id?: string;
+        title?: string;
+        metadata?: Record<string, string>;
+      };
     };
     try {
       payload = JSON.parse(jsonField);
@@ -313,20 +383,40 @@ export const dropboxSignWebhook = onRequest(
       return;
     }
 
-    // 4. Map the event → status and apply (idempotent, monotonic).
-    const newStatus = EVENT_STATUS[eventType];
-    if (!newStatus) {
-      // Authentic but not a status we track (e.g. remind, downloadable) — ack.
-      res.status(200).send(WEBHOOK_ACK);
-      return;
-    }
-
     const db = admin.firestore();
     const docRef = db
       .collection('firms').doc(firmId)
       .collection('clients').doc(clientId)
       .collection('documents').doc(documentId);
     const now = admin.firestore.FieldValue.serverTimestamp();
+
+    // 4a. Files are ready → pull the executed PDF back into the vault.
+    if (eventType === 'signature_request_downloadable') {
+      try {
+        await storeSignedPdf(
+          apiKey,
+          payload.signature_request?.signature_request_id ?? '',
+          firmId, clientId, documentId,
+          payload.signature_request?.title ?? 'Document',
+          docRef,
+        );
+      } catch (err) {
+        console.error('[dropboxSignWebhook] Failed to store signed PDF:', err);
+        // Ack so Dropbox Sign stops retrying; logged for manual follow-up.
+      }
+      res.status(200).send(WEBHOOK_ACK);
+      return;
+    }
+
+    // 4b. Map the event → status and apply (idempotent, monotonic).
+    const newStatus = EVENT_STATUS[eventType];
+    if (!newStatus) {
+      // Authentic but not a status we track (e.g. remind) — ack.
+      res.status(200).send(WEBHOOK_ACK);
+      return;
+    }
+
+
     const tsField: Record<string, string> = {
       viewed: 'viewedAt', signed: 'signedAt', declined: 'declinedAt',
     };

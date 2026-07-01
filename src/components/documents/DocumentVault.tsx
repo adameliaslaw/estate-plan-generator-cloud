@@ -27,12 +27,15 @@ import {
   FileText,
   Eye,
   FileSignature,
+  FileCheck,
   Loader2,
   AlertCircle,
   Wand2,
   History,
   CloudCheck,
 } from 'lucide-react';
+import { getStorage, ref as storageRef, getDownloadURL } from 'firebase/storage';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -263,6 +266,33 @@ function RowActions({ doc, firmId, clientId, onPreview, onReview, onApprove, onD
           </TooltipTrigger>
           <TooltipContent>Send for E-Signature</TooltipContent>
         </Tooltip>
+
+        {/* Download signed document (once Dropbox Sign returns the executed PDF) */}
+        {doc.eSignature?.signedStoragePath && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-emerald-600 hover:text-emerald-800"
+                onClick={async () => {
+                  try {
+                    const url = await getDownloadURL(
+                      storageRef(getStorage(), doc.eSignature!.signedStoragePath!),
+                    );
+                    window.open(url, '_blank', 'noopener');
+                  } catch (err) {
+                    console.error('[DocumentVault] signed-doc download failed:', err);
+                    toast.error('Could not open the signed document.');
+                  }
+                }}
+              >
+                <FileCheck className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Download signed document</TooltipContent>
+          </Tooltip>
+        )}
 
         {/* AI Review */}
         <Tooltip>

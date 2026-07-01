@@ -977,6 +977,10 @@ export interface Document {
     viewedAt?: Timestamp;
     signedAt?: Timestamp;
     declinedAt?: Timestamp;
+    // The executed PDF (signed document + audit page) pulled back into Storage
+    // once Dropbox Sign reports it downloadable.
+    signedStoragePath?: string;
+    signedFileName?: string;
   };
 
   // Review
