@@ -4,6 +4,23 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-01 (truth-in-status frontend cluster: CR/CS/CW shipped; e-sign = wire a real provider, PLANNING NEXT)
+
+**TL;DR — 3 truth-in-status frontend fixes (CR, CS, CW) shipped + merged (#71, `b01370e`); hosting deploy auto-running (green CI path). CU (e-sign) escalated to a real-provider integration per Adam — that's the next work, and it needs Adam's provider choice + credentials before code.**
+
+**Session start (clean):** `main` in sync at `9f3634c`; **83/83 functions ACTIVE, 0 FAILED** (prod healthy). No open criticals. Issue #64 (CI functions-deploy red) is still the cosmetic build-hash churn — deliberately left to clear over normal deploys (Adam's 6/30 decision); untouched this session. Deliberately picked **frontend-only** work so it deploys clean (hosting CI green) instead of tripping the functions churn.
+
+**✅ Shipped (#71, merged, hosting deploy in progress):**
+- **CR — `SingleDocumentGenerator`**: direct callable result AND the Firestore polling fallback both reported "saved to the Document Vault" ignoring status. A gen that ran but failed the vault save is written `status:'error'` (backend E) yet showed the green screen. Now both paths gate on `result.success`/`status!=='error'` → new `markFailure` (shares the settle guard) shows an honest failure.
+- **CS — `FlexDocumentGenerator`**: `markSuccess` now routes an error-status doc to the error phase instead of "added to the Document Vault"; polling fallback no longer hardcodes `success:true`.
+- **CW — `CommentsPanel`** (open half): reply `createdAt` was `null` forever (`serverTimestamp()` can't live inside an `arrayUnion` element) → every reply rendered "just now". Now stamps client-side `Timestamp.now()`.
+- Verify: `tsc -b` clean, `vite build` clean, **634 tests pass**, no new lint warnings.
+
+**🔴 NEXT / OPEN — CU (e-sign): wire a real provider (Adam's decision 2026-07-01).** `functions/src/esign-service.ts` is an explicit **mock** — it writes an activity-log entry and returns a fake `sig_req_${Date.now()}` with `success:true`, but **sends no email**. The UI (`ESignatureDialog`, live in `DocumentVault`) then claims *"The signature request has been emailed to {client}"* — a false delivery claim on a legal doc. The audit's literal fix (gate on `res.success`) is a no-op because the backend always returns `success:true`. Adam chose to integrate a real provider instead of relabeling/disabling.
+- **BLOCKED ON ADAM before code:** (1) **which provider** — Dropbox Sign (ex-HelloSign) vs DocuSign (different APIs, OAuth, pricing); (2) an **account + API key** (goes in Secrets Manager, not the firm doc); (3) signing model — email-based vs embedded.
+- **Scope (multi-session):** real REST call in `esign-service.ts` (currently v1 `onCall`), new secret(s), a **webhook function** for status callbacks (signed/declined/viewed) to update the doc + activity trail, and a functions deploy — **which hits the CI churn caveat** (use the single-function direct-deploy pattern from #70 if needed: cancel the CI run before its deploy step, wait for the op-queue to settle to all-ACTIVE, then `firebase deploy --only functions:<name>`). Plan-first (real coding + new callable/webhook + secrets).
+
+
 ## 📍 SESSION — 2026-06-30 (CI chunked-deploy + drain; convergence still unsolved — DECISION: let it resolve naturally)
 
 **TL;DR — #69 (chunked deploy) + #70 (BM security fix) both LIVE; prod is healthy. The one open item is cosmetic CI-green, deliberately left to resolve over normal deploys.**
