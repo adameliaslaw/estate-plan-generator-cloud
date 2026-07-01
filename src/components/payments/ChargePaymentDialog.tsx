@@ -229,6 +229,11 @@ export function ChargePaymentDialog({
   const [processing, setProcessing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Whether the gateway reported the funds as captured/settled vs merely
+  // authorized. AffiniPay charges are typically AUTHORIZED and auto-captured on
+  // a daily batch, so an authorized charge is not a failure — but we must not
+  // claim it was "processed/charged" until it's actually captured (finding DG).
+  const [captured, setCaptured] = useState(false);
 
   // References
   const hostedFieldsRef = useRef<HostedFieldsInstance | null>(null);
@@ -358,6 +363,7 @@ export function ChargePaymentDialog({
     setSelectedClientId(fixedClientId ?? '');
     setShowConfirm(false);
     setShowSuccess(false);
+    setCaptured(false);
     setSdkReady(false);
     setSdkError(null);
     setExpMonth('');
@@ -480,7 +486,15 @@ export function ChargePaymentDialog({
       const chargeResult = result.data;
 
       if (chargeResult.success) {
-        toast.success('Payment processed successfully!');
+        const isCaptured = ['completed', 'captured', 'settled', 'paid'].includes(
+          (chargeResult.status ?? '').toLowerCase(),
+        );
+        setCaptured(isCaptured);
+        toast.success(
+          isCaptured
+            ? 'Payment processed successfully!'
+            : 'Payment authorized — it will be captured shortly.',
+        );
         setShowSuccess(true);
       } else {
         toast.error(
@@ -614,11 +628,21 @@ export function ChargePaymentDialog({
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </div>
             <h3 className="text-lg font-semibold text-[#1a365d]">
-              Payment Processed!
+              {captured ? 'Payment Processed!' : 'Payment Authorized'}
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              ${(parseFloat(amountStr) || 0).toFixed(2)} was charged
-              successfully to {effectiveClientName || 'the client'}.
+              {captured ? (
+                <>
+                  ${(parseFloat(amountStr) || 0).toFixed(2)} was charged
+                  successfully to {effectiveClientName || 'the client'}.
+                </>
+              ) : (
+                <>
+                  ${(parseFloat(amountStr) || 0).toFixed(2)} was authorized on{' '}
+                  {effectiveClientName || 'the client'}&apos;s account. Funds are
+                  captured on AffiniPay&apos;s next daily batch.
+                </>
+              )}
             </p>
             <Button className="mt-6" onClick={handleClose}>
               Done
