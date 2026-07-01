@@ -10,7 +10,15 @@ Items requiring human action or decisions before the next agent session can proc
 
 **Session start (clean):** `main` in sync at `9f3634c`; **83/83 functions ACTIVE, 0 FAILED** (prod healthy). No open criticals. Issue #64 (CI functions-deploy red) is still the cosmetic build-hash churn — deliberately left to clear over normal deploys (Adam's 6/30 decision); untouched this session. Deliberately picked **frontend-only** work so it deploys clean (hosting CI green) instead of tripping the functions churn.
 
-**✅ Shipped (#71, merged, hosting deploy in progress):**
+**✅ Shipped #2 (#72, merged `6479ddf`, hosting deploy auto-running):** rest of the T13 truth-in-status cluster, frontend-only —
+- **CT** (`GenerateDocumentsButton`): full-package (`generateAll`) path only errored on 0-generated; a partial result still claimed "All documents have been drafted." Now shows "Documents Partially Generated" + "N of M drafted, K failed" + red badge on error rows.
+- **DG** (`ChargePaymentDialog`): "Payment Processed!" for any `success:true` ignored capture status. Now distinguishes captured/settled vs authorized-only (AffiniPay auto-captures daily → authorized isn't a failure, but isn't "processed" either).
+- **DW** (`SettingsPage`): LawPay "Test Connection" faked success via an 800ms setTimeout. Now a neutral info toast; a real LawPay test callable is deferred (needs a functions deploy → churn).
+- Verify: tsc -b + build clean, **634 tests**, eslint clean. Ledger rows CT/DG/DW marked fixed.
+
+**Truth-in-status (T13) status:** CR/CS/CW (#71) + CT/DG/DW (#72) done. **Remaining in the cluster:** CU (e-sign — planned above, build next session). Non-T13 open frontend cleanups still available: CV (regenerate stale-content data-loss — DocumentEditor), CX (AttorneyReviewGate missing `reviewedAt`), CY (TipTap onUpdate stale-closure → duplicate versionNumber), DA (dead regenerate action).
+
+**✅ Shipped (#71, merged, hosting deployed green):**
 - **CR — `SingleDocumentGenerator`**: direct callable result AND the Firestore polling fallback both reported "saved to the Document Vault" ignoring status. A gen that ran but failed the vault save is written `status:'error'` (backend E) yet showed the green screen. Now both paths gate on `result.success`/`status!=='error'` → new `markFailure` (shares the settle guard) shows an honest failure.
 - **CS — `FlexDocumentGenerator`**: `markSuccess` now routes an error-status doc to the error phase instead of "added to the Document Vault"; polling fallback no longer hardcodes `success:true`.
 - **CW — `CommentsPanel`** (open half): reply `createdAt` was `null` forever (`serverTimestamp()` can't live inside an `arrayUnion` element) → every reply rendered "just now". Now stamps client-side `Timestamp.now()`.
