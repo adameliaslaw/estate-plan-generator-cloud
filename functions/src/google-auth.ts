@@ -81,6 +81,8 @@ export const exchangeGoogleAuthCode = onCall(
                 'googleCalendar.accessToken': tokenData.access_token,
                 'googleCalendar.refreshToken': tokenData.refresh_token,
                 'googleCalendar.tokenExpiry': newExpiry,
+                'googleCalendar.needsReauth': admin.firestore.FieldValue.delete(),
+                'googleCalendar.needsReauthAt': admin.firestore.FieldValue.delete(),
                 'updatedBy': request.auth.uid,
                 'updatedAt': admin.firestore.FieldValue.serverTimestamp()
             });
