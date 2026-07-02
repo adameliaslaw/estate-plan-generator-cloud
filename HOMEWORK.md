@@ -4,6 +4,33 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🚩 START HERE NEXT SESSION — CI functions-deploy root-cause fix (issue #64)
+
+**TL;DR — Last session (2026-07-02) shipped BV (OAuth needs-reauth, #82, live) and four CI-workflow patches (#81–#84) that tried to make the functions-deploy *survive* a symptom. Prod is healthy the whole time; the only open thing is CI-green + a 2.5h deploy that should be 10 min. STOP patching the symptom. Fix the disease.**
+
+**The disease (diagnosed, not yet fixed):** Firebase decides redeploy-vs-skip per function by hashing the uploaded source bundle. That hash is unstable across CI runs → all ~80 functions look changed every run → we mass-deploy 80 CF v2 functions (~2.5h) → mass-deploying 80 at once trips a rotating burst of 409 "unable to queue the operation". Problem 2 is *caused by* problem 1. Fix the hash and the mass deploy, the runtime, and the 409 lottery all vanish — and PRs #81–#84's machinery (drain, straggler pass, patient retries) becomes deletable dead code.
+
+**Prime suspect:** the source tarball firebase uploads includes file **mtimes**, and `git checkout` + `npm ci` stamp fresh mtimes every CI run → identical content, different tarball, different hash. This explains why even a plain *rerun* re-updates all 80 instead of skipping.
+
+**Go-forward plan (investigate first, highest-leverage first):**
+1. Confirm whether firebase-tools hashes source *content* or the *archive* (mtimes). Test in ONE `workflow_dispatch` run: normalize mtimes before deploy (`find functions/lib functions/src -exec touch -t 200001010000 {} +`, or `SOURCE_DATE_EPOCH`) and check the deploy reports "Skipped (No changes detected)" for unchanged functions.
+2. **#1 (best):** if that stabilizes the hash, collapse the workflow back to a plain `firebase deploy --only functions` and DELETE the batch/drain/straggler/patient-retry machinery (~150 lines). Normal merges → ~10 min, only changed functions.
+3. **#2 (fallback):** if the hash stays stubborn, diff-targeted deploy — compute changed functions from the git diff (map shared modules like `ai-client.ts` / `client-data-serializer.ts` to their dependents) and deploy only that set.
+4. **#3 (only if forced):** split the 80 functions across multiple Firebase codebases.
+
+**Guardrails (learned the hard way — non-negotiable):**
+- Never-Break CI file → **Adam's explicit sign-off on the diff before merge.**
+- **Never cancel a functions-deploy run mid-deploy** — orphans GCP ops that 409-poison later runs. `concurrency: cancel-in-progress: false` stays.
+- Prod is healthy/current throughout — CI-green + speed fix only; nothing user-facing is broken.
+- Verify workflow bash against the mock-harness pattern from last session before merging.
+- After the first red, if the fix didn't work, **stop and re-diagnose — do not iterate retry knobs.** (That's the mistake that made last session 13 hours.)
+
+**Definition of done:** a functions merge deploys only its changed functions, finishes green in ~10 min, issue #64 closed, this section removed.
+
+**Meta-lesson:** after the first red deploy, the correct move was "why does everything look changed?" — not another retry knob. Ask the root-cause question first next time.
+
+---
+
 ## 📍 SESSION — 2026-07-01 (truth-in-status frontend cluster: CR/CS/CW shipped; e-sign = wire a real provider, PLANNING NEXT)
 
 **TL;DR — 3 truth-in-status frontend fixes (CR, CS, CW) shipped + merged (#71, `b01370e`); hosting deploy auto-running (green CI path). CU (e-sign) escalated to a real-provider integration per Adam — that's the next work, and it needs Adam's provider choice + credentials before code.**
