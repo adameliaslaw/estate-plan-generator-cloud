@@ -29,21 +29,27 @@ on:
   # Manual trigger for ad-hoc deploys (e.g. after rotating a secret)
   workflow_dispatch:
 
-# Cancel in-flight deploys when a newer commit arrives
+# QUEUE (never cancel) deploys. Cancelling a run mid-deploy does NOT stop the
+# GCP operations it already started — on 2026-06-30 cancelled runs left orphaned
+# in-flight ops that 409-poisoned every subsequent deploy for hours. With
+# cancel-in-progress:false a newer push waits for the running deploy to finish;
+# GitHub keeps only the newest PENDING run per group (superseded pending runs
+# are dropped before they start any GCP work — harmless).
 concurrency:
   group: functions-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 90 min headroom for the ONE-TIME full convergence: when every function is
+    # 5.5h headroom for the ONE-TIME full convergence: when every function is
     # churned (local-build vs CI-build hash mismatch), all ~80 deploy in batches
-    # of 5, and each batch now waits for the op-queue to drain before the next
-    # (see the deploy step). Normal pushes change a few functions → batches skip
-    # the unchanged ones with no drain wait → ~10 min. The high ceiling only
-    # costs wall-clock on the rare full-convergence run.
-    timeout-minutes: 90
+    # of 5, and each batch waits for the previous batch's LROs to fully finalize
+    # (not just serve ACTIVE) before starting — worst case ~9 min/batch × 16
+    # batches ≈ 2.5-3h. Normal pushes change a few functions → batches skip the
+    # unchanged ones and the ops-drain returns instantly (0 in-flight) → fast.
+    # The high ceiling only costs wall-clock on the rare full-convergence run.
+    timeout-minutes: 330
     # contents:read for checkout; issues:write so the failure handler below can
     # open/append a GitHub issue. Deploy auth is via google-github-actions/auth
     # (a SA key), NOT GITHUB_TOKEN, so this restriction doesn't affect the deploy.
@@ -126,56 +132,115 @@ jobs:
         # The first chunked rework (#65) deployed in batches of 5 but fired them
         # back-to-back, so each batch 409'd within ~3s — the PREVIOUS batch's
         # operations were still in flight on the region's op-queue (its run timed
-        # out at 60 min, converging only ~22 of 80). Manual convergence had
-        # worked only because it was human-paced. So the real fix is to PACE the
-        # batches: drain() polls `firebase functions:list` until no function is
-        # left in a non-ACTIVE (DEPLOYING) state before starting the next batch.
+        # out at 60 min, converging only ~22 of 80). The second rework (#69)
+        # paced batches with a drain() that polled `firebase functions:list`
+        # until every function showed ACTIVE — still 409'd, because a v2 update
+        # operation keeps FINALIZING for minutes after the function already
+        # serves ACTIVE (confirmed from the 2026-06-30 run logs). Manual
+        # convergence only ever worked because humans paced batches minutes
+        # apart — i.e. past the invisible finalization tail.
+        #
+        # So drain() now polls the ACTUAL long-running operations
+        # (cloudfunctions.googleapis.com/v2 .../operations?filter=done=false)
+        # until ZERO are in flight, via gcloud print-access-token + curl
+        # (gcloud is preinstalled on ubuntu-latest; the SA key from auth@v3 is
+        # activated below — print-access-token re-mints, so no 1h-token expiry
+        # on a long convergence run). If the ops query is unavailable
+        # (permission/API change), drain falls back to the old ACTIVE-state
+        # poll — no worse than #69; the per-batch retries absorb any 409s.
         # Now:
         #   1. deploy firestore:rules + storage once,
         #   2. redeploy the deployed default-codebase functions in batches of 5,
-        #      draining the op-queue before every batch + retry,
+        #      draining the op-queue (LRO done) before every batch + retry,
         #   3. run a final full `firebase deploy --only functions` — catches
         #      brand-new functions and deletes removed ones; everything converged
         #      in step 2 is unchanged → skipped → no storm. This final deploy is
         #      the authoritative gate: we FAIL the job on any per-function
         #      failure, which trips the "Notify on failure" issue below.
-        # Both enumeration and the drain poll use `firebase functions:list`
-        # (already authed via GOOGLE_APPLICATION_CREDENTIALS — no gcloud).
+        # Enumeration still uses `firebase functions:list` (authed via
+        # GOOGLE_APPLICATION_CREDENTIALS).
         run: |
           # GitHub runs this with `bash -e`; disable errexit so a failing deploy
           # attempt doesn't abort before we read its exit code and retry.
           set +e -uo pipefail
           PROJECT=estate-plan-generator
+          REGION=us-east1
           CHUNK_SIZE=5
           RUNNER_TEMP="${RUNNER_TEMP:-/tmp}"
           FAIL_RE='failed to (update|create) function|unable to queue the operation'
 
           # Small node helpers, written to files to avoid inline-quoting hell.
-          # count-busy: number of functions NOT in ACTIVE state (op in flight).
+          # count-busy: number of functions NOT in ACTIVE state (fallback drain).
           cat > "$RUNNER_TEMP/count-busy.js" <<'JS'
           let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s).result||[];process.stdout.write(String(r.filter(f=>f.state&&f.state!=='ACTIVE').length));}catch(e){process.stdout.write('ERR');}});
+          JS
+          # count-inflight: number of not-done LROs in a v2 ListOperationsResponse.
+          cat > "$RUNNER_TEMP/count-inflight.js" <<'JS'
+          let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const o=JSON.parse(s).operations||[];process.stdout.write(String(o.filter(op=>op.done!==true).length));}catch(e){process.stdout.write('ERR');}});
           JS
           # list-default: ids of the `default`-codebase functions, one per line.
           cat > "$RUNNER_TEMP/list-default.js" <<'JS'
           let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s).result||[];for(const f of r){if(f.codebase==='default'&&f.id)console.log(f.id);}}catch(e){}});
           JS
 
-          # Wait until the regional v2 op-queue has drained (no function mid-deploy)
-          # so the next batch doesn't 409. Caps at 6 min, then proceeds.
+          # gcloud (preinstalled on ubuntu-latest) mints the access tokens for
+          # the ops-drain; auth@v3 already wrote the SA key file.
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet \
+            || echo "⚠️ gcloud activation failed — drain will use the state-based fallback."
+
+          # Count of in-flight (done=false) Cloud Functions v2 LROs, or ERR.
+          # An empty ListOperationsResponse {} parses to 0 (all done).
+          inflight_ops() {
+            local token
+            token=$(gcloud auth print-access-token 2>/dev/null) || { echo ERR; return; }
+            curl -sf -m 30 -H "Authorization: Bearer $token" \
+              "https://cloudfunctions.googleapis.com/v2/projects/$PROJECT/locations/$REGION/operations?filter=done%3Dfalse&pageSize=100" \
+              | node "$RUNNER_TEMP/count-inflight.js"
+          }
+
+          # Wait until the regional v2 op-queue has drained so the next batch
+          # doesn't 409. Primary signal: ZERO in-flight LROs — this catches the
+          # minutes-long finalization tail AFTER a function already serves
+          # ACTIVE (the gap that broke the #69 state-based drain). Fallback on
+          # ops-query failure: the old ACTIVE-state poll. Both cap and then
+          # proceed anyway (the deploy retries absorb a 409 if a cap was short).
           drain() {
-            local waited=0 max=360 busy
+            local waited=0 max=900 ops busy
+            while [ "$waited" -lt "$max" ]; do
+              ops=$(inflight_ops)
+              if [ "$ops" = "ERR" ] || [ -z "$ops" ]; then
+                sleep 5
+                ops=$(inflight_ops)   # one retry — transient token/API hiccup
+              fi
+              if [ "$ops" = "ERR" ] || [ -z "$ops" ]; then
+                echo "   ⚠️ operations API unavailable — falling back to ACTIVE-state drain."
+                break
+              fi
+              if [ "$ops" = "0" ]; then
+                [ "$waited" -gt 0 ] && echo "   op-queue drained after ${waited}s."
+                return 0
+              fi
+              echo "   draining op-queue: $ops operation(s) still in flight (${waited}s)…"
+              sleep 20; waited=$((waited + 20))
+            done
+            if [ "$waited" -ge "$max" ]; then
+              echo "   ⚠️ drain cap (${max}s) reached; proceeding anyway."
+              return 0
+            fi
+            # Fallback: state-based poll (pre-LRO behavior — better than nothing).
+            waited=0; max=360
             while [ "$waited" -lt "$max" ]; do
               busy=$(firebase functions:list --project "$PROJECT" --json 2>/dev/null \
                 | node "$RUNNER_TEMP/count-busy.js")
               if [ "$busy" = "0" ]; then
-                [ "$waited" -gt 0 ] && echo "   op-queue drained after ${waited}s."
+                [ "$waited" -gt 0 ] && echo "   op-queue drained (state-based) after ${waited}s."
                 return 0
               fi
               [ "$busy" = "ERR" ] || [ -z "$busy" ] && busy="?"
-              echo "   draining op-queue: $busy function(s) still deploying (${waited}s)…"
+              echo "   draining (state-based): $busy function(s) still deploying (${waited}s)…"
               sleep 20; waited=$((waited + 20))
             done
-            echo "   ⚠️ drain cap (${max}s) reached; proceeding anyway."
+            echo "   ⚠️ state-drain cap (${max}s) reached; proceeding anyway."
             return 0
           }
 
