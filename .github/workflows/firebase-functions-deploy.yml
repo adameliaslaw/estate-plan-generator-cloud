@@ -249,12 +249,14 @@ jobs:
           # per-function failure lines. Non-zero if it can't converge in $tries.
           deploy_with_retry() {
             local label="$1" targets="$2" tries="$3" i=1 code fails
+            LAST_DEPLOY_CODE=1  # exposed for the straggler pass (exit of last attempt)
             while [ "$i" -le "$tries" ]; do
               drain
               echo "::group::deploy $label — attempt $i/$tries"
               firebase deploy --only "$targets" \
                 --project "$PROJECT" --non-interactive --force 2>&1 | tee "deploy-$label-$i.log"
               code=${PIPESTATUS[0]}
+              LAST_DEPLOY_CODE=$code
               echo "::endgroup::"
               fails=$(grep -ciE "$FAIL_RE" "deploy-$label-$i.log" || true)
               if [ "$code" -eq 0 ] && [ "$fails" -eq 0 ]; then
@@ -296,11 +298,56 @@ jobs:
           # 3. Final full deploy — catches new functions, deletes removed ones,
           #    and is the authoritative convergence gate. After step 2 the
           #    existing functions are unchanged (same build) → skipped → no storm.
-          deploy_with_retry "final" "functions,firestore:rules,storage" 5 || {
-            echo "❌ Final full deploy did NOT converge — functions may be stale. Failing the job."
-            echo "   Re-run this workflow, or small-batch deploy the stragglers locally:"
-            echo "   firebase deploy --only functions:default:a,functions:default:b (≤5 at a time)."
-            exit 1; }
+          #
+          # 4. STRAGGLER PASS (2026-07-02). Empirically (runs #95/#96), every
+          #    mass update of ~80 functions gets EXACTLY ONE random 409 — a
+          #    different function each attempt, 10/10 attempts across both
+          #    convergence runs — so "retry the full deploy" can never reach
+          #    zero failures. Single-function deploys, by contrast, succeed
+          #    essentially always (the burst 409 only hits mass updates; it was
+          #    also the reliable manual pattern for weeks). So when the final
+          #    deploy fails on a SMALL tail (≤5 functions), parse exactly which
+          #    functions failed from the last attempt's log and deploy each one
+          #    individually. Anything larger still fails loud — a big failure
+          #    set means something real is broken, not burst-409 noise.
+          if ! deploy_with_retry "final" "functions,firestore:rules,storage" 5; then
+            # Parse failed function names from the LAST final attempt; the log is
+            # tee'd raw (may carry ANSI codes), so keep only valid name chars.
+            mapfile -t STRAGGLERS < <(grep -hoE 'failed to (update|create) function [^ ]+' "deploy-final-5.log" \
+              | awk '{print $NF}' | sed 's|.*/functions/||' | grep -oE '^[A-Za-z0-9_-]+' | sort -u)
+            in_default() { local f; for f in "${FUNCS[@]}"; do [ "$f" = "$1" ] && return 0; done; return 1; }
+            # Only take the straggler shortcut when firebase itself exited 0 on the
+            # last attempt — per-function 409s are warning-level (exit stays 0). A
+            # non-zero exit means some OTHER failure (e.g. a failed delete or a
+            # rules error) that targeted redeploys would mask. Fail loud instead.
+            if [ "${LAST_DEPLOY_CODE:-1}" -ne 0 ]; then
+              echo "❌ Final deploy exited non-zero (${LAST_DEPLOY_CODE:-?}) — not burst-409 straggler noise. Failing the job."
+              exit 1
+            fi
+            if [ "${#STRAGGLERS[@]}" -ge 1 ] && [ "${#STRAGGLERS[@]}" -le 5 ]; then
+              echo "Final deploy left ${#STRAGGLERS[@]} straggler(s): ${STRAGGLERS[*]} — converging individually."
+              straggler_failed=0
+              for fn in "${STRAGGLERS[@]}"; do
+                if ! in_default "$fn"; then
+                  echo "❌ Straggler '$fn' is not a known default-codebase function — cannot target it safely."
+                  straggler_failed=1; continue
+                fi
+                deploy_with_retry "straggler-$fn" "functions:default:$fn" 3 || {
+                  echo "❌ Straggler '$fn' failed even as a single-function deploy."
+                  straggler_failed=1; }
+              done
+              if [ "$straggler_failed" -ne 0 ]; then
+                echo "❌ Straggler pass did NOT converge — functions may be stale. Failing the job."
+                exit 1
+              fi
+              echo "✅ Straggler pass converged the tail; prod matches this build."
+            else
+              echo "❌ Final full deploy did NOT converge (${#STRAGGLERS[@]} failures — too many for the straggler pass)."
+              echo "   Re-run this workflow, or small-batch deploy the stragglers locally:"
+              echo "   firebase deploy --only functions:default:a,functions:default:b (≤5 at a time)."
+              exit 1
+            fi
+          fi
 
           if [ "$batch_warned" -ne 0 ]; then
             echo "ℹ️ One or more batches needed the final deploy to converge, but the final"
