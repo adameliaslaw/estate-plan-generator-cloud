@@ -248,7 +248,7 @@ jobs:
           # attempt so batches don't 409-cascade. Converged = exit 0 AND zero
           # per-function failure lines. Non-zero if it can't converge in $tries.
           deploy_with_retry() {
-            local label="$1" targets="$2" tries="$3" i=1 code fails
+            local label="$1" targets="$2" tries="$3" pause="${4:-20}" i=1 code fails
             LAST_DEPLOY_CODE=1  # exposed for the straggler pass (exit of last attempt)
             while [ "$i" -le "$tries" ]; do
               drain
@@ -265,7 +265,7 @@ jobs:
               fi
               echo "⚠️ $label attempt $i did not converge (firebase exit=$code, per-function failures=$fails)."
               i=$((i + 1))
-              [ "$i" -le "$tries" ] && { echo "Retrying after drain…"; sleep 20; }
+              [ "$i" -le "$tries" ] && { echo "Retrying after ${pause}s pause + drain…"; sleep "$pause"; }
             done
             return 1
           }
@@ -332,7 +332,12 @@ jobs:
                   echo "❌ Straggler '$fn' is not a known default-codebase function — cannot target it safely."
                   straggler_failed=1; continue
                 fi
-                deploy_with_retry "straggler-$fn" "functions:default:$fn" 3 || {
+                # 6 tries spaced ~4 min: run #97 (2026-07-02) showed the invisible
+                # per-function blocker behind a burst 409 can outlive the region
+                # ops-queue drain AND persist 11+ minutes (createFirmUser) — the
+                # old 3 tries × ~20s spanned only ~8 min and lost the race. Every
+                # observed blocker cleared well within this ~25-minute window.
+                deploy_with_retry "straggler-$fn" "functions:default:$fn" 6 240 || {
                   echo "❌ Straggler '$fn' failed even as a single-function deploy."
                   straggler_failed=1; }
               done
