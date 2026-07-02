@@ -47,6 +47,9 @@ interface GoogleDriveTokens {
   refreshToken: string;
   tokenExpiry?: number;
   rootFolderId?: string;
+  /** Set when Google returns invalid_grant (refresh token revoked/expired).
+   *  The document-sync trigger skips flagged firms until the firm reconnects. */
+  needsReauth?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +119,17 @@ async function refreshDriveTokenIfNeeded(
     const err = (await response.json()) as Record<string, string>;
     console.error('[refreshDriveToken] Google error:', JSON.stringify(err));
     if (err.error === 'invalid_grant') {
+      // Persist the revoked state so the document-sync trigger stops retrying
+      // on every write and the UI can show a re-auth banner. Cleared on
+      // reconnect (connectGoogleDrive) or on the next successful refresh.
+      try {
+        await db.doc(`firms/${firmId}`).update({
+          'googleDrive.needsReauth': true,
+          'googleDrive.needsReauthAt': admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (updateErr) {
+        console.error(`[refreshDriveToken] Failed to persist needsReauth for firm ${firmId}:`, updateErr);
+      }
       throw new functions.https.HttpsError(
         'unauthenticated',
         'Google Drive authorization revoked. Please reconnect in Settings → Integrations.',
@@ -133,6 +147,9 @@ async function refreshDriveTokenIfNeeded(
   await db.doc(`firms/${firmId}`).update({
     'googleDrive.accessToken': access_token,
     'googleDrive.tokenExpiry': newExpiry,
+    // A working refresh proves the grant is valid — clear any stale flag.
+    'googleDrive.needsReauth': admin.firestore.FieldValue.delete(),
+    'googleDrive.needsReauthAt': admin.firestore.FieldValue.delete(),
   });
 
   return access_token as string;
@@ -445,6 +462,8 @@ export const connectGoogleDrive = onCall(
         'googleDrive.accessToken': tokenData.access_token,
         'googleDrive.refreshToken': tokenData.refresh_token,
         'googleDrive.tokenExpiry': newExpiry,
+        'googleDrive.needsReauth': admin.firestore.FieldValue.delete(),
+        'googleDrive.needsReauthAt': admin.firestore.FieldValue.delete(),
         updatedBy: request.auth.uid,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -517,6 +536,10 @@ export const onDocumentWrittenSyncToDrive = onDocumentWritten(
     }
 
     if (!tokens.connected) return;
+    if (tokens.needsReauth) {
+      console.log(`[driveSyncTrigger] firm=${firmId} skipped — Google Drive needs re-authorization (revoked grant)`);
+      return;
+    }
 
     console.log(`[driveSyncTrigger] Syncing ${documentId} to Drive for firm ${firmId}`);
 

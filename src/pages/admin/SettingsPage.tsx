@@ -188,6 +188,8 @@ interface FirmSettings {
     accessToken?: string;
     refreshToken?: string;
     tokenExpiry?: number;
+    /** Backend sets this when Google reports the grant revoked (invalid_grant). */
+    needsReauth?: boolean;
   };
 
   // Google Drive OAuth
@@ -197,6 +199,8 @@ interface FirmSettings {
     refreshToken?: string;
     tokenExpiry?: number;
     rootFolderId?: string;
+    /** Backend sets this when Google reports the grant revoked (invalid_grant). */
+    needsReauth?: boolean;
   };
 
   // Security
@@ -741,6 +745,7 @@ export default function SettingsPage() {
         'googleCalendar.refreshToken': '',
         'googleCalendar.tokenExpiry': 0,
         'googleCalendar.email': '',
+        'googleCalendar.needsReauth': false,
         updatedBy: userProfile?.uid ?? '',
       });
       toast.success('Google Calendar disconnected.');
@@ -790,6 +795,7 @@ export default function SettingsPage() {
         'googleDrive.refreshToken': '',
         'googleDrive.tokenExpiry': 0,
         'googleDrive.rootFolderId': '',
+        'googleDrive.needsReauth': false,
         updatedBy: userProfile?.uid ?? '',
       });
       toast.success('Google Drive disconnected.');
@@ -2046,11 +2052,40 @@ export default function SettingsPage() {
                           Sync appointments and deadlines with Google Calendar.
                         </CardDescription>
                       </div>
-                      <StatusBadge connected={Boolean(firmDoc?.googleCalendar?.connected)} />
+                      <StatusBadge connected={Boolean(firmDoc?.googleCalendar?.connected) && !firmDoc?.googleCalendar?.needsReauth} />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {firmDoc?.googleCalendar?.connected ? (
+                    {firmDoc?.googleCalendar?.connected && firmDoc.googleCalendar.needsReauth ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-amber-800">Authorization expired</p>
+                            <p className="text-xs text-amber-600">
+                              Google revoked the connection — calendar sync is paused until you reconnect.
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDisconnectGoogleCalendar}
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                          >
+                            <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                            Disconnect
+                          </Button>
+                        </div>
+                        {GOOGLE_CLIENT_ID && (
+                          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                            <GoogleLoginButton
+                              onSuccess={handleExchangeAuthCode}
+                              onError={() => toast.error('Google login popup failed.')}
+                              disabled={connectingGoogle}
+                            />
+                          </GoogleOAuthProvider>
+                        )}
+                      </div>
+                    ) : firmDoc?.googleCalendar?.connected ? (
                       <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3">
                         <div>
                           <p className="text-sm font-medium text-green-800">Connected</p>
@@ -2112,11 +2147,40 @@ export default function SettingsPage() {
                           Auto-sync vault documents to Google Drive as PDFs.
                         </CardDescription>
                       </div>
-                      <StatusBadge connected={Boolean(firmDoc?.googleDrive?.connected)} />
+                      <StatusBadge connected={Boolean(firmDoc?.googleDrive?.connected) && !firmDoc?.googleDrive?.needsReauth} />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {firmDoc?.googleDrive?.connected ? (
+                    {firmDoc?.googleDrive?.connected && firmDoc.googleDrive.needsReauth ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-amber-800">Authorization expired</p>
+                            <p className="text-xs text-amber-600">
+                              Google revoked the connection — document sync is paused until you reconnect.
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDisconnectGoogleDrive}
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                          >
+                            <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                            Disconnect
+                          </Button>
+                        </div>
+                        {GOOGLE_CLIENT_ID && (
+                          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                            <GoogleDriveLoginButton
+                              onSuccess={handleExchangeDriveAuthCode}
+                              onError={() => toast.error('Google login popup failed.')}
+                              disabled={connectingDrive}
+                            />
+                          </GoogleOAuthProvider>
+                        )}
+                      </div>
+                    ) : firmDoc?.googleDrive?.connected ? (
                       <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3">
                         <div>
                           <p className="text-sm font-medium text-green-800">Connected</p>

@@ -89,6 +89,9 @@ interface GoogleCalendarTokens {
   refreshToken: string;
   /** Epoch milliseconds when the access token expires. */
   tokenExpiry?: number;
+  /** Set when Google returns invalid_grant (refresh token revoked/expired).
+   *  The scheduled sync skips flagged firms until the firm reconnects. */
+  needsReauth?: boolean;
 }
 
 /** Shape of a Google Calendar Event resource (relevant fields). */
@@ -306,6 +309,17 @@ async function refreshAccessTokenIfNeeded(
     console.error('[refreshAccessTokenIfNeeded] Detailed Google API Error Payload:', JSON.stringify(err, null, 2));
 
     if (err.error === 'invalid_grant') {
+      // Persist the revoked state so the 5-minute cron stops retrying forever
+      // and the UI can show a re-auth banner. Cleared on reconnect
+      // (exchangeGoogleAuthCode) or on the next successful refresh.
+      try {
+        await db.doc(`firms/${firmId}`).update({
+          'googleCalendar.needsReauth': true,
+          'googleCalendar.needsReauthAt': admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (updateErr) {
+        console.error(`[refreshAccessTokenIfNeeded] Failed to persist needsReauth for firm ${firmId}:`, updateErr);
+      }
       throw new functions.https.HttpsError(
         'unauthenticated',
         'Google Calendar authorisation has been revoked. ' +
@@ -322,6 +336,9 @@ async function refreshAccessTokenIfNeeded(
   await db.doc(`firms/${firmId}`).update({
     'googleCalendar.accessToken': newAccessToken,
     'googleCalendar.tokenExpiry': newExpiry,
+    // A working refresh proves the grant is valid — clear any stale flag.
+    'googleCalendar.needsReauth': admin.firestore.FieldValue.delete(),
+    'googleCalendar.needsReauthAt': admin.firestore.FieldValue.delete(),
   });
 
   return newAccessToken;
@@ -782,6 +799,10 @@ export const syncGoogleCalendar = onSchedule(
       const firmId = firmDoc.id;
       const data = firmDoc.data();
       if (!data.googleCalendar || !data.googleCalendar.accessToken) continue;
+      if ((data.googleCalendar as GoogleCalendarTokens).needsReauth) {
+        console.log(`[syncGoogleCalendar] firm=${firmId} skipped — Google Calendar needs re-authorization (revoked grant)`);
+        continue;
+      }
 
       try {
         const tokens = data.googleCalendar as GoogleCalendarTokens;

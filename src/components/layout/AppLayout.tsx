@@ -2,6 +2,7 @@ import { type ReactNode, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, ChevronDown, LogOut, User, AlertTriangle } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
+import { GoogleReauthBanner } from './GoogleReauthBanner';
 const GlobalAiWidget = lazy(() => import('@/components/ai/GlobalAiWidget').then(m => ({ default: m.GlobalAiWidget })));
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
@@ -127,6 +128,9 @@ export function AppLayout({ children, allowedRoles, fullWidth = false }: AppLayo
 
       {/* ── Main column ── */}
       <div className="flex flex-1 flex-col overflow-hidden print:!overflow-visible">
+        {/* Google integration re-auth warning (revoked OAuth grant) */}
+        <GoogleReauthBanner />
+
         {/* Session timeout warning banner */}
         {sessionWarning && (
           <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800">
