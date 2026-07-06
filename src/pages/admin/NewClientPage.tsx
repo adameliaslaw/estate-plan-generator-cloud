@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -103,13 +103,18 @@ export default function NewClientPage() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const firmId = userProfile?.firmId ?? '';
 
-  // A client-name combobox may hand us the typed name to pre-fill (see
-  // useCreateClientRedirect). First token seeds first name, the rest last name.
+  // A client-name picker may hand us the typed name to pre-fill: same-tab
+  // redirects pass it via router state (see useCreateClientRedirect); new-tab
+  // opens (the audio-note modal) pass it via the ?name= query param.
+  // First token seeds first name, the rest last name.
   const prefillName =
-    (location.state as { prefillName?: string } | null)?.prefillName?.trim() ?? '';
+    (location.state as { prefillName?: string } | null)?.prefillName?.trim() ||
+    searchParams.get('name')?.trim() ||
+    '';
   const [prefillFirst, ...prefillRest] = prefillName ? prefillName.split(/\s+/) : [];
 
   const [values, setValues] = useState<FormValues>({

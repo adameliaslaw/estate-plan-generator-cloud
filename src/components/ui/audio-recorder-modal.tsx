@@ -52,14 +52,19 @@ export interface AudioRecorderModalProps {
         audioFileName: string;
         durationSeconds: number;
         clientId?: string;
-        newClientName?: string;
     }) => Promise<void>;
     /** If provided, locks the note to this client. Otherwise shows client selector. */
     defaultClientId?: string;
     /** Pass available clients for the selector if no default is provided. */
     clients?: { id: string; name: string }[];
     isSaving?: boolean;
-    onAddClient?: () => void;
+    /**
+     * Create a new client. Called with the name typed into the selector (if
+     * any) so the parent can open the full New Client form pre-filled. The
+     * modal stays open — a new client should surface in `clients` (live) for
+     * selection, so an in-progress recording is never lost.
+     */
+    onAddClient?: (typedName?: string) => void;
 }
 
 export function AudioRecorderModal({
@@ -69,6 +74,7 @@ export function AudioRecorderModal({
     defaultClientId,
     clients = [],
     isSaving = false,
+    onAddClient,
 }: AudioRecorderModalProps) {
     const [title, setTitle] = useState('');
     const [noteType, setNoteType] = useState<NoteType>('general');
@@ -135,16 +141,17 @@ export function AudioRecorderModal({
         setIsDropdownOpen(false);
     };
 
-    const handleCreateAndSelect = () => {
-        // Mark as "new client" — the parent will create it
-        setSelectedClientId('__new__');
+    // Open the full New Client form (in a new tab, via the parent) pre-filled
+    // with whatever was typed. Keeps this modal — and its recording — intact;
+    // the created client flows back into `clients` for selection.
+    const handleAddClient = () => {
+        onAddClient?.(clientSearch.trim() || undefined);
         setIsDropdownOpen(false);
     };
 
     const handleDone = async () => {
-        const isNewClient = selectedClientId === '__new__' && clientSearch.trim();
-        if (!selectedClientId && !isNewClient) {
-            toast.error('Please select or enter a client name.');
+        if (!selectedClientId) {
+            toast.error('Please select a client.');
             return;
         }
 
@@ -156,8 +163,7 @@ export function AudioRecorderModal({
                 audioBlob: audioRecorder.audioBlob,
                 audioFileName: audioRecorder.audioFileName,
                 durationSeconds: audioRecorder.durationSeconds,
-                clientId: isNewClient ? undefined : selectedClientId,
-                newClientName: isNewClient ? clientSearch.trim() : undefined,
+                clientId: selectedClientId,
             });
             onOpenChange(false);
         } catch (err) {
@@ -211,14 +217,9 @@ export function AudioRecorderModal({
                                 onFocus={() => setIsDropdownOpen(true)}
                                 className="border-gray-200 bg-white text-sm"
                             />
-                            {selectedClientId && selectedClientId !== '__new__' && (
+                            {selectedClientId && (
                                 <div className="absolute right-3 top-[30px] text-emerald-500">
                                     <Check className="h-4 w-4" />
-                                </div>
-                            )}
-                            {selectedClientId === '__new__' && (
-                                <div className="absolute right-3 top-[30px] text-blue-500">
-                                    <UserPlus className="h-4 w-4" />
                                 </div>
                             )}
                             {isDropdownOpen && (
@@ -239,28 +240,17 @@ export function AudioRecorderModal({
                                     {clientSearch.trim() && !exactMatch && (
                                         <button
                                             type="button"
-                                            onClick={handleCreateAndSelect}
+                                            onClick={handleAddClient}
                                             className="w-full text-left px-3 py-2 text-sm border-t border-gray-100 text-[#2b6cb0] font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
                                         >
                                             <UserPlus className="h-3.5 w-3.5" />
-                                            Create &quot;{clientSearch.trim()}&quot;
+                                            Create &quot;{clientSearch.trim()}&quot; in a new tab
                                         </button>
                                     )}
-                                    {/* Always-visible Add New Client option */}
+                                    {/* Always-visible Add New Client option — opens the full form in a new tab */}
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            if (clientSearch.trim() && !exactMatch) {
-                                                // If they've typed a name, create inline
-                                                handleCreateAndSelect();
-                                            } else {
-                                                // Focus input so user can type a new client name inline
-                                                setSelectedClientId('');
-                                                setClientSearch('');
-                                                setIsDropdownOpen(false);
-                                                setTimeout(() => clientInputRef.current?.focus(), 50);
-                                            }
-                                        }}
+                                        onClick={handleAddClient}
                                         className="w-full text-left px-3 py-2.5 text-sm border-t border-gray-100 text-[#1a365d] font-semibold hover:bg-[#ebf4ff] transition-colors flex items-center gap-2"
                                     >
                                         <UserPlus className="h-4 w-4 text-[#2b6cb0]" />
@@ -268,7 +258,7 @@ export function AudioRecorderModal({
                                     </button>
                                     {!filteredClients.length && !clientSearch.trim() && (
                                         <div className="px-3 py-2 text-center text-xs text-gray-400">
-                                            Or type a name above to create one quickly.
+                                            Type a name above, then create the full record in a new tab.
                                         </div>
                                     )}
                                 </div>
