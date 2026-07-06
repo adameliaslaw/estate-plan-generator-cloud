@@ -135,8 +135,11 @@ function clientDataChecks(
 
   if (NAME_CHECK_EXEMPT_DOC_TYPES.has(docType)) return findings;
 
-  const personalInfo = (ctx as unknown as { personalInfo?: Record<string, unknown> }).personalInfo;
-  const fullName = typeof personalInfo?.fullName === 'string' ? personalInfo.fullName.trim() : '';
+  // Names live on the aggregated context: the joined full names are on
+  // ctx.computed, and marital status is on ctx.client.personalInfo. (An
+  // earlier version read ctx.personalInfo.fullName — neither path exists,
+  // so these checks never fired.)
+  const fullName = typeof ctx.computed?.clientFullName === 'string' ? ctx.computed.clientFullName.trim() : '';
 
   if (fullName) {
     const upperFullName = fullName.toUpperCase();
@@ -150,10 +153,10 @@ function clientDataChecks(
     }
   }
 
+  const personalInfo = ctx.client?.personalInfo as Record<string, unknown> | undefined;
   const maritalStatus = typeof personalInfo?.maritalStatus === 'string' ? personalInfo.maritalStatus.toLowerCase() : '';
   if (maritalStatus === 'married') {
-    const spouseInfo = (ctx as unknown as { spouseInfo?: Record<string, unknown> }).spouseInfo;
-    const spouseName = typeof spouseInfo?.fullName === 'string' ? spouseInfo.fullName.trim() : '';
+    const spouseName = typeof ctx.computed?.spouseFullName === 'string' ? ctx.computed.spouseFullName.trim() : '';
     if (spouseName && !html.toUpperCase().includes(spouseName.toUpperCase())) {
       findings.push({
         name: 'Spouse name missing',

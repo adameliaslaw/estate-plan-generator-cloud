@@ -99,6 +99,14 @@ export interface UnifiedGenerateParams {
    * the spouse as the primary person without per-generator changes.
    */
   spouseRole?: 'client' | 'spouse';
+  /**
+   * Package tier for this generation run. The batch entry point writes the
+   * requested packageType to the client record only AFTER generation, so on a
+   * first run the stored client doc still holds the intake default. Pass it
+   * explicitly so generators see the tier the attorney actually selected;
+   * falls back to the stored value when omitted.
+   */
+  packageType?: string;
 }
 
 export interface UnifiedGenerateResult {
@@ -655,22 +663,29 @@ export async function generateDocument(
       // husband" referring to Karen — wrong. Reflip from the now-current
       // testator's gender.
       const newGender = (ctxSwappedPersonal.gender as string | undefined)?.trim().toLowerCase();
+      // The new spouse IS the original primary, whose actual gender is reliably
+      // captured. Derive the spouse's title/pronouns from THAT — not by
+      // inverting the new testator's gender, which assumed an opposite-sex
+      // marriage and rendered a same-sex spouse with the wrong title and
+      // pronouns (R5-003).
+      const newSpouseGender = (ctxOriginalPersonal.gender as string | undefined)?.trim().toLowerCase();
       const newClientIsFemale = newGender === 'female';
+      const newSpouseIsFemale = newSpouseGender === 'female';
       const newMaritalStatus = (ctxSwappedPersonal.maritalStatus as string | undefined) ?? '';
       const isDP = newMaritalStatus === 'Domestic Partnership';
       if (isDP) {
         clientContext.computed.spouseTitle = 'partner';
         clientContext.computed.clientTitle = 'partner';
-      } else if (newGender) {
-        clientContext.computed.spouseTitle = newClientIsFemale ? 'husband' : 'wife';
-        clientContext.computed.clientTitle = newClientIsFemale ? 'wife' : 'husband';
+      } else {
+        if (newSpouseGender) clientContext.computed.spouseTitle = newSpouseIsFemale ? 'wife' : 'husband';
+        if (newGender) clientContext.computed.clientTitle = newClientIsFemale ? 'wife' : 'husband';
       }
-      if (newGender) {
+      if (newGender || newSpouseGender) {
         const malePronouns = { subject: 'he', object: 'him', possessive: 'his' };
         const femalePronouns = { subject: 'she', object: 'her', possessive: 'her' };
         const neutralPronouns = { subject: 'they', object: 'them', possessive: 'their' };
-        clientContext.computed.clientPronouns = newClientIsFemale ? femalePronouns : malePronouns;
-        clientContext.computed.spousePronouns = newClientIsFemale ? malePronouns : femalePronouns;
+        clientContext.computed.clientPronouns = newGender ? (newClientIsFemale ? femalePronouns : malePronouns) : neutralPronouns;
+        clientContext.computed.spousePronouns = newSpouseGender ? (newSpouseIsFemale ? femalePronouns : malePronouns) : neutralPronouns;
 
         // Recompute fiduciary pronouns now that the testator perspective has
         // flipped. A spouse-tagged fiduciary slot now points at the new
@@ -717,7 +732,10 @@ export async function generateDocument(
     }
   }
 
-  const packageType = clientData.packageDetails?.packageType ?? 'foundation';
+  // Prefer the tier the caller requested for THIS run (the batch entry point
+  // persists it to the client doc only after generation), falling back to the
+  // stored value, then the intake default.
+  const packageType = params.packageType ?? clientData.packageDetails?.packageType ?? 'foundation';
 
   // ------------------------------------------------------------------
   // 1b. Pre-generation completeness gate (Phase 3)

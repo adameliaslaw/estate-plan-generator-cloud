@@ -120,20 +120,30 @@ Use the following JSON schema. For any missing fields, use null.
 If an array is empty, return an empty array [].
 Do NOT wrap the output in markdown code blocks. Just return raw JSON.
 
-Schema:
+Schema (use these EXACT field names — they map directly to the app's data model;
+do NOT invent alternates like fullName/dateOfBirth/ssn4/usCitizen or a nested address object):
 {
   "personalInfo": {
-    "firstName": null, "middleName": null, "lastName": null, "suffix": null, "preferredNames": null,
-    "email": null, "phone": null, "dateOfBirth": null, "ssn4": null, "usCitizen": null, 
-    "address": {"street": null, "city": null, "state": null, "zipCode": null}
+    "firstName": null, "middleName": null, "lastName": null, "suffix": null,
+    "email": null, "phone": null,
+    "dob": null,                 // ISO date "YYYY-MM-DD"
+    "ssnLast4": null,            // last 4 digits only, as a string
+    "citizenship": null,         // one of: "US Citizen", "Permanent Resident (Green Card)", "Non-Resident Alien", "Other"
+    "address": null,             // street address as a single string
+    "city": null, "state": null, "zip": null, "county": null
   },
   "spouseInfo": {
-    "firstName": null, "middleName": null, "lastName": null, "suffix": null, "preferredNames": null,
-    "email": null, "phone": null, "dateOfBirth": null, "ssn4": null, "usCitizen": null,
-    "dateOfMarriage": null, "isFirstMarriage": null
+    "firstName": null, "middleName": null, "lastName": null, "suffix": null,
+    "email": null, "phone": null,
+    "dob": null, "ssnLast4": null, "citizenship": null
   },
   "children": [
-    { "fullName": null, "dateOfBirth": null, "parentage": null, "specialNeeds": null, "financialIssues": null, "preDeceased": null }
+    {
+      "name": null,              // child's full name
+      "dob": null,               // ISO date "YYYY-MM-DD"
+      "relationship": null,      // one of: "biological", "adopted", "stepchild"
+      "specialNeeds": null       // boolean
+    }
   ]
 }
 `;

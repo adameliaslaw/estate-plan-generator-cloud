@@ -86,18 +86,20 @@ export async function recordCorrection(
   },
 ): Promise<void> {
   const ref = learningCollection(firmId).doc('corrections');
-  const now = admin.firestore.FieldValue.serverTimestamp();
 
   const entry: CorrectionEntry = {
     ...correction,
-    timestamp: now,
+    // Concrete Timestamp — a serverTimestamp() sentinel is prohibited inside
+    // arrayUnion() and would make this whole call throw (see the same rule
+    // documented at recordConfirmedVariables below).
+    timestamp: admin.firestore.Timestamp.now(),
   };
 
   // Use arrayUnion to append; if doc doesn't exist, create it
   await ref.set(
     {
       entries: admin.firestore.FieldValue.arrayUnion(entry),
-      lastUpdated: now,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true },
   );

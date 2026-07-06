@@ -269,6 +269,7 @@ export const generateDocuments = onCall(
             modelOverride,
             preloadedContext,
             spouseRole: entry.spouseRole,
+            packageType,
           });
           settled[i] = { status: 'fulfilled', value: result };
         } catch (err) {

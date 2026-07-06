@@ -89,13 +89,15 @@ describe('checkContentIntegrity — universal rules', () => {
 // ===========================================================================
 
 describe('checkContentIntegrity — client-data rules', () => {
+  // Mirrors the real ClientContext shape: joined full names live on `computed`,
+  // marital status on `client.personalInfo`.
   const ctx = {
-    personalInfo: {
-      fullName: 'Karen K. Elias',
-      maritalStatus: 'married',
+    client: {
+      personalInfo: { maritalStatus: 'married' },
     },
-    spouseInfo: {
-      fullName: 'Adam J. Elias',
+    computed: {
+      clientFullName: 'Karen K. Elias',
+      spouseFullName: 'Adam J. Elias',
     },
   } as unknown as Parameters<typeof checkContentIntegrity>[2];
 
@@ -118,8 +120,8 @@ describe('checkContentIntegrity — client-data rules', () => {
     // check. Without normalization, two of three real clients in the vault
     // silently dropped the warning.
     const capitalMCtx = {
-      personalInfo: { fullName: 'Karen K. Elias', maritalStatus: 'Married' },
-      spouseInfo: { fullName: 'Adam J. Elias' },
+      client: { personalInfo: { maritalStatus: 'Married' } },
+      computed: { clientFullName: 'Karen K. Elias', spouseFullName: 'Adam J. Elias' },
     } as unknown as Parameters<typeof checkContentIntegrity>[2];
     const html = `<p>I, KAREN K. ELIAS, of Monroe Township, hereby declare.</p>`;
     const result = checkContentIntegrity(html, 'will', capitalMCtx);

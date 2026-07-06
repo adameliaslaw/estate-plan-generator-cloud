@@ -253,6 +253,12 @@ export const sendForSignature = functions
           signerName: String(signerName),
           signerEmail: String(signerEmail),
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          // Resend: drop any executed-PDF pointer from a prior request so
+          // storeSignedPdf's idempotency check doesn't short-circuit and the
+          // NEW request's signed file is fetched fresh (R5-014).
+          signedStoragePath: admin.firestore.FieldValue.delete(),
+          signedFileName: admin.firestore.FieldValue.delete(),
+          signedAt: admin.firestore.FieldValue.delete(),
         },
         requiresSignature: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -389,6 +395,27 @@ export const dropboxSignWebhook = onRequest(
       .collection('clients').doc(clientId)
       .collection('documents').doc(documentId);
     const now = admin.firestore.FieldValue.serverTimestamp();
+
+    // Guard: apply events only for the signature request currently on this doc.
+    // After a resend the doc holds a NEW signatureRequestId; a delayed or
+    // replayed retry of the superseded request — or a forged event with edited
+    // metadata pointing at another document — must not flip status or pull an
+    // old executed PDF onto the document (R5-013).
+    const incomingSigReqId = payload.signature_request?.signature_request_id ?? '';
+    const guardSnap = await docRef.get();
+    if (!guardSnap.exists) {
+      res.status(200).send(WEBHOOK_ACK);
+      return;
+    }
+    const storedSigReqId =
+      (guardSnap.data()?.eSignature as { signatureRequestId?: string } | undefined)?.signatureRequestId ?? '';
+    if (storedSigReqId && incomingSigReqId && storedSigReqId !== incomingSigReqId) {
+      console.warn(
+        `[dropboxSignWebhook] Event sig-req ${incomingSigReqId} != stored ${storedSigReqId} for doc ${documentId}; ignoring stale/superseded event.`,
+      );
+      res.status(200).send(WEBHOOK_ACK);
+      return;
+    }
 
     // 4a. Files are ready → pull the executed PDF back into the vault.
     if (eventType === 'signature_request_downloadable') {

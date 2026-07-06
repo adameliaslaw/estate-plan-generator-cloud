@@ -169,7 +169,7 @@ ${serializedData ?? '(Client data not available — use the details below)'}
 TRUST-SPECIFIC DETAILS:
   Trust name: ${trustName}
   Trust type: ${trustType}
-  ${packageType === 'fortress' ? 'Note: Generate as JOINT Revocable Living Trust with co-settlor provisions.' : ''}
+  ${packageType === 'fortress' ? 'Note: Generate as a JOINT IRREVOCABLE trust with co-settlor provisions — the co-settlors retain NO power to revoke, amend, or reclaim principal. The fortress package is the irrevocable Medicaid asset-protection instrument; do NOT make it revocable.' : ''}
   ${coTrustee ? `Co-trustee: ${sanitizeForPrompt(coTrustee.name ?? '')} (${sanitizeForPrompt(coTrustee.relationship ?? '')})` : ''}
 
   Trust beneficiaries:
