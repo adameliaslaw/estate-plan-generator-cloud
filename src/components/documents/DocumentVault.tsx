@@ -804,16 +804,23 @@ export default function DocumentVault({
                     {/* Drive sync indicator */}
                     <td className="px-2 py-3">
                       {doc.googleDriveSyncedAt && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <CloudCheck className="h-4 w-4 text-green-500" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            <p className="text-xs">
-                              Synced to Google Drive
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
+                        // Wrapped in its own TooltipProvider — the only other
+                        // provider in this file scopes the RowActions cell, so
+                        // this row-body Tooltip had no provider ancestor and
+                        // Radix throws during render, crashing the vault tab
+                        // for any client with a Drive-synced document (R5-021).
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <CloudCheck className="h-4 w-4 text-green-500" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">
+                                Synced to Google Drive
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </td>
 
