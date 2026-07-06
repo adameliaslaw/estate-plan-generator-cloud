@@ -107,13 +107,26 @@ export const uploadTemplate = onCall(
         complexity: complexity ?? 2,
         version: currentVersion,
         isDefault: isDefault ?? false,
-        variables: mergedVariables,
         tags: tags ?? [],
-        softwareSource: softwareSource ?? '',
         ...(folder !== undefined ? { folder } : {}),
         updatedAt: now,
         updatedBy: request.auth.uid,
       };
+      // Only overwrite variables when the caller gave us something to recompute
+      // them from — new content (auto-extracted) or an explicit variables array.
+      // A tags-/metadata-only update must NOT wipe an attorney-reviewed
+      // template's variables list to [] (R5-029) — which also stops the batch
+      // retemplatizer from re-selecting it (softwareSource!='' && variables==[]).
+      if (content || variables !== undefined) {
+        updateData.variables = mergedVariables;
+      }
+      // Only overwrite the softwareSource label when explicitly provided;
+      // omitting it (a content-only or tags-only save) must preserve the
+      // existing value rather than blanking it (R5-030), which would drop the
+      // template's +80 source-match bonus at resolution time.
+      if (softwareSource !== undefined) {
+        updateData.softwareSource = softwareSource;
+      }
       // Only update content if provided (allows variable-only updates)
       if (content) {
         updateData.content = content;
