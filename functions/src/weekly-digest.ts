@@ -21,6 +21,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
+import { loadFirmSecrets } from './firm-secrets';
 
 import {
   buildEmailHtml,
@@ -223,7 +224,10 @@ export const sendWeeklyDigest = onSchedule(
     for (const firmDoc of firmsSnap.docs) {
       const firmId = firmDoc.id;
       try {
-        const result = await sendDigestForFirm(db, firmId, firmDoc.data());
+        // Merge Functions-only secrets (SendGrid key moved off the firm doc in
+        // #59 / finding AR) so getSendGridKey() can find it.
+        const firmData = { ...firmDoc.data(), ...(await loadFirmSecrets(firmId)) };
+        const result = await sendDigestForFirm(db, firmId, firmData);
         if (result.skipped) {
           firmsSkipped++;
           logger.info('[sendWeeklyDigest] Skipped firm', {

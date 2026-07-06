@@ -19,6 +19,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, sanitizeObject, parseAIJson } from './ai-client';
 import { DOCUMENT_REVIEW_SCHEMA } from './document-schemas';
+import { loadFirmSecrets } from './firm-secrets';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -339,9 +340,15 @@ export const reviewDocument = onCall(
     const pi = (clientData as admin.firestore.DocumentData).personalInfo ?? {};
     const clientFullName = [pi.firstName, pi.lastName].filter(Boolean).join(' ');
 
-    // Fetch firm data to get settings for AI provider
+    // Fetch firm data to get settings for AI provider. Merge Functions-only
+    // secrets (provider API keys moved off the firm doc in #59 / finding AR)
+    // AFTER sanitizing so callAI can reach the firm's provider — without this
+    // the live firm's Anthropic (claude-opus-4-8) key is absent and review throws.
     const firmSnap = await db.doc(`firms/${firmId}`).get();
-    const firmData = firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {};
+    const firmData = {
+      ...(firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {}),
+      ...(await loadFirmSecrets(firmId)),
+    };
 
     // ------------------------------------------------------------------
     // 5. Build prompts and call AI
@@ -360,8 +367,10 @@ ${REVIEW_OUTPUT_FORMAT}`;
       ? `\nFOCUS AREAS: ${focusAreas.map(f => sanitizeForPrompt(f)).join(', ')}\n`
       : '';
 
-    // Truncate document content to avoid token limits (review the first 30,000 chars)
-    const truncatedContent = sanitizeForPrompt(documentContent).slice(0, 30000);
+    // Truncate document content to avoid token limits (review the first 30,000 chars).
+    // Pass maxLength explicitly — sanitizeForPrompt's default 5,000-char cap would
+    // otherwise silently truncate the doc before the .slice ever mattered.
+    const truncatedContent = sanitizeForPrompt(documentContent, { maxLength: 30000 });
 
     const userPrompt = `
 Review this ${docType} document for NJ compliance and drafting quality.
