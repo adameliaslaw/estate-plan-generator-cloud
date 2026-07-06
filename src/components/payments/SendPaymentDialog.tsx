@@ -22,9 +22,7 @@ import { Input } from '@/components/ui/input';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const callCreatePaymentRequest = httpsCallable<
@@ -154,18 +152,15 @@ export function SendPaymentDialog({
                                     control={control}
                                     name="selectedClientId"
                                     render={({ field }) => (
-                                        <Select value={field.value} onValueChange={field.onChange}>
-                                            <SelectTrigger id="sp-client">
-                                                <SelectValue placeholder="Select a client…" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {clients.map((c) => (
-                                                    <SelectItem key={c.id} value={c.id}>
-                                                        {clientDisplayName(c)}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Combobox
+                                            id="sp-client"
+                                            placeholder="Select a client…"
+                                            emptyText="No matching client."
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            aria-invalid={!!errors.selectedClientId}
+                                            options={clients.map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+                                        />
                                     )}
                                 />
                                 {errors.selectedClientId && <p className="text-xs text-red-500">{errors.selectedClientId.message}</p>}

@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // ---------------------------------------------------------------------------
@@ -701,21 +702,17 @@ export function ChargePaymentDialog({
               <Label className="text-sm font-medium text-[#1a365d]">
                 Client
               </Label>
-              <Select
+              <Combobox
+                id="charge-client-select"
+                placeholder="Select a client…"
+                emptyText="No matching client."
                 value={selectedClientId}
-                onValueChange={setSelectedClientId}
-              >
-                <SelectTrigger id="charge-client-select">
-                  <SelectValue placeholder="Select a client…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.personalInfo?.firstName} {c.personalInfo?.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={setSelectedClientId}
+                options={clients.map((c) => ({
+                  value: c.id,
+                  label: `${c.personalInfo?.firstName ?? ''} ${c.personalInfo?.lastName ?? ''}`.trim(),
+                }))}
+              />
             </div>
           )}
 

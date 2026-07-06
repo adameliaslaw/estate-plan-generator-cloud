@@ -17,6 +17,7 @@ import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS } from '@/config/constants';
 import type { Client } from '@/types';
 import { renderTemplatePreview } from '@/utils/template-preview';
+import { Combobox } from '@/components/ui/combobox';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -101,21 +102,18 @@ export default function TemplatePreviewPanel({ firmId, template, className }: Pr
               Loading clients…
             </div>
           ) : (
-            <select
-              title="Preview client"
-              value={selectedId ?? ''}
-              onChange={(e) => setSelectedId(e.target.value || null)}
-              className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-[#2b6cb0] focus:outline-none"
-            >
-              <option value="">— Pick a client —</option>
-              {clients
-                .filter((c) => !c.isArchived)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {clientDisplayName(c)}
-                  </option>
-                ))}
-            </select>
+            <div className="w-48">
+              <Combobox
+                className="h-8 text-xs"
+                placeholder="— Pick a client —"
+                emptyText="No matching client."
+                value={selectedId ?? ''}
+                onChange={(v) => setSelectedId(v || null)}
+                options={clients
+                  .filter((c) => !c.isArchived)
+                  .map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+              />
+            </div>
           )}
         </div>
       </div>
