@@ -22,8 +22,7 @@ import { toast } from 'sonner';
 
 import { functions } from '@/config/firebase';
 import { sanitizeInput } from '@/utils/sanitize';
-import { useAuth } from '@/hooks/useAuth';
-import { createClientFromName } from '@/lib/create-client';
+import { useCreateClientRedirect } from '@/hooks/useCreateClientRedirect';
 import type { Client } from '@/types';
 
 import { Button } from '@/components/ui/button';
@@ -44,7 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { Combobox } from '@/components/ui/combobox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // ---------------------------------------------------------------------------
@@ -210,8 +209,6 @@ export function ChargePaymentDialog({
   clientName?: string;
   clients?: Client[];
 }) {
-  const { userProfile } = useAuth();
-
   // Form state
   const [selectedClientId, setSelectedClientId] = useState(fixedClientId ?? '');
   const [description, setDescription] = useState('');
@@ -256,21 +253,7 @@ export function ChargePaymentDialog({
       : '');
   const defaultZip = selectedClient?.personalInfo?.zip ?? '';
 
-  async function handleCreateClient(name: string): Promise<ComboboxOption | null> {
-    if (!firmId || !userProfile?.uid) {
-      toast.error('Unable to determine your account. Please sign in again.');
-      return null;
-    }
-    try {
-      const c = await createClientFromName(firmId, userProfile.uid, name);
-      toast.success(`Client "${name}" created.`);
-      return { value: c.id, label: `${c.firstName} ${c.lastName}`.trim() };
-    } catch (err) {
-      console.error('[ChargePaymentDialog] create client failed:', err);
-      toast.error('Failed to create client.');
-      return null;
-    }
-  }
+  const handleCreateClient = useCreateClientRedirect();
 
   // Pre-fill the billing ZIP whenever the selected client changes (and the
   // user hasn't manually edited it yet).
