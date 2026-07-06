@@ -401,6 +401,17 @@ export function ChargePaymentDialog({
       toast.error('Please enter the card expiration date.');
       return;
     }
+    if (paymentType === 'card') {
+      const mm = parseInt(expMonth, 10);
+      if (!(mm >= 1 && mm <= 12)) {
+        toast.error('Please enter a valid expiration month (01–12).');
+        return;
+      }
+      if (!/^\d{2}(\d{2})?$/.test(expYear)) {
+        toast.error('Please enter a valid expiration year (e.g. 2028).');
+        return;
+      }
+    }
     if (paymentType === 'card' && !billingZip.trim()) {
       toast.error('Please enter the billing ZIP code for the card.');
       return;
@@ -441,8 +452,11 @@ export function ChargePaymentDialog({
           setProcessing(false);
           return;
         }
-        formData.exp_month = expMonth;
-        formData.exp_year = expYear;
+        // AffiniPay requires exp_month as 2 digits (01-12) and exp_year as 4
+        // digits (e.g. 2028). The inputs accept "8"/"26", so normalize before
+        // tokenizing — otherwise getPaymentToken throws "field validation errors".
+        formData.exp_month = expMonth.padStart(2, '0');
+        formData.exp_year = expYear.length === 2 ? `20${expYear}` : expYear;
         formData.postal_code = billingZip.trim();
       } else {
         // eCheck requires account_type and account_holder_type
@@ -504,8 +518,23 @@ export function ChargePaymentDialog({
       }
     } catch (err: unknown) {
       console.error('[ChargePaymentDialog] Charge error:', err);
-      const message =
+      let message =
         err instanceof Error ? err.message : 'Failed to process payment.';
+      // AffiniPay's "field validation errors" is generic — pull the per-field
+      // detail out of the SDK state so the user (and logs) know exactly which
+      // hosted field (card number / CVV) is invalid.
+      try {
+        const state = hostedFieldsRef.current?.getState?.();
+        const fieldErrors = (state?.fields ?? [])
+          .filter((f) => f.error)
+          .map((f) => `${f.type}: ${f.error}`);
+        if (fieldErrors.length) {
+          console.error('[ChargePaymentDialog] Hosted field errors:', fieldErrors);
+          message = `Card details invalid — ${fieldErrors.join('; ')}`;
+        }
+      } catch {
+        /* getState is best-effort */
+      }
       toast.error(message);
     } finally {
       setProcessing(false);
