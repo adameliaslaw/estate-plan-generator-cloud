@@ -613,7 +613,13 @@ export function QuestionnaireProvider({
         state.data as unknown as Record<string, unknown>,
         field.name,
       );
-      return val != null && val !== '';
+      if (val == null || val === '') return false;
+      // Composite required steps (Home Address → 'personalInfo', required
+      // repeaters like children) hold an object/array, so an empty {} or []
+      // must NOT count as satisfied — otherwise Next never gates them (R5-081).
+      if (Array.isArray(val)) return val.length > 0;
+      if (typeof val === 'object') return Object.keys(val).length > 0;
+      return true;
     });
   }, [currentStepDef, state.data]);
 

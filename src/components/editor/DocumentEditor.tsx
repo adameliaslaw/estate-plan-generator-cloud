@@ -351,38 +351,50 @@ export default function DocumentEditor({
     [document, versionsPath, docPath, userProfile, firmId, clientId],
   );
 
+  // ── Persist immediately (shared by the debounced autosave and manual Save) ──
+  const performSave = useCallback(
+    async (html: string) => {
+      // Cancel any pending debounced save — we're writing now.
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      setSaveStatus('saving');
+      try {
+        await updateDoc<Document & { editorContent: string }>(docPath, {
+          editorContent: html,
+          updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
+        });
+
+        // Periodic versioning
+        autoSaveCountRef.current += 1;
+
+        if (autoSaveCountRef.current % VERSION_EVERY_N_SAVES === 0) {
+          await saveVersion(html, 'Auto-saved checkpoint');
+        }
+
+        setSaveStatus('saved');
+        setLastSavedAt(new Date());
+        setHasUnsavedChanges(false);
+      } catch (err) {
+        console.error('[DocumentEditor] Save error:', err);
+        setSaveStatus('error');
+      }
+    },
+    [docPath, userProfile, saveVersion],
+  );
+
   // ── Auto-save (debounced) ──
   const scheduleAutoSave = useCallback(
     (html: string) => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
-
-      autoSaveTimerRef.current = setTimeout(async () => {
-        setSaveStatus('saving');
-        try {
-          await updateDoc<Document & { editorContent: string }>(docPath, {
-            editorContent: html,
-            updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
-          });
-
-          // Periodic versioning
-          autoSaveCountRef.current += 1;
-
-          if (autoSaveCountRef.current % VERSION_EVERY_N_SAVES === 0) {
-            await saveVersion(html, 'Auto-saved checkpoint');
-          }
-
-          setSaveStatus('saved');
-          setLastSavedAt(new Date());
-          setHasUnsavedChanges(false);
-        } catch (err) {
-          console.error('[DocumentEditor] Auto-save error:', err);
-          setSaveStatus('error');
-        }
+      autoSaveTimerRef.current = setTimeout(() => {
+        void performSave(html);
       }, AUTO_SAVE_DEBOUNCE_MS);
     },
-    [docPath, userProfile, saveVersion],
+    [performSave],
   );
 
   // Keep the onUpdate-facing ref pointed at the latest scheduleAutoSave so the
@@ -683,7 +695,9 @@ export default function DocumentEditor({
                   size="sm"
                   className="h-7 gap-1.5 text-xs border-[#2b6cb0] text-[#2b6cb0] hover:bg-[#ebf4ff]"
                   onClick={() => {
-                    if (editor) scheduleAutoSave(editor.getHTML());
+                    // Flush immediately — scheduling the 2s debounce here meant
+                    // leaving within 2s silently discarded the edits (R5-075).
+                    if (editor) void performSave(editor.getHTML());
                   }}
                 >
                   <Save className="h-3.5 w-3.5" />
