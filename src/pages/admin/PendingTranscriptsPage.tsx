@@ -33,13 +33,7 @@ import { pendingTranscriptService } from '@/services/pending-transcript-service'
 import type { Client, PendingTranscript } from '@/types';
 
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -284,21 +278,16 @@ export default function PendingTranscriptsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 sm:shrink-0">
-                      <Select
-                        value={selectedMatter[t.id] ?? ''}
-                        onValueChange={(v) => setSelectedMatter((prev) => ({ ...prev, [t.id]: v }))}
-                      >
-                        <SelectTrigger className="h-9 w-56 text-sm">
-                          <SelectValue placeholder="Select matter…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {clientDisplayName(c)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="w-56">
+                        <Combobox
+                          className="h-9"
+                          placeholder="Select matter…"
+                          emptyText="No matching client."
+                          value={selectedMatter[t.id] ?? ''}
+                          onChange={(v) => setSelectedMatter((prev) => ({ ...prev, [t.id]: v }))}
+                          options={clients.map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+                        />
+                      </div>
                       <Button
                         size="sm"
                         disabled={!selectedMatter[t.id] || isFiling}
