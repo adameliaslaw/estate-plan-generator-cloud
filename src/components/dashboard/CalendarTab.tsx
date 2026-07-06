@@ -825,13 +825,19 @@ function EventDetailDialog({
       toast.error('Title is required.');
       return;
     }
+    if (!isValid(parseISO(form.date))) {
+      toast.error('Please choose a valid date.');
+      return;
+    }
     setSaving(true);
     try {
       const docPath = `${COLLECTIONS.CALENDAR_EVENTS(firmId)}/${event.id}`;
-      const startAt = event.allDay
+      // Use the edited form.allDay, not the stale event.allDay — toggling the
+      // all-day checkbox during edit must affect the saved times (R5-082).
+      const startAt = form.allDay
         ? toTimestamp(form.date, '00:00')
         : toTimestamp(form.date, form.startTime);
-      const endAt = event.allDay
+      const endAt = form.allDay
         ? toTimestamp(form.date, '23:59')
         : toTimestamp(form.date, form.endTime);
 
@@ -1128,6 +1134,10 @@ function NewEventDialog({
   const handleCreate = async () => {
     if (!form.title.trim()) {
       toast.error('Title is required.');
+      return;
+    }
+    if (!isValid(parseISO(form.date))) {
+      toast.error('Please choose a valid date.');
       return;
     }
     setSaving(true);

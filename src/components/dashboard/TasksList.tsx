@@ -142,7 +142,14 @@ export function TasksList({ clientId, clientName, activeClientIds }: TasksListPr
         if (aDue) return -1;
         if (bDue) return 1;
 
-        return a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime();
+        // createdAt is a pending serverTimestamp (null) in the latency-compensated
+        // snapshot for a just-added task — guard before .toDate() (R5-084).
+        const aCreated = a.createdAt?.toDate();
+        const bCreated = b.createdAt?.toDate();
+        if (aCreated && bCreated) return aCreated.getTime() - bCreated.getTime();
+        if (aCreated) return -1;
+        if (bCreated) return 1;
+        return 0;
     });
     const completedTasks = tasks?.filter(t =>
         t.status === 'completed' &&
