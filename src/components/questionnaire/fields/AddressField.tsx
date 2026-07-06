@@ -209,11 +209,18 @@ export function AddressField({ value, onChange, required, parentPath, clientAddr
             ref={stateRef}
             defaultValue={stateValue}
             onChange={(e) => {
-              update('state', e.target.value);
-              // Clear county if switching away from NJ
-              if (e.target.value !== 'NJ') {
-                update('county', '');
-              }
+              // Single write: setting state and clearing county in two separate
+              // update() calls both rebuild from the same stale `current`
+              // closure, and the second call's `state: current.state || 'NJ'`
+              // reverts the just-picked state — making any non-NJ state
+              // impossible to save. Write both fields at once instead.
+              const newState = e.target.value;
+              onChange({
+                ...current,
+                state: newState,
+                // Clear county when switching away from NJ (NJ-county select only)
+                ...(newState !== 'NJ' ? { county: '' } : {}),
+              });
             }}
             required={required}
             className={inputClass(!!(current['state']))}

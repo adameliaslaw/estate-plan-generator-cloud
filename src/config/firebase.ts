@@ -66,6 +66,12 @@ const auth: Auth = getAuth(app);
 let db: Firestore;
 try {
   db = initializeFirestore(app, {
+    // Firestore rejects any write containing an `undefined` leaf value with a
+    // hard `invalid-argument` error. In the questionnaire, clearing an optional
+    // field (e.g. a currency input → parseCurrency('') === undefined) would
+    // otherwise throw on every subsequent autosave and silently lose all intake
+    // from that point on. Omitting undefined is the Firebase-recommended default.
+    ignoreUndefinedProperties: true,
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager(),
     }),
@@ -73,6 +79,7 @@ try {
 } catch (e) {
   console.warn('[Firebase] Persistent cache unavailable, falling back to in-memory cache:', e);
   db = initializeFirestore(app, {
+    ignoreUndefinedProperties: true,
     localCache: memoryLocalCache(),
   });
 }
