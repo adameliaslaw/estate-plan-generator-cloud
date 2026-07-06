@@ -436,46 +436,9 @@ export default function DashboardPage() {
   const handleSaveAudioNote = async (data: Parameters<AudioRecorderModalProps['onSave']>[0]) => {
     if (!user?.uid || !firmId) return;
 
-    // If a new client name was typed, create the client first
-    let clientId = data.clientId;
-    if (!clientId && data.newClientName) {
-      try {
-        const nameParts = data.newClientName.trim().split(/\s+/);
-        // Firestore rules require both firstName and lastName to be non-empty.
-        // If only one word is provided, use it as lastName with a placeholder first.
-        let firstName: string;
-        let lastName: string;
-        if (nameParts.length === 1) {
-          firstName = nameParts[0];
-          lastName = '(New Client)';
-        } else {
-          firstName = nameParts[0] || '';
-          lastName = nameParts.slice(1).join(' ') || '';
-        }
-        const clientsCol = collection(db, COLLECTIONS.CLIENTS(firmId));
-        const newClientRef = doc(clientsCol);
-        await setDoc(newClientRef, {
-          firstName,
-          lastName,
-          personalInfo: { firstName, lastName },
-          firmId,
-          status: 'active',
-          isArchived: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: user.uid,
-        });
-        clientId = newClientRef.id;
-        toast.success(`Client "${data.newClientName}" created.`);
-      } catch (err) {
-        console.error('Failed to create new client', err);
-        toast.error('Failed to create new client.');
-        return;
-      }
-    }
-
+    const clientId = data.clientId;
     if (!clientId) {
-      toast.error('Please select or create a client.');
+      toast.error('Please select a client.');
       return;
     }
 
@@ -1114,9 +1077,14 @@ export default function DashboardPage() {
         onOpenChange={setIsRecordModalOpen}
         onSave={handleSaveAudioNote}
         isSaving={isSavingRecord}
-        onAddClient={() => {
-          setIsRecordModalOpen(false);
-          navigate(ROUTES.CLIENT_NEW);
+        onAddClient={(typedName) => {
+          // Open the full New Client form in a new tab so the in-progress
+          // recording survives; the created client flows back into the live
+          // `audioModalClients` list for selection.
+          const url = typedName
+            ? `${ROUTES.CLIENT_NEW}?name=${encodeURIComponent(typedName)}`
+            : ROUTES.CLIENT_NEW;
+          window.open(url, '_blank', 'noopener,noreferrer');
         }}
         clients={audioModalClients}
       />

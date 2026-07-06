@@ -413,7 +413,7 @@ export default function ClientDashboardPage() {
   const qStatusCfg = Q_STATUS_CONFIG[qProgress?.status ?? 'not_started'];
   const QIcon = qStatusCfg.icon;
 
-  const handleSaveAudioNote = async (data: { audioBlob: Blob | null; title: string; noteType: string; content: string; audioFileName: string; durationSeconds: number; clientId?: string; newClientName?: string }) => {
+  const handleSaveAudioNote = async (data: { audioBlob: Blob | null; title: string; noteType: string; content: string; audioFileName: string; durationSeconds: number; clientId?: string }) => {
     if (!userProfile?.uid || !firmId || !clientId) return;
     setIsSavingRecord(true);
     try {
