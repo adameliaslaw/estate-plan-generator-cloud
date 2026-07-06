@@ -73,3 +73,4 @@ export { willsPilotRun } from './wills-pilot';
 export { registerClientFromLink } from './register-client';
 export { createClientRegistrationLink } from './create-registration-link';
 export { fileTranscriptToMatter } from './file-transcript-to-matter';
+export { summarizePendingTranscript } from './summarize-pending-transcript';

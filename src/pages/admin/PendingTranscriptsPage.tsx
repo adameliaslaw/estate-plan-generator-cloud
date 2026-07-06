@@ -18,8 +18,11 @@ import {
   ChevronUp,
   Clock,
   FileText,
+  Info,
   Languages,
+  Loader2,
   Mic,
+  Sparkles,
   Users,
 } from 'lucide-react';
 
@@ -65,6 +68,78 @@ function formatTimestamp(ts: { toDate?: () => Date } | Date | undefined): string
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// ── AI summary panel ─────────────────────────────────────────────────────────
+
+/**
+ * Renders the AI triage summary for a transcript. An absent status is treated
+ * as loading (the trigger fires within moments of the doc landing). A failed
+ * summary shows a small, unobtrusive notice — never an error dialog — and the
+ * raw transcript below stays fully available.
+ */
+function SummaryPanel({ transcript }: { transcript: PendingTranscript }) {
+  const status = transcript.summaryStatus ?? 'pending';
+  const summary = transcript.summary;
+
+  if (status === 'complete' && summary) {
+    return (
+      <div className="rounded-lg border border-[#2b6cb0]/20 bg-[#ebf4fb]/60 p-3">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-[#2b6cb0]">
+          <Sparkles className="h-3.5 w-3.5" />
+          AI Summary
+          {summary.matterTypeHint && (
+            <span className="ml-1 rounded-full bg-[#2b6cb0]/10 px-2 py-0.5 text-[11px] font-medium text-[#2b6cb0]">
+              {summary.matterTypeHint}
+            </span>
+          )}
+        </div>
+
+        {summary.overview && (
+          <p className="mt-2 text-sm text-gray-700">{summary.overview}</p>
+        )}
+
+        {summary.keyPoints.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-gray-600">Key points</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-gray-700">
+              {summary.keyPoints.map((point, i) => (
+                <li key={i}>{point}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {summary.actionItems.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-gray-600">Action items</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-gray-700">
+              {summary.actionItems.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="flex items-center gap-1.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+        <Info className="h-3.5 w-3.5 shrink-0" />
+        AI summary unavailable for this transcript. The full transcript is below.
+      </div>
+    );
+  }
+
+  // pending | processing | absent → loading
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#2b6cb0]" />
+      Generating AI summary…
+    </div>
+  );
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -236,17 +311,21 @@ export default function PendingTranscriptsPage() {
                   </div>
 
                   {isExpanded && (
-                    <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 p-3 text-sm text-gray-700 space-y-2">
-                      {t.segments.length === 0 ? (
-                        <p className="text-gray-400">No transcript text available.</p>
-                      ) : (
-                        t.segments.map((seg, i) => (
-                          <p key={i}>
-                            <span className="font-semibold text-[#1a365d]">Speaker {seg.speaker}:</span>{' '}
-                            {seg.text}
-                          </p>
-                        ))
-                      )}
+                    <div className="mt-3 space-y-3">
+                      <SummaryPanel transcript={t} />
+
+                      <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 p-3 text-sm text-gray-700 space-y-2">
+                        {t.segments.length === 0 ? (
+                          <p className="text-gray-400">No transcript text available.</p>
+                        ) : (
+                          t.segments.map((seg, i) => (
+                            <p key={i}>
+                              <span className="font-semibold text-[#1a365d]">Speaker {seg.speaker}:</span>{' '}
+                              {seg.text}
+                            </p>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
                 </li>
