@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export interface ComboboxOption {
@@ -19,6 +19,15 @@ export interface ComboboxProps {
   className?: string
   disabled?: boolean
   "aria-invalid"?: boolean
+  /**
+   * When provided, a "➕ Create …" row appears if the typed text matches no
+   * existing option. Selecting it calls this with the trimmed text; resolve
+   * with the new option (which becomes selected) or `null` to abort (e.g. on
+   * failure — surface your own toast). Handles its own pending state.
+   */
+  onCreate?: (typedName: string) => Promise<ComboboxOption | null>
+  /** Label for the create row; defaults to `Create "<text>"`. */
+  createLabel?: (typedName: string) => string
 }
 
 /**
@@ -39,11 +48,19 @@ export function Combobox({
   className,
   disabled,
   "aria-invalid": ariaInvalid,
+  onCreate,
+  createLabel,
 }: ComboboxProps) {
-  const selectedLabel = React.useMemo(
-    () => options.find((o) => o.value === value)?.label ?? "",
-    [options, value],
-  )
+  // A freshly created option may not be in `options` yet (the live collection
+  // hasn't refreshed) — keep it locally so its label shows immediately.
+  const [created, setCreated] = React.useState<ComboboxOption | null>(null)
+
+  const selectedLabel = React.useMemo(() => {
+    const inList = options.find((o) => o.value === value)?.label
+    if (inList) return inList
+    if (created && created.value === value) return created.label
+    return ""
+  }, [options, value, created])
 
   const [open, setOpen] = React.useState(false)
   // `dirty` = the user has typed since opening; controls whether we show the
@@ -51,6 +68,7 @@ export function Combobox({
   const [dirty, setDirty] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const [highlight, setHighlight] = React.useState(-1)
+  const [creating, setCreating] = React.useState(false)
 
   const containerRef = React.useRef<HTMLDivElement>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -63,6 +81,17 @@ export function Combobox({
     () => (q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options),
     [options, q],
   )
+
+  const trimmedQuery = dirty ? query.trim() : ""
+  const exactMatch = React.useMemo(
+    () => options.some((o) => o.label.toLowerCase() === trimmedQuery.toLowerCase()),
+    [options, trimmedQuery],
+  )
+  // Whether the "➕ Create …" row is offered, and its index in the list
+  // (one past the filtered options, so keyboard nav can reach it).
+  const canCreate = !!onCreate && trimmedQuery.length > 0 && !exactMatch
+  const createIndex = canCreate ? filtered.length : -1
+  const maxHighlight = canCreate ? filtered.length : filtered.length - 1
 
   // Close (and reset the query) on any click outside the component.
   React.useEffect(() => {
@@ -95,6 +124,29 @@ export function Combobox({
     inputRef.current?.blur()
   }
 
+  async function handleCreate() {
+    if (!onCreate || creating) return
+    const name = trimmedQuery
+    if (!name) return
+    setCreating(true)
+    try {
+      const opt = await onCreate(name)
+      if (opt) {
+        setCreated(opt)
+        onChange(opt.value)
+        setOpen(false)
+        setDirty(false)
+        setQuery("")
+        setHighlight(-1)
+        inputRef.current?.blur()
+      }
+    } catch {
+      // Creation failed — the caller surfaces its own error; leave the menu open.
+    } finally {
+      setCreating(false)
+    }
+  }
+
   function openMenu() {
     if (disabled) return
     setOpen(true)
@@ -120,7 +172,7 @@ export function Combobox({
           openMenu()
           return
         }
-        setHighlight((p) => Math.min(p + 1, filtered.length - 1))
+        setHighlight((p) => Math.min(p + 1, maxHighlight))
         break
       case "ArrowUp":
         e.preventDefault()
@@ -129,8 +181,10 @@ export function Combobox({
       case "Enter":
         if (open) {
           e.preventDefault()
-          if (highlight >= 0 && highlight < filtered.length) select(filtered[highlight])
+          if (canCreate && highlight === createIndex) handleCreate()
+          else if (highlight >= 0 && highlight < filtered.length) select(filtered[highlight])
           else if (filtered.length === 1) select(filtered[0])
+          else if (filtered.length === 0 && canCreate) handleCreate()
         }
         break
       case "Escape":
@@ -185,30 +239,57 @@ export function Combobox({
           role="listbox"
           className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
         >
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && !canCreate && (
             <li className="px-3 py-2 text-sm text-gray-500">{emptyText}</li>
-          ) : (
-            filtered.map((opt, idx) => (
-              <li
-                key={opt.value}
-                role="option"
-                aria-selected={opt.value === value}
-                onMouseDown={(e) => {
-                  // Prevent the input blur that would otherwise fire first.
-                  e.preventDefault()
-                  select(opt)
-                }}
-                onMouseEnter={() => setHighlight(idx)}
-                className={cn(
-                  "flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm transition-colors",
-                  idx === highlight ? "bg-[#ebf4ff] text-[#1a365d]" : "text-gray-700",
-                  opt.value === value && idx !== highlight && "font-medium text-[#1a365d]",
-                )}
-              >
-                <span className="truncate">{opt.label}</span>
-                {opt.value === value && <Check className="h-4 w-4 shrink-0 text-[#2b6cb0]" />}
-              </li>
-            ))
+          )}
+
+          {filtered.map((opt, idx) => (
+            <li
+              key={opt.value}
+              role="option"
+              aria-selected={opt.value === value}
+              onMouseDown={(e) => {
+                // Prevent the input blur that would otherwise fire first.
+                e.preventDefault()
+                select(opt)
+              }}
+              onMouseEnter={() => setHighlight(idx)}
+              className={cn(
+                "flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm transition-colors",
+                idx === highlight ? "bg-[#ebf4ff] text-[#1a365d]" : "text-gray-700",
+                opt.value === value && idx !== highlight && "font-medium text-[#1a365d]",
+              )}
+            >
+              <span className="truncate">{opt.label}</span>
+              {opt.value === value && <Check className="h-4 w-4 shrink-0 text-[#2b6cb0]" />}
+            </li>
+          ))}
+
+          {canCreate && (
+            <li
+              role="option"
+              aria-selected={false}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleCreate()
+              }}
+              onMouseEnter={() => setHighlight(createIndex)}
+              className={cn(
+                "flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium text-[#2b6cb0] transition-colors",
+                filtered.length > 0 && "border-t border-gray-100",
+                highlight === createIndex ? "bg-blue-50" : "hover:bg-blue-50",
+                creating && "cursor-wait opacity-70",
+              )}
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 shrink-0" />
+              )}
+              <span className="truncate">
+                {createLabel ? createLabel(trimmedQuery) : `Create "${trimmedQuery}"`}
+              </span>
+            </li>
           )}
         </ul>
       )}

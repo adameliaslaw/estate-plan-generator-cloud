@@ -22,7 +22,8 @@ import { Input } from '@/components/ui/input';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import { Combobox } from '@/components/ui/combobox';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { createClientFromName } from '@/lib/create-client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const callCreatePaymentRequest = httpsCallable<
@@ -97,6 +98,22 @@ export function SendPaymentDialog({
             : c.id;
     };
 
+    async function handleCreateClient(name: string): Promise<ComboboxOption | null> {
+        if (!firmId || !userProfile?.uid) {
+            toast.error('Unable to determine your account. Please sign in again.');
+            return null;
+        }
+        try {
+            const c = await createClientFromName(firmId, userProfile.uid, name);
+            toast.success(`Client "${name}" created.`);
+            return { value: c.id, label: `${c.firstName} ${c.lastName}`.trim() };
+        } catch (err) {
+            console.error('[SendPaymentDialog] create client failed:', err);
+            toast.error('Failed to create client.');
+            return null;
+        }
+    }
+
     async function onSubmit(values: SendFormValues) {
         const cleanDescription = sanitizeInput(values.description.trim());
         const amountCents = Math.round(parseFloat(values.amountDollars) * 100);
@@ -160,6 +177,8 @@ export function SendPaymentDialog({
                                             onChange={field.onChange}
                                             aria-invalid={!!errors.selectedClientId}
                                             options={clients.map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+                                            onCreate={handleCreateClient}
+                                            createLabel={(name) => `Create client "${name}"`}
                                         />
                                     )}
                                 />

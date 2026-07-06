@@ -33,7 +33,8 @@ import { pendingTranscriptService } from '@/services/pending-transcript-service'
 import type { Client, PendingTranscript } from '@/types';
 
 import { Button } from '@/components/ui/button';
-import { Combobox } from '@/components/ui/combobox';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { createClientFromName } from '@/lib/create-client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,22 @@ export default function PendingTranscriptsPage() {
     });
   }
 
+  async function handleCreateClient(name: string): Promise<ComboboxOption | null> {
+    if (!firmId || !userProfile?.uid) {
+      toast.error('Unable to determine your account. Please sign in again.');
+      return null;
+    }
+    try {
+      const c = await createClientFromName(firmId, userProfile.uid, name);
+      toast.success(`Client "${name}" created.`);
+      return { value: c.id, label: `${c.firstName} ${c.lastName}`.trim() };
+    } catch (err) {
+      console.error('[PendingTranscriptsPage] create client failed:', err);
+      toast.error('Failed to create client.');
+      return null;
+    }
+  }
+
   async function handleFile(transcript: PendingTranscript & { id: string }) {
     const matterId = selectedMatter[transcript.id];
     if (!matterId) {
@@ -286,6 +303,8 @@ export default function PendingTranscriptsPage() {
                           value={selectedMatter[t.id] ?? ''}
                           onChange={(v) => setSelectedMatter((prev) => ({ ...prev, [t.id]: v }))}
                           options={clients.map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+                          onCreate={handleCreateClient}
+                          createLabel={(name) => `Create client "${name}"`}
                         />
                       </div>
                       <Button
