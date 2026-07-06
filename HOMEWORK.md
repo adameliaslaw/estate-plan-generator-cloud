@@ -4,6 +4,27 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #5 (Round 5 mediums batch 3 — 4 fixed #107; versions/comments RULES GAP found)
+
+**TL;DR — Shipped 4 more Round 5 🟡 mediums in one clean frontend PR (#107, `7e444d3`), all silent data-loss / correctness bugs in the editor + questionnaire. Verified green (tsc -b, build, 640/640 tests, eslint clean); no Never-Break files touched; squash-merged → hosting auto-deploy. While attempting R5-074 I found a real, separate, HIGHER-priority issue: the `versions`/`comments` subcollections have NO Firestore rule → possible silent breakage of version history + comments. Needs Adam's eyes before I touch rules.**
+
+**✅ Shipped in #107 (all frontend):**
+- **R5-078** (`FindReplaceDialog.tsx`): **Replace All with an empty replacement** threw (ProseMirror rejects `schema.text('')`) → "delete all occurrences" silently did nothing. Now `tr.delete(range)` when replacement is empty; single Replace uses `deleteSelection()` for the same case.
+- **R5-077** (`CommentsPanel.tsx`): `handleAddReply` swallowed write errors → a failed reply **cleared the input as if it posted**. Now re-throws; the card keeps the text + shows "Failed to post reply."
+- **R5-075** (`DocumentEditor.tsx`): the manual **Save** button only *scheduled* the 2s debounce → clicking Save then leaving within 2s **discarded the edits** (unmount clears the timer). Extracted `performSave()`; Save flushes immediately; autosave still debounces through it.
+- **R5-081** (`QuestionnaireContext.tsx`): `canProceed` treated empty `{}`/`[]` as satisfied → required composite steps (Home Address `'personalInfo'`, required repeaters like children) **never gated Next**. Empty object/array now counts as incomplete.
+
+**🟠 DEFERRED — R5-074 (doc delete orphans versions/comments) is NOT a clean frontend fix, and surfaced a bigger issue.** The intended fix (cascade-delete the `versions`/`comments` subcollections before the parent) can't be done client-side because **those subcollections have no `firestore.rules` match at all** — the file ends in an explicit DEFAULT DENY, and `versions`/`comments` appear nowhere in it. A client-side `getDocs`/`deleteDoc` on them is therefore denied and would **break document deletion** entirely. Correct fix is a backend Admin-SDK `recursiveDelete` callable (mirrors the closed #96 for a single doc) → functions change + destructive → **your sign-off**.
+
+**🚩 SEPARATE DISCOVERY worth verifying (potential silent prod breakage) — versions/comments have no Firestore rules.**
+- `DocumentEditor.saveVersion` writes `firms/{firmId}/clients/{clientId}/documents/{docId}/versions/{id}` **client-side** (`createDoc`), and `VersionHistory` reads it **client-side** (`useCollection`). Same for `CommentsPanel` at `.../documents/{docId}/comments/{id}`.
+- Firestore rules **do not cascade** to subcollections, and neither `versions` nor `comments` has a `match` block → **default-deny for the client SDK**. `saveVersion`'s catch **swallows the error** (`console.error` only), so version snapshots would fail invisibly and version history would read empty; comments likewise.
+- **Caveat:** this is the ruleset in the repo file — I could not confirm the **live deployed** ruleset from here. If a newer rules version was hand-deployed with these matches, the features work and this is moot. **Please verify against the deployed rules** (Firebase console → Firestore → Rules, or `firebase firestore:rules get` equivalent). If the gap is real, the fix is additive rules for both subcollections (attorney/paralegal/admin within firm; client read on own docs' comments if desired) — a Never-Break change → your sign-off. This also unblocks a clean R5-074.
+
+**▶️ REMAINING Round 5 mediums (~52 open):** ledger `docs/AUDIT-findings.md` 🟡 table (R5-031…R5-094) is source of truth. Still-clean frontend candidates: R5-068/069 (schema-drift + non-transactional client writes), R5-070 (subset-gen propertyIndex dup), R5-076/079 (status→final bypasses review gate / staff save stamps 'completed' — both have a policy angle, ask first), R5-092 (TemplatePreviewDialog Handlebars corruption). **Functions-side mediums** (R5-031…R5-066) batch as churn-aware direct deploys. **R5-080** still DEFERRED (Never-Break types touch). **PARKED:** payment/money-path (R5-083/085/086, R5-053/054) until LawPay resumes.
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #4 (FEATURE — auto AI summary on pending transcripts, #101)
 
 **TL;DR — New feature (not an audit fix): the moment a consult transcript lands in the Pending Filing queue, a Firestore trigger summarizes it with Claude so the summary is already waiting when staff open the row to review/file. Additive-only — never moves, deletes, or re-statuses the transcript; a failed summary is a degraded state, not a lost transcript. Verified green (functions tsc, root tsc -b, vite build, eslint on changed files); squash-merged #101. Adam signed off on the `src/types/index.ts` (Never-Break) touch — additive optional fields only.**
