@@ -152,14 +152,19 @@ function CommentCard({
   const [replyText, setReplyText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
+  const [replyError, setReplyError] = useState(false);
 
   const handleReply = async () => {
     if (!replyText.trim() || submitting) return;
     setSubmitting(true);
+    setReplyError(false);
     try {
       await onAddReply(replyText.trim());
       setReplyText('');
       setShowReplyInput(false);
+    } catch {
+      // Keep the typed text and tell the user it didn't post (R5-077).
+      setReplyError(true);
     } finally {
       setSubmitting(false);
     }
@@ -307,6 +312,11 @@ function CommentCard({
               }
             }}
           />
+          {replyError && (
+            <p className="text-xs text-red-600">
+              Failed to post reply. Please try again.
+            </p>
+          )}
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -415,6 +425,9 @@ export default function CommentsPanel({
       });
     } catch (err) {
       console.error('[CommentsPanel] Reply error:', err);
+      // Re-throw so the reply UI keeps the text and shows a failure instead of
+      // clearing the input as if the reply posted (R5-077).
+      throw err;
     }
   };
 

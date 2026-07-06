@@ -192,12 +192,13 @@ export default function FindReplaceDialog({
     }
     const idx = currentIndex >= 0 && currentIndex < fresh.length ? currentIndex : 0;
     const match = fresh[idx];
-    editor
+    const chain = editor
       .chain()
       .focus()
-      .setTextSelection({ from: match.from, to: match.to })
-      .insertContent(replaceText)
-      .run();
+      .setTextSelection({ from: match.from, to: match.to });
+    // An empty replacement means "delete the match". insertContent('') is a
+    // no-op that leaves the match in place, so delete the selection instead.
+    (replaceText ? chain.insertContent(replaceText) : chain.deleteSelection()).run();
 
     setReplaceCount(null);
     // Recompute matches after replacement
@@ -219,7 +220,12 @@ export default function FindReplaceDialog({
     const sorted = [...allMatches].sort((a, b) => b.from - a.from);
     let tr = editor.state.tr;
     for (const m of sorted) {
-      tr = tr.replaceWith(m.from, m.to, editor.schema.text(replaceText));
+      // ProseMirror rejects empty text nodes, so an empty replacement (i.e.
+      // "delete all occurrences") must delete the range rather than insert
+      // schema.text('') — which would throw and replace nothing (R5-078).
+      tr = replaceText
+        ? tr.replaceWith(m.from, m.to, editor.schema.text(replaceText))
+        : tr.delete(m.from, m.to);
     }
     editor.view.dispatch(tr);
     editor.commands.focus();
