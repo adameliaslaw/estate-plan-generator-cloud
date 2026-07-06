@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react';
 import { orderBy, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -72,7 +73,7 @@ export default function PendingTranscriptsPage() {
   const { userProfile } = useAuth();
   const firmId = userProfile?.firmId ?? '';
 
-  const { data: transcripts, loading } = useCollection<PendingTranscript>(
+  const { data: transcripts, loading, error } = useCollection<PendingTranscript>(
     firmId ? COLLECTIONS.PENDING_TRANSCRIPTS(firmId) : null,
     useMemo(() => [where('status', '==', 'pending'), orderBy('createdAt', 'desc')], []),
   );
@@ -146,6 +147,13 @@ export default function PendingTranscriptsPage() {
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100" />
             ))}
+          </div>
+        ) : error ? (
+          // Don't render the "queue is clear" success state on a query failure —
+          // an empty list from an error is not an empty queue (R5-067).
+          <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
+            <AlertTriangle className="h-10 w-10 text-red-300" />
+            <p className="text-sm text-red-600">Couldn't load the queue. Refresh to try again.</p>
           </div>
         ) : transcripts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 px-5 py-16 text-center">
