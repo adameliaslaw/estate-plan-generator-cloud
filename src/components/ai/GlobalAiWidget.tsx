@@ -426,8 +426,16 @@ export function GlobalAiWidget() {
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
-    // Strip @mention from the message text sent to the AI
-    const cleanedMessage = inputValue.trim().replace(/@[\w\s]+(?=\s|$)/, '').trim();
+    // Strip the @mention token from the message text sent to the AI. Strip the
+    // KNOWN mentioned-client name literally — a greedy /@[\w\s]+/ regex ate word
+    // chars AND spaces up to the end, deleting the whole message (R5-091).
+    const cleanedMessage = mentionedClient
+      ? inputValue
+          .trim()
+          .replace(`@${mentionedClient.name}`, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim()
+      : inputValue.trim();
 
     const userMessage: Message = {
       id: Date.now().toString(),

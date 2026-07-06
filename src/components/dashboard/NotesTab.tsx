@@ -994,7 +994,9 @@ export default function NotesTab({ firmId, clientId, autoOpenNewNote = false }: 
     const q = searchQuery.toLowerCase();
     return notes.filter(
       (n) =>
-        n.content.toLowerCase().includes(q) ||
+        // An audio-only note whose upload beats the text autosave has no content
+        // field — guard before .toLowerCase() or search crashes (R5-089).
+        (n.content ?? '').toLowerCase().includes(q) ||
         (n.title ?? '').toLowerCase().includes(q),
     );
   }, [notes, searchQuery]);
