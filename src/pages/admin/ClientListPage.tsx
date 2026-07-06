@@ -14,13 +14,14 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { logSystemActivity } from '@/utils/activity-logger';
+import { clientService } from '@/services/client-service';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -268,10 +269,13 @@ export default function ClientListPage() {
     try {
       const client = clients.find(c => c.id === clientId);
       const cName = client ? clientDisplayName(client) : 'Unknown Client';
-      await deleteDoc(doc(db, COLLECTIONS.CLIENTS(firmId), clientId));
+      // Server-side cascade: the client SDK's deleteDoc would orphan the
+      // client's documents/notes/payments/versions + Storage files (R5-020).
+      await clientService.deleteClient({ firmId, clientId });
 
       await logSystemActivity(firmId, userProfile, 'deleting client', {
-        clientName: cName
+        clientName: cName,
+        clientId,
       });
 
       toast.success('Client permanently deleted');

@@ -49,6 +49,7 @@ export { updateFirmApiKeys, migrateFirmApiKeysToSecrets } from './firm-settings'
 // Phase 7: Knowledge Base & Template Engine
 export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources, bulkImportKnowledgeResources, analyzeKnowledgeContent } from './knowledge-base';
 export { uploadTemplate, deleteTemplate, listTemplates, getTemplateContent } from './seed-templates';
+export { deleteClient } from './delete-client';
 export { seedKnowledgeBase } from './seed-knowledge-base';
 export { processTemplateFile, recordTemplateCorrection, confirmTemplateVariables, consolidateTemplateVariables } from './process-template-file';
 export { retemplatizeTemplates } from './retemplatize-templates';
