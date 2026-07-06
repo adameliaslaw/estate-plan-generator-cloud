@@ -4,6 +4,24 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #4 (FEATURE — auto AI summary on pending transcripts, #101)
+
+**TL;DR — New feature (not an audit fix): the moment a consult transcript lands in the Pending Filing queue, a Firestore trigger summarizes it with Claude so the summary is already waiting when staff open the row to review/file. Additive-only — never moves, deletes, or re-statuses the transcript; a failed summary is a degraded state, not a lost transcript. Verified green (functions tsc, root tsc -b, vite build, eslint on changed files); squash-merged #101. Adam signed off on the `src/types/index.ts` (Never-Break) touch — additive optional fields only.**
+
+**✅ Shipped in #101 (`e1e404c`):**
+- **Backend — `summarizePendingTranscript`** (`functions/src/summarize-pending-transcript.ts`, exported in `index.ts`): v2 `onDocumentCreated` on `firms/{firmId}/pendingTranscripts/{transcriptId}`, region `us-east1`, inherits the 512MiB global default (no per-fn memory → no OOM footgun). Fires only for `status === 'pending'`; idempotency guard exits if `summaryStatus` is already `complete`/`processing` (survives at-least-once redelivery). Reads `transcriptText`, falls back to speaker-prefixed `segments`; injection-strips + caps at 40k chars via existing `sanitizeForPrompt`.
+- **Claude call** reuses the existing `callAI()` + **per-firm Anthropic key** (`firms/{firmId}/secrets/apiKeys.anthropicApiKey` via `loadFirmSecrets`) — **no new secret**. Model = firm's `documentDraftingModel` when it's a Claude model, else `claude-haiku-4-5-20251001`. Structured `jsonSchema` output; grounded/factual system prompt (no invented client details, no legal advice).
+- **Never fails the transcript:** all errors caught → `summaryStatus: 'error'` + `summaryError`; transcript stays pending and fileable. Empty transcript → same non-fatal error state.
+- **Summary field shape (additive on the same doc):** `summary: { overview, keyPoints[], actionItems[], matterTypeHint } | null`, `summaryStatus: 'pending'|'processing'|'complete'|'error'`, `summaryGeneratedAt`, `summaryError`. Types added to `src/types/index.ts` (`TranscriptSummary`, `TranscriptSummaryStatus`, optional fields on `PendingTranscript`).
+- **Frontend** (`PendingTranscriptsPage.tsx`): new `SummaryPanel` renders the summary **above** the raw transcript in each expandable row — complete → overview + key points + action items + matter-type chip; processing/absent → spinner ("Generating AI summary…"); error → small unobtrusive gray notice (raw transcript still fully shown).
+- **Rules:** no change — `pendingTranscripts` was already staff-read-only, admin-SDK write only (`create,update,delete: if false`); the trigger bypasses rules, no new client write path.
+
+**▶️ For Adam to verify once CI functions-deploy finishes (~a few min):** first transcript that lands after deploy is the real end-to-end test — confirm a summary appears in the queue row. Note: a firm with **no Anthropic key configured** will get `summaryStatus:'error'` (still fully fileable), not a summary — elias-counsel has one, so this is fine there. **Out of scope (unchanged):** the desktop transcription script, the `fileTranscriptToMatter` callable, and any audio handling.
+
+**Deploy status:** #101 merged to `main` → CI functions-deploy auto-deploys (serializes behind any in-flight functions runs per the usual concurrency pattern; nothing to babysit).
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #3 (Round 5 highs CLOSED OUT — R5-010 + R5-020 shipped, #97 + #98)
 
 **TL;DR — The last two open Round 5 highs are done and merged; PR #96 closed unmerged. Every actionable Round 5 high is now resolved (R5-011/012 remain SKIPPED with the LawPay pause). Both PRs verified green (functions+root tsc, vite build, 640/640 tests, eslint) and squash-merged; neither touches the Never-Break list.**
