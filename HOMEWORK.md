@@ -4,9 +4,9 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 SESSION — 2026-07-06 PM #2 (Round 5 functions correctness batch — 8 highs shipped, #94)
+## 📍 SESSION — 2026-07-06 PM #2 (Round 5 correctness — 10 highs shipped, #94 + #95)
 
-**TL;DR — Shipped ONE PR (#94, squash `2dab3bc`) fixing 8 of the 15 remaining Round 5 highs — all pure `functions/src` legal-correctness / data-integrity bugs, batched together so the functions deploy churns once instead of eight times. Verified green (functions tsc, root tsc -b, vite build, 640/640 tests, eslint clean) and squash-merged (none touch the Never-Break List). CI functions-deploy run `28821367813` is in progress; the PRIOR functions run (#87, `28816082008`) converged GREEN in ~45min, so the chunked-deploy workflow now deploys cleanly — no direct-deploy dance needed, just let CI finish (~45min).**
+**TL;DR — Shipped 10 of the 15 remaining Round 5 highs across two PRs. #94 (squash `2dab3bc`) = 8 functions-side legal-correctness / data-integrity bugs, batched so the deploy churns once. #95 (squash `bd9fb84`) = R5-029/030 (template metadata wipe), root-caused in the `uploadTemplate` backend update path. Both verified green (functions tsc, root tsc -b, vite build, 640/640 tests, eslint clean) and squash-merged (neither touches the Never-Break List). Two CI functions-deploy runs serialize (concurrency `cancel-in-progress:false`, no overlap); the prior functions run (#87) converged GREEN in ~45min, so just let CI finish. Only R5-010 + R5-020 remain (R5-011/012 skipped w/ LawPay).**
 
 **✅ Shipped in #94 (8 highs):**
 - **R5-002** (`unified-generator.ts` + `generate-documents.ts`): batch persisted the chosen `packageType` to the client doc only AFTER generation → first run used the stale/foundation tier (e.g. a fortress trust generated as foundation). Added optional `packageType` to `UnifiedGenerateParams`; batch now forwards the requested tier; `generateDocument` prefers `params.packageType ?? clientData.packageDetails?.packageType ?? 'foundation'`.
@@ -19,13 +19,14 @@ Items requiring human action or decisions before the next agent session can proc
 - **R5-017** (`template-learning.ts`): `serverTimestamp()` sentinel inside `arrayUnion()` → `recordCorrection` threw on EVERY call. Now `Timestamp.now()` (the file already documents this rule for `recordConfirmedVariables`).
 - **R5-018** (`wills-pilot.ts`): `TERMINAL_STATUSES` **and** the `extractedOk` counter (line ~354) both omitted `'extracted'` (the processor's real success status) → every success was reported as `timeout`, extraction_success_rate=0, gate never passed. Added `'extracted'` to both (the counter half was a second bug beyond the finding's stated one-line fix).
 
-**▶️ REMAINING open Round 5 highs (7) — pick up next session:**
-- **R5-010** (`register-client.ts`) — attorney-issued registration token (Adam's decision: unique per-client token in the invite link; NO bare-email-match claim). Bigger — needs the frontend invite-link flow + token storage/design, not just a functions edit. **Its own session.**
-- **R5-020** (`ClientListPage.tsx` + new callable) — Delete Client leaves documents/notes/payments/versions/Storage orphaned. Needs a NEW admin-SDK `recursiveDelete` callable + wire the frontend. Functions change + destructive → **verify hard, likely sign-off before merge. Its own PR.**
-- **R5-011/012** — SKIP (part of the LawPay skip; do not touch until LawPay resumes).
-- **R5-029/030** (`knowledge-base-service.ts`, `TemplatePreviewDialog.tsx`, backend `seed-templates.ts` update path) — template/KB save wipes `variables`/`softwareSource`. **Frontend-clean deploy** (hosting, green CI) — check whether the real fix is frontend-only (send the fields) or also needs `seed-templates.ts` to stop unconditionally overwriting. Good next pickup (independent, low-risk, clean deploy).
+**✅ Also shipped #95 (`bd9fb84`) — R5-029/030 (template metadata wipe):** root-caused in the backend `uploadTemplate` update path (`seed-templates.ts`) rather than patching each frontend caller. The update branch was unconditionally writing `variables: mergedVariables` and `softwareSource: softwareSource ?? ''`, so any partial update (tags-only `updateTemplateTags` → R5-029; content-only `TemplatePreviewDialog.handleSave` which omits softwareSource → R5-030) blanked those fields. Now `variables` is only overwritten when `content` or an explicit `variables` array is passed, and `softwareSource` only when explicitly provided; explicit clears still work, omission preserves. Fixes both callers + any future partial-update caller. (Turned out NOT frontend-clean as hoped — the correct fix is backend, so it's a functions deploy, but one small file.)
 
-**Deploy status:** #94 merged to `main`; CI functions-deploy `28821367813` running (~45min expected, converges green per the prior run). Nothing to babysit — CI auto-deploys. The 8 fixes go live when it finishes.
+**▶️ REMAINING open Round 5 highs (2 actionable) — pick up next session:**
+- **R5-010** (`register-client.ts`) — attorney-issued registration token (Adam's decision: unique per-client token in the invite link; NO bare-email-match claim). Bigger — needs the frontend invite-link flow + token storage/design, not just a functions edit. **Needs a design pass + likely a UX decision on how the token rides the invite link. Its own session.**
+- **R5-020** (`ClientListPage.tsx` + new callable) — Delete Client leaves documents/notes/payments/versions/Storage orphaned. Needs a NEW admin-SDK `recursiveDelete` callable + wire the frontend. Functions change + **destructive → verify hard, sign-off before merge. Its own PR.**
+- **R5-011/012** — SKIP (part of the LawPay skip; do not touch until LawPay resumes).
+
+**Deploy status:** #94 + #95 merged to `main`; CI functions-deploy runs serialize and converge green (~45min each) per the prior run. Nothing to babysit — CI auto-deploys. The 10 fixes go live when the runs finish.
 
 ---
 
