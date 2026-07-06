@@ -41,8 +41,9 @@ const SUPPORTED_MIME_TYPES = new Set([
   'application/msword',
 ]);
 
+// 'extracted' is the processor's success status for Wills/Trusts/POAs;
 // 'classified' is terminal for Correspondence/Other/OCR docs that skip extraction.
-const TERMINAL_STATUSES = new Set<ProcessingStatus>(['classified', 'indexed', 'error', 'skipped']);
+const TERMINAL_STATUSES = new Set<ProcessingStatus>(['extracted', 'classified', 'indexed', 'error', 'skipped']);
 
 const DEFAULT_SAMPLE_SIZE   = 30;
 const DEFAULT_POLL_TIMEOUT  = 480_000;  // 8 min — leaves 60s headroom in a 540s function
@@ -350,7 +351,11 @@ function buildReport(args: {
       typeCounts[r.document_type] = (typeCounts[r.document_type] ?? 0) + 1;
       classifiedOk++;
     }
-    if (r.terminal_status === 'indexed' || r.terminal_status === 'skipped') {
+    if (
+      r.terminal_status === 'extracted' ||   // the processor's actual success status
+      r.terminal_status === 'indexed' ||
+      r.terminal_status === 'skipped'
+    ) {
       extractedOk++;
     }
     if (typeof r.extraction_confidence === 'number') {
