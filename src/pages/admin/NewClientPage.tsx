@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -102,12 +102,21 @@ const inputError =
 export default function NewClientPage() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const firmId = userProfile?.firmId ?? '';
 
+  // A client-name combobox may hand us the typed name to pre-fill (see
+  // useCreateClientRedirect). First token seeds first name, the rest last name.
+  const prefillName =
+    (location.state as { prefillName?: string } | null)?.prefillName?.trim() ?? '';
+  const [prefillFirst, ...prefillRest] = prefillName ? prefillName.split(/\s+/) : [];
+
   const [values, setValues] = useState<FormValues>({
-    firstName: '',
-    lastName: '',
+    firstName: prefillFirst ? sanitizeNameField('firstName', prefillFirst) : '',
+    lastName: prefillRest.length
+      ? sanitizeNameField('lastName', prefillRest.join(' '))
+      : '',
     email: '',
     phone: '',
   });

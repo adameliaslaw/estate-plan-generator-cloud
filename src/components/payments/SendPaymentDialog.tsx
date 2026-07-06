@@ -22,8 +22,8 @@ import { Input } from '@/components/ui/input';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
-import { createClientFromName } from '@/lib/create-client';
+import { Combobox } from '@/components/ui/combobox';
+import { useCreateClientRedirect } from '@/hooks/useCreateClientRedirect';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const callCreatePaymentRequest = httpsCallable<
@@ -98,21 +98,7 @@ export function SendPaymentDialog({
             : c.id;
     };
 
-    async function handleCreateClient(name: string): Promise<ComboboxOption | null> {
-        if (!firmId || !userProfile?.uid) {
-            toast.error('Unable to determine your account. Please sign in again.');
-            return null;
-        }
-        try {
-            const c = await createClientFromName(firmId, userProfile.uid, name);
-            toast.success(`Client "${name}" created.`);
-            return { value: c.id, label: `${c.firstName} ${c.lastName}`.trim() };
-        } catch (err) {
-            console.error('[SendPaymentDialog] create client failed:', err);
-            toast.error('Failed to create client.');
-            return null;
-        }
-    }
+    const handleCreateClient = useCreateClientRedirect();
 
     async function onSubmit(values: SendFormValues) {
         const cleanDescription = sanitizeInput(values.description.trim());

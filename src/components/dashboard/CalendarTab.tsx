@@ -63,7 +63,7 @@ import { useAuth } from '@/hooks/useAuth';
 import type { CalendarEvent, EventType, Client } from '@/types';
 import { documentService } from '@/services/document-service';
 import { logSystemActivity } from '@/utils/activity-logger';
-import { createClientFromName } from '@/lib/create-client';
+import { useCreateClientRedirect } from '@/hooks/useCreateClientRedirect';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -75,7 +75,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -1140,21 +1140,7 @@ function NewEventDialog({
       : c.id;
   };
 
-  async function handleCreateClient(name: string): Promise<ComboboxOption | null> {
-    if (!firmId || !userProfile?.uid) {
-      toast.error('Unable to determine your account. Please sign in again.');
-      return null;
-    }
-    try {
-      const c = await createClientFromName(firmId, userProfile.uid, name);
-      toast.success(`Client "${name}" created.`);
-      return { value: c.id, label: `${c.firstName} ${c.lastName}`.trim() };
-    } catch (err) {
-      console.error('[CalendarTab] create client failed:', err);
-      toast.error('Failed to create client.');
-      return null;
-    }
-  }
+  const handleCreateClient = useCreateClientRedirect();
 
   // Reset form when dialog opens
   useEffect(() => {
