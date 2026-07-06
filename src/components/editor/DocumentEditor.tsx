@@ -467,13 +467,21 @@ export default function DocumentEditor({
           updatedBy: userProfile?.uid ?? userProfile?.email ?? 'unknown',
         });
       }
-      await documentService.generateSingleDocument({
+      const res = await documentService.generateSingleDocument({
         firmId,
         clientId,
         docType: document.docType,
         spouseRole: inferredSpouseRole,
         propertyIndex,
       });
+      // Generation can "succeed" at the callable level but fail the vault save,
+      // returning status:'error' without throwing — surface that instead of
+      // silently reloading as if the regenerate worked (R5-072).
+      if (!res.success || res.status === 'error') {
+        forceReloadRef.current = false;
+        setRegenError('Regeneration failed — the document was not saved. Please try again.');
+        return;
+      }
     } catch (err) {
       // Regen failed — cancel the forced reload so we keep the user's draft.
       forceReloadRef.current = false;

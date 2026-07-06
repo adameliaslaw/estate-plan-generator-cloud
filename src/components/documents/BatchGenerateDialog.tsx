@@ -209,12 +209,17 @@ export default function BatchGenerateDialog({
           batch: true,
         });
 
+        // documentsGenerated === 0 means every document failed server-side —
+        // that is a failure, not a green "0 docs" success (R5-073).
         setStatusById((prev) => ({
           ...prev,
-          [client.id]: {
-            state: 'success',
-            docsGenerated: response.documentsGenerated,
-          },
+          [client.id]:
+            response.documentsGenerated > 0
+              ? { state: 'success', docsGenerated: response.documentsGenerated }
+              : {
+                  state: 'error',
+                  error: 'No documents were generated. Check the client data and try again.',
+                },
         }));
       } catch (err) {
         const msg =
