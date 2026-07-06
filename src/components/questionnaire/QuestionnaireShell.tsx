@@ -370,6 +370,7 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
     currentSection,
     isLoading,
     isSaving,
+    error: saveError,
     canProceed,
     goNext,
     goBack,
@@ -481,8 +482,14 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
     try {
       if (!firmId || !clientId) throw new Error('Missing route params');
 
-      // Save final state to Firestore with completed status and selected package
-      await saveProgress();
+      // Save final state to Firestore. If the write failed after all retries,
+      // do NOT mark the questionnaire completed / notify the attorney — the
+      // answers were never persisted (R5-027).
+      const saved = await saveProgress();
+      if (!saved) {
+        toast.error('Your answers could not be saved. Please check your connection and try again before submitting.');
+        return;
+      }
 
       const updaterName = userProfile?.role === 'client'
         ? 'Client'
@@ -547,7 +554,11 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
   async function handleSaveAndClose() {
     try {
       if (!firmId || !clientId) throw new Error('Missing route params');
-      await saveProgress();
+      const saved = await saveProgress();
+      if (!saved) {
+        toast.error('Changes could not be saved. Please check your connection and try again.');
+        return;
+      }
 
       const updaterName = `Admin (${userProfile?.displayName || userProfile?.email || 'Unknown'})`;
       await updateDoc(doc(db, `firms/${firmId}/clients/${clientId}`), {
@@ -721,6 +732,15 @@ export function QuestionnaireShell({ isEditMode = false }: QuestionnaireShellPro
                     <Save className="h-3 w-3 animate-pulse" />
                     <span className="hidden sm:inline">Saving…</span>
                   </span>
+                ) : saveError ? (
+                  <button
+                    onClick={() => void saveProgress()}
+                    className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
+                    title={`Your answers were not saved: ${saveError}. Click to retry.`}
+                  >
+                    <Save className="h-3 w-3" />
+                    <span className="hidden sm:inline">Not saved — retry</span>
+                  </button>
                 ) : (
                   <button
                     onClick={() => void saveProgress()}

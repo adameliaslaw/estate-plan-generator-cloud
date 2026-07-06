@@ -224,8 +224,9 @@ interface QuestionnaireContextValue {
   goBack: () => void;
   // Step helpers
   isStepComplete: (stepId: string) => boolean;
-  // Save
-  saveProgress: () => Promise<void>;
+  // Save — resolves true when the write succeeded, false when it failed after
+  // all retries (callers must NOT mark the questionnaire completed on false).
+  saveProgress: () => Promise<boolean>;
 }
 
 const QuestionnaireContext = createContext<QuestionnaireContextValue | null>(null);
@@ -469,13 +470,18 @@ export function QuestionnaireProvider({
         if (lastError) {
           const message = lastError instanceof Error ? lastError.message : 'Failed to save after retries';
           dispatch({ type: 'SET_ERROR', message });
+          return false;
         }
+        // Recovered save clears any stale error banner from a prior failure.
+        dispatch({ type: 'SET_ERROR', message: null });
+        return true;
       } catch (err) {
         // Defensive: performSave is invoked as `void performSave(...)` by the
         // autosave timer, so it must never reject (an unhandled rejection would
         // be invisible). Surface anything the retry loop didn't handle.
         const message = err instanceof Error ? err.message : 'Failed to save';
         dispatch({ type: 'SET_ERROR', message });
+        return false;
       } finally {
         dispatch({ type: 'SET_SAVING', value: false });
       }
@@ -490,7 +496,7 @@ export function QuestionnaireProvider({
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    await performSave(state.data, state.currentStep);
+    return await performSave(state.data, state.currentStep);
   }, [performSave, state.data, state.currentStep]);
 
   // ── Flush on unmount ─────────────────────────────────────────────────────
