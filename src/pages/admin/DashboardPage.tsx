@@ -1071,7 +1071,7 @@ export default function DashboardPage() {
 
       {/* Task & Calendar/Payments Row */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 h-[520px]">
-        <TasksList activeClientIds={filteredClients.map(c => c.id)} />
+        <TasksList activeClientIds={allClients.map(c => c.id)} />
         <div className="xl:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
           {/* Tab header */}
           <div className="flex items-center border-b border-gray-100 px-5">
@@ -1101,7 +1101,7 @@ export default function DashboardPage() {
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto">
             {bottomTab === 'calendar' ? (
-              <UpcomingAppointments activeClientIds={filteredClients.map(c => c.id)} />
+              <UpcomingAppointments activeClientIds={allClients.map(c => c.id)} />
             ) : (
               <DashboardPayments clients={allClients} />
             )}
