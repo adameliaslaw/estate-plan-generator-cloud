@@ -162,6 +162,11 @@ export default function DocumentEditor({
   // Set true after a regenerate so the next document delivery reloads the new
   // content into the editor even though contentLoaded is already true.
   const forceReloadRef = useRef(false);
+  // True for the duration of a regenerate op. While true, the load effect
+  // reloads incoming snapshots but does NOT clear forceReloadRef, so the
+  // regenerated-content snapshot is honored even if it arrives before the
+  // generateSingleDocument callable resolves (R5-022).
+  const regeneratingRef = useRef(false);
 
   // ── Derived state ──
   const isReadOnly =
@@ -278,7 +283,10 @@ export default function DocumentEditor({
     if (htmlContent && editor) {
       editor.commands.setContent(sanitizeHtml(htmlContent), { emitUpdate: false });
       setContentLoaded(true);
-      forceReloadRef.current = false;
+      // Keep forcing reloads until the regenerate op finishes (see regeneratingRef),
+      // otherwise the pre-regen editorContent snapshot clears the flag and the
+      // real regenerated snapshot that arrives next is skipped.
+      if (!regeneratingRef.current) forceReloadRef.current = false;
       setHasUnsavedChanges(false);
       setSaveStatus('saved');
       setLastSavedAt(
@@ -424,6 +432,13 @@ export default function DocumentEditor({
 
     setRegenerating(true);
     setRegenError(null);
+    // Force the load effect to pull the regenerated content into the editor as
+    // soon as its snapshot arrives, and keep forcing until the op completes.
+    // The snapshot can land BEFORE generateSingleDocument resolves, so setting
+    // this only after the await raced and lost — the stale draft stayed and the
+    // next keystroke autosaved it over the regenerated document (R5-022).
+    regeneratingRef.current = true;
+    forceReloadRef.current = true;
     // Cancel any pending debounced autosave — otherwise a timer scheduled from a
     // pre-regen keystroke could fire mid-regenerate and write stale editor HTML
     // to editorContent after the new draft lands (CV data-loss window).
@@ -431,9 +446,21 @@ export default function DocumentEditor({
       clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
     }
+    // Per-property docs (deed_0, affidavitOfConsideration_1, gitRep3_0) must
+    // regenerate the SAME property. Without propertyIndex the backend falls back
+    // to the first property and writes a different un-suffixed doc, leaving this
+    // editor's document stale (R5-023). Derive the index from the doc id suffix.
+    const PER_PROPERTY_DOCS = new Set(['deed', 'affidavitOfConsideration', 'gitRep3']);
+    let propertyIndex: number | undefined;
+    if (PER_PROPERTY_DOCS.has(document.docType)) {
+      const base = documentId.replace(/_spouse$/, '');
+      const m = base.match(/_(\d+)$/);
+      if (m) propertyIndex = parseInt(m[1], 10);
+    }
     try {
-      // Snapshot current edits so they aren't lost (versions subcollection
-      // already retains prior content, but make doubly sure).
+      // Snapshot current edits so they aren't lost — flushing the in-memory
+      // unsaved HTML into editorContent lets the backend's pre-overwrite version
+      // snapshot capture it (matches the confirm dialog's promise).
       if (editor && hasUnsavedChanges) {
         await updateDoc<Document & { editorContent: string }>(docPath, {
           editorContent: editor.getHTML(),
@@ -445,31 +472,41 @@ export default function DocumentEditor({
         clientId,
         docType: document.docType,
         spouseRole: inferredSpouseRole,
+        propertyIndex,
       });
-      // Document data auto-refreshes via the useDocument subscription; force the
-      // load effect to pull the regenerated content into the editor (contentLoaded
-      // is already true, so without this the editor would keep the stale draft).
-      forceReloadRef.current = true;
     } catch (err) {
+      // Regen failed — cancel the forced reload so we keep the user's draft.
+      forceReloadRef.current = false;
       const msg = err instanceof Error ? err.message : String(err);
       setRegenError(msg);
       console.error('[DocumentEditor] regenerate failed:', err);
     } finally {
+      regeneratingRef.current = false;
       setRegenerating(false);
     }
   }, [document, documentId, docPath, editor, firmId, clientId, hasUnsavedChanges, userProfile]);
 
   // ── Restore a version ──
   const handleRestoreVersion = useCallback(
-    (content: string, _vn: number) => {
+    async (content: string, _vn: number) => {
       if (!editor) return;
+      // Preserve the CURRENT working copy as a version BEFORE overwriting it, so
+      // unsnapshotted edits aren't lost — the restore dialog promises exactly
+      // this (R5-024). saveVersion owns the version counter (currentVersionRef)
+      // and the parent-doc currentVersion bump, so routing through it also
+      // avoids the duplicate versionNumber VersionHistory produced by numbering
+      // restores off the lagging currentVersion prop.
+      const currentHtml = editor.getHTML();
+      if (currentHtml.replace(/<[^>]*>/g, '').trim()) {
+        await saveVersion(currentHtml, 'Auto-saved before restore');
+      }
       const safeContent = sanitizeHtml(content);
       editor.commands.setContent(safeContent, { emitUpdate: false });
       setHasUnsavedChanges(true);
       setSaveStatus('unsaved');
       scheduleAutoSave(safeContent);
     },
-    [editor, scheduleAutoSave],
+    [editor, saveVersion, scheduleAutoSave],
   );
 
   // ── Status change ──

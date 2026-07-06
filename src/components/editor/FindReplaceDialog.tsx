@@ -177,9 +177,21 @@ export default function FindReplaceDialog({
 
   // ── Replace current match ──
   const replaceCurrent = useCallback(() => {
-    if (!editor || matches.length === 0 || currentIndex < 0) return;
+    if (!editor || !findText) return;
 
-    const match = matches[currentIndex];
+    // Recompute against the LIVE document. The `matches` state is only refreshed
+    // on query/case change, but this panel is non-modal — the user can edit the
+    // document between searching and clicking Replace, which makes the cached
+    // from/to offsets point at a different (possibly off-screen) span and
+    // corrupts the wrong text in the legal document (R5-025).
+    const fresh = findMatches(editor, findText, caseSensitive);
+    if (fresh.length === 0) {
+      setMatches([]);
+      setCurrentIndex(-1);
+      return;
+    }
+    const idx = currentIndex >= 0 && currentIndex < fresh.length ? currentIndex : 0;
+    const match = fresh[idx];
     editor
       .chain()
       .focus()
@@ -191,10 +203,10 @@ export default function FindReplaceDialog({
     // Recompute matches after replacement
     const newMatches = findMatches(editor, findText, caseSensitive);
     setMatches(newMatches);
-    const nextIndex = Math.min(currentIndex, newMatches.length - 1);
+    const nextIndex = Math.min(idx, newMatches.length - 1);
     setCurrentIndex(nextIndex);
     if (nextIndex >= 0) navigateTo(nextIndex);
-  }, [editor, matches, currentIndex, replaceText, findText, caseSensitive, navigateTo]);
+  }, [editor, currentIndex, replaceText, findText, caseSensitive, navigateTo]);
 
   // ── Replace all matches ──
   const replaceAll = useCallback(() => {

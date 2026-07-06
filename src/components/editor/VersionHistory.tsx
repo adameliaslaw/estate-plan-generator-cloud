@@ -67,9 +67,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { useCollection, createDoc } from '@/hooks/useFirestore';
-import { useAuth } from '@/hooks/useAuth';
-import { serverTimestamp } from 'firebase/firestore';
+import { useCollection } from '@/hooks/useFirestore';
 import { type DocStatus } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -94,7 +92,7 @@ interface VersionHistoryProps {
   documentId: string;
   currentContent: string; // passed for future use (e.g. diff against current)
   currentVersion: number;
-  onRestoreVersion: (content: string, versionNumber: number) => void;
+  onRestoreVersion: (content: string, versionNumber: number) => void | Promise<void>;
   onSaveVersion: (changeNotes: string) => Promise<void>;
 }
 
@@ -433,7 +431,6 @@ export default function VersionHistory({
   onRestoreVersion,
   onSaveVersion,
 }: VersionHistoryProps) {
-  const { userProfile } = useAuth();
   const versionsPath = `firms/${firmId}/clients/${clientId}/documents/${documentId}/versions`;
 
   const { data: versions, loading } = useCollection<DocumentVersionRecord>(versionsPath);
@@ -480,19 +477,13 @@ export default function VersionHistory({
     setRestoring(true);
     setError('');
     try {
-      // Create a new version with the restored content
-      const newVersionNum = currentVersion + 1;
-      await createDoc(versionsPath, {
-        content: version.content,
-        versionNumber: newVersionNum,
-        createdAt: serverTimestamp(),
-        createdBy: userProfile?.uid ?? 'unknown',
-        createdByName: userProfile?.displayName ?? userProfile?.email ?? 'Unknown',
-        changeNotes: `Restored from version ${version.versionNumber}`,
-        status: 'draft' as DocStatus,
-        wordCount: countWords(version.content),
-      });
-      onRestoreVersion(version.content, newVersionNum);
+      // Delegate to the parent, which snapshots the CURRENT working copy as a
+      // version BEFORE loading this (older) content and owns version numbering.
+      // Previously this created a version doc holding the OLD restored content
+      // (never the current edits, contradicting the dialog's "no work will be
+      // lost" promise) and numbered it off the lagging currentVersion prop,
+      // producing duplicate versionNumbers (R5-024).
+      await onRestoreVersion(version.content, version.versionNumber);
       setRestoreConfirm(null);
       onClose();
     } catch (err) {
