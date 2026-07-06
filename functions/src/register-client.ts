@@ -4,9 +4,9 @@
  * Public callable function that powers the questionnaire self-registration
  * flow. When an attorney shares a generic link (/questionnaire/:firmId/register),
  * clients land on a page that asks for their name and email. This function
- * either finds their existing record or creates a new prospect stub so the
- * client can be redirected into the questionnaire without the attorney
- * manually sending a per-client invite.
+ * either claims a specific existing record via an attorney-issued token, or
+ * (for the generic firm link, no token) creates a fresh prospect stub, so the
+ * client can be redirected into the questionnaire.
  *
  * The caller must hold a Firebase Auth token. The register page signs the
  * visitor in anonymously BEFORE calling this, so legitimate users are
@@ -16,6 +16,14 @@
  * Firestore rules check (`resource.data.linkedUserId == request.auth.uid`), so
  * binding it to the token prevents a caller from linking a record to someone
  * else's session (audit finding BM).
+ *
+ * R5-010: this flow used to CLAIM any unlinked existing record on a bare
+ * name+email match. Email is not a verified identity in the anonymous flow, so
+ * that let anyone who knew a pre-created client's email take over their record.
+ * Claiming an existing record now requires a `registrationToken` the attorney
+ * minted (createClientRegistrationLink) and embedded in a personal invite link.
+ * Without a token, the generic link can ONLY create a brand-new prospect stub —
+ * it never looks a record up by email.
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -78,17 +86,13 @@ export const registerClientFromLink = onCall(
       email?: unknown;
       firstName?: unknown;
       lastName?: unknown;
+      token?: unknown;
     };
 
     const firmId = typeof data.firmId === 'string' ? data.firmId.trim() : '';
-    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
-    const firstName = typeof data.firstName === 'string' ? data.firstName.trim() : '';
-    const lastName = typeof data.lastName === 'string' ? data.lastName.trim() : '';
+    const token = typeof data.token === 'string' ? data.token.trim() : '';
 
     if (!firmId) throw new HttpsError('invalid-argument', 'firmId is required.');
-    if (!email || !EMAIL_RE.test(email)) throw new HttpsError('invalid-argument', 'A valid email address is required.');
-    if (!firstName) throw new HttpsError('invalid-argument', 'First name is required.');
-    if (!lastName) throw new HttpsError('invalid-argument', 'Last name is required.');
 
     const db = admin.firestore();
 
@@ -100,90 +104,60 @@ export const registerClientFromLink = onCall(
 
     const clientsCol = db.collection(`firms/${firmId}/clients`);
 
-    // Creates a fresh prospect stub linked to this anonymous session so the
-    // visitor can immediately start the questionnaire on their own record.
-    async function createStub(
-      extra: admin.firestore.DocumentData = {},
-    ): Promise<string> {
-      // Bound per-firm flooding before writing a new record.
-      await enforceRegistrationRateLimit(db, firmId);
-      const ref = clientsCol.doc();
-      await ref.set({
-        firmId,
-        personalInfo: { firstName, lastName, email },
-        linkedUserId: linkUid,
-        status: 'prospect',
-        isArchived: false,
-        questionnaireProgress: {
-          status: 'not_started',
-          sectionsCompleted: [],
-          lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdVia: 'questionnaire_link',
-        ...extra,
-      });
-      return ref.id;
-    }
-
-    // Look for an existing client record with this email.
-    const existingSnap = await clientsCol
-      .where('personalInfo.email', '==', email)
-      .limit(1)
-      .get();
-
-    if (!existingSnap.empty) {
-      const existingDoc = existingSnap.docs[0];
-      const existingLink = existingDoc.get('linkedUserId') as string | undefined;
-
-      // The record is already linked to a DIFFERENT session. Email is not a
-      // verified identity here (anonymous registration), so silently overwriting
-      // the link would hand this visitor someone else's record — the
-      // account-hijack path. Instead, give the visitor their own fresh record so
-      // they're never locked out, and flag the collision for staff to reconcile.
-      if (existingLink && existingLink !== linkUid) {
-        const newId = await createStub({
-          emailCollision: true,
-          collidesWithClientId: existingDoc.id,
-          status: 'prospect',
-        });
-
-        // Surface it in the dashboard activity feed (best-effort).
-        try {
-          await clientsCol.parent!.collection('activities').add({
-            firmId,
-            userId: 'system',
-            userName: 'System',
-            action: 'questionnaire registration needs review',
-            description:
-              `A questionnaire registration used an email already linked to another ` +
-              `client record. A separate record was created for "${firstName} ${lastName}" ` +
-              `(${email}); please reconcile with the existing record.`,
-            context: { clientId: newId, collidesWithClientId: existingDoc.id, email },
-            clientId: newId,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        } catch (logErr) {
-          console.warn('[registerClientFromLink] Failed to log collision activity:', logErr);
-        }
-
-        return { clientId: newId, isNew: true, needsReview: true };
+    // ── Token path: claim the ONE record the attorney's invite link points to.
+    // The token is a bearer credential (createClientRegistrationLink), so we do
+    // not require the typed name/email to match — possession of the link is the
+    // authorization. We (re-)point linkedUserId to the current session so the
+    // real client is never locked out when they change devices/browsers.
+    if (token) {
+      const tokenSnap = await clientsCol
+        .where('registrationToken', '==', token)
+        .limit(1)
+        .get();
+      if (tokenSnap.empty) {
+        throw new HttpsError('not-found', 'This invitation link is invalid or has expired.');
       }
-
-      // Unlinked record (e.g. attorney-created or imported), or the same session
-      // returning: claim/keep the link so the visitor can read/write it.
-      if (!existingLink) {
-        await existingDoc.ref.update({
+      const clientDoc = tokenSnap.docs[0];
+      const existingLink = clientDoc.get('linkedUserId') as string | undefined;
+      if (existingLink !== linkUid) {
+        await clientDoc.ref.update({
           linkedUserId: linkUid,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
-      return { clientId: existingDoc.id, isNew: false };
+      return { clientId: clientDoc.id, isNew: false };
     }
 
-    // No existing record — create a fresh prospect stub.
-    const newId = await createStub();
-    return { clientId: newId, isNew: true };
+    // ── No token: self-registration via the generic firm link. Requires a
+    // name + email so staff have something to work with, and always creates a
+    // NEW prospect stub. It never looks a record up by email (that was the
+    // R5-010 takeover oracle).
+    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
+    const firstName = typeof data.firstName === 'string' ? data.firstName.trim() : '';
+    const lastName = typeof data.lastName === 'string' ? data.lastName.trim() : '';
+
+    if (!email || !EMAIL_RE.test(email)) throw new HttpsError('invalid-argument', 'A valid email address is required.');
+    if (!firstName) throw new HttpsError('invalid-argument', 'First name is required.');
+    if (!lastName) throw new HttpsError('invalid-argument', 'Last name is required.');
+
+    // Bound per-firm flooding before writing a new record.
+    await enforceRegistrationRateLimit(db, firmId);
+    const ref = clientsCol.doc();
+    await ref.set({
+      firmId,
+      personalInfo: { firstName, lastName, email },
+      linkedUserId: linkUid,
+      status: 'prospect',
+      isArchived: false,
+      questionnaireProgress: {
+        status: 'not_started',
+        sectionsCompleted: [],
+        lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdVia: 'questionnaire_link',
+    });
+    return { clientId: ref.id, isNew: true };
   },
 );

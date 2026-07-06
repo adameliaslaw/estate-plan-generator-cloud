@@ -13,6 +13,7 @@ import {
   Archive,
   Trash2,
   Upload,
+  Link2,
 } from 'lucide-react';
 import { orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -21,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
 import { logSystemActivity } from '@/utils/activity-logger';
+import { clientService } from '@/services/client-service';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -260,6 +262,18 @@ export default function ClientListPage() {
     } catch (error) {
       console.error('Error changing archive status:', error);
       toast.error('Failed to update client');
+    }
+  };
+
+  const handleCopyInviteLink = async (clientId: string) => {
+    if (!firmId) return;
+    try {
+      const url = await clientService.getRegistrationLink(firmId, clientId);
+      await navigator.clipboard.writeText(url);
+      toast.success('Personal invite link copied to clipboard');
+    } catch (error) {
+      console.error('Error creating invite link:', error);
+      toast.error('Failed to create invite link');
     }
   };
 
@@ -581,6 +595,15 @@ export default function ClientListPage() {
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      handleCopyInviteLink(client.id);
+                                    }}
+                                  >
+                                    <Link2 className="mr-2 h-4 w-4" />
+                                    Copy Invite Link
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       handleArchive(client.id, !!client.isArchived);
                                     }}
                                   >
@@ -687,6 +710,15 @@ export default function ClientListPage() {
                         <DropdownMenuSeparator />
                         {canManageClients && (
                           <>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyInviteLink(client.id);
+                              }}
+                            >
+                              <Link2 className="mr-2 h-4 w-4" />
+                              Copy Invite Link
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();

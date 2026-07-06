@@ -19,8 +19,8 @@
  *     the client record via the linkedUserId rule.
  */
 
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 import { functions, auth } from '@/config/firebase';
@@ -32,10 +32,11 @@ import { sanitizeNameField } from '@/utils/sanitize';
 
 interface RegisterRequest {
   firmId: string;
-  email: string;
-  firstName: string;
-  lastName: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
   anonymousUid: string;
+  token?: string;
 }
 
 interface RegisterResponse {
@@ -108,16 +109,74 @@ function Field({ id, label, error, children }: FieldProps) {
 export default function QuestionnaireRegisterPage() {
   const { firmId } = useParams<{ firmId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
 
   const [form, setForm] = useState<FormState>({ firstName: '', lastName: '', email: '' });
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+  // When a personal invite token is present we claim that specific record
+  // directly (no form) — the attorney vouched for this person via the link.
+  const [verifying, setVerifying] = useState(!!token);
+  const claimAttempted = useRef(false);
+
+  useEffect(() => {
+    if (!token || !firmId || claimAttempted.current) return;
+    claimAttempted.current = true;
+    (async () => {
+      try {
+        const anonCred = await signInAnonymously(auth);
+        const fn = httpsCallable<RegisterRequest, RegisterResponse>(
+          functions,
+          'registerClientFromLink',
+        );
+        const result = await fn({ firmId, token, anonymousUid: anonCred.user.uid });
+        navigate(`/questionnaire/${firmId}/${result.data.clientId}`, { replace: true });
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'This invitation link is invalid or has expired.';
+        setServerError(msg);
+        setVerifying(false);
+      }
+    })();
+  }, [token, firmId, navigate]);
 
   if (!firmId) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#ebf4ff] p-4">
         <p className="text-center text-red-600">Invalid link — no firm identifier found.</p>
+      </div>
+    );
+  }
+
+  // Personal invite link: show a verifying spinner while we claim the record,
+  // or an error if the token is bad. Never fall through to the self-registration
+  // form (that would create a stray record for a broken invite).
+  if (token) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#ebf4ff] p-4">
+        <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          {verifying ? (
+            <>
+              <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-[#2b6cb0] border-t-transparent" />
+              <h1 className="mb-1 text-xl font-bold text-[#1a365d]">Verifying your invitation…</h1>
+              <p className="text-sm text-gray-500">One moment while we open your questionnaire.</p>
+            </>
+          ) : (
+            <>
+              <h1 className="mb-1 text-xl font-bold text-[#1a365d]">Invitation link problem</h1>
+              <p className="mb-4 text-sm text-red-600" role="alert">
+                {serverError || 'This invitation link is invalid or has expired.'}
+              </p>
+              <p className="text-sm text-gray-500">
+                Please contact your attorney's office for a new link.
+              </p>
+            </>
+          )}
+        </div>
       </div>
     );
   }
