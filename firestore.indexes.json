@@ -257,6 +257,23 @@
       ]
     },
     {
+      "collectionGroup": "chatInsights",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 768,
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
       "collectionGroup": "chunks",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -329,16 +346,6 @@
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "files",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uploadedAt",
           "order": "DESCENDING"
         }
       ]
