@@ -4,6 +4,31 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #2 (Round 5 functions correctness batch — 8 highs shipped, #94)
+
+**TL;DR — Shipped ONE PR (#94, squash `2dab3bc`) fixing 8 of the 15 remaining Round 5 highs — all pure `functions/src` legal-correctness / data-integrity bugs, batched together so the functions deploy churns once instead of eight times. Verified green (functions tsc, root tsc -b, vite build, 640/640 tests, eslint clean) and squash-merged (none touch the Never-Break List). CI functions-deploy run `28821367813` is in progress; the PRIOR functions run (#87, `28816082008`) converged GREEN in ~45min, so the chunked-deploy workflow now deploys cleanly — no direct-deploy dance needed, just let CI finish (~45min).**
+
+**✅ Shipped in #94 (8 highs):**
+- **R5-002** (`unified-generator.ts` + `generate-documents.ts`): batch persisted the chosen `packageType` to the client doc only AFTER generation → first run used the stale/foundation tier (e.g. a fortress trust generated as foundation). Added optional `packageType` to `UnifiedGenerateParams`; batch now forwards the requested tier; `generateDocument` prefers `params.packageType ?? clientData.packageDetails?.packageType ?? 'foundation'`.
+- **R5-003** (`unified-generator.ts`): spouse title/pronouns were derived by INVERTING the new testator's gender (assumed opposite-sex marriage) → same-sex spouse rendered with wrong title/pronouns. Now derives the spouse (= original primary) side from the original primary's actual, reliably-captured gender; testator side from its own gender; neutral when unknown. **Residual:** when the questionnaire never captured the spouse's own gender, the swapped testator's gender is still inverted-backfilled (that's the separate R5-035 medium / a data-capture gap, not this fix).
+- **R5-004** (`doc-content-integrity-checker.ts`): read `ctx.personalInfo.fullName` — a path that never exists on `ClientContext` → the client/spouse name-missing checks NEVER fired (the test encoded the bug by feeding that exact fake shape). Now reads `ctx.computed.clientFullName`/`spouseFullName` + `ctx.client.personalInfo.maritalStatus`; test mocks corrected to the real `ClientContext` shape.
+- **R5-005** (`generators/trust-generator.ts`): fortress package injected "Generate as JOINT **Revocable** Living Trust" while labeled Irrevocable/Medicaid everywhere else → now instructs a JOINT **IRREVOCABLE** trust with co-settlor provisions (Adam's decision). Not a `.hbs` template — it's a generator prompt string, so no Never-Break gate.
+- **R5-013** (`esign-service.ts` webhook): never compared the event's `signature_request_id` to the doc's stored `eSignature.signatureRequestId` → superseded-request replays / forged cross-doc metadata could flip status or pull the wrong PDF. Added a guard that acks + ignores mismatches (before both the downloadable and status-transition paths).
+- **R5-014** (`esign-service.ts` resend): resend preserved the prior request's `signedStoragePath` (nested merge) → `storeSignedPdf`'s idempotency check short-circuited and never fetched the NEW executed PDF. Now clears `signedStoragePath`/`signedFileName`/`signedAt` via `FieldValue.delete()` on the resend write (Adam's minimal-fix decision).
+- **R5-016** (`process-ocr.ts`): OCR extraction schema used non-canonical field names (`dateOfBirth`/`ssn4`/`usCitizen`, nested `address` map, children `fullName`/`parentage`) → a scan merge corrupted/orphaned client data. Schema aligned to `src/types/index.ts` (`dob`/`ssnLast4`/`citizenship` with enum hints, flat `address`/`city`/`state`/`zip`/`county`, Child `name`/`dob`/`relationship`/`specialNeeds`).
+- **R5-017** (`template-learning.ts`): `serverTimestamp()` sentinel inside `arrayUnion()` → `recordCorrection` threw on EVERY call. Now `Timestamp.now()` (the file already documents this rule for `recordConfirmedVariables`).
+- **R5-018** (`wills-pilot.ts`): `TERMINAL_STATUSES` **and** the `extractedOk` counter (line ~354) both omitted `'extracted'` (the processor's real success status) → every success was reported as `timeout`, extraction_success_rate=0, gate never passed. Added `'extracted'` to both (the counter half was a second bug beyond the finding's stated one-line fix).
+
+**▶️ REMAINING open Round 5 highs (7) — pick up next session:**
+- **R5-010** (`register-client.ts`) — attorney-issued registration token (Adam's decision: unique per-client token in the invite link; NO bare-email-match claim). Bigger — needs the frontend invite-link flow + token storage/design, not just a functions edit. **Its own session.**
+- **R5-020** (`ClientListPage.tsx` + new callable) — Delete Client leaves documents/notes/payments/versions/Storage orphaned. Needs a NEW admin-SDK `recursiveDelete` callable + wire the frontend. Functions change + destructive → **verify hard, likely sign-off before merge. Its own PR.**
+- **R5-011/012** — SKIP (part of the LawPay skip; do not touch until LawPay resumes).
+- **R5-029/030** (`knowledge-base-service.ts`, `TemplatePreviewDialog.tsx`, backend `seed-templates.ts` update path) — template/KB save wipes `variables`/`softwareSource`. **Frontend-clean deploy** (hosting, green CI) — check whether the real fix is frontend-only (send the fields) or also needs `seed-templates.ts` to stop unconditionally overwriting. Good next pickup (independent, low-risk, clean deploy).
+
+**Deploy status:** #94 merged to `main`; CI functions-deploy `28821367813` running (~45min expected, converges green per the prior run). Nothing to babysit — CI auto-deploys. The 8 fixes go live when it finishes.
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM (Round 5 audit highs — 9 shipped, LawPay skipped per Adam)
 
 **TL;DR — Adam said skip the LawPay/card-charge fix and work the Round 5 audit highs by priority. Shipped 3 clean frontend PRs (#91/#92/#93) fixing 9 of the 24 open highs, all silent data-loss/crash classes. Also committed + pushed the firestore.indexes.json fix (chatInsights vector index + dropped redundant files/uploadedAt), and Adam manually deployed indexes (`firebase deploy --only firestore:indexes`) — verified live: chatInsights vector index present, files/uploadedAt single-field index gone; no code queries `files` by `uploadedAt`.**
