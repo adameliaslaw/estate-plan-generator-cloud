@@ -4,6 +4,32 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM (Round 5 audit highs — 9 shipped, LawPay skipped per Adam)
+
+**TL;DR — Adam said skip the LawPay/card-charge fix and work the Round 5 audit highs by priority. Shipped 3 clean frontend PRs (#91/#92/#93) fixing 9 of the 24 open highs, all silent data-loss/crash classes. Also committed + pushed the firestore.indexes.json fix (chatInsights vector index + dropped redundant files/uploadedAt), and Adam manually deployed indexes (`firebase deploy --only firestore:indexes`) — verified live: chatInsights vector index present, files/uploadedAt single-field index gone; no code queries `files` by `uploadedAt`.**
+
+**Round 5 open-highs accounting: 29 highs total − 1 (R5-001 LawPay critical, skipped) ... actually R5-001 is the critical; the 29 highs are R5-002…R5-030. 5 were already shipped in B19 (#87): R5-006/007/008/009/015. That left 24 open. Shipped this session: 9. Remaining: 15 (see below).**
+
+**✅ Shipped this session (all frontend → clean hosting deploys, auto-merged):**
+- **#91 `ba6ed81` — questionnaire intake integrity (R5-026/027/028):** `ignoreUndefinedProperties:true` in firebase.ts (clearing a currency field no longer throws on every autosave); AddressField state `<select>` single-write (non-NJ states now saveable); performSave/saveProgress return a success boolean → submit/save-and-close abort instead of falsely stamping `completed`, + red "Not saved — retry" indicator.
+- **#92 `31cc734` — editor data-loss (R5-022/023/024/025):** regenerate forceReloadRef race (held via regeneratingRef from op start); regenerate now passes propertyIndex (per-property deed/affidavit/gitRep3 regen the right property); version restore snapshots CURRENT content via parent saveVersion before loading old content (no lost edits, no dup versionNumber); single Replace recomputes offsets against the live doc.
+- **#93 `19a2d56` — dashboard/vault (R5-019/021):** dashboard passes `allClients` (not the 5 recent/`filteredClients`) as activeClientIds so all tasks/appointments show and the search box stops mutating the panels; vault Drive-sync Tooltip wrapped in its own TooltipProvider (was crashing the vault tab under Radix).
+
+**▶️ REMAINING open highs (15) — pick up here next session:**
+- **Frontend (deploy-clean):** R5-029/030 (template/KB save wipes `variables`/`softwareSource` — batch 4). Check whether the fix is purely frontend (add the fields to the uploadTemplate calls) or also needs the `seed-templates.ts` update path to stop unconditionally overwriting.
+- **Functions (churn-aware direct deploy):** R5-002 (packageType not forwarded to first-run generation), R5-003 (spouse-swap gender wrong for same-sex), R5-004 (doc-content-integrity-checker reads wrong path → name-missing check never fires), R5-016 (process-ocr schema mismatch corrupts client data), R5-017 (template-learning serverTimestamp-in-arrayUnion throws every call), R5-018 (wills-pilot TERMINAL_STATUSES omits 'extracted').
+- **R5-020 (its own PR):** Delete Client leaves documents/notes/payments/versions/Storage orphaned. Needs a NEW admin-SDK `recursiveDelete` callable (client SDK can't cascade) + wire ClientListPage. Functions change + destructive → verify hard, likely sign-off before merge.
+
+**🔴 NEEDS ADAM'S DECISION before code (do NOT guess):**
+- **R5-005** (trust-generator): fortress package injects "Generate as JOINT **Revocable** Living Trust" but fortress is labeled **Irrevocable/Medicaid** everywhere else (Dashboard/ClientList/BatchGenerate/summary). One of the two pipelines ships a legally wrong instrument. **Legal/product call: is fortress revocable or irrevocable?**
+- **R5-010** (register-client): unlinked client records are claimable on a bare email match with no identity proof (anonymous auth) → full read/write of another person's estate profile. BM (#70) only protected already-linked records. Fix needs an identity-proof design choice (email_verified? attorney-issued token?).
+- **R5-013/014** (e-sign webhook): no `signature_request_id` verification against the doc's stored id + replayable events; re-send keeps the old signed PDF. Fix design: reject events whose sig-req id ≠ stored id; clear signedStoragePath on resend.
+- **R5-011/012** (LawPay money-path): webhook marks underpayment as fully paid; `reference` is an editable field on the payment page (breaks BN reconciliation). **Held under "skip LawPay" — confirm whether these count as the LawPay skip or should be done.**
+
+**Verification bar met on all 3 PRs:** `npx tsc -b`, `npm run build`, `npm run test` (640/640), eslint (no new warnings). Full finding detail: `docs/AUDIT-findings.md` (Round 5 section, Critical+High table).
+
+---
+
 ## 🔴 START HERE NEXT SESSION — Card charge (AffiniPay Hosted Fields) is BROKEN, never worked
 
 **TL;DR — The "Charge Payment" card flow has never worked. Confirmed by live browser inspection 2026-07-06: the AffiniPay card-number hosted field displays typed digits but never registers them with the SDK, so `getPaymentToken` always sees an empty card and throws "field validation errors." This is a real integration bug in `src/components/payments/ChargePaymentDialog.tsx`, not user input. Needs a focused fix session — I can't type into the cross-origin iframe from automation, so every fix iteration needs Adam to test live.**
