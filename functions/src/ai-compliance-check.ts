@@ -20,6 +20,7 @@ import * as admin from 'firebase-admin';
 import { callAI, sanitizeForPrompt, parseAIJson, sanitizeObject } from './ai-client';
 import { COMPLIANCE_CHECK_SCHEMA } from './document-schemas';
 import { assertStaff } from './auth-guards';
+import { loadFirmSecrets } from './firm-secrets';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,9 +187,15 @@ export const checkDocumentCompliance = onCall(
     const docTitle: string = docData.title ?? 'Untitled Document';
     const docContent: string = docData.content ?? '';
 
-    // Fetch the firm to get settings for AI provider
+    // Fetch the firm to get settings for AI provider. Merge Functions-only
+    // secrets (provider API keys moved off the firm doc in #59 / finding AR)
+    // AFTER sanitizing so callAI can route to the firm's provider — without this
+    // merge the forced gpt-5.4 call has no OpenAI key and throws for every firm.
     const firmSnap = await db.doc(`firms/${firmId}`).get();
-    const firmData = firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {};
+    const firmData = {
+      ...(firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {}),
+      ...(await loadFirmSecrets(firmId)),
+    };
 
     if (!docContent.trim()) {
       throw new HttpsError(
@@ -197,8 +204,10 @@ export const checkDocumentCompliance = onCall(
       );
     }
 
-    // Sanitize content to prevent prompt injection
-    const sanitizedContent = sanitizeForPrompt(docContent);
+    // Sanitize content to prevent prompt injection. Raise the cap to 30k so the
+    // compliance verdict is computed from the whole document, not the first
+    // ~5,000 chars (sanitizeForPrompt's default cap).
+    const sanitizedContent = sanitizeForPrompt(docContent, { maxLength: 30000 });
 
     // ── Build user prompt ─────────────────────────────────────────────────
     const userPrompt = `Please perform a compliance review of the following New Jersey estate planning document.
