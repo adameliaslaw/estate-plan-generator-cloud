@@ -60,9 +60,10 @@ import { createDoc, updateDoc, deleteDoc } from '@/hooks/useFirestore';
 import { COLLECTIONS } from '@/config/constants';
 import { sanitizeInput } from '@/utils/sanitize';
 import { useAuth } from '@/hooks/useAuth';
-import type { CalendarEvent, EventType } from '@/types';
+import type { CalendarEvent, EventType, Client } from '@/types';
 import { documentService } from '@/services/document-service';
 import { logSystemActivity } from '@/utils/activity-logger';
+import { createClientFromName } from '@/lib/create-client';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +75,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -1116,18 +1118,49 @@ function NewEventDialog({
   onClose: () => void;
   onCreated: () => void;
   firmId: string;
-  clientId: string;
-  clientName: string;
+  clientId?: string;
+  clientName?: string;
   initialDate: Date;
 }) {
   const { userProfile } = useAuth();
   const [form, setForm] = useState<EventFormState>(() => blankForm(initialDate));
   const [saving, setSaving] = useState(false);
 
+  // Firm-wide mode (no fixed client): let the user pick/create a client to link.
+  const selectorMode = !clientId;
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const { data: clients } = useCollection<Client>(
+    selectorMode && firmId ? COLLECTIONS.CLIENTS(firmId) : null,
+  );
+
+  const clientDisplayName = (c: Client & { id: string }) => {
+    const pi = c.personalInfo;
+    return pi
+      ? `${pi.firstName ?? ''} ${pi.lastName ?? ''}`.trim() || c.id
+      : c.id;
+  };
+
+  async function handleCreateClient(name: string): Promise<ComboboxOption | null> {
+    if (!firmId || !userProfile?.uid) {
+      toast.error('Unable to determine your account. Please sign in again.');
+      return null;
+    }
+    try {
+      const c = await createClientFromName(firmId, userProfile.uid, name);
+      toast.success(`Client "${name}" created.`);
+      return { value: c.id, label: `${c.firstName} ${c.lastName}`.trim() };
+    } catch (err) {
+      console.error('[CalendarTab] create client failed:', err);
+      toast.error('Failed to create client.');
+      return null;
+    }
+  }
+
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setForm(blankForm(initialDate));
+      setSelectedClientId('');
     }
   }, [open, initialDate]);
 
@@ -1150,10 +1183,20 @@ function NewEventDialog({
         ? toTimestamp(form.date, '23:59')
         : toTimestamp(form.date, form.endTime);
 
+      // Resolve the linked client from the fixed prop (client dashboard) or the
+      // picker (firm-wide calendar). A firm-wide event may have no client.
+      const resolvedClientId = clientId ?? selectedClientId;
+      const selected = clients.find((c) => c.id === selectedClientId);
+      const resolvedClientName = clientId
+        ? (clientName ?? '')
+        : selected
+          ? clientDisplayName(selected)
+          : '';
+
       const payload: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'> = {
         firmId,
-        clientId,
-        clientName,
+        ...(resolvedClientId ? { clientId: resolvedClientId } : {}),
+        ...(resolvedClientName ? { clientName: resolvedClientName } : {}),
         assignedTo: userProfile?.uid ? [userProfile.uid] : [],
         eventType: form.eventType,
         title: sanitizeInput(form.title.trim()),
@@ -1173,8 +1216,8 @@ function NewEventDialog({
       const eventId = await createDoc(collectionPath, payload);
 
       await logSystemActivity(firmId, userProfile, 'scheduling appointment', {
-        clientId,
-        clientName,
+        clientId: resolvedClientId || undefined,
+        clientName: resolvedClientName || undefined,
         appointmentTitle: form.title.trim()
       });
 
@@ -1204,9 +1247,26 @@ function NewEventDialog({
             Schedule New Appointment
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-gray-500 -mt-1">
-          For <span className="font-medium text-gray-700">{clientName}</span>
-        </p>
+        {!selectorMode && (
+          <p className="text-sm text-gray-500 -mt-1">
+            For <span className="font-medium text-gray-700">{clientName}</span>
+          </p>
+        )}
+        {selectorMode && (
+          <div className="space-y-1.5">
+            <Label htmlFor="evt-client">Client</Label>
+            <Combobox
+              id="evt-client"
+              placeholder="Link a client (optional)…"
+              emptyText="No matching client."
+              value={selectedClientId}
+              onChange={setSelectedClientId}
+              options={clients.map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+              onCreate={handleCreateClient}
+              createLabel={(name) => `Create client "${name}"`}
+            />
+          </div>
+        )}
         <EventForm
           form={form}
           onChange={(u) => setForm((f) => ({ ...f, ...u }))}
@@ -1468,7 +1528,7 @@ export default function CalendarTab({
             ))}
           </div>
 
-          {userProfile?.role !== 'client' && clientId && (
+          {userProfile?.role !== 'client' && (
             <Button
               size="sm"
               className="gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white h-8"
@@ -1491,7 +1551,7 @@ export default function CalendarTab({
           <p className="mt-1 max-w-xs text-sm text-gray-400">
             Click &ldquo;New Appointment&rdquo; to schedule a consultation, signing, or follow-up{clientName ? ` for ${clientName}` : ''}.
           </p>
-          {userProfile?.role !== 'client' && clientId && (
+          {userProfile?.role !== 'client' && (
             <Button
               size="sm"
               className="mt-5 gap-1.5 bg-[#1a365d] hover:bg-[#1e407a] text-white"
@@ -1551,7 +1611,7 @@ export default function CalendarTab({
       )}
 
       {/* ── New Event Dialog ───────────────────────────────────────────────── */}
-      {clientId && clientName && (
+      {userProfile?.role !== 'client' && (
         <NewEventDialog
           open={newEventOpen}
           onClose={() => setNewEventOpen(false)}
