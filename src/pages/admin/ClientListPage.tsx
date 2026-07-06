@@ -11,17 +11,15 @@ import {
   FileEdit,
   MoreVertical,
   Archive,
-  Trash2,
   Upload,
   Link2,
 } from 'lucide-react';
-import { orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
 import { COLLECTIONS, ROUTES } from '@/config/constants';
-import { logSystemActivity } from '@/utils/activity-logger';
 import { clientService } from '@/services/client-service';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -33,16 +31,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import type { Client, PackageType, QuestionnaireStatus } from '@/types';
 import BulkImportModal from '@/components/clients/BulkImportModal';
 
@@ -171,7 +159,6 @@ export default function ClientListPage() {
   const [showArchived, setShowArchived] = useState(false);
 
   // Archive/Delete state
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   // Sort state
   const [sortField, setSortField] = useState<SortField>('name');
@@ -274,26 +261,6 @@ export default function ClientListPage() {
     } catch (error) {
       console.error('Error creating invite link:', error);
       toast.error('Failed to create invite link');
-    }
-  };
-
-  const handleDelete = async (clientId: string) => {
-    if (!firmId) return;
-    try {
-      const client = clients.find(c => c.id === clientId);
-      const cName = client ? clientDisplayName(client) : 'Unknown Client';
-      await deleteDoc(doc(db, COLLECTIONS.CLIENTS(firmId), clientId));
-
-      await logSystemActivity(firmId, userProfile, 'deleting client', {
-        clientName: cName
-      });
-
-      toast.success('Client permanently deleted');
-    } catch (error) {
-      console.error('Error deleting client:', error);
-      toast.error('Failed to delete client');
-    } finally {
-      setIsDeleting(null);
     }
   };
 
@@ -610,17 +577,6 @@ export default function ClientListPage() {
                                     <Archive className="mr-2 h-4 w-4" />
                                     {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
                                   </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setIsDeleting(client.id);
-                                    }}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Client
-                                  </DropdownMenuItem>
                                 </>
                               )}
                             </DropdownMenuContent>
@@ -728,17 +684,6 @@ export default function ClientListPage() {
                               <Archive className="mr-2 h-4 w-4" />
                               {client.isArchived ? 'Unarchive Client' : 'Archive Client'}
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsDeleting(client.id);
-                              }}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete Client
-                            </DropdownMenuItem>
                           </>
                         )}
                       </DropdownMenuContent>
@@ -750,26 +695,6 @@ export default function ClientListPage() {
           </>
         )}
       </div>
-
-      <AlertDialog open={!!isDeleting} onOpenChange={(open) => !open && setIsDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the client and remove all of their data, questionnaires, and uploaded documents from our servers.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => isDeleting && handleDelete(isDeleting)}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
-              Confirm Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <BulkImportModal
         open={importOpen}
