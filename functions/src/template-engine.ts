@@ -776,7 +776,11 @@ export function insertOxfordAnd(html: string): string {
   // and produces malformed output. Adjacent <strong>s are almost always
   // a missing-separator bug in a name list — legitimate consecutive
   // emphasis spans are rare enough that this is safe.
-  let out = html.replace(/<\/strong>(\s*)<strong>/g, '</strong>, <strong>');
+  // Only TRULY-adjacent bold spans (no separator at all) are the missing-comma
+  // name-list bug. Spans separated by whitespace are legitimate prose emphasis
+  // (e.g. two consecutive bold words in a sentence) and must NOT get a comma
+  // inserted between them. (R5-044)
+  let out = html.replace(/<\/strong><strong>/g, '</strong>, <strong>');
   // Also un-do any " and " the AI may have already inserted between
   // non-final pair of items in a 3+ list (e.g. "X and Y<strong>Z</strong>"
   // → after the adjacency-fix becomes "X and Y, Z"). Convert " and Y, Z"
