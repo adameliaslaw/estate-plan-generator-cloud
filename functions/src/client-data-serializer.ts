@@ -255,10 +255,14 @@ export function serializeClientData(
       for (const r of realEstate) {
         const addr = sanitizeForPrompt(r.address ?? '');
         const city = sanitizeForPrompt(r.city ?? '');
+        // Use the property's actual state (RealEstate.state) so out-of-state
+        // property isn't presented to every generator as NJ; default NJ when
+        // unset. (R5-045)
+        const state = sanitizeForPrompt(r.state ?? 'NJ');
         const val = r.estimatedValue ? ` ($${Number(r.estimatedValue).toLocaleString()})` : '';
         const trust = r.transferToTrust ? ' [Transfer to Trust]' : '';
         const block = r.blockLot ? `, Block/Lot: ${r.blockLot}` : '';
-        assetLines.push(`    - ${addr}, ${city}, NJ${block}${val}${trust}`);
+        assetLines.push(`    - ${addr}, ${city}, ${state}${block}${val}${trust}`);
       }
     }
 

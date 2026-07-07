@@ -302,6 +302,18 @@ describe('serializeClientData — content correctness', () => {
     expect(result.hasSpecialNeedsChild).toBe(true);
     expect(result.text).toContain('[SPECIAL NEEDS]');
   });
+
+  it('renders a real-estate property in NJ by default when state is unset', () => {
+    const result = serializeClientData(fullClient(), firmData(), 'will');
+    expect(result.text).toContain('123 Main Street, Princeton, NJ');
+  });
+
+  it('renders an out-of-state property with its actual state, not NJ (R5-045)', () => {
+    const c = fullClient();
+    c.assets.realEstate[0].state = 'FL';
+    const result = serializeClientData(c, firmData(), 'will');
+    expect(result.text).toContain('123 Main Street, Princeton, FL');
+  });
 });
 
 // ===========================================================================
