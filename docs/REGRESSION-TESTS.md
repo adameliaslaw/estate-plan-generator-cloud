@@ -218,11 +218,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** the address line was blank/missing.
 - **Test:** `tests/unit/questionnaire-street.test.ts` (2 tests) — output for a client with `personalInfo.address` set contains that address; renders cleanly (no `undefined`) when address absent.
 
-#### `R5-032` · #110 · generate-flex honest success · ⬜ automate
+#### `R5-032` · #110 · generate-flex honest success · 🤖 automated
 - **File:** `functions/src/generate-flex-document.ts`
 - **What broke:** returned `success:true` unconditionally even when the vault save failed (`generateDocument` returns `status:'error'` rather than throwing). Now `success = result.status !== 'error'`.
-- **Test to write:** callable returns `success:false` when the generator result status is `'error'`.
+- **Step:** `npm run test -- generate-flex-honest`
 - **Expected (pre-fix failure):** a failed save still reported `success:true`.
+- **Test:** `tests/unit/generate-flex-honest.test.ts` (2 tests) — invokes the onCall handler with `generateDocument` mocked; `status:'error'` → `success:false`, `status:'draft'` → `success:true`.
 
 #### `R5-038` · #110 · transcript filed empty · ⬜ automate
 - **File:** `functions/src/file-transcript-to-matter.ts`
@@ -282,11 +283,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** skipped/unsupported docs counted as extraction successes.
 - **Test:** `tests/unit/wills-pilot.test.ts` (R5-064 block) — buildReport over one `extracted` + one `skipped` doc yields `extraction_success_rate=0.5`, not `1.0`.
 
-#### `E/A/AE/B` · #52 · honest generation success + preserved HttpsError codes · ⬜ automate
+#### `E/A/AE/B` · #52 · honest generation success + preserved HttpsError codes · 🤖 automated
 - **File:** `functions/src/generate-documents.ts`, `generate-single-document.ts`
 - **What broke:** batch/single generation reported `success:true` regardless of per-doc `status:'error'` and re-wrapped typed `HttpsError` codes into generic `internal`.
-- **Test to write:** success derived from status/counts; original `HttpsError` code preserved (also observable in the UI — see T2 note).
+- **Step:** `npm run test -- generate-single-honest`
 - **Expected (pre-fix failure):** a failed generation returned `success:true` and lost the error code.
+- **Test:** `tests/unit/generate-single-honest.test.ts` (4 tests) — invokes the `generateSingleDocument` handler with the orchestrator mocked; asserts `success` follows the per-doc status (E), a typed `HttpsError('failed-precondition')` is re-thrown unchanged (B), and a plain `Error` is wrapped as `internal`. (The batch `generate-documents.ts` half shares the identical status-derived success + `instanceof HttpsError` guard.)
 
 ---
 
@@ -608,7 +610,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-039 | #111 | export DRAFT watermark gate | T1 | 🤖 |
 | R5-057 | #117 | email open-relay server-resolve | T1 | ⬜ automate |
 | R5-043 | #110 | questionnaire street dropped | T1 | 🤖 |
-| R5-032 | #110 | flex honest-success | T1 | ⬜ automate |
+| R5-032 | #110 | flex honest-success | T1 | 🤖 |
 | R5-038 | #110 | transcript filed empty | T1 | ⬜ automate |
 | R5-031 | #110 | notarized flag conflation | T1 | ⬜ automate |
 | R5-041 | #118 | fiduciary multi-role corruption | T1 | ⬜ automate |
@@ -618,7 +620,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-062 | #112 | wills-extractor validation | T1 | ⬜ automate |
 | R5-063 | #112 | wills-pilot classification rate | T1 | 🤖 |
 | R5-064 | #112 | wills-pilot extraction rate | T1 | 🤖 |
-| E/A/AE/B | #52 | honest generation success | T1 | ⬜ automate |
+| E/A/AE/B | #52 | honest generation success | T1 | 🤖 |
 | R5-028 | #91 | questionnaire undefined-write | T2 | ⬜ |
 | R5-026 | #91 | questionnaire non-NJ state | T2 | ⬜ |
 | R5-027 | #91 | questionnaire false completed | T2 | ⬜ |
@@ -670,7 +672,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 20 locked · ⬜ 11 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 22 locked · ⬜ 9 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
