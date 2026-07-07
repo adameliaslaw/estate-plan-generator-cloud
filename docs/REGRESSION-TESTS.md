@@ -152,11 +152,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** `packageType='fortress'` produced a "Revocable" prompt (the "JOINT Revocable Living Trust" note).
 - **Test:** `tests/unit/trust-generator-fortress.test.ts` (3 tests) — captures the user prompt via a mocked `callAI`; asserts the fortress branch emits "IRREVOCABLE"/"do NOT make it revocable", never the pre-fix note, and foundation injects neither.
 
-#### `R5-013` · #94 · esign webhook accepts mismatched signature_request_id · ⬜ automate
+#### `R5-013` · #94 · esign webhook accepts mismatched signature_request_id · 🤖 automated
 - **File:** `functions/src/esign-service.ts`
 - **What broke:** the webhook never compared the payload's `signature_request_id` to the doc's stored id (HMAC covers only event_time+type), so a stale/foreign request could flip the wrong doc's status or pull a signed PDF into another client's vault.
-- **Test to write:** the handler rejects an event whose id ≠ stored id before any write. (`tests/unit/esign-hmac.test.ts` covers HMAC only.)
+- **Step:** `npm run test -- esign-webhook-guard`
 - **Expected (pre-fix failure):** a foreign `signature_request_id` event was applied.
+- **Test:** `tests/unit/esign-webhook-guard.test.ts` (2 tests) — drives the real `onRequest` handler through the real HMAC verification with a path-aware Firestore mock (only the unused Puppeteer/PDF deps stubbed): a `signature_request_signed` event whose id ≠ the stored `eSignature.signatureRequestId` writes nothing and acks 200; a matching id applies `status:'signed'` + logs activity. (`tests/unit/esign-hmac.test.ts` still covers HMAC only.)
 
 #### `R5-014` · #94 · esign resend reuses prior signed PDF · ⬜ automate
 - **File:** `functions/src/esign-service.ts`
@@ -601,7 +602,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-002 | #94 | packageType forwarding | T1 | 🤖 |
 | R5-003 | #94 | spouse gender same-sex | T1 | 🤖 |
 | R5-005 | #94 | fortress irrevocable trust | T1 | 🤖 |
-| R5-013 | #94 | esign signature_request_id match | T1 | ⬜ automate |
+| R5-013 | #94 | esign signature_request_id match | T1 | 🤖 |
 | R5-014 | #94 | esign resend clears signed PDF | T1 | ⬜ automate |
 | R5-016 | #94 | process-ocr schema alignment | T1 | ⬜ automate |
 | R5-017 | #94 | template-learning serverTimestamp | T1 | 🤖 |
@@ -673,7 +674,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 23 locked · ⬜ 8 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 24 locked · ⬜ 7 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
