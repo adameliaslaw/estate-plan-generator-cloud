@@ -4,19 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 📍 SESSION — 2026-07-07 PM (T1 backlog nearly drained — batches 11–12 shipped, 2 heavy T1 left)
+## 📍 SESSION — 2026-07-07 PM (T1 `⬜ automate` backlog DRAINED — batches 11–14 shipped)
 
-**TL;DR — The `⬜ automate` T1 backlog is almost done. Batches 6–10 (R5-031/057/062/013/038) landed in prior sessions; this session shipped batch 11 (R5-041, #134) and batch 12 (R5-016, #135). Both merged squash → functions-deploy churns once each and converges (do NOT re-trigger). Full suite now 714/714 green.**
+**TL;DR — Every pure-unit T1 case now has a real passing test. Batches 6–10 (R5-031/057/062/013/038) landed in prior sessions; this session shipped batches 11–14 (R5-041 #134, R5-016 #135, R5-014 #137, R5-051-backend #138). Full suite 720/720 green. No `⬜ automate` cases remain — the T1 build list is done.**
 
-**✅ Shipped this session:**
-- **Batch 11 · R5-041** (#134, `process-template-file.ts`): extracted the fiduciary-path enforcement block into an exported test-only pure `enforceFiduciaryPaths(html)` helper (handler calls it, behavior unchanged); `tests/unit/process-template-fiduciary.test.ts` (3 tests) locks that a two-role paragraph keeps BOTH `{{fiduciaries.executor.*}}` and `{{fiduciaries.trustee.*}}`.
-- **Batch 12 · R5-016** (#135, `process-ocr.ts`): extracted the OCR schema prompt into exported `OCR_EXTRACTION_SCHEMA_PROMPT` (text unchanged); R5-016 block in `tests/unit/process-ocr-strip.test.ts` (3 tests) locks canonical field names + rejects pre-fix alternates (`fullName`/`dateOfBirth`/`ssn4`/`usCitizen`/nested address).
+**✅ Shipped this session (all merged squash):**
+- **Batch 11 · R5-041** (#134, `process-template-file.ts`, deploy-churns): extracted fiduciary-path enforcement into exported pure `enforceFiduciaryPaths(html)`; `process-template-fiduciary.test.ts` (3) locks that a two-role paragraph keeps BOTH `{{fiduciaries.executor.*}}` and `{{fiduciaries.trustee.*}}`.
+- **Batch 12 · R5-016** (#135, `process-ocr.ts`, deploy-churns): extracted the OCR schema into exported `OCR_EXTRACTION_SCHEMA_PROMPT`; R5-016 block in `process-ocr-strip.test.ts` (3) locks canonical field names, rejects pre-fix alternates.
+- **Batch 13 · R5-014** (#137, tests-only — **no deploy**): `esign-resend-clears-signed.test.ts` (2) drives the real `sendForSignature` v1 callable (path-aware Firestore mock capturing the set payload, stubbed Dropbox Sign `fetch`, inert Puppeteer/Chromium) → a resend writes `FieldValue.delete()` for `signedStoragePath`/`signedFileName`/`signedAt`.
+- **Batch 14 · R5-051 backend** (#138, `bulk-knowledge-import.ts`, deploy-churns): extracted the OCR-completeness arithmetic into exported pure `deriveOcrCompleteness(...)`; `bulk-knowledge-import-partial-ocr.test.ts` (4) locks >15MB → `ocrPartial`/`ocrPagesCount:0`, ≤15MB → full pageCount. (The raw `require('pdf-parse')` isn't unit-mockable + a real multi-MB fixture is impractical, so the pure helper is the seam.)
 
-**▶ NEXT — the 2 remaining `⬜ automate` T1 cases, both heavier (need to drive the real onCall handler with external-service stubs, à la `email-open-relay.test.ts` / `document-save-notarized.test.ts`):**
-- **R5-014** (`esign-service.ts`): drive `sendForSignature` with Firestore mock capturing the `docRef.set` payload + stubbed `renderDocumentPdf` (Puppeteer) + stubbed global `fetch` returning a `signature_request_id`; assert a resend writes `signedStoragePath`/`signedFileName`/`signedAt` = `FieldValue.delete()`.
-- **R5-051 (backend half)** (`bulk-knowledge-import.ts`): heaviest — `extractFileText` over a large (>15MB) multi-chunk scanned PDF with the Gemini OCR call stubbed → `status:'partial'`, `ocrPagesCount:0`, non-empty warning. Needs a multi-chunk PDF fixture + OCR mock.
+**Test-mocking gotchas learned this session (for the next T1-style work):** a bare `vi.mock('firebase-functions/v1' | 'pdf-parse')` **no-ops** when the module resolves through `functions/node_modules` and is actually invoked — mock the **resolvable node_modules path** (both `lib/esm/.../*.mjs` and `lib/.../*.js` for firebase-functions). For a raw `require('pdf-parse')` you can't intercept: polyfill `DOMMatrix` via `vi.hoisted` (runs before the hoisted import) so the module loads, and test a pure helper instead of the pdf path. Extract-a-pure-helper (`enforceFiduciaryPaths`, `deriveOcrCompleteness`, `OCR_EXTRACTION_SCHEMA_PROMPT`) is the repeatable pattern for logic buried in an onCall handler.
 
-Everything else in the backlog is T2 manual-UI / T3 multi-tenant / T4 race (R5-033, R5-052 need the emulator/failure-injection, not pure unit). `docs/REGRESSION-TESTS.md` per-case markers are the source of truth (the "only 7 automated" prose header there is now stale — many are 🤖). Prereq for any run: `npm ci --prefix functions` before `npm run test`.
+**▶ NEXT — T1 is done; the remaining `docs/REGRESSION-TESTS.md` backlog is all non-pure-unit:** T2 manual-UI (~31, browser), T3 multi-tenant (4, seeded 2nd firm), T4 race/emulator (R5-033 version-bump, R5-052 createFirmUser idempotency — need the Firestore emulator / failure-injection, NOT pure unit). Pick a tier and set up the harness (emulator seed for T3/T4; a browser click-path pass for T2). `docs/REGRESSION-TESTS.md` per-case markers are the source of truth (the "only 7 automated" prose header there is now stale — 15+ are 🤖). Prereq for any run: `npm ci --prefix functions` before `npm run test`.
 
 **Do NOT touch** the card-charge fix (`ChargePaymentDialog.tsx`) — separate 🔴 session needing a live AffiniPay test loop. Sole 🚫-blocked item needing Adam live.
 
