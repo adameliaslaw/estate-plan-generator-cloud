@@ -265,11 +265,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** `extractFileText` over a large multi-chunk scanned PDF → `status:'partial'`, `ocrPagesCount:0`, non-empty warning.
 - **Expected (pre-fix failure):** partial OCR persisted as `success` with the full pageCount.
 
-#### `R5-062` · #112 · wills-extractor unvalidated truncated extraction · ⬜ automate
+#### `R5-062` · #112 · wills-extractor unvalidated truncated extraction · 🤖 automated
 - **File:** `functions/src/wills-extractor.ts`
 - **What broke:** extraction output was stored with zero validation — `stop_reason` never checked (max_tokens truncation yields partial tool input), required fields/enums unverified, despite a "Step 9: Validate schema" header.
-- **Test to write:** mock the AI response with a truncated `stop_reason` / missing field → retry-once then `needs_human_review`.
+- **Step:** `npm run test -- wills-extractor-validation`
 - **Expected (pre-fix failure):** partial/truncated tool input stored as a valid extraction.
+- **Test:** `tests/unit/wills-extractor-validation.test.ts` (6 tests) — mocks the Anthropic SDK and queues per-attempt responses; a `max_tokens` truncation, a missing declared-required field, and a missing tool_use block each retry once then stub (`extraction_confidence 0` + `type_fields null`, which `extractionNeedsReview` flags); a good retry after a first-attempt failure recovers the extraction; a complete first attempt stores without retrying.
 
 #### `R5-063` · #112 · wills-pilot classification rate inflated · 🤖 automated
 - **File:** `functions/src/wills-pilot.ts`
@@ -619,7 +620,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-065 | #118 | retemplatize block-helper strip | T1 | 🤖 |
 | R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
 | R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | ⬜ automate |
-| R5-062 | #112 | wills-extractor validation | T1 | ⬜ automate |
+| R5-062 | #112 | wills-extractor validation | T1 | 🤖 |
 | R5-063 | #112 | wills-pilot classification rate | T1 | 🤖 |
 | R5-064 | #112 | wills-pilot extraction rate | T1 | 🤖 |
 | E/A/AE/B | #52 | honest generation success | T1 | 🤖 |
@@ -674,7 +675,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 24 locked · ⬜ 7 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 25 locked · ⬜ 6 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
