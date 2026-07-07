@@ -4,6 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #13 (Round 5 core save path — R5-033 non-transactional version bump shipped #116)
+
+**TL;DR — Made the core vault-save version bump transactional so concurrent saves to the same docId can't lose a version snapshot or duplicate version numbers. This is the shared save path used by every generation route (batch/single/flex/chat-draft/revert), so it was handled carefully. Verified green (functions tsc, root tsc -b, vite build, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger).**
+
+**✅ Shipped in #116 (`document-save-helper.ts`):**
+- **R5-033** (data-integrity): `saveDocumentToVault` did a non-transactional read-modify-write — `get` → snapshot `v{N}` → `update currentVersion=N+1` + `arrayUnion({versionNumber:N+1})`. Two concurrent saves to the same deterministic docId both read `currentVersion=N`, both wrote `N+1`, and both appended an `N+1` summary entry → one save's content lost (last-write-wins), a version snapshot silently dropped, and duplicate `versionNumber`s in the summary array. Now the read + version-number computation + prior-content snapshot + main write run in one `db.runTransaction` (`tx.get(docRef)` then `tx.set(versionRef)` + `tx.update`/`tx.set(docRef)`). Firestore's optimistic concurrency invalidates the loser's read on the first commit and retries its callback against the fresh `currentVersion`.
+- **Binary Storage upload moved before the transaction:** Storage writes aren't transactional and the `.docx` object path is version-independent, so it uploads once up-front — a transaction retry must not re-upload the buffer. On tx failure the snapshot + main doc are now atomic (before, the snapshot could be written without the main update).
+- **Not unit-covered by design:** a real concurrency regression test needs the Firestore emulator (the unit suite's Firestore mock doesn't execute `runTransaction` callbacks); consistent with how prior version-bump fixes (CY #74, R5-069 #108) were verified. Relied on tsc + Firestore's documented transaction semantics.
+
+**▶️ REMAINING Round 5 mediums (~27 open):** ledger `docs/AUDIT-findings.md` 🟡 table is source of truth. Clean-functions batch is largely drained — what's left needs a decision or is higher-touch. **Needs design/decision:** R5-047 (chat history truncation), R5-048/049 (chat generation-intent heuristics — behavioral). **Security-sensitive (careful):** R5-052 (createFirmUser orphan), R5-056 (custom email template injection — mirror escapeHtml T9 fix), R5-057 (client-callable notification w/ arbitrary attorneyEmail → spam). **Complex/risky:** R5-040/041 (process-template-file), R5-044 (insertOxfordAnd comma), R5-065 (retemplatize strips block helpers). **Never-Break (sign-off):** R5-045 (serializer hardcodes NJ state), R5-046 (ai-client Gemini drops parts / no finishReason), R5-037 (rules admin cross-tenant). **Policy-gated frontend (ask Adam):** R5-076, R5-079. **DEFERRED (sign-off):** R5-074 + versions/comments rules gap, R5-080. **PARKED:** R5-053/054 (LawPay).
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #12 (Round 5 KB import — R5-051 silent partial OCR shipped #115)
 
 **TL;DR — Fixed the bulk KB import so a large scanned PDF that only gets its first ~15MB OCR'd is no longer reported as a clean full success. Cross-stack truth-in-status fix (functions + frontend). Verified green (functions tsc, root tsc -b, vite build, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → triggers BOTH a hosting deploy and a CI functions-deploy churn (converges on its own — do NOT re-trigger).**
