@@ -4,6 +4,21 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-07 PM #2 (T4 emulator harness stood up — R5-033 + R5-052 green)
+
+**TL;DR — Built the emulator-backed integration-test harness and landed the first two T4 tests, both verified green against live Firestore + Auth emulators (#140). This is new infra: the prior `security-rules.test.ts` was static file-analysis, not a real emulator test. Default `npm run test` still 720/720 (emulator tests excluded).**
+
+**✅ Shipped in #140:**
+- **Harness:** `vitest.emulator.config.ts` (node env, `tests/emulator/**`, serial) + `npm run test:emulator` (`firebase emulators:exec --only firestore,auth --project demo-eplan`) + `tests/emulator/_emulator.ts` (inits the functions/ firebase-admin against the emulators). `vitest.config.ts` excludes `tests/emulator/**` so the unit pass stays hermetic — **CI runs `npm run test` only, needs no Java.**
+- **R5-033** `document-save-version-race.test.ts` (1): two parallel `saveDocumentToVault` at one new docId → versions `[1,2]`, doc `currentVersion=2`, unique `versionNumber`s, one `v1` snapshot. Proves the `runTransaction` fix (the mock suite can't execute tx callbacks).
+- **R5-052** `create-firm-user-idempotency.test.ts` (2): real `createFirmUser` onCall vs Auth+Firestore emulators — no SendGrid key → `success+warning`, user persists; a `setCustomUserClaims`-injected post-create failure → throws `internal` + Auth user rolled back (`getUserByEmail`→`auth/user-not-found`).
+
+**⚙️ To RUN the emulator tests you need Java 21+** (Firestore emulator needs a JRE; firebase-tools 15.x requires JDK ≥ 21). This machine had **no Java** — verified this session with a portable Temurin JRE 21 (in the session scratchpad; not installed system-wide). For Adam to run `npm run test:emulator` locally, install a JDK 21+ (e.g. Temurin) and put `java` on PATH.
+
+**▶ NEXT (two independent tracks):**
+1. **Wire the emulator tests into CI** — add a `setup-java` (JDK 21) step + `npm run test:emulator` to `firebase-functions-deploy.yml` (or a new `emulator-tests.yml`). **This is a CI-workflow change = Never-Break → needs Adam sign-off** before merging.
+2. **Keep filling T4 with the harness** — the other T4 rows are `🚫 blocked` wills/calendar-sync cases (R5-055/058/059/060/061) that need injected-failure integration tests; several now become reachable with this harness (calendar-sync watermark, wills error-record paths). Or pivot to **T3 multi-tenant** (4 cases, seeded 2nd firm — the same emulator harness covers these via firestore.rules + cross-firm admin-SDK reads) or the **T2 browser** click-path pass.
+
 ## 📍 SESSION — 2026-07-07 PM (T1 `⬜ automate` backlog DRAINED — batches 11–14 shipped)
 
 **TL;DR — Every pure-unit T1 case now has a real passing test. Batches 6–10 (R5-031/057/062/013/038) landed in prior sessions; this session shipped batches 11–14 (R5-041 #134, R5-016 #135, R5-014 #137, R5-051-backend #138). Full suite 720/720 green. No `⬜ automate` cases remain — the T1 build list is done.**
