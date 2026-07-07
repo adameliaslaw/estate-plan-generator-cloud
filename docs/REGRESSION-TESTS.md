@@ -241,11 +241,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a fresh draft was saved with `notarized:true`.
 - **Test:** `tests/unit/document-save-notarized.test.ts` (4 tests) — drives `saveDocumentToVault` with a callback-executing `runTransaction` mock that captures the main-document payload; a fresh POA (`tx.set`) and a regenerated deed (`tx.update`) are both `notarized:false` even though `requiresNotarization` is true for them, and a will is false too. The `UploadDraftDialog.tsx` upload path is the frontend half (T2, manual). (This is the doc-content contract — the version-bump concurrency race is R5-033, still emulator-gated.)
 
-#### `R5-041` · #118 · fiduciary multi-role corruption · ⬜ automate
+#### `R5-041` · #118 · fiduciary multi-role corruption · 🤖 automated
 - **File:** `functions/src/process-template-file.ts`
 - **What broke:** fiduciary-path enforcement picked the FIRST matching role and rewrote ALL `{{fiduciaries.*}}` vars in a paragraph to it — corrupting paragraphs that name two roles ("the Executor shall consult the Trustee" → both become executor). Now only rewrites when exactly one role matches.
-- **Test to write:** a two-role paragraph keeps both `{{fiduciaries.executor}}` and `{{fiduciaries.trustee}}`.
+- **Step:** `npm run test -- process-template-fiduciary`
 - **Expected (pre-fix failure):** both vars collapsed to the first-matched role.
+- **Test:** `tests/unit/process-template-fiduciary.test.ts` (3 tests) — the fiduciary-enforcement block was extracted into an exported pure `enforceFiduciaryPaths(html)` helper (test-only; the handler now calls it, behavior unchanged). A two-role paragraph keeps BOTH `{{fiduciaries.executor.primary.name}}` and `{{fiduciaries.trustee.primary.name}}` (`fixCount=0`); a single-role paragraph with a genuinely mis-pathed var still corrects it (`fixCount=1`); a non-fiduciary paragraph is returned untouched.
 
 #### `R5-065` · #118 · retemplatize strips block helpers · 🤖 automated
 - **File:** `functions/src/retemplatize-templates.ts`
@@ -618,7 +619,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-032 | #110 | flex honest-success | T1 | 🤖 |
 | R5-038 | #110 | transcript filed empty | T1 | 🤖 |
 | R5-031 | #110 | notarized flag conflation | T1 | 🤖 (backend) |
-| R5-041 | #118 | fiduciary multi-role corruption | T1 | ⬜ automate |
+| R5-041 | #118 | fiduciary multi-role corruption | T1 | 🤖 automated |
 | R5-065 | #118 | retemplatize block-helper strip | T1 | 🤖 |
 | R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
 | R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | ⬜ automate |

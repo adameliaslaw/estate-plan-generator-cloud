@@ -600,78 +600,12 @@ Respond with a valid JSON object (no markdown fences):
         }
 
         // -------------------------------------------------------------------
-        // POST-PROCESSING: Fiduciary Path Enforcement
-        // When the same person serves in multiple fiduciary roles, the AI
-        // often reuses the first path it assigned. This step ensures each
-        // fiduciary section uses ONLY its own field paths.
+        // POST-PROCESSING: Fiduciary Path Enforcement (R5-041 — see
+        // enforceFiduciaryPaths helper below for the logic + rationale).
         // -------------------------------------------------------------------
-        const fiduciaryRoles = [
-          {
-            role: 'executor',
-            prefix: 'fiduciaries.executor.',
-            contextPatterns: [/\bexecutor\b/i, /\bexecutrix\b/i, /\bpersonal\s+representative\b/i, /\bappointment\s+of\s+.*executor/i],
-          },
-          {
-            role: 'trustee',
-            prefix: 'fiduciaries.trustee.',
-            contextPatterns: [/\btrustee\b/i, /\bco-trustee\b/i, /\bsuccessor\s+trustee\b/i],
-          },
-          {
-            role: 'guardian',
-            prefix: 'fiduciaries.guardian.',
-            contextPatterns: [/\bguardian\b/i, /\bguardians\b/i, /\bguardianship\b/i, /\bappointment\s+of\s+guardian/i],
-          },
-          {
-            role: 'powerOfAttorney',
-            prefix: 'fiduciaries.powerOfAttorney.',
-            contextPatterns: [/\bpower\s+of\s+attorney\b/i, /\battorney[\s-]+in[\s-]+fact\b/i, /\bagent\b.*\bpoa\b/i],
-          },
-          {
-            role: 'healthcareProxy',
-            prefix: 'fiduciaries.healthcareProxy.',
-            contextPatterns: [/\bhealthcare\s+proxy\b/i, /\bhealthcare\s+representative\b/i, /\bhealth\s+care\s+proxy\b/i, /\badvance\s+directive\b/i],
-          },
-        ];
-
-        // Split HTML into paragraphs/sections for context detection
-        const paragraphs = templatizedHtml.split(/(?=<p[\s>]|<h[1-6][\s>]|<div[\s>]|<li[\s>])/i);
-        let fixCount = 0;
-
-        const correctedParagraphs = paragraphs.map((para) => {
-          // Strip out handlebars variables before checking context so we don't accidentally match
-          // the word "executor" inside a leaked {{fiduciaries.executor.foo}} variable.
-          const textOnly = para.replace(/\{\{[^}]+\}\}/g, '');
-
-          // Determine what fiduciary role(s) this paragraph is about. Only rewrite
-          // when it unambiguously concerns EXACTLY ONE role. A paragraph that
-          // legitimately references two roles (e.g. "the Executor shall consult
-          // the Trustee") must be left alone — rewriting ALL of its
-          // {{fiduciaries.*}} variables to the first-matched role would corrupt
-          // the other role's references. (R5-041)
-          const hasFiduciaryVar = /\{\{fiduciaries\./.test(para);
-          const matchedRoles = hasFiduciaryVar
-            ? fiduciaryRoles.filter((role) => role.contextPatterns.some((p) => p.test(textOnly)))
-            : [];
-
-          if (matchedRoles.length !== 1) return para; // ambiguous or no context — leave as-is
-          const detectedRole = matchedRoles[0];
-
-          // In this paragraph, replace any fiduciary path that doesn't match the detected role
-          // Swap ONLY the role prefix — preserve the exact level (primary/alternate/successor/etc.) and field
-          return para.replace(/\{\{fiduciaries\.(\w+)\.((?:primary|alternate|successor|secondSuccessor|thirdSuccessor)\.\w+)\}\}/g,
-            (match, actualRole, levelAndField) => {
-              if (actualRole === detectedRole.role) return match; // Already correct
-
-              const corrected = `{{fiduciaries.${detectedRole.role}.${levelAndField}}}`;
-              console.log(`[processTemplateFile] Fiduciary path fix: ${match} → ${corrected} (context: ${detectedRole.role})`);
-              fixCount++;
-              return corrected;
-            },
-          );
-        });
-
+        const { html: enforcedHtml, fixCount } = enforceFiduciaryPaths(templatizedHtml);
         if (fixCount > 0) {
-          templatizedHtml = applyTemplateFormattingStyles(correctedParagraphs.join(''));
+          templatizedHtml = applyTemplateFormattingStyles(enforcedHtml);
           console.log(`[processTemplateFile] Fiduciary path enforcement: ${fixCount} corrections applied`);
         }
       } else {
@@ -952,6 +886,87 @@ export const confirmTemplateVariables = onCall(
     return { success: true, confirmed: variables.length };
   },
 );
+// ---------------------------------------------------------------------------
+// Fiduciary Path Enforcement (exported test-only — R5-041)
+//
+// When the same person serves in multiple fiduciary roles, the AI often reuses
+// the first path it assigned. This normalizes each paragraph's {{fiduciaries.*}}
+// variables to the role the paragraph is unambiguously about — but ONLY when
+// EXACTLY ONE role matches. A paragraph that legitimately references two roles
+// (e.g. "the Executor shall consult the Trustee") is left untouched: rewriting
+// ALL of its {{fiduciaries.*}} variables to the first-matched role would corrupt
+// the other role's references. Returns the (possibly) rewritten HTML plus the
+// number of fixes applied so the caller can decide whether to re-style.
+// ---------------------------------------------------------------------------
+export function enforceFiduciaryPaths(html: string): { html: string; fixCount: number } {
+  const fiduciaryRoles = [
+    {
+      role: 'executor',
+      prefix: 'fiduciaries.executor.',
+      contextPatterns: [/\bexecutor\b/i, /\bexecutrix\b/i, /\bpersonal\s+representative\b/i, /\bappointment\s+of\s+.*executor/i],
+    },
+    {
+      role: 'trustee',
+      prefix: 'fiduciaries.trustee.',
+      contextPatterns: [/\btrustee\b/i, /\bco-trustee\b/i, /\bsuccessor\s+trustee\b/i],
+    },
+    {
+      role: 'guardian',
+      prefix: 'fiduciaries.guardian.',
+      contextPatterns: [/\bguardian\b/i, /\bguardians\b/i, /\bguardianship\b/i, /\bappointment\s+of\s+guardian/i],
+    },
+    {
+      role: 'powerOfAttorney',
+      prefix: 'fiduciaries.powerOfAttorney.',
+      contextPatterns: [/\bpower\s+of\s+attorney\b/i, /\battorney[\s-]+in[\s-]+fact\b/i, /\bagent\b.*\bpoa\b/i],
+    },
+    {
+      role: 'healthcareProxy',
+      prefix: 'fiduciaries.healthcareProxy.',
+      contextPatterns: [/\bhealthcare\s+proxy\b/i, /\bhealthcare\s+representative\b/i, /\bhealth\s+care\s+proxy\b/i, /\badvance\s+directive\b/i],
+    },
+  ];
+
+  // Split HTML into paragraphs/sections for context detection
+  const paragraphs = html.split(/(?=<p[\s>]|<h[1-6][\s>]|<div[\s>]|<li[\s>])/i);
+  let fixCount = 0;
+
+  const correctedParagraphs = paragraphs.map((para) => {
+    // Strip out handlebars variables before checking context so we don't accidentally match
+    // the word "executor" inside a leaked {{fiduciaries.executor.foo}} variable.
+    const textOnly = para.replace(/\{\{[^}]+\}\}/g, '');
+
+    // Determine what fiduciary role(s) this paragraph is about. Only rewrite
+    // when it unambiguously concerns EXACTLY ONE role. A paragraph that
+    // legitimately references two roles (e.g. "the Executor shall consult
+    // the Trustee") must be left alone — rewriting ALL of its
+    // {{fiduciaries.*}} variables to the first-matched role would corrupt
+    // the other role's references. (R5-041)
+    const hasFiduciaryVar = /\{\{fiduciaries\./.test(para);
+    const matchedRoles = hasFiduciaryVar
+      ? fiduciaryRoles.filter((role) => role.contextPatterns.some((p) => p.test(textOnly)))
+      : [];
+
+    if (matchedRoles.length !== 1) return para; // ambiguous or no context — leave as-is
+    const detectedRole = matchedRoles[0];
+
+    // In this paragraph, replace any fiduciary path that doesn't match the detected role
+    // Swap ONLY the role prefix — preserve the exact level (primary/alternate/successor/etc.) and field
+    return para.replace(/\{\{fiduciaries\.(\w+)\.((?:primary|alternate|successor|secondSuccessor|thirdSuccessor)\.\w+)\}\}/g,
+      (match, actualRole, levelAndField) => {
+        if (actualRole === detectedRole.role) return match; // Already correct
+
+        const corrected = `{{fiduciaries.${detectedRole.role}.${levelAndField}}}`;
+        console.log(`[processTemplateFile] Fiduciary path fix: ${match} → ${corrected} (context: ${detectedRole.role})`);
+        fixCount++;
+        return corrected;
+      },
+    );
+  });
+
+  return { html: correctedParagraphs.join(''), fixCount };
+}
+
 /**
  * Post-processes converted HTML from mammoth to restore professional formatting
  * that mammoth typically strips (like Word auto-numbering).
