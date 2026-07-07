@@ -31,6 +31,38 @@ import {
 import { generateDocument } from './unified-generator';
 
 // ---------------------------------------------------------------------------
+// Post-reply memory extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the post-reply memory extraction to completion. These were previously
+ * launched fire-and-forget immediately before the callable returned, so Cloud
+ * Functions froze the instance CPU on return and the extraction (key facts,
+ * insight embeddings, KB corrections, client notes) silently never completed.
+ * Awaited here so it finishes before the response; both extractors run
+ * concurrently, so this adds only ~one extraction call's latency, not the sum.
+ * Never throws — a memory failure must not fail the chat turn. (R5-050)
+ */
+async function runMemoryExtraction(
+  firmId: string,
+  clientId: string,
+  convId: string,
+  messages: ConversationMessage[],
+  firmData: Record<string, unknown>,
+): Promise<void> {
+  const [keyFacts, corrections] = await Promise.allSettled([
+    extractAndSaveKeyFacts(firmId, clientId, convId, messages, firmData),
+    extractAndSaveCorrections(firmId, convId, messages, firmData),
+  ]);
+  if (keyFacts.status === 'rejected') {
+    console.error('[chatAi] extractAndSaveKeyFacts failed', { firmId, clientId, convId }, keyFacts.reason);
+  }
+  if (corrections.status === 'rejected') {
+    console.error('[chatAi] extractAndSaveCorrections failed', { firmId, convId }, corrections.reason);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -882,14 +914,10 @@ SOURCE PRIORITY (apply when grounding and citing your answer):
         const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
         result.conversationId = convId;
 
-        // Extract key facts (fire-and-forget)
+        // Extract key facts + corrections — awaited so the memory pipeline
+        // actually completes before the instance CPU is frozen on return. (R5-050)
         if (clientId && allMessages.length >= 4) {
-          extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch((err) =>
-            console.error('[chatAi] extractAndSaveKeyFacts failed', { firmId, clientId, convId }, err),
-          );
-          extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch((err) =>
-            console.error('[chatAi] extractAndSaveCorrections failed', { firmId, convId }, err),
-          );
+          await runMemoryExtraction(firmId, clientId, convId, allMessages, firmData ?? {});
         }
 
         return result;
@@ -907,14 +935,10 @@ SOURCE PRIORITY (apply when grounding and citing your answer):
       // Save conversation
       const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId);
 
-      // Extract key facts (fire-and-forget)
+      // Extract key facts + corrections — awaited so the memory pipeline
+      // actually completes before the instance CPU is frozen on return. (R5-050)
       if (clientId && allMessages.length >= 4) {
-        extractAndSaveKeyFacts(firmId, clientId, convId, allMessages, firmData ?? {}).catch((err) =>
-          console.error('[chatAi] extractAndSaveKeyFacts failed', { firmId, clientId, convId }, err),
-        );
-        extractAndSaveCorrections(firmId, convId, allMessages, firmData ?? {}).catch((err) =>
-          console.error('[chatAi] extractAndSaveCorrections failed', { firmId, convId }, err),
-        );
+        await runMemoryExtraction(firmId, clientId, convId, allMessages, firmData ?? {});
       }
 
       return { reply: raw, conversationId: convId };
