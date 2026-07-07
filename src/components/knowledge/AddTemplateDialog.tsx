@@ -206,7 +206,14 @@ export function AddTemplateDialog({
       if (result.suggestedTags?.length > 0) setSelectedTags(result.suggestedTags);
       if (result.learningStats) setLearningStats(result.learningStats);
 
-      toast.success(`File processed — ${result.detectedVariables?.length || 0} variables detected.`);
+      // R5-040: when some sections couldn't be auto-templatized, the extracted
+      // HTML still contains the source document's real names/addresses. Warn
+      // loudly so the attorney templatizes those sections before saving.
+      if (result.warnings?.length) {
+        result.warnings.forEach((w) => toast.warning(w, { duration: 15000 }));
+      } else {
+        toast.success(`File processed — ${result.detectedVariables?.length || 0} variables detected.`);
+      }
     } catch {
       console.error('File upload/process error');
       toast.error('Failed to process template file.');

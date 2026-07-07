@@ -105,6 +105,10 @@ export function BulkTemplateUploadDialog({
     }
 
     const processedFiles: ProcessedFile[] = [];
+    // R5-040: files whose templatization was partial/failed still contain the
+    // source document's real names/addresses — surface them so they aren't
+    // saved as PII-leaking templates unreviewed.
+    const filesWithWarnings: string[] = [];
 
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
@@ -140,6 +144,7 @@ export function BulkTemplateUploadDialog({
         setResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'processing' } : r));
 
         const processed = await templateService.processTemplateFile(firmId, storagePath, file.name);
+        if (processed.warnings?.length) filesWithWarnings.push(file.name);
         const detectedDocType = processed.suggestedDocType || 'will';
         const baseName = file.name.replace(/\.(docx|pdf)$/i, '').replace(/[_-]/g, ' ');
         const vars = processed.detectedVariables?.map((v: DetectedVariable) => v.suggestedVariable) || [];
@@ -289,6 +294,12 @@ export function BulkTemplateUploadDialog({
     if (successCount > 0) {
       toast.success(`Successfully processed ${successCount} of ${selectedFiles.length} template(s).`);
       onSaved();
+    }
+    if (filesWithWarnings.length > 0) {
+      toast.warning(
+        `${filesWithWarnings.length} template(s) could not be fully auto-templatized and may still contain the original names/addresses — review before use: ${filesWithWarnings.join(', ')}`,
+        { duration: 15000 },
+      );
     }
   };
 

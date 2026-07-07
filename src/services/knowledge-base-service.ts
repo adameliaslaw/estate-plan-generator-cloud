@@ -330,6 +330,7 @@ export const templateService = {
       totalTemplatesLearned: number;
       dictionarySize: number;
     };
+    warnings?: string[];
   }> {
     const fn = httpsCallable(functions, 'processTemplateFile', { timeout: 540000 });
     const res = await fn({ firmId, storagePath, fileName });
@@ -353,6 +354,7 @@ export const templateService = {
         totalTemplatesLearned: number;
         dictionarySize: number;
       };
+      warnings?: string[];
     };
   },
 
