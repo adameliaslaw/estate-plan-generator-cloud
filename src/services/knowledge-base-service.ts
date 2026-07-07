@@ -161,15 +161,17 @@ export const knowledgeBaseService = {
     ocrRanges?: Record<number, { start: number; end: number }>,
   ): Promise<{
     processed: number;
+    partial: number;
     failed: number;
     total: number;
     results: {
       fileName: string;
       resourceId: string;
-      status: 'success' | 'failed';
+      status: 'success' | 'partial' | 'failed';
       extractedChars: number;
       ocrPagesCount: number;
       error?: string;
+      warning?: string;
     }[];
   }> {
     const { ref: storageRef, uploadBytesResumable } = await import('firebase/storage');
@@ -215,15 +217,17 @@ export const knowledgeBaseService = {
     const res = await fn({ firmId, files: uploadResults });
     return res.data as {
       processed: number;
+      partial: number;
       failed: number;
       total: number;
       results: {
         fileName: string;
         resourceId: string;
-        status: 'success' | 'failed';
+        status: 'success' | 'partial' | 'failed';
         extractedChars: number;
         ocrPagesCount: number;
         error?: string;
+        warning?: string;
       }[];
     };
   },

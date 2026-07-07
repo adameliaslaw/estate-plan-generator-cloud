@@ -36,15 +36,17 @@ export function BulkImportDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadResults, setUploadResults] = useState<{
     processed: number;
+    partial: number;
     failed: number;
     total: number;
     results: {
       fileName: string;
       resourceId: string;
-      status: 'success' | 'failed';
+      status: 'success' | 'partial' | 'failed';
       extractedChars: number;
       ocrPagesCount: number;
       error?: string;
+      warning?: string;
     }[];
   } | null>(null);
 
@@ -348,17 +350,22 @@ export function BulkImportDialog({
                   }`}>
                     <p className={`text-sm font-medium ${uploadResults.failed === 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
                       ✓ Processed {uploadResults.processed} of {uploadResults.total} files
+                      {uploadResults.partial > 0 && ` • ${uploadResults.partial} partial`}
                       {uploadResults.failed > 0 && ` • ${uploadResults.failed} failed`}
                     </p>
                   </div>
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
                     {uploadResults.results.map((r, i) => (
                       <div key={i} className="flex items-center gap-2 px-3 py-2 text-xs">
-                        <span className={`flex-shrink-0 ${r.status === 'success' ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {r.status === 'success' ? '✓' : '✗'}
+                        <span className={`flex-shrink-0 ${
+                          r.status === 'success' ? 'text-emerald-500'
+                            : r.status === 'partial' ? 'text-amber-500'
+                            : 'text-red-500'
+                        }`}>
+                          {r.status === 'success' ? '✓' : r.status === 'partial' ? '⚠' : '✗'}
                         </span>
                         <span className="flex-1 truncate text-gray-700">{r.fileName}</span>
-                        {r.status === 'success' && (
+                        {(r.status === 'success' || r.status === 'partial') && (
                           <>
                             <span className="text-gray-400">{(r.extractedChars / 1000).toFixed(1)}K chars</span>
                             {r.ocrPagesCount > 0 && (
@@ -366,8 +373,14 @@ export function BulkImportDialog({
                                 OCR {r.ocrPagesCount}pg
                               </span>
                             )}
+                            {r.status === 'partial' && (
+                              <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[10px]">
+                                Partial
+                              </span>
+                            )}
                           </>
                         )}
+                        {r.warning && <span className="text-amber-600 truncate max-w-[150px]" title={r.warning}>{r.warning}</span>}
                         {r.error && <span className="text-red-500 truncate max-w-[150px]" title={r.error}>{r.error}</span>}
                       </div>
                     ))}
