@@ -138,6 +138,23 @@ function stripFences(text: string): string {
   return cleaned.trim();
 }
 
+/**
+ * Replace simple leaf {{variable}} placeholders with blanks, but PRESERVE
+ * Handlebars block helpers ({{#each}}/{{/each}}, {{#if}}/{{/if}}, {{else}},
+ * {{^...}}), partials ({{>...}}), comments ({{!...}}), and loop-internal
+ * references ({{this...}}, {{@...}}). Blanking those out destroys the loop /
+ * conditional structure the AI cannot reliably reconstruct from underscores. (R5-065)
+ */
+function stripLeafVariables(html: string): string {
+  return html.replace(/\{\{[^}]+\}\}/g, (match) => {
+    const inner = match.slice(2, -2).trim();
+    if (/^[#/^>!]/.test(inner)) return match;       // block open/close, partial, comment, inverse
+    if (inner === 'else') return match;              // {{else}}
+    if (/^(?:this\b|@)/.test(inner)) return match;   // loop-internal references
+    return '_______________';
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
@@ -241,22 +258,28 @@ export const retemplatizeTemplates = onCall(
       // otherwise use current content. If current content has {{variables}},
       // strip them back to blank placeholders for clean re-templatization.
       let sourceContent: string;
-      let originalContentForRawStorage = data.content as string;
       if (data.rawContent && typeof data.rawContent === 'string' && data.rawContent.length > 100) {
         // rawContent was preserved from a previous run — use it
         sourceContent = data.rawContent;
-        originalContentForRawStorage = data.rawContent;
         console.log(`[retemplatize] ${name}: Using preserved rawContent (${sourceContent.length} chars)`);
       } else {
         sourceContent = data.content as string;
-        // If content already has Handlebars variables, strip them for clean re-templatization
-        const varCount = (sourceContent.match(/\{\{[^}]+\}\}/g) ?? []).length;
-        if (varCount > 0) {
-          console.log(`[retemplatize] ${name}: Stripping ${varCount} existing variables from content`);
-          // Replace {{variable}} with a generic placeholder so the AI sees clean text
-          sourceContent = sourceContent.replace(/\{\{[^}]+\}\}/g, '_______________');
-        }
       }
+
+      // Strip existing LEAF variables back to blanks so the AI re-templatizes
+      // clean text, but preserve block helpers / loop internals (see
+      // stripLeafVariables). No-op on genuinely raw HTML, and it self-heals a
+      // rawContent that was mislabeled by an earlier run. (R5-065)
+      const varCount = (sourceContent.match(/\{\{[^}]+\}\}/g) ?? []).length;
+      if (varCount > 0) {
+        console.log(`[retemplatize] ${name}: Stripping ${varCount} existing variables (preserving block helpers)`);
+        sourceContent = stripLeafVariables(sourceContent);
+      }
+      // Only genuinely raw HTML (data.content had zero Handlebars) is safe to
+      // persist as rawContent for future clean re-runs. Content we had to strip
+      // is already templatized — storing it as "raw" and then reusing it
+      // unstripped double-templatizes on the next run. (R5-065)
+      const sourceIsGenuinelyRaw = !data.rawContent && varCount === 0;
 
       sourceContent = applyTemplateFormattingStyles(sourceContent);
 
@@ -357,8 +380,8 @@ export const retemplatizeTemplates = onCall(
             retemplatizedBy: request.auth?.uid ?? 'system',
             retemplatizeFidelityScore: finalFidelity.score,
           };
-          if (!data.rawContent) {
-            updateData.rawContent = originalContentForRawStorage; // Save the original before overwriting
+          if (sourceIsGenuinelyRaw) {
+            updateData.rawContent = data.content; // genuine raw HTML — safe to preserve
           }
           // Re-affirm preserved metadata so a partial-write or schema migration
           // can't silently drop these. Falls back to existing values when fields
@@ -380,7 +403,7 @@ export const retemplatizeTemplates = onCall(
             if (data[field] !== undefined) updateData[field] = data[field];
           }
           await col.doc(templateId).update(updateData);
-          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : 'preserved'}, +metadata)`);
+          console.log(`[retemplatize] ${name}: Updated in Firestore (rawContent ${data.rawContent ? 'already saved' : sourceIsGenuinelyRaw ? 'preserved (genuine raw)' : 'not stored — source was already templatized'}, +metadata)`);
         }
 
         results.push({

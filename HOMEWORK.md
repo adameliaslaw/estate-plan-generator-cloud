@@ -4,6 +4,21 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #15 (Round 5 templatization correctness — R5-041/044/065 shipped #118)
+
+**TL;DR — Shipped 3 contained legal-prose/templatization-correctness 🟡 mediums in one functions PR (#118). Verified green (functions tsc, root tsc -b, 648/648 tests incl. 4 new Oxford-comma regression tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger). R5-040 (the 4th of the complex cluster) is cross-stack and shipped separately next.**
+
+**✅ Shipped in #118:**
+- **R5-041** (`process-template-file.ts`): fiduciary-path enforcement picked the FIRST role whose context matched a paragraph and rewrote ALL its `{{fiduciaries.*}}` vars to that role — corrupting paragraphs that legitimately name two roles ("the Executor shall consult the Trustee" → both become executor). Now it only rewrites when EXACTLY ONE role matches (`matchedRoles.length !== 1` → leave as-is).
+- **R5-044** (`template-engine.ts`): `insertOxfordAnd`'s pre-normalization rewrote every `</strong>[whitespace]<strong>` to `</strong>, <strong>`, inserting a spurious comma between legitimately adjacent bold spans separated by a space. Narrowed to TRULY-adjacent spans only (`/<\/strong><strong>/` — no separator, the actual missing-comma name-list bug). **New regression tests** (space-separated untouched; adjacent 2-name → "A and B"; adjacent 3-name → Oxford; existing comma list still fixed). **Tradeoff:** if a missing-comma name-list ever comes space-separated it now renders "A B" (no comma) rather than getting a wrong comma — a formatting miss, not corruption.
+- **R5-065** (`retemplatize-templates.ts`): force-mode stripping blanked ALL `{{...}}` including block helpers (`{{#each}}`/`{{/each}}`, `{{#if}}`, `{{else}}`), destroying loop/conditional structure. New `stripLeafVariables` helper blanks only leaf vars and preserves block helpers / partials / comments / `{{this}}`/`{{@}}` refs. Also, rawContent is now only persisted when the source was genuinely raw (zero Handlebars) — an already-templatized source is no longer mislabeled as raw and reused unstripped; the now-unconditional leaf-strip self-heals a previously mislabeled rawContent on next run.
+
+**▶️ NEXT (this session): R5-040** (`process-template-file.ts`, multi-pass) — a failed templatization chunk silently falls back to the ORIGINAL filled HTML (prior client PII) and the doc still returns success with high-confidence vars + a structure-only fidelity score that can't detect it. Cross-stack fix (backend `warnings[]` + surface in AddTemplateDialog/BulkTemplateUploadDialog) since the attorney reviews in an editor before saving — they must be told which sections still contain real names/addresses.
+
+**▶️ REMAINING Round 5 mediums (~21 open after #118+R5-040):** ledger `docs/AUDIT-findings.md` 🟡 table is source of truth. **Needs design/decision (Adam):** R5-047 (chat history truncation), R5-048/049 (chat generation-intent heuristics). **Never-Break (sign-off):** R5-045 (serializer hardcodes NJ state), R5-046 (ai-client Gemini drops parts / no finishReason), R5-037 (rules admin cross-tenant). **Policy-gated frontend (ask Adam):** R5-076, R5-079. **DEFERRED (sign-off):** R5-074 + versions/comments rules gap, R5-080. **PARKED:** R5-053/054 (LawPay).
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #14 (Round 5 security cluster — R5-052/056/057 shipped #117)
 
 **TL;DR — Shipped 3 security-sensitive 🟡 mediums in one functions PR (#117): a stored-XSS fix in custom email templates, a client-callable email open-relay/spam fix, and an idempotency fix for user creation. Verified green (functions tsc, root tsc -b, 644/644 tests incl. 3 new processCustomTemplate escape tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger).**

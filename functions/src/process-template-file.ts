@@ -627,26 +627,28 @@ Respond with a valid JSON object (no markdown fences):
           // the word "executor" inside a leaked {{fiduciaries.executor.foo}} variable.
           const textOnly = para.replace(/\{\{[^}]+\}\}/g, '');
 
-          // Determine what fiduciary role this paragraph is about
-          let detectedRole: typeof fiduciaryRoles[0] | null = null;
-          for (const role of fiduciaryRoles) {
-            // Only match context if the PLAIN text mentions the role AND the original para contains fiduciary variables
-            if (role.contextPatterns.some((p) => p.test(textOnly)) && /\{\{fiduciaries\./.test(para)) {
-              detectedRole = role;
-              break;
-            }
-          }
+          // Determine what fiduciary role(s) this paragraph is about. Only rewrite
+          // when it unambiguously concerns EXACTLY ONE role. A paragraph that
+          // legitimately references two roles (e.g. "the Executor shall consult
+          // the Trustee") must be left alone — rewriting ALL of its
+          // {{fiduciaries.*}} variables to the first-matched role would corrupt
+          // the other role's references. (R5-041)
+          const hasFiduciaryVar = /\{\{fiduciaries\./.test(para);
+          const matchedRoles = hasFiduciaryVar
+            ? fiduciaryRoles.filter((role) => role.contextPatterns.some((p) => p.test(textOnly)))
+            : [];
 
-          if (!detectedRole) return para; // No fiduciary context detected, leave as-is
+          if (matchedRoles.length !== 1) return para; // ambiguous or no context — leave as-is
+          const detectedRole = matchedRoles[0];
 
           // In this paragraph, replace any fiduciary path that doesn't match the detected role
           // Swap ONLY the role prefix — preserve the exact level (primary/alternate/successor/etc.) and field
           return para.replace(/\{\{fiduciaries\.(\w+)\.((?:primary|alternate|successor|secondSuccessor|thirdSuccessor)\.\w+)\}\}/g,
             (match, actualRole, levelAndField) => {
-              if (actualRole === detectedRole!.role) return match; // Already correct
+              if (actualRole === detectedRole.role) return match; // Already correct
 
-              const corrected = `{{fiduciaries.${detectedRole!.role}.${levelAndField}}}`;
-              console.log(`[processTemplateFile] Fiduciary path fix: ${match} → ${corrected} (context: ${detectedRole!.role})`);
+              const corrected = `{{fiduciaries.${detectedRole.role}.${levelAndField}}}`;
+              console.log(`[processTemplateFile] Fiduciary path fix: ${match} → ${corrected} (context: ${detectedRole.role})`);
               fixCount++;
               return corrected;
             },
