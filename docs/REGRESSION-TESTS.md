@@ -211,11 +211,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** request `attorneyEmail`/`clientName` are ignored; recipient resolved from `assignedAttorneyId`.
 - **Expected (pre-fix failure):** email sent to the caller-supplied arbitrary address.
 
-#### `R5-043` · #110 · questionnaire street dropped · ⬜ automate
+#### `R5-043` · #110 · questionnaire street dropped · 🤖 automated
 - **File:** `functions/src/generators/questionnaire-generator.ts`
 - **What broke:** address read `pi.street`/`si.street`, but the model field is `personalInfo.address` (no `street` field), so the street line was silently omitted from every vaulted questionnaire.
-- **Test to write:** output for a client with `personalInfo.address` set contains that address string.
+- **Step:** `npm run test -- questionnaire-street`
 - **Expected (pre-fix failure):** the address line was blank/missing.
+- **Test:** `tests/unit/questionnaire-street.test.ts` (2 tests) — output for a client with `personalInfo.address` set contains that address; renders cleanly (no `undefined`) when address absent.
 
 #### `R5-032` · #110 · generate-flex honest success · ⬜ automate
 - **File:** `functions/src/generate-flex-document.ts`
@@ -241,11 +242,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** a two-role paragraph keeps both `{{fiduciaries.executor}}` and `{{fiduciaries.trustee}}`.
 - **Expected (pre-fix failure):** both vars collapsed to the first-matched role.
 
-#### `R5-065` · #118 · retemplatize strips block helpers · ⬜ automate
+#### `R5-065` · #118 · retemplatize strips block helpers · 🤖 automated
 - **File:** `functions/src/retemplatize-templates.ts`
 - **What broke:** force-mode stripping blanked ALL `{{...}}` including block helpers (`{{#each}}`/`{{#if}}`/`{{else}}`), destroying loop/conditional structure. New `stripLeafVariables` blanks only leaf vars.
-- **Test to write:** `stripLeafVariables` preserves block helpers/`{{this}}` while blanking leaf `{{var}}`.
+- **Step:** `npm run test -- retemplatize-templates`
 - **Expected (pre-fix failure):** block helpers were blanked, collapsing structure.
+- **Test:** `tests/unit/retemplatize-templates.test.ts` (3 tests) — preserves block-open/close, `{{else}}`, `{{#if}}`, partials, comments, and `{{this}}`/`{{@index}}`; blanks leaf vars (including leaves inside a loop). `stripLeafVariables` exported test-only.
 
 #### `R5-046` · #120 · Gemini multi-part / truncation · 🤖 automated
 - **File:** `functions/src/ai-client.ts`
@@ -605,12 +607,12 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-035 | #111 | spouse-swap gender gate | T1 | 🤖 |
 | R5-039 | #111 | export DRAFT watermark gate | T1 | 🤖 |
 | R5-057 | #117 | email open-relay server-resolve | T1 | ⬜ automate |
-| R5-043 | #110 | questionnaire street dropped | T1 | ⬜ automate |
+| R5-043 | #110 | questionnaire street dropped | T1 | 🤖 |
 | R5-032 | #110 | flex honest-success | T1 | ⬜ automate |
 | R5-038 | #110 | transcript filed empty | T1 | ⬜ automate |
 | R5-031 | #110 | notarized flag conflation | T1 | ⬜ automate |
 | R5-041 | #118 | fiduciary multi-role corruption | T1 | ⬜ automate |
-| R5-065 | #118 | retemplatize block-helper strip | T1 | ⬜ automate |
+| R5-065 | #118 | retemplatize block-helper strip | T1 | 🤖 |
 | R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
 | R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | ⬜ automate |
 | R5-062 | #112 | wills-extractor validation | T1 | ⬜ automate |
@@ -668,7 +670,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 18 locked · ⬜ 13 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 20 locked · ⬜ 11 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
