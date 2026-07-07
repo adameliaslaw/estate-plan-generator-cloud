@@ -441,6 +441,10 @@ Respond with a valid JSON object (no markdown fences):
     let suggestedTags: string[] = [];
     let documentSummary = '';
     let templatizedHtml = extractedHtml;
+    // Truthful signal to the reviewing attorney when the returned HTML still
+    // contains un-templatized original content (real prior-client names /
+    // addresses) — the structure-only fidelity score can't detect that. (R5-040)
+    const warnings: string[] = [];
 
     try {
       // For large HTML documents (>30K chars), split at paragraph boundaries
@@ -486,6 +490,7 @@ Respond with a valid JSON object (no markdown fences):
         console.log(`[processTemplateFile] Split into ${htmlChunks.length} HTML chunks`);
 
         // Process chunks in PARALLEL to avoid timeout on large documents
+        let chunkFailures = 0;
         const chunkPromises = htmlChunks.map((chunk, ci) => {
           const chunkPrompt = `This is part ${ci + 1} of ${htmlChunks.length} of a legal document. Apply the same templatization rules to this section:\n\n${chunk}`;
           return callAI(
@@ -498,11 +503,21 @@ Respond with a valid JSON object (no markdown fences):
             return result;
           }).catch((err) => {
             console.error(`[processTemplateFile] Phase 1: Chunk ${ci + 1}/${htmlChunks.length} failed:`, err);
-            return chunk; // Fallback to original HTML for failed chunks
+            chunkFailures++;
+            return chunk; // Fallback to original HTML — but flag it below (R5-040)
           });
         });
         const processedChunks = await Promise.all(chunkPromises);
         templatizeResult = processedChunks.join('');
+
+        // A failed chunk's original HTML still holds the source document's real
+        // names/addresses. Warn the attorney so they don't save PII-leaking,
+        // un-templatized sections as a reusable template. (R5-040)
+        if (chunkFailures > 0) {
+          warnings.push(
+            `${chunkFailures} of ${htmlChunks.length} sections could not be auto-templatized and still contain the original document's names/addresses. Review and templatize those sections manually before saving.`,
+          );
+        }
       }
 
       // Clean up AI output — strip any markdown fences the model may add
@@ -661,6 +676,9 @@ Respond with a valid JSON object (no markdown fences):
         }
       } else {
         console.warn(`[processTemplateFile] Phase 1: AI output doesn't look right (hasVars=${hasVariables}, hasHtml=${looksLikeHtml}). Keeping original HTML.`);
+        warnings.push(
+          'Automatic templatization did not produce a valid template. The original document is shown for manual templatization — it still contains the original names/addresses.',
+        );
       }
 
       // -----------------------------------------------------------------------
@@ -698,7 +716,11 @@ Respond with a valid JSON object (no markdown fences):
       }
     } catch (err) {
       console.error('[processTemplateFile] AI templatization error:', err);
-      // Continue with original HTML — still return content for manual editing
+      // Continue with original HTML — still return content for manual editing —
+      // but tell the attorney it was NOT templatized and still holds real PII. (R5-040)
+      warnings.push(
+        'Automatic templatization failed. The original document is shown for manual templatization — it still contains the original names/addresses.',
+      );
     }
 
     // -----------------------------------------------------------------------
@@ -785,6 +807,7 @@ Return ONLY the modified HTML snippet (no JSON wrapper, no markdown fences, no e
       fileType: ext,
       learningStats: learningCtx.stats,
       fidelityScore: finalFidelity.score,
+      warnings,
     };
   },
 );
