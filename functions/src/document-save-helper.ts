@@ -190,7 +190,13 @@ export async function saveDocumentToVault(
     generatedByAI: true,
     aiModel: params.aiModel ?? 'unknown',
     requiresSignature: requiresSignature(params.docType),
-    notarized: requiresNotarization(params.docType),
+    // `notarized` means "has been notarized" (it sits with notarizedAt/notaryName
+    // in the Document type). A freshly generated draft has NOT been notarized, so
+    // it must be false — writing the requiresNotarization() *requirement* here
+    // falsely marked every notarization-required draft as already notarized
+    // (R5-031). The requirement is a doc-type property (requiresNotarization),
+    // not a completion state.
+    notarized: false,
     changeNotes,
     tags: existing.exists
       ? (allTags.length > 0 ? admin.firestore.FieldValue.arrayUnion(...allTags) : (existing.data()?.tags ?? []))

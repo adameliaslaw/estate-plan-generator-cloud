@@ -43,7 +43,6 @@ async function saveUploadedDraftToVault(params: {
   const { db } = await import('@/config/firebase');
 
   const SIGNATURE_REQUIRED = new Set(['will', 'pourOverWill', 'poa', 'livingWill', 'trust', 'deed']);
-  const NOTARIZED_REQUIRED = new Set(['poa', 'deed', 'affidavitOfConsideration', 'gitRep3']);
 
   // serverTimestamp() is only valid at the top level of a document — NOT inside arrays.
   // Use Timestamp.now() for the version entry (embedded in the versions array).
@@ -80,7 +79,10 @@ async function saveUploadedDraftToVault(params: {
     generatedByAI: false,
     uploadedDraft: true,
     requiresSignature: SIGNATURE_REQUIRED.has(params.docType),
-    notarized: NOTARIZED_REQUIRED.has(params.docType),
+    // `notarized` = "has been notarized" (a completion state, next to
+    // notarizedAt/notaryName). An uploaded draft has not been notarized — the
+    // doc-type notarization *requirement* must not be written here (R5-031).
+    notarized: false,
     tags: ['uploaded-draft'],
     isConfidential: true,
     changeNotes: 'Uploaded existing draft',
