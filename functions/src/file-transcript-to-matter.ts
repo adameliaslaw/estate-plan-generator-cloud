@@ -75,6 +75,16 @@ export const fileTranscriptToMatter = onCall(
     const sourceFilename = (transcript.sourceFilename as string | undefined) ?? 'untitled recording';
     const segments = (transcript.segments as TranscriptSegment[] | undefined) ?? [];
 
+    // Prefer speaker-attributed segments; fall back to the flat transcriptText
+    // (the canonical PendingTranscript field) so a transcript that has text but
+    // empty/missing segments doesn't file an empty note marked 'completed'
+    // (R5-038). Refuse to file when there is no content at all.
+    const transcriptText = (transcript.transcriptText as string | undefined)?.trim() ?? '';
+    const transcriptionBody = segments.length > 0 ? formatSegments(segments) : transcriptText;
+    if (!transcriptionBody.trim()) {
+      throw new HttpsError('failed-precondition', 'This transcript has no content to file.');
+    }
+
     const batch = db.batch();
     batch.set(noteRef, {
       firmId,
@@ -82,7 +92,7 @@ export const fileTranscriptToMatter = onCall(
       noteType: 'transcript',
       source: 'system',
       content: `Consult transcript filed — ${sourceFilename}`,
-      transcription: formatSegments(segments),
+      transcription: transcriptionBody,
       transcriptionStatus: 'completed',
       audioFileName: sourceFilename,
       audioDurationSeconds: (transcript.durationSeconds as number | undefined) ?? null,

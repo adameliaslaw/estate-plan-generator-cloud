@@ -106,10 +106,14 @@ export const generateFlexDocument = onCall(
         triggerSource: 'flex',
       });
 
-      console.log(`[generateFlexDocument] Saved ${result.docId}`);
+      console.log(`[generateFlexDocument] Saved ${result.docId} (status ${result.status})`);
 
+      // The orchestrator returns status:'error' when the vault save failed
+      // (it catches saveError instead of throwing), so success must reflect the
+      // real outcome — don't report success:true for a doc that didn't save
+      // (finding E / R5-032, matching generate-single-document).
       return {
-        success: true,
+        success: result.status !== 'error',
         docId: result.docId,
         docType: result.docType,
         title: result.title,

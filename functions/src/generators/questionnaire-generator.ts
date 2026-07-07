@@ -17,10 +17,25 @@ import * as admin from 'firebase-admin';
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Escape a value for safe interpolation into HTML text / double-quoted
+ * attributes. Every client-controlled field in this summary is inserted into
+ * vaulted HTML that is later rendered in the attorney's browser, so all such
+ * values MUST be escaped to prevent stored HTML/script injection (R5-042).
+ */
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function val(v: unknown, fallback = '—'): string {
   if (v === undefined || v === null || v === '') return fallback;
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-  return String(v);
+  return esc(String(v));
 }
 
 function fmtCurrency(n: unknown): string {
@@ -45,12 +60,12 @@ function row(...cols: string[]): string {
 function fiduciaryBlock(label: string, person: Record<string, unknown> | undefined | null): string {
   if (!person?.name) return `<div class="field"><span class="label">${label}</span><span class="value empty-note">Not specified</span></div>`;
   const parts: string[] = [];
-  if (person.name) parts.push(`<strong>${person.name}</strong>`);
-  if (person.relationship) parts.push(String(person.relationship));
+  if (person.name) parts.push(`<strong>${esc(person.name)}</strong>`);
+  if (person.relationship) parts.push(esc(person.relationship));
   const addr = [person.address, person.city, person.state, person.zip].filter(Boolean).join(', ');
-  if (addr) parts.push(addr);
-  if (person.phone) parts.push(`Phone: ${person.phone}`);
-  if (person.email) parts.push(`Email: ${person.email}`);
+  if (addr) parts.push(esc(addr));
+  if (person.phone) parts.push(`Phone: ${esc(person.phone)}`);
+  if (person.email) parts.push(`Email: ${esc(person.email)}`);
   return `<div class="field"><span class="label">${label}</span><span class="value">${parts.join('<br/>')}</span></div>`;
 }
 
@@ -102,7 +117,7 @@ export async function generateQuestionnaire(
 
       <div class="qs-header">
         <h1>Questionnaire Summary</h1>
-        <p>Vaulted Entry for <strong>${clientFullName}</strong></p>
+        <p>Vaulted Entry for <strong>${esc(clientFullName)}</strong></p>
         <p style="font-size:12px;color:#999;">Generated on ${new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' })} at ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' })}</p>
       </div>
   `;
@@ -139,7 +154,7 @@ export async function generateQuestionnaire(
   )}
       <div class="field">
         <span class="label">Home Address</span>
-        <span class="value">${[pi.street, `${pi.city || ''}, ${pi.state || ''} ${pi.zip || ''}`.trim(), pi.county ? `${pi.county} County` : ''].filter(v => v && v !== ', ').join('<br/>')|| '—'}</span>
+        <span class="value">${[esc(pi.address), `${esc(pi.city) || ''}, ${esc(pi.state) || ''} ${esc(pi.zip) || ''}`.trim(), pi.county ? `${esc(pi.county)} County` : ''].filter(v => v && v !== ', ').join('<br/>') || '—'}</span>
       </div>
       ${d.referralSource ? field('Referral Source', d.referralSource) : ''}
     </div>
@@ -169,7 +184,7 @@ export async function generateQuestionnaire(
         ${si.sameAddress ? field('Address', 'Same as client') : `
           <div class="field">
             <span class="label">Address</span>
-            <span class="value">${[si.street, `${si.city || ''}, ${si.state || ''} ${si.zip || ''}`.trim(), si.county ? `${si.county} County` : ''].filter(v => v && v !== ', ').join('<br/>') || '—'}</span>
+            <span class="value">${[esc(si.address), `${esc(si.city) || ''}, ${esc(si.state) || ''} ${esc(si.zip) || ''}`.trim(), si.county ? `${esc(si.county)} County` : ''].filter(v => v && v !== ', ').join('<br/>') || '—'}</span>
           </div>
         `}
         ${row(
@@ -305,7 +320,7 @@ export async function generateQuestionnaire(
       const addr = [p.address, p.city, p.state, p.zip].filter(Boolean).join(', ');
       html += `
         <div class="list-item">
-          <div class="list-item-title">Property ${i + 1}: ${addr || 'Unknown Address'}</div>
+          <div class="list-item-title">Property ${i + 1}: ${esc(addr) || 'Unknown Address'}</div>
           ${row(
         field('County', p.county),
         field('Block/Lot', p.blockLot),
