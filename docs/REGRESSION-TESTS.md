@@ -65,7 +65,7 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ## Running order
 
-1. **T1 first** — `npm ci --prefix functions` then `npm run test`. The 7 `🤖` cases must stay green. Then work the `⬜ automate` backlog (write the missing tests).
+1. **T1 first** — `npm ci --prefix functions` then `npm run test`. The `🤖` cases must stay green. Then work the `⬜ automate` backlog (write the missing tests).
 2. **T2** — emulator + seeded Firm A, walk each click-path, record pass/fail + date.
 3. **T3** — emulator + Firm A *and* Firm B, run the boundary checks.
 4. **T4** — code-review sign-off or write the integration/concurrency test.
@@ -143,11 +143,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** same-sex couple yields title/pronouns from the primary's real gender, consistent with the fiduciary label.
 - **Expected (pre-fix failure):** Karen+Anna (both female) → `spouseTitle='husband'`, male pronouns.
 
-#### `R5-005` · #94 · fortress trust prompt said "Revocable" · ⬜ automate
+#### `R5-005` · #94 · fortress trust prompt said "Revocable" · 🤖 automated
 - **File:** `functions/src/generators/trust-generator.ts`
 - **What broke:** the fortress prompt injected "JOINT Revocable Living Trust," contradicting the Irrevocable/Medicaid-protection label everywhere else — a revocable trust gives zero Medicaid protection.
-- **Test to write:** the fortress branch emits "Irrevocable" and never "Revocable."
-- **Expected (pre-fix failure):** `packageType='fortress'` produced a "Revocable" prompt.
+- **Step:** `npm run test -- trust-generator-fortress`
+- **Expected (pre-fix failure):** `packageType='fortress'` produced a "Revocable" prompt (the "JOINT Revocable Living Trust" note).
+- **Test:** `tests/unit/trust-generator-fortress.test.ts` (3 tests) — captures the user prompt via a mocked `callAI`; asserts the fortress branch emits "IRREVOCABLE"/"do NOT make it revocable", never the pre-fix note, and foundation injects neither.
 
 #### `R5-013` · #94 · esign webhook accepts mismatched signature_request_id · ⬜ automate
 - **File:** `functions/src/esign-service.ts`
@@ -167,11 +168,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** extracted objects match canonical `PersonalInfo`/`Child` field names. (`process-ocr-strip.test.ts` covers only `stripEmpty`.)
 - **Expected (pre-fix failure):** `personalInfo.address` came out a map; children lacked `name`/`dob`/`relationship`.
 
-#### `R5-017` · #94 · template-learning serverTimestamp inside arrayUnion throws · ⬜ automate
+#### `R5-017` · #94 · template-learning serverTimestamp inside arrayUnion throws · 🤖 automated
 - **File:** `functions/src/template-learning.ts`
 - **What broke:** `recordCorrection` put a `serverTimestamp()` sentinel inside `arrayUnion()` (rejected by the SDK) → every `recordTemplateCorrection` threw; correction memory + dictionary update never ran.
-- **Test to write:** the array entry uses `Timestamp.now()` and the call doesn't throw.
-- **Expected (pre-fix failure):** `recordCorrection` threw on every call.
+- **Step:** `npm run test -- template-learning-timestamp`
+- **Expected (pre-fix failure):** `recordCorrection` threw on every call (sentinel inside an array).
+- **Test:** `tests/unit/template-learning-timestamp.test.ts` (2 tests) — the firebase-admin mock throws on a serverTimestamp sentinel inside an array (mirroring the SDK); asserts `recordCorrection`/`recordConfirmedVariables` resolve and store concrete Timestamps in array elements.
 
 #### `R5-018` · #94 · wills-pilot reports successful extractions as timeout · ⬜ automate
 - **File:** `functions/src/wills-pilot.ts`
@@ -191,11 +193,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** inversion only when `maritalStatus === 'Married'`; other statuses leave gender undefined.
 - **Expected (pre-fix failure):** a Domestic Partnership couple had the primary's gender inverted.
 
-#### `R5-039` · #111 · DRAFT watermark only for status='draft' · ⬜ automate
+#### `R5-039` · #111 · DRAFT watermark only for status='draft' · 🤖 automated
 - **File:** `functions/src/export-pdf.ts`, `export-docx.ts`, `export-batch.ts`
 - **What broke:** the DRAFT watermark applied only when `status==='draft'`, so `review`/`needs_review`/`incomplete`/`error` docs exported as clean, final-looking legal instruments. Fix: `isDraft = status !== 'final'` at all four sites.
-- **Test to write:** every non-`'final'` status carries the watermark. (`export-functions.test.ts` doesn't exercise the gate.)
+- **Step:** `npm run test -- export-draft-watermark`
 - **Expected (pre-fix failure):** a `status='review'` export had no watermark.
+- **Test:** `tests/unit/export-draft-watermark.test.ts` (7 tests) — drives the PDF exporter's pure `buildLegalDocumentHtml`; asserts the CSS watermark overlay is present for every non-`'final'` status and absent only for `'final'`. (DOCX/batch share the identical `status !== 'final'` gate.)
 
 #### `R5-057` · #117 · email client-callable open relay · ⬜ automate
 - **File:** `functions/src/email-notifications.ts`
@@ -239,11 +242,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** `stripLeafVariables` preserves block helpers/`{{this}}` while blanking leaf `{{var}}`.
 - **Expected (pre-fix failure):** block helpers were blanked, collapsing structure.
 
-#### `R5-046` · #120 · Gemini multi-part / truncation · ⬜ automate
+#### `R5-046` · #120 · Gemini multi-part / truncation · 🤖 automated
 - **File:** `functions/src/ai-client.ts`
 - **What broke:** `_callGemini` returned only `parts[0].text` (dropping later text parts from grounding splits) and never checked `finishReason`. Now concatenates all parts and mirrors the MAX_TOKENS check. (Provider dispatch untouched — Never-Break.)
-- **Test to write:** multi-part response is concatenated; `MAX_TOKENS` throws in JSON mode. (Also on the prod-smoke list for real output.)
+- **Step:** `npm run test -- ai-client-gemini`
 - **Expected (pre-fix failure):** a multi-part Gemini answer was silently cut to part 0.
+- **Test:** `tests/unit/ai-client-gemini.test.ts` (3 tests) — drives the real `callAI` (dispatch untouched) with a stubbed `fetch`; asserts all parts concatenate, `MAX_TOKENS` throws in JSON mode, and prose mode returns the partial text. (Also on the prod-smoke list for real output.)
 
 #### `R5-051` (backend half) · #115 · bulk-KB partial-OCR honesty · ⬜ automate
 - **File:** `functions/src/bulk-knowledge-import.ts`
@@ -584,15 +588,15 @@ Short, deliberate, post-deploy — never bulk regression:
 | BT | #50 | OCR stripEmpty before merge | T1 | 🤖 |
 | R5-002 | #94 | packageType forwarding | T1 | ⬜ automate |
 | R5-003 | #94 | spouse gender same-sex | T1 | ⬜ automate |
-| R5-005 | #94 | fortress irrevocable trust | T1 | ⬜ automate |
+| R5-005 | #94 | fortress irrevocable trust | T1 | 🤖 |
 | R5-013 | #94 | esign signature_request_id match | T1 | ⬜ automate |
 | R5-014 | #94 | esign resend clears signed PDF | T1 | ⬜ automate |
 | R5-016 | #94 | process-ocr schema alignment | T1 | ⬜ automate |
-| R5-017 | #94 | template-learning serverTimestamp | T1 | ⬜ automate |
+| R5-017 | #94 | template-learning serverTimestamp | T1 | 🤖 |
 | R5-018 | #94 | wills-pilot terminal status | T1 | ⬜ automate |
 | R5-034 | #111 | spouse-swap missing-info dup | T1 | ⬜ automate |
 | R5-035 | #111 | spouse-swap gender gate | T1 | ⬜ automate |
-| R5-039 | #111 | export DRAFT watermark gate | T1 | ⬜ automate |
+| R5-039 | #111 | export DRAFT watermark gate | T1 | 🤖 |
 | R5-057 | #117 | email open-relay server-resolve | T1 | ⬜ automate |
 | R5-043 | #110 | questionnaire street dropped | T1 | ⬜ automate |
 | R5-032 | #110 | flex honest-success | T1 | ⬜ automate |
@@ -600,7 +604,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-031 | #110 | notarized flag conflation | T1 | ⬜ automate |
 | R5-041 | #118 | fiduciary multi-role corruption | T1 | ⬜ automate |
 | R5-065 | #118 | retemplatize block-helper strip | T1 | ⬜ automate |
-| R5-046 | #120 | Gemini multi-part/truncation | T1 | ⬜ automate |
+| R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
 | R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | ⬜ automate |
 | R5-062 | #112 | wills-extractor validation | T1 | ⬜ automate |
 | R5-063 | #112 | wills-pilot classification rate | T1 | ⬜ automate |
@@ -657,7 +661,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 7 locked · ⬜ 24 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 11 locked · ⬜ 20 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
