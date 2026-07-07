@@ -4,6 +4,18 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-07 (post-audit regression manual shipped — NEXT: write the T1 test backlog)
+
+**TL;DR — Built `docs/REGRESSION-TESTS.md`, a step-by-step regression manual covering ALL 80 fixes since the Round 5 audit (PRs #86–#120) + load-bearing rounds 1-4 criticals. Merged #122 (`0b190ef`), docs-only, no deploy (`docs/` not in CI trigger paths). Approach decided: hybrid automation-first, emulator-first + prod smoke. Each case is grounded in the real diff + checked against `tests/unit/`, schema = file · what broke · steps · expected-result-as-failure · test · status. Living doc: every future fix appends its case in the same PR.**
+
+**The honest headline: only 7 of 80 fixes have a real passing test today** (🤖 R5-004, R5-044, R5-045, R5-042, R5-056, AF, BT). Tally: 24 unit-lockable-but-unwritten (T1 backlog), 31 manual UI (T2), 4 multi-tenant (T3), 8 race/pipeline (T4), 4 prod-smoke, 2 blocked.
+
+**▶ NEXT SESSION — write the 24 `⬜ automate` T1 tests.** Pure vitest unit tests, no emulator/browser. Start batch (all `functions/src/`): R5-005 (fortress=Irrevocable), R5-002 (packageType forwarded), R5-003/R5-035 (spouse gender from primary + gated on Married), R5-017 (Timestamp.now not serverTimestamp in arrayUnion), R5-018 (wills-pilot 'extracted' terminal), R5-039 (DRAFT watermark for every non-'final' status), R5-046 (Gemini concat parts + MAX_TOKENS throw — do NOT touch provider dispatch, Never-Break). Each assertion is in the case's "Expected (pre-fix failure)" line. For every test landed: flip its status ⬜→🤖 + update the tally, same PR. Prereq: `npm ci --prefix functions` before `npm run test`.
+
+**Do NOT touch** the card-charge fix (`ChargePaymentDialog.tsx`) — separate 🔴 session needing a live AffiniPay test loop (see the card-charge session entry below). It's the sole 🚫-blocked item that needs Adam live.
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #15 (Round 5 templatization correctness — R5-041/044/065 shipped #118)
 
 **TL;DR — Shipped 3 contained legal-prose/templatization-correctness 🟡 mediums in one functions PR (#118). Verified green (functions tsc, root tsc -b, 648/648 tests incl. 4 new Oxford-comma regression tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger). R5-040 (the 4th of the complex cluster) is cross-stack and shipped separately next.**
