@@ -68,6 +68,24 @@ function truncateAtWordBoundary(text: string, maxLen: number): string {
 // Helper: extract text from a single file
 // ---------------------------------------------------------------------------
 
+/**
+ * Given a scanned PDF's byte size and page count, decide how much of it OCR can
+ * actually cover. Only the first ~15MB chunk is a valid standalone PDF sendable
+ * to Gemini, so a larger file is OCR'd partially. R5-051: a partial OCR must NOT
+ * fabricate the full pageCount — byte-chunking gives no reliable page boundary,
+ * so `ocrPagesCount` is 0 (unknown) when partial. Exported for regression tests.
+ */
+export function deriveOcrCompleteness(
+  bufferLength: number,
+  maxChunkBytes: number,
+  pageCount: number,
+): { totalChunks: number; chunksSkipped: number; ocrPartial: boolean; ocrPagesCount: number } {
+  const totalChunks = Math.ceil(bufferLength / maxChunkBytes);
+  const chunksSkipped = totalChunks > 1 ? totalChunks - 1 : 0;
+  const ocrPartial = chunksSkipped > 0;
+  return { totalChunks, chunksSkipped, ocrPartial, ocrPagesCount: ocrPartial ? 0 : pageCount };
+}
+
 async function extractFileText(
   buffer: Buffer,
   fileName: string,
@@ -151,11 +169,12 @@ async function extractFileText(
         if (ocrFullText.length > text.length) {
           text = ocrFullText;
           ocrApplied = true;
-          ocrPartial = chunksSkipped > 0;
           // Only claim a page count when the whole document was OCR'd. Byte-chunking
           // gives no reliable page boundary, so a partial OCR reports 0 (unknown)
           // rather than the full pageCount. (R5-051)
-          ocrPagesCount = ocrPartial ? 0 : pageCount;
+          const completeness = deriveOcrCompleteness(buffer.length, MAX_CHUNK_BYTES, pageCount);
+          ocrPartial = completeness.ocrPartial;
+          ocrPagesCount = completeness.ocrPagesCount;
           console.log(`[bulkKnowledgeImport] Gemini PDF OCR extracted ${ocrFullText.length} chars from "${fileName}"${ocrPartial ? ' (PARTIAL)' : ''}`);
         }
       } catch (err) {
