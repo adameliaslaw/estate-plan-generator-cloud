@@ -69,6 +69,17 @@ import './template-preview-styles.css';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * True if the template uses block-level Handlebars helpers ({{#each}}, {{#if}},
+ * {{/each}}, {{else}}, …). Such tokens can sit in HTML positions the TipTap /
+ * ProseMirror schema disallows (e.g. between <table> and <tr>); a WYSIWYG
+ * round-trip foster-parents them out of place and structurally corrupts the
+ * template. Templates that contain them are edited in Source view only.
+ */
+function hasBlockHelpers(html: string): boolean {
+  return /\{\{\s*[#/]/.test(html) || /\{\{\s*else\b/.test(html);
+}
+
 /** Extract all {{variableName}} tokens from an HTML/Handlebars string. */
 function extractVariables(html: string): string[] {
   const regex = /\{\{(?!#|\/|!|>)([^}]+)\}\}/g;
@@ -123,6 +134,9 @@ export function TemplatePreviewDialog({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'rendered' | 'source'>('rendered');
+  // True when the loaded template contains block-level Handlebars logic; such
+  // templates are edited in Source view only (WYSIWYG would corrupt them).
+  const [isLogicTemplate, setIsLogicTemplate] = useState(false);
   const [sourceContent, setSourceContent] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
@@ -178,6 +192,7 @@ export function TemplatePreviewDialog({
     setLoading(true);
     setIsDirty(false);
     setViewMode('rendered');
+    setIsLogicTemplate(false);
     setShowAddField(false);
     setNewFieldName('');
 
@@ -191,6 +206,11 @@ export function TemplatePreviewDialog({
         setSourceContent(decodedContent);
         setEditorHtml(decodedContent);
         editor?.commands.setContent(decodedContent, { emitUpdate: false });
+        // Logic templates cannot survive a WYSIWYG round-trip — open them in
+        // Source view so the pristine Handlebars is what gets saved.
+        const logic = hasBlockHelpers(decodedContent);
+        setIsLogicTemplate(logic);
+        setViewMode(logic ? 'source' : 'rendered');
       })
       .catch(() => {
         if (!cancelled) toast.error('Failed to load template content.');
@@ -206,9 +226,11 @@ export function TemplatePreviewDialog({
 
   // Current content (from whichever view is active)
   const getCurrentContent = useCallback(() => {
-    if (viewMode === 'source') return sourceContent;
+    // Never serialize a logic template from the editor — getHTML() would return
+    // the foster-parented (corrupted) markup. Source is authoritative for those.
+    if (viewMode === 'source' || isLogicTemplate) return sourceContent;
     return editor?.getHTML() ?? '';
-  }, [viewMode, sourceContent, editor]);
+  }, [viewMode, sourceContent, editor, isLogicTemplate]);
 
   // Variables extracted from content
   const variables = useMemo(() => {
@@ -223,11 +245,14 @@ export function TemplatePreviewDialog({
       setSourceContent(editor?.getHTML() ?? '');
       setViewMode('source');
     } else {
+      // Logic templates stay in Source — the rendered WYSIWYG would corrupt
+      // their Handlebars blocks, so the toggle to rendered is a no-op.
+      if (isLogicTemplate) return;
       // Going back to rendered: push source into editor
       editor?.commands.setContent(sourceContent, { emitUpdate: false });
       setViewMode('rendered');
     }
-  }, [viewMode, editor, sourceContent]);
+  }, [viewMode, editor, sourceContent, isLogicTemplate]);
 
   // Insert a variable at the cursor
   const handleInsertVariable = useCallback(
@@ -379,11 +404,17 @@ export function TemplatePreviewDialog({
               <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
                 <button
                   onClick={() => viewMode !== 'rendered' && handleToggleView()}
+                  disabled={isLogicTemplate}
+                  title={
+                    isLogicTemplate
+                      ? 'Rendered editing is disabled for templates with Handlebars logic ({{#each}}, {{#if}}, …) to prevent corrupting them. Edit in Source.'
+                      : undefined
+                  }
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     viewMode === 'rendered'
                       ? 'bg-white text-[#2b6cb0] shadow-sm'
                       : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                  } ${isLogicTemplate ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Eye className="h-3.5 w-3.5" />
                   Rendered
@@ -594,14 +625,21 @@ export function TemplatePreviewDialog({
                   </div>
                 </div>
               ) : (
-                <div className="p-4 h-full">
+                <div className="p-4 h-full flex flex-col gap-2">
+                  {isLogicTemplate && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 flex-shrink-0">
+                      This template contains Handlebars logic ({'{{#each}}'}, {'{{#if}}'}, …).
+                      It is edited in Source view only — the Rendered editor would relocate
+                      those blocks and corrupt the template.
+                    </p>
+                  )}
                   <textarea
                     value={sourceContent}
                     onChange={(e) => {
                       setSourceContent(e.target.value);
                       setIsDirty(true);
                     }}
-                    className="template-source-view w-full h-full resize-none"
+                    className="template-source-view w-full flex-1 resize-none"
                     spellCheck={false}
                   />
                 </div>

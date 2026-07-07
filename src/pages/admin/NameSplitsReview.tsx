@@ -11,7 +11,7 @@
  * writes the proposals; this page commits them after human review.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, runTransaction } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -205,43 +205,48 @@ export default function NameSplitsReview() {
   ) {
     if (!firmId) return;
     const clientRef = doc(db, `firms/${firmId}/clients`, clientId);
-    const snap = await getDocs(collection(db, `firms/${firmId}/clients`));
-    const target = snap.docs.find((d) => d.id === clientId);
-    if (!target) throw new Error(`Client ${clientId} not found`);
-    const client = target.data() as Record<string, unknown>;
-    const slots = enumerateSlots(client);
-    const labelToSlot = new Map(slots.map((s) => [s.label, s]));
 
-    for (const { label, action } of actions) {
-      const slotRef = labelToSlot.get(label);
-      if (!slotRef) continue;
-      const { parent, key } = slotRef;
-      const entry = (parent as Record<string | number, unknown>)[key] as Record<string, unknown>;
-      if (action === 'approve') {
-        const editKey = `${clientId}::${label}`;
-        const split = edits[editKey];
-        if (!split) continue;
-        entry.firstName = split.firstName.trim();
-        entry.middleName = split.middleName.trim();
-        entry.lastName = split.lastName.trim();
-        entry.suffix = split.suffix.trim();
-        const joined = joinName(split);
-        if (joined) entry.name = joined;
-        delete entry._pendingNameSplit;
-      } else {
-        // Skip — just clear the pending field; canonical name unchanged.
-        delete entry._pendingNameSplit;
+    // Read-modify-write inside a transaction: re-read the doc at commit time and
+    // write only the touched maps atomically, so a concurrent edit to a
+    // different slot between our read and write is not clobbered.
+    await runTransaction(db, async (tx) => {
+      const target = await tx.get(clientRef);
+      if (!target.exists()) throw new Error(`Client ${clientId} not found`);
+      const client = target.data() as Record<string, unknown>;
+      const slots = enumerateSlots(client);
+      const labelToSlot = new Map(slots.map((s) => [s.label, s]));
+
+      for (const { label, action } of actions) {
+        const slotRef = labelToSlot.get(label);
+        if (!slotRef) continue;
+        const { parent, key } = slotRef;
+        const entry = (parent as Record<string | number, unknown>)[key] as Record<string, unknown>;
+        if (action === 'approve') {
+          const editKey = `${clientId}::${label}`;
+          const split = edits[editKey];
+          if (!split) continue;
+          entry.firstName = split.firstName.trim();
+          entry.middleName = split.middleName.trim();
+          entry.lastName = split.lastName.trim();
+          entry.suffix = split.suffix.trim();
+          const joined = joinName(split);
+          if (joined) entry.name = joined;
+          delete entry._pendingNameSplit;
+        } else {
+          // Skip — just clear the pending field; canonical name unchanged.
+          delete entry._pendingNameSplit;
+        }
       }
-    }
 
-    const updates: Record<string, unknown> = {};
-    if (client.fiduciaries) updates.fiduciaries = client.fiduciaries;
-    if (client.children) updates.children = client.children;
-    if (client.grandchildren) updates.grandchildren = client.grandchildren;
-    if (client.otherDependents) updates.otherDependents = client.otherDependents;
-    if (client.guardianPrimary) updates.guardianPrimary = client.guardianPrimary;
-    if (client.guardianAlternate) updates.guardianAlternate = client.guardianAlternate;
-    await updateDoc(clientRef, updates);
+      const updates: Record<string, unknown> = {};
+      if (client.fiduciaries) updates.fiduciaries = client.fiduciaries;
+      if (client.children) updates.children = client.children;
+      if (client.grandchildren) updates.grandchildren = client.grandchildren;
+      if (client.otherDependents) updates.otherDependents = client.otherDependents;
+      if (client.guardianPrimary) updates.guardianPrimary = client.guardianPrimary;
+      if (client.guardianAlternate) updates.guardianAlternate = client.guardianAlternate;
+      tx.update(clientRef, updates);
+    });
 
     // Optimistically remove the affected entries from the local UI state.
     setGroups((prev) => prev.flatMap((g) => {
