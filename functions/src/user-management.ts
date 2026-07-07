@@ -106,7 +106,12 @@ export const createFirmUser = onCall(
 
     const auth = admin.auth();
     let newUserId = '';
+    let userCreated = false;
 
+    // ── Critical path: create + claims + profile ───────────────────────────
+    // These three must all succeed for a usable account. If any fails after the
+    // Auth user is created, roll it back so it isn't orphaned (no claims / no
+    // profile) with every retry then failing 'already-exists'. (R5-052)
     try {
       // 1. Create the user in Firebase Auth without a password.
       const userRecord = await auth.createUser({
@@ -114,6 +119,7 @@ export const createFirmUser = onCall(
         displayName: `${firstName} ${lastName}`.trim(),
       });
       newUserId = userRecord.uid;
+      userCreated = true;
 
       // 2. Set custom claims for RBAC in rules and front-end
       await auth.setCustomUserClaims(newUserId, { firmId, role, capabilities: capabilities || [] });
@@ -129,11 +135,36 @@ export const createFirmUser = onCall(
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         isActive: true,
       });
+    } catch (error: unknown) {
+      // Roll back only the user THIS call created (createUser itself failing —
+      // e.g. already-exists — leaves userCreated false, so we never delete a
+      // pre-existing account).
+      if (userCreated && newUserId) {
+        try {
+          await auth.deleteUser(newUserId);
+          logger.warn(`[createFirmUser] Rolled back orphaned auth user ${newUserId} after a post-create failure.`);
+        } catch (cleanupErr) {
+          logger.error(`[createFirmUser] Rollback failed for ${newUserId} — manual cleanup may be needed.`, cleanupErr);
+        }
+      }
+      if (error instanceof Error) {
+        logger.error(`[createFirmUser] Error creating user: ${error.message}`, error);
+        if ((error as { code?: string }).code === 'auth/email-already-exists') {
+          throw new HttpsError('already-exists', 'The email address is already in use by another account.');
+        }
+        throw new HttpsError('internal', `Failed to create user: ${error.message}`);
+      }
+      logger.error(`[createFirmUser] Unknown error creating user`, error);
+      throw new HttpsError('internal', `Failed to create user.`);
+    }
 
-      // 4. Generate password reset link to be sent via email
+    // ── Non-critical path: invitation email ────────────────────────────────
+    // The user is fully created, claimed, and profiled at this point. An email
+    // failure must NOT fail the whole operation — otherwise the caller retries
+    // into 'already-exists' against a now-valid user. Return success + a warning.
+    try {
       const resetLink = await auth.generatePasswordResetLink(email);
 
-      // 5. Send Welcome Email via SendGrid
       const firmData = await getFirmData(firmId);
       let apiKey = '';
       try {
@@ -148,7 +179,7 @@ export const createFirmUser = onCall(
       const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Welcome, ${escapeHtml(firstName)}!</h2>
 <p style="margin:0 0 12px;">
-  An account has been created for you at <strong>${branding.firmName}</strong>. 
+  An account has been created for you at <strong>${branding.firmName}</strong>.
   To get started, please set your password by clicking the button below:
 </p>
 ${ctaButton('Set Your Password', resetLink, branding.primaryColor)}
@@ -171,17 +202,9 @@ ${ctaButton('Set Your Password', resetLink, branding.primaryColor)}
       logger.info(`[createFirmUser] Successfully created user ${email} and sent invite.`);
 
       return { success: true, uid: newUserId };
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        logger.error(`[createFirmUser] Error creating user: ${error.message}`, error);
-        
-        if ((error as { code?: string }).code === 'auth/email-already-exists') {
-          throw new HttpsError('already-exists', 'The email address is already in use by another account.');
-        }
-        throw new HttpsError('internal', `Failed to create user: ${error.message}`);
-      }
-      logger.error(`[createFirmUser] Unknown error creating user`, error);
-      throw new HttpsError('internal', `Failed to create user.`);
+    } catch (emailErr: unknown) {
+      logger.error(`[createFirmUser] User ${newUserId} created but the invitation email failed to send.`, emailErr);
+      return { success: true, uid: newUserId, warning: 'User created successfully, but the invitation email could not be sent. Send them a password reset to finish setup.' };
     }
   }
 );

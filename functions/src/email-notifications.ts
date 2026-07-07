@@ -297,16 +297,24 @@ async function getCustomTemplate(firmId: string, trigger: string): Promise<{ sub
   return { subject: data.subject || '', content: data.content || '' };
 }
 
-function processCustomTemplate(
+export function processCustomTemplate(
   template: { subject: string; content: string },
   variables: Record<string, string>,
+  /** Keys whose values are pre-built, trusted HTML (e.g. an anchor built with an
+   *  already-escaped URL) and must be inserted into the body raw. Everything
+   *  else is HTML-escaped. */
+  rawHtmlKeys: ReadonlySet<string> = new Set(),
 ): { subject: string; bodyHtml: string } {
   let { subject, content } = template;
 
   for (const [key, val] of Object.entries(variables)) {
-    const rx = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+    const rx = new RegExp(`\\{\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}\\}`, 'g');
+    // Subject is a plain-text email header (never rendered as HTML) — insert raw.
     subject = subject.replace(rx, val);
-    content = content.replace(rx, val);
+    // Body is HTML — HTML-escape caller-supplied values so a custom template can't
+    // be a stored-XSS vector (it otherwise bypassed the T9 escape fix). Only
+    // pre-trusted keys go in raw. (R5-056)
+    content = content.replace(rx, rawHtmlKeys.has(key) ? val : escapeHtml(val));
   }
 
   if (!content.includes('<p>') && !content.includes('<br')) {
@@ -401,8 +409,8 @@ ${ctaButton('Complete My Questionnaire', questionnaireUrl, branding.primaryColor
       const processed = processCustomTemplate(customTemplate, {
         clientName,
         firmName: branding.firmName,
-        link: `<a href="${questionnaireUrl}" style="color:${branding.primaryColor};">${questionnaireUrl}</a>`
-      });
+        link: `<a href="${escapeHtml(questionnaireUrl)}" style="color:${branding.primaryColor};">${escapeHtml(questionnaireUrl)}</a>`
+      }, new Set(['link']));
       subject = processed.subject;
       bodyHtml = processed.bodyHtml;
     }
@@ -459,23 +467,50 @@ export const sendQuestionnaireCompleteNotification = onCall(
     // BJ hardening for this sender (server-resolve attorneyEmail + sanitize) is
     // a follow-up; do NOT add assertStaff here.
 
-    const { firmId, clientId, clientName, attorneyEmail } =
-      request.data as QuestionnaireCompleteRequest;
+    // clientName/attorneyEmail from the request are IGNORED — this callable is
+    // client-invokable, so trusting them lets any authenticated client send
+    // firm-branded email to any address (open relay / spam). Both are resolved
+    // server-side from firm-owned data below. (R5-057)
+    const { firmId, clientId } = request.data as QuestionnaireCompleteRequest;
 
-    if (!firmId || !clientId || !clientName || !attorneyEmail) {
-      throw new HttpsError(
-        'invalid-argument',
-        'firmId, clientId, clientName, and attorneyEmail are required.',
-      );
+    if (!firmId || !clientId) {
+      throw new HttpsError('invalid-argument', 'firmId and clientId are required.');
     }
 
     if ((request.auth.token['firmId'] as string | undefined) !== firmId) {
       throw new HttpsError('permission-denied', 'Cannot send notifications for a different firm.');
     }
 
+    const db = admin.firestore();
+    const clientSnap = await db.doc(`firms/${firmId}/clients/${clientId}`).get();
+    if (!clientSnap.exists) {
+      throw new HttpsError('not-found', 'Client not found.');
+    }
+    const clientData = clientSnap.data()!;
+    const pi = (clientData.personalInfo ?? {}) as { firstName?: string; lastName?: string };
+    const clientName = `${pi.firstName ?? ''} ${pi.lastName ?? ''}`.trim() || 'A client';
+
     const firmData = await getFirmData(firmId);
     const apiKey = getSendGridKey(firmData);
     const branding = extractBranding(firmData);
+
+    // Recipient = the client's assigned attorney (looked up server-side, and
+    // only if that user belongs to this firm), else the firm's own email. Never
+    // a caller-supplied address.
+    let attorneyEmail = '';
+    const attorneyId = clientData.assignedAttorneyId as string | undefined;
+    if (attorneyId) {
+      const attorneyData = (await db.doc(`users/${attorneyId}`).get()).data();
+      if (attorneyData?.firmId === firmId && typeof attorneyData.email === 'string') {
+        attorneyEmail = attorneyData.email;
+      }
+    }
+    if (!attorneyEmail) {
+      attorneyEmail = (branding.firmEmail || (firmData.email as string | undefined) || '');
+    }
+    if (!attorneyEmail) {
+      throw new HttpsError('failed-precondition', 'No attorney or firm email is configured to receive this notification.');
+    }
 
     const subject = `${clientName} has completed their questionnaire`;
 
