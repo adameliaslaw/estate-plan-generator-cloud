@@ -264,11 +264,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a multi-part Gemini answer was silently cut to part 0.
 - **Test:** `tests/unit/ai-client-gemini.test.ts` (3 tests) — drives the real `callAI` (dispatch untouched) with a stubbed `fetch`; asserts all parts concatenate, `MAX_TOKENS` throws in JSON mode, and prose mode returns the partial text. (Also on the prod-smoke list for real output.)
 
-#### `R5-051` (backend half) · #115 · bulk-KB partial-OCR honesty · ⬜ automate
+#### `R5-051` (backend half) · #115 · bulk-KB partial-OCR honesty · 🤖 automated
 - **File:** `functions/src/bulk-knowledge-import.ts`
 - **What broke:** a scanned PDF >15MB was byte-chunked and only chunk 0 OCR'd, yet saved `status:'success'` with `ocrPagesCount` = full pageCount — a silent partial import of legal reference content. Now `status:'partial'`, `ocrPagesCount:0`, a warning. (Frontend badge half is R5-051 in T2.)
-- **Test to write:** `extractFileText` over a large multi-chunk scanned PDF → `status:'partial'`, `ocrPagesCount:0`, non-empty warning.
+- **Step:** `npm run test -- bulk-knowledge-import-partial-ocr`
 - **Expected (pre-fix failure):** partial OCR persisted as `success` with the full pageCount.
+- **Test:** `tests/unit/bulk-knowledge-import-partial-ocr.test.ts` (4 tests) — the completeness arithmetic (the seam the bug lived in) was extracted into an exported pure `deriveOcrCompleteness(bufferLength, maxChunkBytes, pageCount)` helper (`extractFileText` calls it; behavior unchanged). A >15MB scan → `ocrPartial:true`, `chunksSkipped>0`, `ocrPagesCount:0` (does NOT fabricate the full pageCount); a ≤15MB single-chunk scan → `ocrPartial:false`, `ocrPagesCount=pageCount`. Driving the real `extractFileText` over the raw `require('pdf-parse')` isn't unit-mockable (and a real multi-MB PDF fixture is impractical), so the pure helper is the correct seam. Frontend badge/warning surface stays T2 manual.
 
 #### `R5-062` · #112 · wills-extractor unvalidated truncated extraction · 🤖 automated
 - **File:** `functions/src/wills-extractor.ts`
@@ -624,7 +625,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-041 | #118 | fiduciary multi-role corruption | T1 | 🤖 automated |
 | R5-065 | #118 | retemplatize block-helper strip | T1 | 🤖 |
 | R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
-| R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | ⬜ automate |
+| R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | 🤖 automated |
 | R5-062 | #112 | wills-extractor validation | T1 | 🤖 |
 | R5-063 | #112 | wills-pilot classification rate | T1 | 🤖 |
 | R5-064 | #112 | wills-pilot extraction rate | T1 | 🤖 |
