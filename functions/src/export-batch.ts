@@ -48,7 +48,7 @@ async function generatePdfBuffer(
   try {
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
 
-    const isDraft = status === 'draft';
+    const isDraft = status !== 'final'; // running-header DRAFT marker for any unexecuted doc (R5-039)
     const headerHtml = `
       <div style="
         font-size: 9px;

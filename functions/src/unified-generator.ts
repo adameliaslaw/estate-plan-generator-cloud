@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { HttpsError } from 'firebase-functions/v2/https';
 import { loadFirmSecrets } from './firm-secrets';
 import * as crypto from 'crypto';
 
@@ -517,6 +518,20 @@ export async function generateDocument(
     }
   }
 
+  // R5-034: a spouse document requires spouse data on file. Without it the swap
+  // below is skipped, yet the document is still generated from the PRIMARY
+  // client's data and saved under the `_spouse` docId — a misleading duplicate
+  // of the primary's document in the spouse's vault slot. Fail loudly instead.
+  if (params.spouseRole === 'spouse') {
+    const sp = clientData.spouseInfo as Record<string, unknown> | undefined;
+    if (!sp || (!sp.firstName && !sp.lastName)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Cannot generate a spouse document: no spouse information is on file for this client.',
+      );
+    }
+  }
+
   if (params.spouseRole === 'spouse' && clientData.spouseInfo) {
     const originalPersonal = { ...clientData.personalInfo };
     const originalSpouse = { ...clientData.spouseInfo };
@@ -539,11 +554,23 @@ export async function generateDocument(
         swappedPersonal[field] = originalPersonal[field];
       }
     }
-    if (!swappedPersonal.gender && typeof originalPersonal.gender === 'string') {
+    // Gender inversion is a heteronormative-marriage heuristic. It must NOT
+    // apply to Domestic Partnership (or any non-married status) — the adjacent
+    // comment claimed this was already skipped, but the code never checked
+    // marital status and inverted regardless (R5-035). Gate it on 'Married';
+    // for everything else leave gender undefined so the user sets it explicitly.
+    const originalMaritalStatus =
+      typeof originalPersonal.maritalStatus === 'string'
+        ? (originalPersonal.maritalStatus as string).trim().toLowerCase()
+        : '';
+    if (
+      !swappedPersonal.gender &&
+      typeof originalPersonal.gender === 'string' &&
+      originalMaritalStatus === 'married'
+    ) {
       const og = (originalPersonal.gender as string).trim().toLowerCase();
       if (og === 'female') swappedPersonal.gender = 'male';
       else if (og === 'male') swappedPersonal.gender = 'female';
-      // domestic-partnership / other: leave undefined; user must set explicitly.
     }
 
     // Swap fiduciary entries whose relationship marks them as the spouse:
