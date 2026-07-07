@@ -234,11 +234,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a text-only transcript filed an empty, completed note.
 - **Test:** `tests/unit/file-transcript-to-matter.test.ts` (3 tests) — invokes the handler with a path-aware Firestore mock; segments-empty + text present → note `transcription` = the text (status `completed`); segments present → speaker-attributed body; no content → `failed-precondition` and nothing committed.
 
-#### `R5-031` · #110 · notarized flag conflation · ⬜ automate
+#### `R5-031` · #110 · notarized flag conflation · 🤖 automated (backend half)
 - **File:** `functions/src/document-save-helper.ts`, `src/components/documents/UploadDraftDialog.tsx`
 - **What broke:** `notarized` (= "has been notarized") was set from the doc-type notarization *requirement*, falsely marking every notarization-required fresh draft/upload as already notarized. Now `false` on both paths.
-- **Test to write:** a freshly generated notarization-required doc is saved with `notarized:false`.
+- **Step:** `npm run test -- document-save-notarized`
 - **Expected (pre-fix failure):** a fresh draft was saved with `notarized:true`.
+- **Test:** `tests/unit/document-save-notarized.test.ts` (4 tests) — drives `saveDocumentToVault` with a callback-executing `runTransaction` mock that captures the main-document payload; a fresh POA (`tx.set`) and a regenerated deed (`tx.update`) are both `notarized:false` even though `requiresNotarization` is true for them, and a will is false too. The `UploadDraftDialog.tsx` upload path is the frontend half (T2, manual). (This is the doc-content contract — the version-bump concurrency race is R5-033, still emulator-gated.)
 
 #### `R5-041` · #118 · fiduciary multi-role corruption · ⬜ automate
 - **File:** `functions/src/process-template-file.ts`
@@ -616,7 +617,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-043 | #110 | questionnaire street dropped | T1 | 🤖 |
 | R5-032 | #110 | flex honest-success | T1 | 🤖 |
 | R5-038 | #110 | transcript filed empty | T1 | 🤖 |
-| R5-031 | #110 | notarized flag conflation | T1 | ⬜ automate |
+| R5-031 | #110 | notarized flag conflation | T1 | 🤖 (backend) |
 | R5-041 | #118 | fiduciary multi-role corruption | T1 | ⬜ automate |
 | R5-065 | #118 | retemplatize block-helper strip | T1 | 🤖 |
 | R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
@@ -676,7 +677,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 26 locked · ⬜ 5 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 27 locked · ⬜ 4 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
