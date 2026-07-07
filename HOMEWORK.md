@@ -4,6 +4,24 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-07 PM (T1 backlog nearly drained — batches 11–12 shipped, 2 heavy T1 left)
+
+**TL;DR — The `⬜ automate` T1 backlog is almost done. Batches 6–10 (R5-031/057/062/013/038) landed in prior sessions; this session shipped batch 11 (R5-041, #134) and batch 12 (R5-016, #135). Both merged squash → functions-deploy churns once each and converges (do NOT re-trigger). Full suite now 714/714 green.**
+
+**✅ Shipped this session:**
+- **Batch 11 · R5-041** (#134, `process-template-file.ts`): extracted the fiduciary-path enforcement block into an exported test-only pure `enforceFiduciaryPaths(html)` helper (handler calls it, behavior unchanged); `tests/unit/process-template-fiduciary.test.ts` (3 tests) locks that a two-role paragraph keeps BOTH `{{fiduciaries.executor.*}}` and `{{fiduciaries.trustee.*}}`.
+- **Batch 12 · R5-016** (#135, `process-ocr.ts`): extracted the OCR schema prompt into exported `OCR_EXTRACTION_SCHEMA_PROMPT` (text unchanged); R5-016 block in `tests/unit/process-ocr-strip.test.ts` (3 tests) locks canonical field names + rejects pre-fix alternates (`fullName`/`dateOfBirth`/`ssn4`/`usCitizen`/nested address).
+
+**▶ NEXT — the 2 remaining `⬜ automate` T1 cases, both heavier (need to drive the real onCall handler with external-service stubs, à la `email-open-relay.test.ts` / `document-save-notarized.test.ts`):**
+- **R5-014** (`esign-service.ts`): drive `sendForSignature` with Firestore mock capturing the `docRef.set` payload + stubbed `renderDocumentPdf` (Puppeteer) + stubbed global `fetch` returning a `signature_request_id`; assert a resend writes `signedStoragePath`/`signedFileName`/`signedAt` = `FieldValue.delete()`.
+- **R5-051 (backend half)** (`bulk-knowledge-import.ts`): heaviest — `extractFileText` over a large (>15MB) multi-chunk scanned PDF with the Gemini OCR call stubbed → `status:'partial'`, `ocrPagesCount:0`, non-empty warning. Needs a multi-chunk PDF fixture + OCR mock.
+
+Everything else in the backlog is T2 manual-UI / T3 multi-tenant / T4 race (R5-033, R5-052 need the emulator/failure-injection, not pure unit). `docs/REGRESSION-TESTS.md` per-case markers are the source of truth (the "only 7 automated" prose header there is now stale — many are 🤖). Prereq for any run: `npm ci --prefix functions` before `npm run test`.
+
+**Do NOT touch** the card-charge fix (`ChargePaymentDialog.tsx`) — separate 🔴 session needing a live AffiniPay test loop. Sole 🚫-blocked item needing Adam live.
+
+---
+
 ## 📍 SESSION — 2026-07-07 (post-audit regression manual shipped — NEXT: write the T1 test backlog)
 
 **TL;DR — Built `docs/REGRESSION-TESTS.md`, a step-by-step regression manual covering ALL 80 fixes since the Round 5 audit (PRs #86–#120) + load-bearing rounds 1-4 criticals. Merged #122 (`0b190ef`), docs-only, no deploy (`docs/` not in CI trigger paths). Approach decided: hybrid automation-first, emulator-first + prod smoke. Each case is grounded in the real diff + checked against `tests/unit/`, schema = file · what broke · steps · expected-result-as-failure · test · status. Living doc: every future fix appends its case in the same PR.**
