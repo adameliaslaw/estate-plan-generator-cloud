@@ -225,11 +225,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a failed save still reported `success:true`.
 - **Test:** `tests/unit/generate-flex-honest.test.ts` (2 tests) — invokes the onCall handler with `generateDocument` mocked; `status:'error'` → `success:false`, `status:'draft'` → `success:true`.
 
-#### `R5-038` · #110 · transcript filed empty · ⬜ automate
+#### `R5-038` · #110 · transcript filed empty · 🤖 automated
 - **File:** `functions/src/file-transcript-to-matter.ts`
 - **What broke:** the filed Note's transcription was built only from `transcript.segments`; a transcript with `transcriptText` but no segments filed an empty note marked `completed`.
-- **Test to write:** (a) segments-empty + text present → note content = transcriptText; (b) no content → throws `failed-precondition`.
+- **Step:** `npm run test -- file-transcript-to-matter`
 - **Expected (pre-fix failure):** a text-only transcript filed an empty, completed note.
+- **Test:** `tests/unit/file-transcript-to-matter.test.ts` (3 tests) — invokes the handler with a path-aware Firestore mock; segments-empty + text present → note `transcription` = the text (status `completed`); segments present → speaker-attributed body; no content → `failed-precondition` and nothing committed.
 
 #### `R5-031` · #110 · notarized flag conflation · ⬜ automate
 - **File:** `functions/src/document-save-helper.ts`, `src/components/documents/UploadDraftDialog.tsx`
@@ -611,7 +612,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-057 | #117 | email open-relay server-resolve | T1 | ⬜ automate |
 | R5-043 | #110 | questionnaire street dropped | T1 | 🤖 |
 | R5-032 | #110 | flex honest-success | T1 | 🤖 |
-| R5-038 | #110 | transcript filed empty | T1 | ⬜ automate |
+| R5-038 | #110 | transcript filed empty | T1 | 🤖 |
 | R5-031 | #110 | notarized flag conflation | T1 | ⬜ automate |
 | R5-041 | #118 | fiduciary multi-role corruption | T1 | ⬜ automate |
 | R5-065 | #118 | retemplatize block-helper strip | T1 | 🤖 |
@@ -672,7 +673,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 22 locked · ⬜ 9 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 23 locked · ⬜ 8 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
