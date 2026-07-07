@@ -206,11 +206,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a `status='review'` export had no watermark.
 - **Test:** `tests/unit/export-draft-watermark.test.ts` (7 tests) — drives the PDF exporter's pure `buildLegalDocumentHtml`; asserts the CSS watermark overlay is present for every non-`'final'` status and absent only for `'final'`. (DOCX/batch share the identical `status !== 'final'` gate.)
 
-#### `R5-057` · #117 · email client-callable open relay · ⬜ automate
+#### `R5-057` · #117 · email client-callable open relay · 🤖 automated
 - **File:** `functions/src/email-notifications.ts`
 - **What broke:** `sendQuestionnaireCompleteNotification` (client-callable) trusted a caller-supplied `attorneyEmail`/`clientName`, letting any authenticated client send firm-branded email from the firm's sender to any address. Fix resolves both server-side from `assignedAttorneyId` (same-firm) and the client's `personalInfo`.
-- **Test to write:** request `attorneyEmail`/`clientName` are ignored; recipient resolved from `assignedAttorneyId`.
+- **Step:** `npm run test -- email-open-relay`
 - **Expected (pre-fix failure):** email sent to the caller-supplied arbitrary address.
+- **Test:** `tests/unit/email-open-relay.test.ts` (6 tests) — drives the real onCall handler with a path-aware Firestore mock and a stubbed `fetch` that captures the SendGrid payload; the hostile `attorneyEmail`/`clientName` in every request are ignored — recipient resolves to the assigned attorney, falls back to the firm email when there's no attorney or the attorney is in a different firm, throws `failed-precondition` (nothing sent) when neither exists, and subject uses the client-record name. Also locks the firmId-claim tenant boundary.
 
 #### `R5-043` · #110 · questionnaire street dropped · 🤖 automated
 - **File:** `functions/src/generators/questionnaire-generator.ts`
@@ -611,7 +612,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-034 | #111 | spouse-swap missing-info dup | T1 | 🤖 |
 | R5-035 | #111 | spouse-swap gender gate | T1 | 🤖 |
 | R5-039 | #111 | export DRAFT watermark gate | T1 | 🤖 |
-| R5-057 | #117 | email open-relay server-resolve | T1 | ⬜ automate |
+| R5-057 | #117 | email open-relay server-resolve | T1 | 🤖 |
 | R5-043 | #110 | questionnaire street dropped | T1 | 🤖 |
 | R5-032 | #110 | flex honest-success | T1 | 🤖 |
 | R5-038 | #110 | transcript filed empty | T1 | 🤖 |
@@ -675,7 +676,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 25 locked · ⬜ 6 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 26 locked · ⬜ 5 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
