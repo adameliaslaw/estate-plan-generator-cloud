@@ -19,6 +19,49 @@ import { OpenAI } from 'openai';
  * intended "this scan covered that section" behavior; only empty arrays are
  * dropped so a partial scan can't erase a populated section.
  */
+/**
+ * OCR extraction schema handed to the model. The field names here MUST match the
+ * canonical data model (`PersonalInfo`/`Child` in src/types/index.ts) exactly —
+ * the extracted object is merged straight onto the client record. R5-016: the
+ * pre-fix schema invented alternates (`dateOfBirth`/`ssn4`/`usCitizen`, a nested
+ * address map, `children[{fullName}]`) that a merge turned into `[object Object]`
+ * addresses and wholesale-replaced arrays. Exported so the shape is regression-locked.
+ */
+export const OCR_EXTRACTION_SCHEMA_PROMPT = `
+You are an expert legal aide extracting information from handwritten Estate Planning Questionnaires.
+Extract the data from the provided images into a structured JSON object.
+Use the following JSON schema. For any missing fields, use null.
+If an array is empty, return an empty array [].
+Do NOT wrap the output in markdown code blocks. Just return raw JSON.
+
+Schema (use these EXACT field names — they map directly to the app's data model;
+do NOT invent alternates like fullName/dateOfBirth/ssn4/usCitizen or a nested address object):
+{
+  "personalInfo": {
+    "firstName": null, "middleName": null, "lastName": null, "suffix": null,
+    "email": null, "phone": null,
+    "dob": null,                 // ISO date "YYYY-MM-DD"
+    "ssnLast4": null,            // last 4 digits only, as a string
+    "citizenship": null,         // one of: "US Citizen", "Permanent Resident (Green Card)", "Non-Resident Alien", "Other"
+    "address": null,             // street address as a single string
+    "city": null, "state": null, "zip": null, "county": null
+  },
+  "spouseInfo": {
+    "firstName": null, "middleName": null, "lastName": null, "suffix": null,
+    "email": null, "phone": null,
+    "dob": null, "ssnLast4": null, "citizenship": null
+  },
+  "children": [
+    {
+      "name": null,              // child's full name
+      "dob": null,               // ISO date "YYYY-MM-DD"
+      "relationship": null,      // one of: "biological", "adopted", "stepchild"
+      "specialNeeds": null       // boolean
+    }
+  ]
+}
+`;
+
 export function stripEmpty(value: unknown): unknown {
     if (Array.isArray(value)) {
         const cleaned = value.map(stripEmpty).filter((v) => v !== undefined);
@@ -113,40 +156,7 @@ export const processQuestionnaireScan = functions
                 throw new functions.https.HttpsError('not-found', 'No valid images found at provided paths.');
             }
 
-            const systemPrompt = `
-You are an expert legal aide extracting information from handwritten Estate Planning Questionnaires.
-Extract the data from the provided images into a structured JSON object.
-Use the following JSON schema. For any missing fields, use null.
-If an array is empty, return an empty array [].
-Do NOT wrap the output in markdown code blocks. Just return raw JSON.
-
-Schema (use these EXACT field names — they map directly to the app's data model;
-do NOT invent alternates like fullName/dateOfBirth/ssn4/usCitizen or a nested address object):
-{
-  "personalInfo": {
-    "firstName": null, "middleName": null, "lastName": null, "suffix": null,
-    "email": null, "phone": null,
-    "dob": null,                 // ISO date "YYYY-MM-DD"
-    "ssnLast4": null,            // last 4 digits only, as a string
-    "citizenship": null,         // one of: "US Citizen", "Permanent Resident (Green Card)", "Non-Resident Alien", "Other"
-    "address": null,             // street address as a single string
-    "city": null, "state": null, "zip": null, "county": null
-  },
-  "spouseInfo": {
-    "firstName": null, "middleName": null, "lastName": null, "suffix": null,
-    "email": null, "phone": null,
-    "dob": null, "ssnLast4": null, "citizenship": null
-  },
-  "children": [
-    {
-      "name": null,              // child's full name
-      "dob": null,               // ISO date "YYYY-MM-DD"
-      "relationship": null,      // one of: "biological", "adopted", "stepchild"
-      "specialNeeds": null       // boolean
-    }
-  ]
-}
-`;
+            const systemPrompt = OCR_EXTRACTION_SCHEMA_PROMPT;
 
             const response = await openai.chat.completions.create({
                 model: 'gpt-5.4',

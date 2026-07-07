@@ -165,11 +165,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** `sendForSignature` clears `signedStoragePath`/`signedFileName`/`signedAt` on resend.
 - **Expected (pre-fix failure):** resend left `signedStoragePath` set → new PDF never stored.
 
-#### `R5-016` · #94 · process-ocr extraction schema mismatch · ⬜ automate
+#### `R5-016` · #94 · process-ocr extraction schema mismatch · 🤖 automated
 - **File:** `functions/src/process-ocr.ts`
 - **What broke:** the OCR schema wrote wrong-shaped fields (`dateOfBirth`/`ssn4`, nested address map, `children[{fullName…}]`) vs the canonical model, so a merge turned the string address into a map (POA rendered `[object Object]`) and wholesale-replaced the children array. (Distinct from BT above.)
-- **Test to write:** extracted objects match canonical `PersonalInfo`/`Child` field names. (`process-ocr-strip.test.ts` covers only `stripEmpty`.)
+- **Step:** `npm run test -- process-ocr-strip`
 - **Expected (pre-fix failure):** `personalInfo.address` came out a map; children lacked `name`/`dob`/`relationship`.
+- **Test:** `tests/unit/process-ocr-strip.test.ts` (R5-016 block, 3 tests) — the schema prompt was extracted to an exported `OCR_EXTRACTION_SCHEMA_PROMPT` const; asserts it uses the canonical `PersonalInfo` field names (`firstName`/`dob`/`ssnLast4`/`address`/`city`/`state`/`zip`/…), contains none of the pre-fix alternates (`fullName`/`dateOfBirth`/`ssn4`/`usCitizen`/`zipCode`/`street`), and documents `address` as a single string (`"address": null`, never `"address": {`).
 
 #### `R5-017` · #94 · template-learning serverTimestamp inside arrayUnion throws · 🤖 automated
 - **File:** `functions/src/template-learning.ts`
@@ -608,7 +609,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-005 | #94 | fortress irrevocable trust | T1 | 🤖 |
 | R5-013 | #94 | esign signature_request_id match | T1 | 🤖 |
 | R5-014 | #94 | esign resend clears signed PDF | T1 | ⬜ automate |
-| R5-016 | #94 | process-ocr schema alignment | T1 | ⬜ automate |
+| R5-016 | #94 | process-ocr schema alignment | T1 | 🤖 automated |
 | R5-017 | #94 | template-learning serverTimestamp | T1 | 🤖 |
 | R5-018 | #94 | wills-pilot terminal status | T1 | 🤖 |
 | R5-034 | #111 | spouse-swap missing-info dup | T1 | 🤖 |
