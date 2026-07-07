@@ -4,6 +4,18 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #11 (Round 5 chat memory — R5-050 unawaited extraction shipped #114)
+
+**TL;DR — Fixed the chat memory-extraction pipeline that silently never ran. Both `chatAi` call sites launched `extractAndSaveKeyFacts`/`extractAndSaveCorrections` fire-and-forget right before returning, so Cloud Functions froze the instance CPU on return and the extraction never completed. Now awaited (concurrently). Verified green (functions tsc, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger).**
+
+**✅ Shipped in #114 (`chat-ai.ts`):**
+- **R5-050** (correctness): extracted both fire-and-forget blocks into one `runMemoryExtraction()` helper that runs both extractors via `Promise.allSettled` (never throws — a memory failure can't fail the chat turn) and is now **`await`ed** at both the draft-mode and chat-mode return paths. Same class as R5-060 (await-before-return). No task-queue infra exists in the repo, so awaiting is the correct fix. **Tradeoff (flagged):** the chat reply returns ~one extraction-call later when `clientId` is set and there are ≥4 messages — but the feature was 100% broken before (never completed), so completing it > a bit of latency. If latency becomes a problem, the durable answer is Cloud Tasks / an `onDocumentCreated` trigger on the saved conversation, not fire-and-forget.
+- **Left alone (stale comment, not this bug):** the `// Save conversation (fire-and-forget)` comment above `await saveConversation(...)` is misleading — that call is actually awaited. Out of scope; not touched.
+
+**▶️ REMAINING Round 5 mediums (~29 open):** ledger `docs/AUDIT-findings.md` 🟡 table is source of truth. **Clean functions candidates still open:** R5-033 (non-transactional version bump → dup versionNumber; core save path in document-save-helper — do carefully), R5-051 (bulk-knowledge-import silent partial OCR reported as success). **Needs design/decision:** R5-047 (chat history truncation), R5-048/049 (chat generation-intent heuristics — behavioral). **Security-sensitive (careful):** R5-052 (createFirmUser orphan), R5-056 (custom email template injection — mirror escapeHtml T9 fix), R5-057 (client-callable notification w/ arbitrary attorneyEmail → spam). **Complex/risky:** R5-040/041 (process-template-file), R5-044 (insertOxfordAnd comma), R5-065 (retemplatize strips block helpers). **Never-Break (sign-off):** R5-045 (serializer hardcodes NJ state), R5-046 (ai-client Gemini drops parts / no finishReason), R5-037 (rules admin cross-tenant). **Policy-gated frontend (ask Adam):** R5-076, R5-079. **DEFERRED (sign-off):** R5-074 + versions/comments rules gap, R5-080. **PARKED:** R5-053/054 (LawPay).
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #10 (Round 5 wills security — R5-066 firm-scoping shipped #113)
 
 **TL;DR — Firm-scoped the two admin-triggered wills pipeline callables so a cross-tenant admin can no longer trigger Elias Counsel's Drive ingestion or read its pilot reports. Verified green (functions tsc, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger).**
