@@ -131,17 +131,19 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ### ⬜ To automate (unit-lockable; write the test, then it joins CI)
 
-#### `R5-002` · #94 · packageType not forwarded to first-run generation · ⬜ automate
+#### `R5-002` · #94 · packageType not forwarded to first-run generation · 🤖 automated
 - **File:** `functions/src/generate-documents.ts`, `unified-generator.ts`
 - **What broke:** the batch re-derived `packageType` from the stored client doc (defaulting `foundation`) instead of the requested value, so the first run generated every doc at the wrong tier (a fortress trust as foundation).
-- **Test to write:** assert `generateDocument` uses `params.packageType` over `clientData.packageDetails.packageType`. `npm run test -- unified-generator`
+- **Step:** `npm run test -- unified-generator`
 - **Expected (pre-fix failure):** `params.packageType='fortress'` on a `foundation` client doc used foundation downstream.
+- **Test:** `tests/unit/unified-generator.test.ts` (R5-002 block) — mocks the generator; asserts it receives `params.packageType` over the stored value, and falls back to the stored value when params omits it.
 
-#### `R5-003` · #94 · spouse-swap title/pronouns wrong for same-sex couples · ⬜ automate
+#### `R5-003` · #94 · spouse-swap title/pronouns wrong for same-sex couples · 🤖 automated
 - **File:** `functions/src/unified-generator.ts`
 - **What broke:** spouse title/pronouns derived by inverting the new testator's gender, so a same-sex couple got "my husband … he/him" in prose while the fiduciary block said "Wife" — a self-contradictory instrument.
-- **Test to write:** same-sex couple yields title/pronouns from the primary's real gender, consistent with the fiduciary label.
+- **Step:** `npm run test -- unified-generator`
 - **Expected (pre-fix failure):** Karen+Anna (both female) → `spouseTitle='husband'`, male pronouns.
+- **Test:** `tests/unit/unified-generator.test.ts` (R5-003 block) — captures the swapped clientContext handed to the template engine; asserts `spouseTitle='wife'`, `spousePronouns.subject='she'` (derived from the primary's real gender).
 
 #### `R5-005` · #94 · fortress trust prompt said "Revocable" · 🤖 automated
 - **File:** `functions/src/generators/trust-generator.ts`
@@ -181,17 +183,19 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** `'extracted'` is terminal and increments `extractedOk`.
 - **Expected (pre-fix failure):** `isTerminalForRun('extracted')` was false; `extractedOk` never counted.
 
-#### `R5-034` · #111 · spouse-swap with missing spouseInfo saves PRIMARY duplicate · ⬜ automate
+#### `R5-034` · #111 · spouse-swap with missing spouseInfo saves PRIMARY duplicate · 🤖 automated
 - **File:** `functions/src/unified-generator.ts`
 - **What broke:** `spouseRole='spouse'` with no spouse info skipped the swap but still generated + saved a doc under the `_spouse` docId — a duplicate of the PRIMARY's document in the spouse's slot.
-- **Test to write:** missing-spouse-info throws `failed-precondition`; nothing persisted.
+- **Step:** `npm run test -- unified-generator`
 - **Expected (pre-fix failure):** a primary-content doc persisted under `_spouse`.
+- **Test:** `tests/unit/unified-generator.test.ts` (R5-034 block) — asserts a missing-spouse-info run rejects with `failed-precondition` and neither the generator nor the save helper is called.
 
-#### `R5-035` · #111 · spouse-swap gender inversion ignored marital status · ⬜ automate
+#### `R5-035` · #111 · spouse-swap gender inversion ignored marital status · 🤖 automated
 - **File:** `functions/src/unified-generator.ts`
 - **What broke:** the gender backfill inverted the primary's gender for Domestic Partnership couples too, despite a comment claiming it's skipped for them.
-- **Test to write:** inversion only when `maritalStatus === 'Married'`; other statuses leave gender undefined.
+- **Step:** `npm run test -- unified-generator`
 - **Expected (pre-fix failure):** a Domestic Partnership couple had the primary's gender inverted.
+- **Test:** `tests/unit/unified-generator.test.ts` (R5-035 block) — Married → the swapped testator's gender inverts (`female`→`male`); Domestic Partnership → gender left undefined.
 
 #### `R5-039` · #111 · DRAFT watermark only for status='draft' · 🤖 automated
 - **File:** `functions/src/export-pdf.ts`, `export-docx.ts`, `export-batch.ts`
@@ -586,16 +590,16 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-056 | #117 | email custom-template XSS | T1 | 🤖 |
 | AF | #47 | client-data block not re-truncated | T1 | 🤖 |
 | BT | #50 | OCR stripEmpty before merge | T1 | 🤖 |
-| R5-002 | #94 | packageType forwarding | T1 | ⬜ automate |
-| R5-003 | #94 | spouse gender same-sex | T1 | ⬜ automate |
+| R5-002 | #94 | packageType forwarding | T1 | 🤖 |
+| R5-003 | #94 | spouse gender same-sex | T1 | 🤖 |
 | R5-005 | #94 | fortress irrevocable trust | T1 | 🤖 |
 | R5-013 | #94 | esign signature_request_id match | T1 | ⬜ automate |
 | R5-014 | #94 | esign resend clears signed PDF | T1 | ⬜ automate |
 | R5-016 | #94 | process-ocr schema alignment | T1 | ⬜ automate |
 | R5-017 | #94 | template-learning serverTimestamp | T1 | 🤖 |
 | R5-018 | #94 | wills-pilot terminal status | T1 | ⬜ automate |
-| R5-034 | #111 | spouse-swap missing-info dup | T1 | ⬜ automate |
-| R5-035 | #111 | spouse-swap gender gate | T1 | ⬜ automate |
+| R5-034 | #111 | spouse-swap missing-info dup | T1 | 🤖 |
+| R5-035 | #111 | spouse-swap gender gate | T1 | 🤖 |
 | R5-039 | #111 | export DRAFT watermark gate | T1 | 🤖 |
 | R5-057 | #117 | email open-relay server-resolve | T1 | ⬜ automate |
 | R5-043 | #110 | questionnaire street dropped | T1 | ⬜ automate |
@@ -661,7 +665,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 11 locked · ⬜ 20 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 15 locked · ⬜ 16 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
