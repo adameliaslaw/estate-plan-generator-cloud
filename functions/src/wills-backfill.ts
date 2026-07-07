@@ -87,10 +87,21 @@ export const willsStartBackfill = onCall(
       throw new HttpsError('failed-precondition', 'Pipeline is disabled — set pipeline_state/control.enabled = true first');
     }
 
-    // Idempotency guard
+    // Idempotency guard. A run killed by the 540s timeout mid-BFS leaves
+    // status:'running' forever, which would permanently block every future run.
+    // Treat a 'running' record whose checkpoint is older than one function
+    // lifetime (+ buffer) as a crashed run and allow a restart. (R5-061)
     const progressSnap = await db.collection('pipeline_state').doc('backfill_progress').get();
-    if ((progressSnap.data() as BackfillProgress | undefined)?.status === 'running') {
-      throw new HttpsError('already-exists', 'A backfill is already running');
+    const priorProgress = progressSnap.data() as BackfillProgress | undefined;
+    if (priorProgress?.status === 'running') {
+      const STALE_MS = 15 * 60 * 1000; // > 540s max lifetime + margin
+      const lastUpdatedMs = priorProgress.last_updated_at
+        ? new Date(priorProgress.last_updated_at).getTime() : 0;
+      const ageMs = Date.now() - lastUpdatedMs;
+      if (Number.isFinite(lastUpdatedMs) && lastUpdatedMs > 0 && ageMs < STALE_MS) {
+        throw new HttpsError('already-exists', 'A backfill is already running');
+      }
+      logger.warn('[wills-backfill] Prior run stale/crashed — restarting', { ageMs });
     }
 
     const firmId: string   = (control.firmId as string | undefined) ?? '';

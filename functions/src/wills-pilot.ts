@@ -347,14 +347,23 @@ function buildReport(args: {
   for (const r of perDoc) {
     statusCounts[r.terminal_status] = (statusCounts[r.terminal_status] ?? 0) + 1;
 
-    if (r.document_type) {
+    // R5-063: _writeErrorRecord stores document_type:'Other' on failure, so a
+    // non-null document_type alone does NOT mean the doc classified OK. Only
+    // count genuine classification successes; 'error'/'skipped'/'timeout'/
+    // 'never_seen' are not classifications.
+    const classifiedOkStatus =
+      r.terminal_status === 'classified' ||
+      r.terminal_status === 'extracted' ||
+      r.terminal_status === 'indexed';
+    if (r.document_type && classifiedOkStatus) {
       typeCounts[r.document_type] = (typeCounts[r.document_type] ?? 0) + 1;
       classifiedOk++;
     }
+    // R5-064: 'skipped' (legacy .doc, unsupported formats, deleted files) never
+    // ran extraction — it is not an extraction success.
     if (
       r.terminal_status === 'extracted' ||   // the processor's actual success status
-      r.terminal_status === 'indexed' ||
-      r.terminal_status === 'skipped'
+      r.terminal_status === 'indexed'
     ) {
       extractedOk++;
     }
