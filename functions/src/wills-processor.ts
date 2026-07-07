@@ -140,7 +140,19 @@ export const willsProcessor = onMessagePublished(
     const { bytes, mimeType, fileName, fileSizeBytes, createdTime, modifiedTime } = driveFile;
 
     // ── Step 4: Detect format + extract text ───────────────────────────────
-    const { text, fileFormat, pageCount, requiresOcr } = await _extractText(bytes, mimeType, fileName);
+    // A corrupt or password-protected PDF/DOCX makes pdfParse/mammoth throw.
+    // Without this guard the Pub/Sub handler rejects and the file vanishes with
+    // no wills_documents record at all — write an error record instead. (R5-058)
+    let extracted: Awaited<ReturnType<typeof _extractText>>;
+    try {
+      extracted = await _extractText(bytes, mimeType, fileName);
+    } catch (err) {
+      await _writeErrorRecord(db, drive_file_id, drive_path, fileName, firmId,
+        `text_extraction_failed: ${(err as Error).message}`);
+      logger.error('[willsProcessor] Text extraction failed', { drive_file_id, err });
+      return;
+    }
+    const { text, fileFormat, pageCount, requiresOcr } = extracted;
 
     // .doc (legacy) — flag and skip
     if (fileFormat === 'doc') {
@@ -199,6 +211,11 @@ export const willsProcessor = onMessagePublished(
       });
       await docRef.set(record);
 
+      // Skip-extraction docs still incurred the classification call — charge it
+      // to the circuit breaker (awaited so it commits before the instance's CPU
+      // is frozen on return). (R5-060)
+      await _chargeDailySpend(db, _estimateCost(text, false));
+
       writePipelineAuditEntry({
         action: 'ingestion_completed', drive_file_id, pageindex_doc_id: null,
         user_uid: null, query_text: null, results_returned: null,
@@ -254,9 +271,10 @@ export const willsProcessor = onMessagePublished(
     await docRef.set(record);
 
     // ── Step 10b: Update daily spend estimate ───────────────────────────────
-    _incrementDailySpend(db, _estimateCost(text)).catch((e: unknown) =>
-      logger.warn('[willsProcessor] spend tracking failed', { err: String(e) }),
-    );
+    // Awaited (not fire-and-forget): a background promise can be dropped when
+    // Cloud Functions freezes the instance CPU on return, so the circuit-breaker
+    // transaction would never commit. (R5-060)
+    await _chargeDailySpend(db, _estimateCost(text, true));
 
     writePipelineAuditEntry({
       action: 'ingestion_completed', drive_file_id, pageindex_doc_id: null,
@@ -348,13 +366,24 @@ function _extractVersionLabel(text: string): string | null {
   return null;
 }
 
-function _estimateCost(text: string): number {
+function _estimateCost(text: string, didExtract: boolean): number {
   // Haiku: ~$0.80/$4 per MTok. Sonnet: ~$3/$15 per MTok.
   // Rough estimate: classification input ~4K tok, extraction input ~text.length/4 tok
   const classificationCost = (4000 * 0.80 + 500 * 4) / 1_000_000;
+  if (!didExtract) return classificationCost;
   const extractionInputToks = text.length / 4;
   const extractionCost = (extractionInputToks * 3 + 2000 * 15) / 1_000_000;
   return classificationCost + extractionCost;
+}
+
+// Awaited spend increment that never fails the handler — a spend-tracking error
+// is logged, not thrown, so it can't reject the Pub/Sub message. (R5-060)
+async function _chargeDailySpend(db: admin.firestore.Firestore, amount: number) {
+  try {
+    await _incrementDailySpend(db, amount);
+  } catch (e: unknown) {
+    logger.warn('[willsProcessor] spend tracking failed', { err: String(e) });
+  }
 }
 
 async function _incrementDailySpend(db: admin.firestore.Firestore, amount: number) {
@@ -389,7 +418,28 @@ async function _writeErrorRecord(
   firmId: string,
   error: string,
 ) {
-  await db.collection('wills_documents').doc(driveFileId).set({
+  const ref = db.collection('wills_documents').doc(driveFileId);
+
+  // R5-059: a transient Drive/classification/extraction failure on a 'modified'
+  // event must not merge the 'Other'/'other'/error stub over an already-good
+  // record — that would corrupt a correctly-classified document. If a prior
+  // successful record exists, preserve it and record the failure in logs/audit
+  // only (the caller already logs + writes a pipeline audit entry).
+  const existing = await ref.get();
+  const prior = existing.exists ? (existing.data() as Partial<WillsDocument>) : null;
+  const priorIsGood = !!prior && (
+    prior.processing_status === 'classified' ||
+    prior.processing_status === 'extracted' ||
+    prior.processing_status === 'indexed'
+  );
+  if (priorIsGood) {
+    logger.warn('[willsProcessor] transient failure on already-processed doc — preserving good record', {
+      drive_file_id: driveFileId, error,
+    });
+    return;
+  }
+
+  await ref.set({
     drive_file_id: driveFileId,
     drive_path: drivePath,
     file_format: 'other',

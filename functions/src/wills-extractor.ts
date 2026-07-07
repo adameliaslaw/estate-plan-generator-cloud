@@ -336,6 +336,13 @@ async function _attempt(
     messages: [{ role: 'user', content: userPrompt }],
   });
 
+  // R5-062: max_tokens truncation yields partial/invalid tool input. Never store
+  // it as a valid extraction — retry once, then stub (→ needs_human_review).
+  if (response.stop_reason === 'max_tokens') {
+    if (!isRetry) return _attempt(client, text, docType, tool, true);
+    return _stubResult(['extraction_truncated']);
+  }
+
   const toolUse = response.content.find((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use');
 
   if (!toolUse) {
@@ -344,6 +351,16 @@ async function _attempt(
   }
 
   const raw = toolUse.input as Record<string, unknown>;
+
+  // R5-062: the processor header claims "Step 9: Validate schema" but nothing did.
+  // Verify every required field the tool declares is present before storing.
+  const required = (tool.input_schema.required ?? []) as string[];
+  const missing = required.filter((k) => !(k in raw));
+  if (missing.length > 0) {
+    if (!isRetry) return _attempt(client, text, docType, tool, true);
+    return _stubResult([`extraction_missing_required_fields: ${missing.join(',')}`]);
+  }
+
   const typeFields = _stripConfidenceFields(raw) as unknown as TypeSpecificFields;
 
   return {
