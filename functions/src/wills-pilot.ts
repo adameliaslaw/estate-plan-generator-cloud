@@ -43,7 +43,8 @@ const SUPPORTED_MIME_TYPES = new Set([
 
 // 'extracted' is the processor's success status for Wills/Trusts/POAs;
 // 'classified' is terminal for Correspondence/Other/OCR docs that skip extraction.
-const TERMINAL_STATUSES = new Set<ProcessingStatus>(['extracted', 'classified', 'indexed', 'error', 'skipped']);
+// Exported for unit tests (regression R5-018/063/064) — see wills-pilot.test.ts.
+export const TERMINAL_STATUSES = new Set<ProcessingStatus>(['extracted', 'classified', 'indexed', 'error', 'skipped']);
 
 const DEFAULT_SAMPLE_SIZE   = 30;
 const DEFAULT_POLL_TIMEOUT  = 480_000;  // 8 min — leaves 60s headroom in a 540s function
@@ -246,7 +247,7 @@ async function fetchExplicitFiles(fileIds: string[]): Promise<SampledFile[]> {
  * run (i.e. last_processed_at is at or after startedAt). Stale records from
  * previous runs are ignored so they can't produce false positives.
  */
-function isTerminalForRun(doc: WillsDocument, startedAt: string): boolean {
+export function isTerminalForRun(doc: WillsDocument, startedAt: string): boolean {
   if (!TERMINAL_STATUSES.has(doc.processing_status)) return false;
   if (!doc.last_processed_at) return false;
   return doc.last_processed_at >= startedAt;
@@ -299,7 +300,7 @@ function median(nums: number[]): number | null {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-function buildReport(args: {
+export function buildReport(args: {
   runId: string;
   startedAt: string;
   completedAt: string;

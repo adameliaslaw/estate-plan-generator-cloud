@@ -177,11 +177,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** `recordCorrection` threw on every call (sentinel inside an array).
 - **Test:** `tests/unit/template-learning-timestamp.test.ts` (2 tests) — the firebase-admin mock throws on a serverTimestamp sentinel inside an array (mirroring the SDK); asserts `recordCorrection`/`recordConfirmedVariables` resolve and store concrete Timestamps in array elements.
 
-#### `R5-018` · #94 · wills-pilot reports successful extractions as timeout · ⬜ automate
+#### `R5-018` · #94 · wills-pilot reports successful extractions as timeout · 🤖 automated
 - **File:** `functions/src/wills-pilot.ts`
 - **What broke:** `TERMINAL_STATUSES` omitted `'extracted'` (the real success status), so `pollUntilTerminal` spun to the 8-min timeout every run, labeled every doc `timeout`, and the acceptance gate could never pass.
-- **Test to write:** `'extracted'` is terminal and increments `extractedOk`.
+- **Step:** `npm run test -- wills-pilot`
 - **Expected (pre-fix failure):** `isTerminalForRun('extracted')` was false; `extractedOk` never counted.
+- **Test:** `tests/unit/wills-pilot.test.ts` (R5-018 block) — asserts `'extracted'` ∈ `TERMINAL_STATUSES`, `isTerminalForRun` returns true for a fresh extracted doc, and buildReport scores it `extraction_success_rate=1` with `terminal_status='extracted'` (not `timeout`). Helpers exported test-only.
 
 #### `R5-034` · #111 · spouse-swap with missing spouseInfo saves PRIMARY duplicate · 🤖 automated
 - **File:** `functions/src/unified-generator.ts`
@@ -265,17 +266,19 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Test to write:** mock the AI response with a truncated `stop_reason` / missing field → retry-once then `needs_human_review`.
 - **Expected (pre-fix failure):** partial/truncated tool input stored as a valid extraction.
 
-#### `R5-063` · #112 · wills-pilot classification rate inflated · ⬜ automate
+#### `R5-063` · #112 · wills-pilot classification rate inflated · 🤖 automated
 - **File:** `functions/src/wills-pilot.ts`
 - **What broke:** `classification_success_rate` counted failed docs as successes because error records store `document_type:'Other'` and buildReport treated any non-null type as classified.
-- **Test to write:** buildReport over seeded docs — error records don't count as classified.
+- **Step:** `npm run test -- wills-pilot`
 - **Expected (pre-fix failure):** `Other` placeholders inflated the rate.
+- **Test:** `tests/unit/wills-pilot.test.ts` (R5-063 block) — buildReport over one `extracted` + one `error`/`Other` doc yields `classification_success_rate=0.5`, not `1.0`.
 
-#### `R5-064` · #112 · wills-pilot extraction rate counts skips · ⬜ automate
+#### `R5-064` · #112 · wills-pilot extraction rate counts skips · 🤖 automated
 - **File:** `functions/src/wills-pilot.ts`
 - **What broke:** `extraction_success_rate` counted `skipped` docs (legacy .doc, unsupported, deleted) as successes; fix counts only `extracted`/`indexed`.
-- **Test to write:** buildReport excludes `skipped`.
+- **Step:** `npm run test -- wills-pilot`
 - **Expected (pre-fix failure):** skipped/unsupported docs counted as extraction successes.
+- **Test:** `tests/unit/wills-pilot.test.ts` (R5-064 block) — buildReport over one `extracted` + one `skipped` doc yields `extraction_success_rate=0.5`, not `1.0`.
 
 #### `E/A/AE/B` · #52 · honest generation success + preserved HttpsError codes · ⬜ automate
 - **File:** `functions/src/generate-documents.ts`, `generate-single-document.ts`
@@ -597,7 +600,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-014 | #94 | esign resend clears signed PDF | T1 | ⬜ automate |
 | R5-016 | #94 | process-ocr schema alignment | T1 | ⬜ automate |
 | R5-017 | #94 | template-learning serverTimestamp | T1 | 🤖 |
-| R5-018 | #94 | wills-pilot terminal status | T1 | ⬜ automate |
+| R5-018 | #94 | wills-pilot terminal status | T1 | 🤖 |
 | R5-034 | #111 | spouse-swap missing-info dup | T1 | 🤖 |
 | R5-035 | #111 | spouse-swap gender gate | T1 | 🤖 |
 | R5-039 | #111 | export DRAFT watermark gate | T1 | 🤖 |
@@ -611,8 +614,8 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-046 | #120 | Gemini multi-part/truncation | T1 | 🤖 |
 | R5-051 (backend) | #115 | bulk-KB partial-OCR honesty | T1 | ⬜ automate |
 | R5-062 | #112 | wills-extractor validation | T1 | ⬜ automate |
-| R5-063 | #112 | wills-pilot classification rate | T1 | ⬜ automate |
-| R5-064 | #112 | wills-pilot extraction rate | T1 | ⬜ automate |
+| R5-063 | #112 | wills-pilot classification rate | T1 | 🤖 |
+| R5-064 | #112 | wills-pilot extraction rate | T1 | 🤖 |
 | E/A/AE/B | #52 | honest generation success | T1 | ⬜ automate |
 | R5-028 | #91 | questionnaire undefined-write | T2 | ⬜ |
 | R5-026 | #91 | questionnaire non-NJ state | T2 | ⬜ |
@@ -665,7 +668,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 15 locked · ⬜ 16 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 18 locked · ⬜ 13 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
