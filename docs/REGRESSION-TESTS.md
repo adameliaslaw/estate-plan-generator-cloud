@@ -159,11 +159,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a foreign `signature_request_id` event was applied.
 - **Test:** `tests/unit/esign-webhook-guard.test.ts` (2 tests) — drives the real `onRequest` handler through the real HMAC verification with a path-aware Firestore mock (only the unused Puppeteer/PDF deps stubbed): a `signature_request_signed` event whose id ≠ the stored `eSignature.signatureRequestId` writes nothing and acks 200; a matching id applies `status:'signed'` + logs activity. (`tests/unit/esign-hmac.test.ts` still covers HMAC only.)
 
-#### `R5-014` · #94 · esign resend reuses prior signed PDF · ⬜ automate
+#### `R5-014` · #94 · esign resend reuses prior signed PDF · 🤖 automated
 - **File:** `functions/src/esign-service.ts`
 - **What broke:** re-sending a signed doc never fetched the new executed PDF — the merge preserved `signedStoragePath` and `storeSignedPdf`'s idempotency guard short-circuited, so the vault kept the superseded v1 signed PDF.
-- **Test to write:** `sendForSignature` clears `signedStoragePath`/`signedFileName`/`signedAt` on resend.
+- **Step:** `npm run test -- esign-resend-clears-signed`
 - **Expected (pre-fix failure):** resend left `signedStoragePath` set → new PDF never stored.
+- **Test:** `tests/unit/esign-resend-clears-signed.test.ts` (2 tests) — drives the real `sendForSignature` v1 callable with a path-aware Firestore mock (capturing the `docRef.set` payload), a stubbed Dropbox Sign `fetch` (returns a new `signature_request_id`), and inert Puppeteer/Chromium deps. Asserts the resend's `eSignature` payload writes `FieldValue.delete()` for `signedStoragePath`/`signedFileName`/`signedAt`, and records the new request id with `status:'sent'`.
 
 #### `R5-016` · #94 · process-ocr extraction schema mismatch · 🤖 automated
 - **File:** `functions/src/process-ocr.ts`
@@ -608,7 +609,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-003 | #94 | spouse gender same-sex | T1 | 🤖 |
 | R5-005 | #94 | fortress irrevocable trust | T1 | 🤖 |
 | R5-013 | #94 | esign signature_request_id match | T1 | 🤖 |
-| R5-014 | #94 | esign resend clears signed PDF | T1 | ⬜ automate |
+| R5-014 | #94 | esign resend clears signed PDF | T1 | 🤖 automated |
 | R5-016 | #94 | process-ocr schema alignment | T1 | 🤖 automated |
 | R5-017 | #94 | template-learning serverTimestamp | T1 | 🤖 |
 | R5-018 | #94 | wills-pilot terminal status | T1 | 🤖 |
