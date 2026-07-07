@@ -4,6 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #12 (Round 5 KB import — R5-051 silent partial OCR shipped #115)
+
+**TL;DR — Fixed the bulk KB import so a large scanned PDF that only gets its first ~15MB OCR'd is no longer reported as a clean full success. Cross-stack truth-in-status fix (functions + frontend). Verified green (functions tsc, root tsc -b, vite build, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → triggers BOTH a hosting deploy and a CI functions-deploy churn (converges on its own — do NOT re-trigger).**
+
+**✅ Shipped in #115:**
+- **R5-051** (`bulk-knowledge-import.ts` + `knowledge-base-service.ts` + `KBBulkImportDialog.tsx`): scanned PDFs >15MB are byte-chunked and only chunk 0 is OCR'd (chunks 2+ can't be sent to Gemini — they're not valid standalone PDFs). Previously the resource was saved `status:'success'` with `ocrPagesCount = full pageCount` — a silent partial import of legal reference content. Now `extractFileText` tracks `chunksSkipped`/`ocrApplied`/`ocrPartial`: a partial OCR returns `status:'partial'`, `ocrPagesCount=0` (byte-chunking gives no reliable page boundary, so we don't fabricate a count), and a human `warning`; the resource persists `ocrPartial`/`ocrWarning`, and `ocrApplied`/`contentSource` now come from an explicit flag (not `ocrPagesCount>0`). The callable's summary adds a `partial` count. Frontend surfaces it: amber ⚠ row + "Partial" badge + warning tooltip, and "N partial" in the summary line.
+- **`ocrPageStart`/`ocrPageEnd` (declared, never used):** the frontend has a per-file page-range UI and sends these, but the backend ignored them. Honoring them needs page-level PDF splitting (pdf-lib — **absent** from `functions/`; adding a dep to the functions bundle is a separate sign-off-worthy change), so it's out of scope here. Instead of silently dropping a requested range, the partial warning now says per-page ranges aren't supported yet when one was requested. **Future work if Adam wants real large-scan OCR:** add pdf-lib, split by page range, OCR the sub-PDF.
+- **No `types/index.ts` touch:** the new `ocrPartial`/`ocrWarning` resource fields are admin-SDK writes, not read via a typed frontend model — additive, no Never-Break gate.
+
+**▶️ REMAINING Round 5 mediums (~28 open):** ledger `docs/AUDIT-findings.md` 🟡 table is source of truth. **Clean functions candidates still open:** R5-033 (non-transactional version bump → dup versionNumber; core save path in document-save-helper — do carefully). **Needs design/decision:** R5-047 (chat history truncation), R5-048/049 (chat generation-intent heuristics — behavioral). **Security-sensitive (careful):** R5-052 (createFirmUser orphan), R5-056 (custom email template injection — mirror escapeHtml T9 fix), R5-057 (client-callable notification w/ arbitrary attorneyEmail → spam). **Complex/risky:** R5-040/041 (process-template-file), R5-044 (insertOxfordAnd comma), R5-065 (retemplatize strips block helpers). **Never-Break (sign-off):** R5-045 (serializer hardcodes NJ state), R5-046 (ai-client Gemini drops parts / no finishReason), R5-037 (rules admin cross-tenant). **Policy-gated frontend (ask Adam):** R5-076, R5-079. **DEFERRED (sign-off):** R5-074 + versions/comments rules gap, R5-080. **PARKED:** R5-053/054 (LawPay).
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #11 (Round 5 chat memory — R5-050 unawaited extraction shipped #114)
 
 **TL;DR — Fixed the chat memory-extraction pipeline that silently never ran. Both `chatAi` call sites launched `extractAndSaveKeyFacts`/`extractAndSaveCorrections` fire-and-forget right before returning, so Cloud Functions froze the instance CPU on return and the extraction never completed. Now awaited (concurrently). Verified green (functions tsc, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger).**

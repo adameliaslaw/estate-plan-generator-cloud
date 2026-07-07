@@ -32,10 +32,12 @@ interface FileInput {
 interface ProcessedResult {
   fileName: string;
   resourceId: string;
-  status: 'success' | 'failed';
+  status: 'success' | 'partial' | 'failed';
   extractedChars: number;
   ocrPagesCount: number;
   error?: string;
+  /** Set when the import succeeded but is incomplete (e.g. only the first OCR chunk of a large scanned PDF was processed). */
+  warning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,11 +72,23 @@ async function extractFileText(
   buffer: Buffer,
   fileName: string,
   firmData: Record<string, unknown>,
-): Promise<{ text: string; html: string; ocrPagesCount: number }> {
+): Promise<{
+  text: string;
+  html: string;
+  ocrPagesCount: number;
+  ocrApplied: boolean;
+  ocrPartial: boolean;
+  pageCount: number;
+  chunksSkipped: number;
+}> {
   const ext = fileName.toLowerCase().split('.').pop();
   let text = '';
   let html = '';
   let ocrPagesCount = 0;
+  let ocrApplied = false;
+  let ocrPartial = false;
+  let pageCount = 0;
+  let chunksSkipped = 0;
 
   if (ext === 'docx') {
     const htmlResult = await mammoth.convertToHtml({ buffer });
@@ -86,7 +100,7 @@ async function extractFileText(
     const parser = new PDFParse({ data: buffer });
     const result = await parser.getText();
     text = result.text || '';
-    const pageCount = result.total || 1;
+    pageCount = result.total || 1;
 
     // Check if this looks like a scanned PDF (very little text)
     const avgCharsPerPage = text.length / pageCount;
@@ -112,7 +126,8 @@ async function extractFileText(
           // Only the first chunk is a valid PDF (others are partial data).
           // For multi-chunk PDFs, we only OCR the first chunk to stay reliable.
           if (chunk > 0) {
-            console.log(`[bulkKnowledgeImport] Skipping chunk ${chunk + 1}/${totalChunks} (partial PDF not sendable to Gemini). Use page range to target later pages.`);
+            chunksSkipped = totalChunks - chunk; // chunks from here on are not processed
+            console.log(`[bulkKnowledgeImport] Skipping ${chunksSkipped} of ${totalChunks} chunks for "${fileName}" (partial PDF not sendable to Gemini).`);
             break;
           }
 
@@ -135,8 +150,13 @@ async function extractFileText(
         const ocrFullText = ocrTexts.join('\n\n');
         if (ocrFullText.length > text.length) {
           text = ocrFullText;
-          ocrPagesCount = pageCount;
-          console.log(`[bulkKnowledgeImport] Gemini PDF OCR extracted ${ocrFullText.length} chars from "${fileName}"`);
+          ocrApplied = true;
+          ocrPartial = chunksSkipped > 0;
+          // Only claim a page count when the whole document was OCR'd. Byte-chunking
+          // gives no reliable page boundary, so a partial OCR reports 0 (unknown)
+          // rather than the full pageCount. (R5-051)
+          ocrPagesCount = ocrPartial ? 0 : pageCount;
+          console.log(`[bulkKnowledgeImport] Gemini PDF OCR extracted ${ocrFullText.length} chars from "${fileName}"${ocrPartial ? ' (PARTIAL)' : ''}`);
         }
       } catch (err) {
         console.error(`[bulkKnowledgeImport] Gemini PDF OCR failed for "${fileName}":`, err);
@@ -154,7 +174,7 @@ async function extractFileText(
       .join('\n');
   }
 
-  return { text, html, ocrPagesCount };
+  return { text, html, ocrPagesCount, ocrApplied, ocrPartial, pageCount, chunksSkipped };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +317,18 @@ export const bulkProcessKnowledgeFiles = onCall(
         console.log(`[bulkKnowledgeImport] Downloaded "${file.fileName}" (${buffer.length} bytes)`);
 
         // 2. Extract text
-        const { text, html, ocrPagesCount } = await extractFileText(buffer, file.fileName, firmData);
+        const { text, html, ocrPagesCount, ocrApplied, ocrPartial, pageCount, chunksSkipped } =
+          await extractFileText(buffer, file.fileName, firmData);
+
+        // A large scanned PDF only has its first ~15MB OCR'd — surface that
+        // instead of silently reporting a partial import as full success. (R5-051)
+        let warning: string | undefined;
+        if (ocrPartial) {
+          const rangeRequested = file.ocrPageStart != null || file.ocrPageEnd != null;
+          warning = `Scanned PDF too large to OCR in full — only the first ~15MB was processed; ${chunksSkipped} of ${Math.ceil(buffer.length / (15 * 1024 * 1024))} chunks (${pageCount} total pages) were not imported. Split the PDF into smaller files to import the rest.`
+            + (rangeRequested ? ' (Per-page OCR ranges are not supported yet, so the requested page range was not applied.)' : '');
+          console.warn(`[bulkKnowledgeImport] Partial OCR for "${file.fileName}": ${warning}`);
+        }
 
         if (!text.trim() && !html.trim()) {
           results.push({
@@ -323,7 +354,7 @@ export const bulkProcessKnowledgeFiles = onCall(
           citation: '',
           content: truncateAtWordBoundary(text, 50000), // Cap at 50K chars for Firestore
           contentHtml: truncateAtWordBoundary(html, 50000),
-          contentSource: ocrPagesCount > 0 ? 'ocr' : 'native', // Auto-tag content source
+          contentSource: ocrApplied ? 'ocr' : 'native', // Auto-tag content source
           tags: [],
           docTypes: [],
           jurisdiction: 'NJ',
@@ -331,8 +362,10 @@ export const bulkProcessKnowledgeFiles = onCall(
           source: 'bulk-upload',
           sourceFileName: file.fileName,
           sourceStoragePath: file.storagePath,
-          ocrApplied: ocrPagesCount > 0,
+          ocrApplied,
           ocrPagesCount,
+          ocrPartial,
+          ocrWarning: warning ?? null,
           createdAt: now,
           updatedAt: now,
           createdBy: request.auth.uid,
@@ -342,9 +375,10 @@ export const bulkProcessKnowledgeFiles = onCall(
         results.push({
           fileName: file.fileName,
           resourceId: ref.id,
-          status: 'success',
+          status: ocrPartial ? 'partial' : 'success',
           extractedChars: text.length,
           ocrPagesCount,
+          ...(warning ? { warning } : {}),
         });
 
         // 4. Fire-and-forget: AI enrichment via Anthropic
@@ -374,12 +408,14 @@ export const bulkProcessKnowledgeFiles = onCall(
     }
 
     const successCount = results.filter(r => r.status === 'success').length;
+    const partialCount = results.filter(r => r.status === 'partial').length;
     const failCount = results.filter(r => r.status === 'failed').length;
-    console.log(`[bulkKnowledgeImport] Done: ${successCount} success, ${failCount} failed for firm ${firmId}`);
+    console.log(`[bulkKnowledgeImport] Done: ${successCount} success, ${partialCount} partial, ${failCount} failed for firm ${firmId}`);
 
     return {
       success: true,
       processed: successCount,
+      partial: partialCount,
       failed: failCount,
       total: files.length,
       results,
