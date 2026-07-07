@@ -853,7 +853,9 @@ export function buildDocxDocument(
   htmlContent: string,
   status: string,
 ): DocxDocument {
-  const isDraft = status === 'draft';
+  // Any non-final document is unexecuted and must carry the DRAFT watermark —
+  // 'review'/'needs_review'/'incomplete'/'error' previously exported clean (R5-039).
+  const isDraft = status !== 'final';
   const nodes = parseHtml(htmlContent);
   const bodyChildren: DocxChild[] = [];
 

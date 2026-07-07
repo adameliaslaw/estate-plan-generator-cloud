@@ -30,7 +30,10 @@ export function buildLegalDocumentHtml(
   content: string,
   status: string,
 ): string {
-  const isDraft = status === 'draft';
+  // Any document that is not 'final' is an unexecuted instrument and must carry
+  // the DRAFT warning — 'review', 'needs_review', 'incomplete', and 'error' were
+  // previously exported clean, looking like final legal documents (R5-039).
+  const isDraft = status !== 'final';
 
   const watermarkCss = isDraft
     ? `
@@ -340,7 +343,7 @@ export const exportDocumentPdf = functions
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
 
-      const isDraft = status === 'draft';
+      const isDraft = status !== 'final'; // running-header DRAFT marker for any unexecuted doc (R5-039)
       const headerHtml = `
         <div style="
           font-size: 9px;

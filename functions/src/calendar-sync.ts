@@ -813,6 +813,12 @@ export const syncGoogleCalendar = onSchedule(
         const calendars = await listSyncableCalendars(accessToken);
         console.log(`[syncGoogleCalendar] firm=${firmId} syncing ${calendars.length} calendar(s): ${calendars.map(c => c.summary ?? c.id).join(', ')}`);
 
+        // The watermark is shared across all of a firm's calendars, so if ANY
+        // calendar's events.list fetch fails mid-run we must NOT advance it —
+        // otherwise the un-fetched changes are permanently skipped next run
+        // (R5-055). Re-processing is idempotent (upsert by googleCalendarEventId).
+        let syncHadError = false;
+
         for (const cal of calendars) {
         const calendarId = cal.id;
         const calendarSummary = cal.summary ?? cal.id;
@@ -839,6 +845,7 @@ export const syncGoogleCalendar = onSchedule(
 
           if (!response.ok) {
             console.error(`[syncGoogleCalendar] API error for firm ${firmId}: ${response.status} ${await response.text()}`);
+            syncHadError = true;
             break;
           }
 
@@ -925,8 +932,14 @@ export const syncGoogleCalendar = onSchedule(
         console.log(`[syncGoogleCalendar] firm=${firmId} calendar="${calendarSummary}" processed=${totalItemsProcessed}`);
         }  // end for (cal of calendars)
 
-        // Update last sync watermark (shared across all calendars for this firm)
-        await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
+        // Update last sync watermark (shared across all calendars for this
+        // firm) — but only if every calendar fetched cleanly. Advancing it after
+        // a mid-run fetch failure would permanently drop the un-fetched changes.
+        if (syncHadError) {
+          console.warn(`[syncGoogleCalendar] firm=${firmId} had a fetch error — NOT advancing watermark; next run re-fetches from ${lastSync}.`);
+        } else {
+          await db.doc(`firms/${firmId}`).update({ googleCalendarLastSyncAt: now });
+        }
         firmsProcessed++;
       } catch (err) {
         console.error(`[syncGoogleCalendar] Error for firmId=${firmId}:`, err);
