@@ -13,7 +13,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 
-import { generateDocument } from './unified-generator';
+import { generateDocument, generateDocumentWithPropertyExpansion } from './unified-generator';
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -111,7 +111,7 @@ export const generateSingleDocument = onCall(
     // 2. Generate via unified generator
     // ------------------------------------------------------------------
     try {
-      const result = await generateDocument({
+      const genParams = {
         firmId,
         clientId,
         docType,
@@ -124,8 +124,22 @@ export const generateSingleDocument = onCall(
         trustTypes,
         spouseRole,
         createdBy: auth.uid,
-        triggerSource: 'single',
-      });
+        triggerSource: 'single' as const,
+      };
+
+      // For per-property docs (deed / affidavit / gitRep3) with NO explicit
+      // propertyIndex, expand across every qualifying property so we write the
+      // suffixed doc ids (deed_0, deed_1, …) that the batch generator uses —
+      // otherwise a subset regen writes an un-suffixed `deed` that duplicates
+      // rather than replaces the per-property docs (R5-070). When a specific
+      // propertyIndex is passed (e.g. editor regen of one property), generate
+      // just that one. generateDocumentWithPropertyExpansion returns a single
+      // result for non-per-property doc types, so this path is a no-op for
+      // wills/POAs/trusts/questionnaire.
+      const results =
+        propertyIndex !== undefined
+          ? [await generateDocument(genParams)]
+          : await generateDocumentWithPropertyExpansion(genParams);
 
       // Bookkeeping only (client updatedAt) — best-effort. A transient failure
       // here must NOT turn a successfully generated+saved document into a
@@ -139,18 +153,28 @@ export const generateSingleDocument = onCall(
         console.error('[generateSingleDocument] Non-fatal: client updatedAt write failed:', updateErr);
       }
 
-      console.log(`[generateSingleDocument] Saved ${result.docId} (version ${result.currentVersion})`);
+      // Aggregate into the single-result response the callers expect. The
+      // subset generator lists one row per selected doc type, so returning the
+      // primary result (with a count hint when expanded) keeps that contract.
+      const primary = results[0];
+      const allOk = results.every((r) => r.status !== 'error');
+      const extra = results.length - 1;
+
+      console.log(
+        `[generateSingleDocument] Saved ${results.map((r) => r.docId).join(', ')} ` +
+        `(${results.length} doc${results.length === 1 ? '' : 's'})`,
+      );
 
       // `success` must reflect the real outcome: the orchestrator returns
       // status:'error' when the vault save failed, so don't report success:true
       // and tell the attorney the doc saved when it didn't (finding E).
       return {
-        success: result.status !== 'error',
-        docId: result.docId,
-        docType: result.docType,
-        title: result.title,
-        status: result.status,
-        version: result.currentVersion,
+        success: allOk,
+        docId: primary.docId,
+        docType: primary.docType,
+        title: extra > 0 ? `${primary.title} (+${extra} more)` : primary.title,
+        status: allOk ? primary.status : 'error',
+        version: primary.currentVersion,
       };
     } catch (error) {
       console.error(`[generateSingleDocument] Generation error for ${docType}:`, error);
