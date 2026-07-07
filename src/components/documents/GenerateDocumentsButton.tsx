@@ -251,11 +251,11 @@ export default function GenerateDocumentsButton({
           formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
         });
       } else {
-        // Subset — call generateSingleDocument once per selected doc. Per-
-        // property docs (deed/affidavit/gitRep3) are generated against the
-        // first property only when invoked this way; for full per-property
-        // expansion the user should leave them all selected and route to
-        // generateAll above.
+        // Subset — call generateSingleDocument once per selected doc. For
+        // per-property docs (deed/affidavit/gitRep3) the callable expands
+        // across every qualifying property server-side (writing the suffixed
+        // deed_0/deed_1/… ids), so a subset regen replaces the per-property
+        // docs rather than orphaning an un-suffixed duplicate (R5-070).
         const docResults: GenerateDocumentsResponse['results'] = [];
         let successCount = 0;
         for (const sel of selectedDocs) {
