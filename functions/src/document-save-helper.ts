@@ -136,124 +136,18 @@ export async function saveDocumentToVault(
     .collection('clients').doc(params.clientId)
     .collection('documents').doc(docId);
 
-  const existing = await docRef.get();
-  const currentVersion: number = existing.exists
-    ? ((existing.data()?.currentVersion as number) ?? 0) + 1
-    : 1;
-
-  const changeNotes = params.changeNotes
-    ?? (existing.exists ? 'AI regeneration' : 'Initial AI generation');
-
-  // ── Snapshot prior version content before overwriting ──────────────────
-  if (existing.exists) {
-    const prevData = existing.data()!;
-    const prevVersion = (prevData.currentVersion as number) ?? 0;
-
-    // Save the FULL prior content into a versions subcollection
-    const versionRef = docRef.collection('versions').doc(`v${prevVersion}`);
-    await versionRef.set({
-      versionNumber: prevVersion,
-      content: prevData.content ?? '',
-      displayName: prevData.displayName ?? '',
-      status: prevData.status ?? 'draft',
-      createdAt: prevData.updatedAt ?? prevData.createdAt ?? admin.firestore.Timestamp.now(),
-      createdBy: prevData.updatedBy ?? prevData.createdBy ?? 'system',
-      changeNotes: prevData.changeNotes ?? 'No notes',
-      aiModel: prevData.aiModel ?? '',
-      docType: prevData.docType ?? params.docType,
-    });
-  }
-
-  // ── Build the document data ───────────────────────────────────────────
-  const baseTags = params.tags ?? [];
-  const allTags = params.propertyAddress
-    ? [...baseTags, `property:${params.propertyAddress}`]
-    : baseTags;
-
-  const docData: Record<string, unknown> = {
-    id: docId,
-    firmId: params.firmId,
-    clientId: params.clientId,
-    docType: params.docType,
-    displayName: params.displayName,
-    status: params.status ?? 'draft',
-    content: params.content,
-    // DocumentEditor.tsx prefers `editorContent` over `content` when it has
-    // any text — so leaving the old editor copy in place would silently strand
-    // the user on the previous generation after every regenerate. Sync them
-    // on save: the version subcollection retains the prior content for recovery.
-    editorContent: params.content,
-    storagePath: '',
-    fileName: `${docId}.html`,
-    mimeType: 'text/html',
-    currentVersion,
-    generatedByAI: true,
-    aiModel: params.aiModel ?? 'unknown',
-    requiresSignature: requiresSignature(params.docType),
-    // `notarized` means "has been notarized" (it sits with notarizedAt/notaryName
-    // in the Document type). A freshly generated draft has NOT been notarized, so
-    // it must be false — writing the requiresNotarization() *requirement* here
-    // falsely marked every notarization-required draft as already notarized
-    // (R5-031). The requirement is a doc-type property (requiresNotarization),
-    // not a completion state.
-    notarized: false,
-    changeNotes,
-    tags: existing.exists
-      ? (allTags.length > 0 ? admin.firestore.FieldValue.arrayUnion(...allTags) : (existing.data()?.tags ?? []))
-      : allTags,
-    isConfidential: true,
-    updatedAt: now,
-    updatedBy: params.createdBy,
-  };
-
-  // Persist quality signals when present
-  if (params.warnings && params.warnings.length > 0) {
-    docData.warnings = params.warnings;
-  }
-  if (params.validationFindings && params.validationFindings.length > 0) {
-    docData.validationFindings = params.validationFindings;
-  }
-  if (params.promptVersion) {
-    docData.promptVersion = params.promptVersion;
-  }
-  if (params.templateBaseline) {
-    docData.templateBaseline = params.templateBaseline;
-  }
-  // Generation provenance — surface real values so audit queries can answer
-  // "what produced this document?" without replaying the call.
-  if (params.generationMode !== undefined) {
-    docData.generationMode = params.generationMode;
-  }
-  if (params.triggerSource !== undefined) {
-    docData.triggerSource = params.triggerSource;
-  }
-  if (params.templateId !== undefined) {
-    docData.templateId = params.templateId;
-  }
-  if (params.templateSourceCollection !== undefined) {
-    docData.templateSourceCollection = params.templateSourceCollection;
-  }
-  if (params.softwareSource !== undefined) {
-    docData.softwareSource = params.softwareSource;
-  }
-  if (params.binaryBuffer) {
-    docData.hasBinary = true;
-    docData.mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    docData.fileName = `${docId}.docx`;
-  }
-  if (params.extractedData) {
-    docData.extractedData = params.extractedData;
-  }
-
-  // ── Handle Binary Storage Upload ─────────────────────────────────────
+  // ── Binary storage upload (outside the transaction) ────────────────────
+  // Storage writes aren't transactional and the object path is
+  // version-independent, so upload once up-front; the transaction below only
+  // touches Firestore. A transaction retry must not re-upload the buffer.
   let finalStoragePath = '';
   if (params.binaryBuffer) {
     finalStoragePath = `firms/${params.firmId}/clients/${params.clientId}/documents/${docId}.docx`;
     console.log(`[saveDocumentToVault] Uploading binary buffer to ${finalStoragePath}...`);
-    
+
     const bucket = admin.storage().bucket();
     const file = bucket.file(finalStoragePath);
-    
+
     await file.save(params.binaryBuffer, {
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       metadata: {
@@ -264,43 +158,159 @@ export async function saveDocumentToVault(
         generatedAt: new Date().toISOString(),
       },
     });
-    
-    docData.storagePath = finalStoragePath;
   }
 
-  // Version summary on the main document (lightweight — no content)
-  const versionEntry = {
-    versionNumber: currentVersion,
-    createdAt: admin.firestore.Timestamp.now(),
-    createdBy: params.createdBy,
-    changeNotes,
-  };
+  // ── Version bump + prior-content snapshot + write, atomically ──────────
+  // Previously this was a non-transactional read-modify-write: two concurrent
+  // saves to the same deterministic docId both read currentVersion=N, both
+  // wrote N+1, and both appended a versionNumber:N+1 summary entry — silently
+  // losing a version snapshot and duplicating version numbers. runTransaction
+  // serializes them: the second save's read is invalidated by the first
+  // commit and its callback retries against the fresh currentVersion. (R5-033)
+  const result = await db.runTransaction(async (tx): Promise<SaveDocumentResult> => {
+    const existing = await tx.get(docRef);
+    const exists = existing.exists;
+    const prevVersion = exists ? ((existing.data()?.currentVersion as number) ?? 0) : 0;
+    const currentVersion = exists ? prevVersion + 1 : 1;
 
-  if (existing.exists) {
-    docData.versions = admin.firestore.FieldValue.arrayUnion(versionEntry);
-    // Clear stale quality flags on regeneration: update() preserves fields not
-    // present in docData, so a clean re-run (no findings/warnings) would leave
-    // an earlier run's flags lingering forever. Delete them when this run has none.
-    if (!('validationFindings' in docData)) {
-      docData.validationFindings = admin.firestore.FieldValue.delete();
-    }
-    if (!('warnings' in docData)) {
-      docData.warnings = admin.firestore.FieldValue.delete();
-    }
-    await docRef.update(docData);
-  } else {
-    docData.versions = [versionEntry];
-    docData.createdAt = now;
-    docData.createdBy = params.createdBy;
-    await docRef.set(docData);
-  }
+    const changeNotes = params.changeNotes
+      ?? (exists ? 'AI regeneration' : 'Initial AI generation');
 
-  return {
-    docId,
-    isNew: !existing.exists,
-    currentVersion,
-    storagePath: finalStoragePath || undefined,
-  };
+    // ── Snapshot prior version content before overwriting ────────────────
+    if (exists) {
+      const prevData = existing.data()!;
+      // Save the FULL prior content into a versions subcollection
+      const versionRef = docRef.collection('versions').doc(`v${prevVersion}`);
+      tx.set(versionRef, {
+        versionNumber: prevVersion,
+        content: prevData.content ?? '',
+        displayName: prevData.displayName ?? '',
+        status: prevData.status ?? 'draft',
+        createdAt: prevData.updatedAt ?? prevData.createdAt ?? admin.firestore.Timestamp.now(),
+        createdBy: prevData.updatedBy ?? prevData.createdBy ?? 'system',
+        changeNotes: prevData.changeNotes ?? 'No notes',
+        aiModel: prevData.aiModel ?? '',
+        docType: prevData.docType ?? params.docType,
+      });
+    }
+
+    // ── Build the document data ─────────────────────────────────────────
+    const baseTags = params.tags ?? [];
+    const allTags = params.propertyAddress
+      ? [...baseTags, `property:${params.propertyAddress}`]
+      : baseTags;
+
+    const docData: Record<string, unknown> = {
+      id: docId,
+      firmId: params.firmId,
+      clientId: params.clientId,
+      docType: params.docType,
+      displayName: params.displayName,
+      status: params.status ?? 'draft',
+      content: params.content,
+      // DocumentEditor.tsx prefers `editorContent` over `content` when it has
+      // any text — so leaving the old editor copy in place would silently strand
+      // the user on the previous generation after every regenerate. Sync them
+      // on save: the version subcollection retains the prior content for recovery.
+      editorContent: params.content,
+      storagePath: finalStoragePath,
+      fileName: `${docId}.html`,
+      mimeType: 'text/html',
+      currentVersion,
+      generatedByAI: true,
+      aiModel: params.aiModel ?? 'unknown',
+      requiresSignature: requiresSignature(params.docType),
+      // `notarized` means "has been notarized" (it sits with notarizedAt/notaryName
+      // in the Document type). A freshly generated draft has NOT been notarized, so
+      // it must be false — writing the requiresNotarization() *requirement* here
+      // falsely marked every notarization-required draft as already notarized
+      // (R5-031). The requirement is a doc-type property (requiresNotarization),
+      // not a completion state.
+      notarized: false,
+      changeNotes,
+      tags: exists
+        ? (allTags.length > 0 ? admin.firestore.FieldValue.arrayUnion(...allTags) : (existing.data()?.tags ?? []))
+        : allTags,
+      isConfidential: true,
+      updatedAt: now,
+      updatedBy: params.createdBy,
+    };
+
+    // Persist quality signals when present
+    if (params.warnings && params.warnings.length > 0) {
+      docData.warnings = params.warnings;
+    }
+    if (params.validationFindings && params.validationFindings.length > 0) {
+      docData.validationFindings = params.validationFindings;
+    }
+    if (params.promptVersion) {
+      docData.promptVersion = params.promptVersion;
+    }
+    if (params.templateBaseline) {
+      docData.templateBaseline = params.templateBaseline;
+    }
+    // Generation provenance — surface real values so audit queries can answer
+    // "what produced this document?" without replaying the call.
+    if (params.generationMode !== undefined) {
+      docData.generationMode = params.generationMode;
+    }
+    if (params.triggerSource !== undefined) {
+      docData.triggerSource = params.triggerSource;
+    }
+    if (params.templateId !== undefined) {
+      docData.templateId = params.templateId;
+    }
+    if (params.templateSourceCollection !== undefined) {
+      docData.templateSourceCollection = params.templateSourceCollection;
+    }
+    if (params.softwareSource !== undefined) {
+      docData.softwareSource = params.softwareSource;
+    }
+    if (params.binaryBuffer) {
+      docData.hasBinary = true;
+      docData.mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      docData.fileName = `${docId}.docx`;
+    }
+    if (params.extractedData) {
+      docData.extractedData = params.extractedData;
+    }
+
+    // Version summary on the main document (lightweight — no content)
+    const versionEntry = {
+      versionNumber: currentVersion,
+      createdAt: admin.firestore.Timestamp.now(),
+      createdBy: params.createdBy,
+      changeNotes,
+    };
+
+    if (exists) {
+      docData.versions = admin.firestore.FieldValue.arrayUnion(versionEntry);
+      // Clear stale quality flags on regeneration: update() preserves fields not
+      // present in docData, so a clean re-run (no findings/warnings) would leave
+      // an earlier run's flags lingering forever. Delete them when this run has none.
+      if (!('validationFindings' in docData)) {
+        docData.validationFindings = admin.firestore.FieldValue.delete();
+      }
+      if (!('warnings' in docData)) {
+        docData.warnings = admin.firestore.FieldValue.delete();
+      }
+      tx.update(docRef, docData);
+    } else {
+      docData.versions = [versionEntry];
+      docData.createdAt = now;
+      docData.createdBy = params.createdBy;
+      tx.set(docRef, docData);
+    }
+
+    return {
+      docId,
+      isNew: !exists,
+      currentVersion,
+      storagePath: finalStoragePath || undefined,
+    };
+  });
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
