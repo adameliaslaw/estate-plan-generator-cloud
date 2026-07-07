@@ -531,19 +531,23 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ## T4 — Race / async / pipeline (code-review sign-off or integration test)
 
-> These can't be verified by clicking. Each needs an automated concurrency/integration test or a documented code-review sign-off. None has coverage today.
+> These can't be verified by clicking. Each needs an automated concurrency/integration test or a documented code-review sign-off.
+>
+> **Emulator harness (new).** R5-033 and R5-052 now have real passing integration tests under `tests/emulator/`, run via `npm run test:emulator` (`firebase emulators:exec` starts Firestore + Auth, runs `vitest.emulator.config.ts`, tears down). They exercise the REAL `functions/src` admin-SDK code against live emulators — no firebase-admin mocks. **Kept OUT of the default `npm run test`** (see `vitest.config.ts` `exclude`) so the unit pass stays hermetic. **Prereq: a Java 21+ runtime** (the Firestore emulator needs a JRE; firebase-tools 15.x requires JDK ≥ 21). Not yet wired into CI — that needs a `setup-java` step in the deploy workflow (Never-Break, Adam sign-off).
 
-#### `R5-033` · #116 · vault-save — non-transactional version-bump race · ⬜ automate (concurrency)
+#### `R5-033` · #116 · vault-save — non-transactional version-bump race · 🤖 automated (emulator)
 - **File:** `functions/src/document-save-helper.ts`
 - **What broke:** `saveDocumentToVault` did a non-transactional read-modify-write; two concurrent saves to the same deterministic docId both read N and wrote N+1 — losing content, dropping a snapshot, duplicating `versionNumber`. Fix wraps read+compute+snapshot+write in one `runTransaction`.
-- **Test to write:** fire two `saveDocumentToVault` in parallel vs the emulator → assert contiguous unique version numbers, no lost content.
+- **Step:** `npm run test:emulator` (needs Java 21+)
 - **Expected (pre-fix failure):** a snapshot dropped and duplicate `versionNumber`s appended.
+- **Test:** `tests/emulator/document-save-version-race.test.ts` (1 test) — fires two `saveDocumentToVault` in parallel at the same brand-new deterministic docId against the Firestore emulator; asserts the two returned versions are exactly `[1, 2]` (one create + one update), the main doc lands at `currentVersion=2`, the `versions` summary array has unique numbers `[1, 2]` (no duplicate), and exactly one prior-content snapshot (`v1`) survives in the subcollection.
 
-#### `R5-052` · #117 · createFirmUser non-idempotent · ⬜ automate (failure injection)
+#### `R5-052` · #117 · createFirmUser non-idempotent · 🤖 automated (emulator)
 - **File:** `functions/src/user-management.ts`
 - **What broke:** any post-create failure orphaned the Auth account (no claims/profile) and every retry hit `already-exists`. Fix: critical path with best-effort `auth.deleteUser` rollback; invite-email failure returns success+warning.
-- **Test to write:** mock a post-create failure → assert Auth user rolled back; mock invite-email failure → success+warning, not throw.
+- **Step:** `npm run test:emulator` (needs Java 21+)
 - **Expected (pre-fix failure):** orphaned Auth account; every retry failed `already-exists`.
+- **Test:** `tests/emulator/create-firm-user-idempotency.test.ts` (2 tests) — drives the real `createFirmUser` onCall against the Auth + Firestore emulators. (1) A firm with no SendGrid key → the invite email fails → handler returns `success + warning` and the Auth user + profile PERSIST (not rolled back). (2) A `setCustomUserClaims` spy injects a post-create failure → handler throws `internal` and the just-created Auth user is deleted (`getUserByEmail` → `auth/user-not-found`), so no orphan and a retry won't hit `already-exists`.
 
 #### `R5-055` · #111 · calendar-sync advances watermark on partial failure · 🚫 blocked
 - **File:** `functions/src/calendar-sync.ts`
@@ -666,8 +670,8 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-010 | #97 | client-claim token gate | T3 | ⬜ |
 | AP/AQ/AZ/BA/BB | #54 | createFirmUser lockdown + scope | T3 | ⬜ |
 | AS | #55 | paralegal billing/settings | T3 | ⬜ |
-| R5-033 | #116 | vault-save version race | T4 | ⬜ automate |
-| R5-052 | #117 | createFirmUser idempotency | T4 | ⬜ automate |
+| R5-033 | #116 | vault-save version race | T4 | 🤖 automated (emulator) |
+| R5-052 | #117 | createFirmUser idempotency | T4 | 🤖 automated (emulator) |
 | R5-055 | #111 | calendar-sync watermark | T4 | 🚫 |
 | R5-058 | #112 | wills corrupt-file loses record | T4 | 🚫 |
 | R5-059 | #112 | wills error clobbers record | T4 | 🚫 |
