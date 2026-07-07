@@ -479,7 +479,23 @@ async function _callGemini(
   }
 
   const data = await response.json() as GeminiGenerateResponse;
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const candidate = data.candidates?.[0];
+  // Concatenate ALL text parts — with google_search grounding Gemini commonly
+  // splits the answer across multiple parts, so parts[0] alone drops the rest. (R5-046)
+  const text = (candidate?.content?.parts ?? [])
+    .map((p) => p.text ?? '')
+    .join('');
+  // Mirror the OpenAI/Anthropic paths: a MAX_TOKENS truncation yields invalid
+  // JSON downstream, so fail loudly in JSON modes rather than returning half an
+  // object; prose output may still be usable, so only warn there. (R5-046)
+  if (candidate?.finishReason === 'MAX_TOKENS') {
+    const detail = `Gemini response truncated (finishReason=MAX_TOKENS, maxTokens=${options.maxTokens ?? 'default'}).`;
+    if (options.jsonMode || options.jsonSchema) {
+      throw new Error(`${detail} Increase maxTokens.`);
+    }
+    console.warn(`[ai-client] ${detail} Consider increasing maxTokens.`);
+  }
+  return text;
 }
 
 async function _callPerplexity(
