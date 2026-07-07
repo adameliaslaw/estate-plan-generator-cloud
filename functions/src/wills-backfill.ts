@@ -80,9 +80,26 @@ export const willsStartBackfill = onCall(
 
     const db = admin.firestore();
 
-    // Kill switch check
     const controlSnap = await db.collection('pipeline_state').doc('control').get();
     const control = controlSnap.data();
+
+    // Firm scope (R5-066): role=='admin' alone is not enough in a multi-tenant
+    // deployment — an admin of any other firm could otherwise trigger this
+    // firm's Drive ingestion. Only an admin of the firm that OWNS the pipeline
+    // (pipeline_state/control.firmId) may run it. Fail closed if the owner is
+    // unconfigured. (Checked before the kill-switch so a cross-firm caller can't
+    // even probe whether the pipeline is enabled.)
+    const ownerFirmId = (control?.firmId as string | undefined) ?? '';
+    const callerFirmId = request.auth.token.firmId as string | undefined;
+    if (!ownerFirmId) {
+      throw new HttpsError('failed-precondition',
+        'Pipeline owner firm is not configured — set pipeline_state/control.firmId first.');
+    }
+    if (callerFirmId !== ownerFirmId) {
+      throw new HttpsError('permission-denied', 'This ingestion pipeline belongs to another firm.');
+    }
+
+    // Kill switch check
     if (!control?.enabled) {
       throw new HttpsError('failed-precondition', 'Pipeline is disabled — set pipeline_state/control.enabled = true first');
     }

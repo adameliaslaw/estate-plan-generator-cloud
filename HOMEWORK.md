@@ -4,6 +4,19 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-06 PM #10 (Round 5 wills security — R5-066 firm-scoping shipped #113)
+
+**TL;DR — Firm-scoped the two admin-triggered wills pipeline callables so a cross-tenant admin can no longer trigger Elias Counsel's Drive ingestion or read its pilot reports. Verified green (functions tsc, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges (do NOT re-trigger).**
+
+**⚠️ OPS PRECONDITION FOR ADAM (one-time):** the fix fails closed if the pipeline-owning firm is unconfigured. `pipeline_state/control.firmId` must be set to **elias-counsel's firmId** (the value on Adam's `firmId` custom claim), or `willsPilotRun`/`willsStartBackfill` will now deny with `"Pipeline owner firm is not configured — set pipeline_state/control.firmId first."`. Nothing in the repo writes `control.firmId` (it's set out-of-band), so verify it's set before the next pilot/backfill run. These callables are **not UI-wired** — they're run manually by an admin, so the worst case is a clear, self-service error on the next manual run, not a broken user flow.
+
+**✅ Shipped in #113 (`wills-pilot.ts` + `wills-backfill.ts`):**
+- **R5-066** (security): both callables gated only on `request.auth.token.role === 'admin'` with **no firm scoping** → in the multi-tenant model an admin of *any* firm could trigger this firm's Drive ingestion and read pilot reports containing client-identifying file names/folder paths. Now, after reading `pipeline_state/control`, both require `callerFirmId === control.firmId` (the pipeline owner) — checked **before** the kill-switch probe so a cross-firm caller can't even learn whether the pipeline is enabled. Owner-unconfigured → `failed-precondition` (fail closed); owner set but caller mismatched → `permission-denied`. Mirrors the established `assertFirmStaff` tenant-boundary pattern (`callerFirmId === firmId`), but the "firm" here is the pipeline owner from `control`, not a request arg.
+
+**▶️ REMAINING Round 5 mediums (~30 open):** ledger `docs/AUDIT-findings.md` 🟡 table is source of truth. **Clean functions candidates still open:** R5-033 (non-transactional version bump → dup versionNumber; core save path in document-save-helper — do carefully), R5-050 (chat-ai unawaited memory-extraction never completes under CPU freeze — same `await`-before-return class as R5-060), R5-051 (bulk-knowledge-import silent partial OCR reported as success). **Needs design/decision:** R5-047 (chat history truncation), R5-048/049 (chat generation-intent heuristics — behavioral). **Security-sensitive (careful):** R5-052 (createFirmUser orphan), R5-056 (custom email template injection — mirror escapeHtml T9 fix), R5-057 (client-callable notification w/ arbitrary attorneyEmail → spam). **Complex/risky:** R5-040/041 (process-template-file), R5-044 (insertOxfordAnd comma), R5-065 (retemplatize strips block helpers). **Never-Break (sign-off):** R5-045 (serializer hardcodes NJ state), R5-046 (ai-client Gemini drops parts / no finishReason), R5-037 (rules admin cross-tenant). **Policy-gated frontend (ask Adam):** R5-076, R5-079. **DEFERRED (sign-off):** R5-074 + versions/comments rules gap, R5-080. **PARKED:** R5-053/054 (LawPay).
+
+---
+
 ## 📍 SESSION — 2026-07-06 PM #9 (Round 5 wills pipeline cluster — R5-058/059/060/061/062/063/064 shipped #112)
 
 **TL;DR — Shipped the whole Wills-ingestion 🟡 medium cluster (7 findings, R5-058→064) in one churn-aware functions PR (#112). All verified green (functions tsc, root tsc -b, vite build, 641/641 tests, eslint clean). Not on the Never-Break list; squash-merged → CI functions-deploy churns once and converges on its own (do NOT re-trigger). No tests encoded the old behavior; the wills pipeline has no test coverage.**
