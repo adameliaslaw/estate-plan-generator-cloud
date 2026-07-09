@@ -10,6 +10,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { randomUUID } from 'node:crypto';
 import { callAI, sanitizeForPrompt } from './ai-client';
 import { generateEmbedding } from './kb-embeddings';
 
@@ -18,6 +19,7 @@ import { generateEmbedding } from './kb-embeddings';
 // ---------------------------------------------------------------------------
 
 export interface ConversationMessage {
+  id?: string; // stable per-message id — the append/dedupe key (R5-047)
   role: 'user' | 'assistant';
   content: string;
   timestamp: string; // ISO string
@@ -83,62 +85,88 @@ export interface FirmMemory {
 const db = () => admin.firestore();
 
 /**
- * Save or update a conversation in Firestore.
+ * Save a conversation turn to Firestore. `newMessages` is only the messages
+ * produced THIS turn (the new user message + the assistant reply), NOT the
+ * whole prompt window.
+ *
+ * R5-047: the update path used to overwrite `messages` with the caller's
+ * ~20-message sliding window, permanently truncating any conversation longer
+ * than the window on every turn. It now APPENDS: a transaction reads the
+ * stored messages and adds only the new ones (deduped by the stable per-message
+ * `id`, so a retry can't double-append). On create, the turn IS the whole
+ * conversation, so it's written directly.
+ *
  * Returns the conversation ID.
  */
 export async function saveConversation(
   firmId: string,
   userId: string,
   conversationId: string | undefined,
-  messages: ConversationMessage[],
+  newMessages: ConversationMessage[],
   mode: 'chat' | 'draft' | 'research',
   clientId?: string,
   draftDocType?: string,
 ): Promise<string> {
   const col = db().collection(`firms/${firmId}/aiConversations`);
+  const now = admin.firestore.FieldValue.serverTimestamp();
 
-  // Auto-generate title from first user message
-  const firstUserMsg = messages.find((m) => m.role === 'user');
+  // Ensure every new message carries a stable id — the append/dedupe key.
+  const stamped: ConversationMessage[] = newMessages.map((m) => ({
+    ...m,
+    id: m.id ?? randomUUID(),
+  }));
+
+  const summarize = (m: ConversationMessage | undefined) =>
+    m ? m.content.slice(0, 100) : '';
+
+  if (conversationId) {
+    // Append this turn to the existing conversation, preserving all prior
+    // history. Read-modify-write in a transaction so two concurrent turns on
+    // the same conversation can't clobber each other.
+    const ref = col.doc(conversationId);
+    await db().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const stored: ConversationMessage[] =
+        (snap.exists ? (snap.data()?.messages as ConversationMessage[] | undefined) : undefined) ?? [];
+      const storedIds = new Set(stored.map((m) => m.id).filter(Boolean));
+      const toAppend = stamped.filter((m) => !storedIds.has(m.id));
+      if (toAppend.length === 0) return; // retry / no-op
+      const merged = [...stored, ...toAppend];
+      tx.update(ref, {
+        messages: merged,
+        messageCount: merged.length,
+        lastMessage: summarize(merged[merged.length - 1]),
+        updatedAt: now,
+        // title is intentionally NOT recomputed — it's set once from the first
+        // user message at creation; recomputing from a later turn would rename
+        // the conversation, and the old window-derived title drifted anyway.
+      });
+    });
+    return conversationId;
+  }
+
+  // Create a new conversation — the turn is its entire history so far.
+  const ref = col.doc();
+  const firstUserMsg = stamped.find((m) => m.role === 'user');
   const title = firstUserMsg
     ? firstUserMsg.content.slice(0, 80) + (firstUserMsg.content.length > 80 ? '...' : '')
     : 'New Conversation';
-
-  const lastMsg = messages[messages.length - 1];
-  const lastMessage = lastMsg ? lastMsg.content.slice(0, 100) : '';
-
-  const now = admin.firestore.FieldValue.serverTimestamp();
-
-  if (conversationId) {
-    // Update existing conversation
-    const ref = col.doc(conversationId);
-    await ref.update({
-      messages,
-      messageCount: messages.length,
-      lastMessage,
-      title,
-      updatedAt: now,
-    });
-    return conversationId;
-  } else {
-    // Create new conversation
-    const ref = col.doc();
-    const data: Conversation = {
-      id: ref.id,
-      firmId,
-      clientId: clientId ?? null,
-      userId,
-      mode,
-      draftDocType: draftDocType ?? null,
-      title,
-      lastMessage,
-      messages,
-      messageCount: messages.length,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await ref.set(data);
-    return ref.id;
-  }
+  const data: Conversation = {
+    id: ref.id,
+    firmId,
+    clientId: clientId ?? null,
+    userId,
+    mode,
+    draftDocType: draftDocType ?? null,
+    title,
+    lastMessage: summarize(stamped[stamped.length - 1]),
+    messages: stamped,
+    messageCount: stamped.length,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await ref.set(data);
+  return ref.id;
 }
 
 /**

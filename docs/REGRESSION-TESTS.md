@@ -538,6 +538,13 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** verified — the two cross-firm-admin tests FAIL against the pre-#121 rules (negative control run at merge time).
 - **Test:** `tests/emulator/firestore-rules-firm-admin.test.ts` (R5-037 blocks, 5 tests) — live rules engine: a Firm B admin can neither read nor write Firm A's firm doc, clients, notes, payments, KB, or templates; a Firm A admin still fully manages their own firm (incl. the firm-settings update path); collection-group notes/payments queries still work for in-firm staff and are denied cross-firm.
 
+#### `R5-047` · (deferred audit finding) · chat conversation history truncated to the prompt window · 🤖 automated (emulator)
+- **File:** `functions/src/ai-memory.ts`, `functions/src/chat-ai.ts`
+- **What broke:** `saveConversation`'s update path overwrote the stored `messages` array with the caller's ~20-message sliding prompt window every turn, permanently truncating any conversation longer than the window. Fix: each message gets a stable `id`; the update path transactionally appends only the new turn (deduped by `id`); the 5 chat-ai call sites pass `allMessages.slice(resolvedHistory.length)`.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — all 4 tests FAIL against the pre-fix `ai-memory.ts` (negative control run at authoring time).
+- **Test:** `tests/emulator/conversation-append.test.ts` (4 tests) — 21 appended turns keep all 42 messages (turn 1 still first, not dropped); every stored message gets a unique id; re-saving a turn with the same ids does not double-append; a legacy id-less stored history is preserved when a new turn appends.
+
 ---
 
 ## T4 — Race / async / pipeline (code-review sign-off or integration test)
@@ -708,6 +715,7 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ## Changelog
 
+- **2026-07-09 (R5-047)** — chat conversation history no longer truncated to the ~20-message prompt window: `saveConversation` appends only the new turn (stable per-message id, transactional dedupe). New emulator test `conversation-append.test.ts` (4, negative-control-verified). Adam signed off on the append-only approach.
 - **2026-07-09 (T4)** — the five 🚫-blocked T4 rows automated with injected-failure emulator tests (7 new tests, 3 files; emulator suite 41/41): R5-055 watermark, R5-058/059/060 wills-processor failure paths, R5-061 backfill stale-running. Every case negative-control-verified against its pre-fix code. T4 now has one open row (R5-050, prod smoke). Tally 32→37 🤖.
 - **2026-07-09 (CI)** — `npm run test:emulator` wired into `firebase-functions-deploy.yml` (setup-java JDK 21 + emulator-jar cache, before the deploy steps) — all 33 emulator tests now gate every functions/rules deploy. Adam sign-off.
 - **2026-07-09 (#121)** — R5-037 firm-scoped admin rules fix merged with a new case entry, plus live rules-engine tests via `@firebase/rules-unit-testing` covering R5-037 (incl. collection-group scoping) and the AS rules half (`firestore-rules-firm-admin.test.ts`, 8 tests; negative control verified the cross-firm tests fail pre-fix). T3 is fully automated. Tally 30→32 🤖 (81 cases).

@@ -656,7 +656,9 @@ export const chatAi = functions
               draftTitle: genResult.title,
             },
           ];
-          const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
+          // Persist only THIS turn (the window is already stored) so history
+          // isn't truncated to the prompt window. (R5-047)
+          const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages.slice(resolvedHistory.length), mode, clientId, draftDocType);
 
           return {
             reply,
@@ -679,7 +681,7 @@ export const chatAi = functions
             { role: 'user' as const, content: message, timestamp: new Date().toISOString() },
             { role: 'assistant' as const, content: reply, timestamp: new Date().toISOString() },
           ];
-          const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
+          const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages.slice(resolvedHistory.length), mode, clientId, draftDocType);
           return { reply, conversationId: convId } as ChatAiResponse;
         }
       }
@@ -748,7 +750,7 @@ SOURCE PRIORITY (apply when grounding and citing your answer):
           { role: 'assistant' as const, content: perplexityResult.content, timestamp: new Date().toISOString() },
         ];
 
-        const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, 'research', clientId);
+        const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages.slice(resolvedHistory.length), 'research', clientId);
 
         return {
           reply: perplexityResult.content,
@@ -910,8 +912,8 @@ SOURCE PRIORITY (apply when grounding and citing your answer):
           draftTitle: result.draftTitle ?? null,
         });
 
-        // Save conversation (fire-and-forget)
-        const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId, draftDocType);
+        // Save conversation — append only this turn (R5-047).
+        const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages.slice(resolvedHistory.length), mode, clientId, draftDocType);
         result.conversationId = convId;
 
         // Extract key facts + corrections — awaited so the memory pipeline
@@ -932,8 +934,8 @@ SOURCE PRIORITY (apply when grounding and citing your answer):
         draftTitle: null,
       });
 
-      // Save conversation
-      const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages, mode, clientId);
+      // Save conversation — append only this turn (R5-047).
+      const convId = await saveConversation(firmId, context.auth.uid, inConvId, allMessages.slice(resolvedHistory.length), mode, clientId);
 
       // Extract key facts + corrections — awaited so the memory pipeline
       // actually completes before the instance CPU is frozen on return. (R5-050)
