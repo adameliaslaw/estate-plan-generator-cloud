@@ -501,7 +501,7 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ## T3 — Multi-tenant / privileged (emulator, two firms)
 
-> **Emulator harness.** Three of the four T3 cases now have real passing integration tests under `tests/emulator/`, run via `npm run test:emulator` (needs Java 21+ — see the T4 harness note). They drive the REAL callables with crafted per-firm auth tokens against the Firestore emulator. The remaining case (`AS`) is a firestore.rules check, which the admin SDK bypasses — it needs `@firebase/rules-unit-testing` (a new devDependency) before it can be automated.
+> **Emulator harness.** All T3 cases now have real passing integration tests under `tests/emulator/`, run via `npm run test:emulator` (needs Java 21+ — see the T4 harness note). Callable-level cases drive the REAL callables with crafted per-firm auth tokens against the Firestore emulator; rules-layer cases (`AS`, `R5-037`) evaluate the REAL `firestore.rules` in the live rules engine via `@firebase/rules-unit-testing` (`firestore-rules-firm-admin.test.ts`) — unlike `tests/unit/security-rules.test.ts`, which is a static text-match.
 
 #### `R5-066` · #113 · wills pipeline — cross-tenant admin trigger · 🤖 automated (emulator)
 - **File:** `functions/src/wills-pilot.ts`, `wills-backfill.ts`
@@ -524,11 +524,19 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** an attorney (or any signed-in user) could mint a cross-privilege admin; the predicate returned another firm's data.
 - **Test:** `tests/emulator/callable-firm-scope.test.ts` (11 tests) — `createFirmUser`: attorney requesting `role:'admin'` denied; paralegal/client denied entirely; Firm B admin targeting Firm A denied. `listTemplates`/`getTemplateContent`/`searchKnowledgeResources`: Firm A **admin** targeting seeded Firm B data → `permission-denied` (old predicate admitted any admin); caller with NO firm claim → denied (old predicate let them through); same-firm positive control reads its own data.
 
-#### `AS` · #55 · paralegal dropped from billing + firm-settings · ⬜ unverified
+#### `AS` · #55 · paralegal dropped from billing + firm-settings · 🤖 automated (emulator, rules half)
 - **File:** `firestore.rules`, `src/hooks/usePermissions.ts`
 - **What broke:** paralegals had `canManageBilling`/`canManageFirmSettings`. Removed at the rules layer and in the hook.
-- **Steps:** as a seeded **paralegal**, (1) attempt a write to the firm-settings/billing path → denied by rules; (2) in the UI, confirm the billing/firm-settings controls are hidden.
+- **Steps:** `npm run test:emulator` (needs Java 21+). The UI half (billing/firm-settings controls hidden for a paralegal) remains a T2 click-path check.
 - **Expected (pre-fix failure):** a paralegal could manage billing and firm settings.
+- **Test:** `tests/emulator/firestore-rules-firm-admin.test.ts` (AS block, 3 tests) — live rules engine: paralegal denied firm-settings update and payment create/update; still allowed to READ payments in their firm (billing review).
+
+#### `R5-037` · #121 · firestore.rules — bare admin OR'd into every firm-scoped block · 🤖 automated (emulator)
+- **File:** `firestore.rules`
+- **What broke:** `isAdmin()` = bare `hasRole('admin')` was OR'd into ~40 firm-scoped match blocks, so an admin of ANY firm could read/write EVERY firm's clients, documents, notes, payments, transcripts, templates, and KB. Fix adds `isFirmAdmin(firmId) = isAdmin() && belongsToFirm(firmId)` at every firm-scoped site; bare `isAdmin()` survives only on the global pipeline collections (`pipeline_state`, `pipeline_audit_log`).
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — the two cross-firm-admin tests FAIL against the pre-#121 rules (negative control run at merge time).
+- **Test:** `tests/emulator/firestore-rules-firm-admin.test.ts` (R5-037 blocks, 5 tests) — live rules engine: a Firm B admin can neither read nor write Firm A's firm doc, clients, notes, payments, KB, or templates; a Firm A admin still fully manages their own firm (incl. the firm-settings update path); collection-group notes/payments queries still work for in-firm staff and are denied cross-firm.
 
 ---
 
@@ -672,7 +680,8 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-066 | #113 | wills firm-scope cross-tenant | T3 | 🤖 automated (emulator) |
 | R5-010 | #97 | client-claim token gate | T3 | 🤖 automated (emulator) |
 | AP/AQ/AZ/BA/BB | #54 | createFirmUser lockdown + scope | T3 | 🤖 automated (emulator) |
-| AS | #55 | paralegal billing/settings | T3 | ⬜ |
+| AS | #55 | paralegal billing/settings | T3 | 🤖 automated (emulator, rules half) |
+| R5-037 | #121 | rules firm-scoped admin | T3 | 🤖 automated (emulator) |
 | R5-033 | #116 | vault-save version race | T4 | 🤖 automated (emulator) |
 | R5-052 | #117 | createFirmUser idempotency | T4 | 🤖 automated (emulator) |
 | R5-055 | #111 | calendar-sync watermark | T4 | 🚫 |
@@ -688,11 +697,12 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 30 locked · ⬜ 4 to-automate (T1) · ⬜ 30 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (81 cases):** 🤖 32 locked · ⬜ 4 to-automate (T1) · ⬜ 29 manual (T2) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
 ## Changelog
 
+- **2026-07-09 (#121)** — R5-037 firm-scoped admin rules fix merged with a new case entry, plus live rules-engine tests via `@firebase/rules-unit-testing` covering R5-037 (incl. collection-group scoping) and the AS rules half (`firestore-rules-firm-admin.test.ts`, 8 tests; negative control verified the cross-firm tests fail pre-fix). T3 is fully automated. Tally 30→32 🤖 (81 cases).
 - **2026-07-09** — T3 multi-tenant batch: R5-066, R5-010, and AP/AQ/AZ/BA/BB automated via the emulator harness (`tests/emulator/`, 22 new tests, emulator suite 25/25). Sole T3 remainder is `AS` (rules-layer check — needs `@firebase/rules-unit-testing`). Tally 27→30 🤖.
 - **2026-07-07** — Populated all 80 cases from the commit log + `HOMEWORK.md` + `docs/AUDIT-findings.md` via 5 extraction subagents; each grounded in the actual diff and checked against `tests/unit/`. 7 fixes have real passing tests today; the rest are the build/run list. Approach: hybrid automation-first, emulator-first + prod smoke.
