@@ -702,7 +702,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (81 cases):** 🤖 37 locked · ⬜ 4 to-automate (T1) · ⬜ 29 manual (T2) · 8 T4 (7 of them 🤖; R5-050 remains prod-smoke) · 4 prod-smoke · 2 blocked.
+**Tally (82 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 32 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained — earlier tally lines undercounted the locked rows and carried a stale "4 to-automate"; this line is derived by counting table rows, not incremental arithmetic.
 
 ---
 
