@@ -544,7 +544,7 @@ Short, deliberate, post-deploy — never bulk regression:
 
 > These can't be verified by clicking. Each needs an automated concurrency/integration test or a documented code-review sign-off.
 >
-> **Emulator harness (new).** R5-033 and R5-052 now have real passing integration tests under `tests/emulator/`, run via `npm run test:emulator` (`firebase emulators:exec` starts Firestore + Auth, runs `vitest.emulator.config.ts`, tears down). They exercise the REAL `functions/src` admin-SDK code against live emulators — no firebase-admin mocks. **Kept OUT of the default `npm run test`** (see `vitest.config.ts` `exclude`) so the unit pass stays hermetic. **Prereq: a Java 21+ runtime** (the Firestore emulator needs a JRE; firebase-tools 15.x requires JDK ≥ 21). Not yet wired into CI — that needs a `setup-java` step in the deploy workflow (Never-Break, Adam sign-off).
+> **Emulator harness (new).** R5-033 and R5-052 now have real passing integration tests under `tests/emulator/`, run via `npm run test:emulator` (`firebase emulators:exec` starts Firestore + Auth, runs `vitest.emulator.config.ts`, tears down). They exercise the REAL `functions/src` admin-SDK code against live emulators — no firebase-admin mocks. **Kept OUT of the default `npm run test`** (see `vitest.config.ts` `exclude`) so the unit pass stays hermetic. **Prereq: a Java 21+ runtime** (the Firestore emulator needs a JRE; firebase-tools 15.x requires JDK ≥ 21). **Wired into CI (2026-07-09, Adam sign-off):** `firebase-functions-deploy.yml` runs `npm run test:emulator` (with `setup-java` JDK 21 + emulator-jar cache) after the unit suite and before any deploy — an emulator regression aborts the functions/rules deploy.
 
 #### `R5-033` · #116 · vault-save — non-transactional version-bump race · 🤖 automated (emulator)
 - **File:** `functions/src/document-save-helper.ts`
@@ -703,6 +703,7 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ## Changelog
 
+- **2026-07-09 (CI)** — `npm run test:emulator` wired into `firebase-functions-deploy.yml` (setup-java JDK 21 + emulator-jar cache, before the deploy steps) — all 33 emulator tests now gate every functions/rules deploy. Adam sign-off.
 - **2026-07-09 (#121)** — R5-037 firm-scoped admin rules fix merged with a new case entry, plus live rules-engine tests via `@firebase/rules-unit-testing` covering R5-037 (incl. collection-group scoping) and the AS rules half (`firestore-rules-firm-admin.test.ts`, 8 tests; negative control verified the cross-firm tests fail pre-fix). T3 is fully automated. Tally 30→32 🤖 (81 cases).
 - **2026-07-09** — T3 multi-tenant batch: R5-066, R5-010, and AP/AQ/AZ/BA/BB automated via the emulator harness (`tests/emulator/`, 22 new tests, emulator suite 25/25). Sole T3 remainder is `AS` (rules-layer check — needs `@firebase/rules-unit-testing`). Tally 27→30 🤖.
 - **2026-07-07** — Populated all 80 cases from the commit log + `HOMEWORK.md` + `docs/AUDIT-findings.md` via 5 extraction subagents; each grounded in the actual diff and checked against `tests/unit/`. 7 fixes have real passing tests today; the rest are the build/run list. Approach: hybrid automation-first, emulator-first + prod smoke.
