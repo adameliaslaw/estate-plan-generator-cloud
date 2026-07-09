@@ -108,10 +108,16 @@ export default function TemplatePreviewPanel({ firmId, template, className }: Pr
                 placeholder="— Pick a client —"
                 emptyText="No matching client."
                 value={selectedId ?? ''}
-                onChange={(v) => setSelectedId(v || null)}
-                options={clients
-                  .filter((c) => !c.isArchived)
-                  .map((c) => ({ value: c.id, label: clientDisplayName(c) }))}
+                onChange={(v) => setSelectedId(v && v !== '__none__' ? v : null)}
+                options={[
+                  // Explicit clear row — the Combobox (unlike the old native
+                  // <select>) has no empty-value option, so once a client was
+                  // picked it could never be deselected (R6-004).
+                  { value: '__none__', label: '— No client —' },
+                  ...clients
+                    .filter((c) => !c.isArchived)
+                    .map((c) => ({ value: c.id, label: clientDisplayName(c) })),
+                ]}
               />
             </div>
           )}

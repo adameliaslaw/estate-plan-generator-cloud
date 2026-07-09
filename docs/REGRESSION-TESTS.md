@@ -336,6 +336,30 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Steps:** open a doc → Regenerate, wait → type one char → hard-reload.
 - **Expected (pre-fix failure):** the editor kept the old draft and the first keystroke overwrote the regenerated document.
 
+#### `R6-003` · #154 · template enhance — AI-injected block helpers corrupted on save · ⬜ unverified
+- **File:** `src/components/knowledge/TemplatePreviewDialog.tsx`
+- **What broke:** `handleEnhance` set `sourceContent` to the pristine enhanced HTML but never recomputed `isLogicTemplate`, so if the AI injected block helpers (`{{#each}}`/`{{#if}}`) into a template that loaded as non-logic, Save serialized `editor.getHTML()` — the ProseMirror round-trip that foster-parents block helpers out of tables — instead of the pristine source. Fixed: recompute `hasBlockHelpers` after enhance (same as the load path) and switch to Source view when logic appears.
+- **Steps:** open a non-logic template → Enhance with a focus that adds a loop (e.g. "add a per-beneficiary distribution table") → Save → reopen and inspect the Handlebars blocks.
+- **Expected (pre-fix failure):** `{{#each}}`/`{{/each}}` relocated outside the table rows (corrupted template). Now: the dialog flips to Source view and Save persists the pristine enhanced source.
+
+#### `R6-004` · #154 · template preview — client can't be deselected · ⬜ unverified
+- **File:** `src/components/knowledge/TemplatePreviewPanel.tsx`
+- **What broke:** the old native `<select>` had a `value=""` "— Pick a client —" option; the replacement `Combobox` only emits real option values, so once a client was chosen the preview could never be cleared back to placeholder mode. Fixed: explicit "— No client —" clear row mapping to `null`.
+- **Steps:** template preview → pick a client → open the combobox again → choose "— No client —".
+- **Expected (pre-fix failure):** no way back to the unselected state. Now: selection clears, placeholder preview returns.
+
+#### `R6-005` · #154 · clients — Copy Invite Link fails on Firefox/Safari with misleading toast · ⬜ unverified *(Firefox/Safari)*
+- **File:** `src/pages/admin/ClientListPage.tsx`
+- **What broke:** `navigator.clipboard.writeText` ran after the `getRegistrationLink` callable round-trip, so the click's transient user activation was already consumed — Firefox/Safari reject the write with NotAllowedError and the catch showed "Failed to create invite link" even though the token WAS minted server-side. Fixed: the clipboard write now starts synchronously inside the click via `ClipboardItem` with a promise payload (writeText fallback where unsupported), and a copy-only failure surfaces the minted URL for manual copy instead of the false "failed to create".
+- **Steps:** on Firefox or Safari: client list → row menu → Copy Invite Link → paste somewhere.
+- **Expected (pre-fix failure):** "Failed to create invite link" toast, empty clipboard (token minted anyway). Now: link lands on the clipboard; if the copy is blocked, a prompt shows the URL for manual copy.
+
+#### `R6-006` · #154 · invite link — auto anonymous sign-in hijacks an existing session · ⬜ unverified
+- **File:** `src/pages/client/QuestionnaireRegisterPage.tsx`
+- **What broke:** the token path called `signInAnonymously` unconditionally on page load, replacing any already-authenticated user app-wide and re-pointing the client record's `linkedUserId` to the throwaway anonymous uid (staff previewing an invite link in their own browser lost their session). Fixed: after `auth.authStateReady()`, a signed-in non-anonymous user gets guidance (open in a private window / sign out) instead of the silent hijack; anonymous/no session proceeds as before.
+- **Steps:** while signed in as staff, paste a client's personal invite link into the same browser.
+- **Expected (pre-fix failure):** staff session silently replaced by an anonymous one; client's `linkedUserId` re-pointed. Now: a notice explains how to open the link; the staff session is untouched.
+
 #### `R6-002` · #153 · KB bulk import — all-partial batch saves resources invisibly · ⬜ unverified *(needs >15MB scanned PDF)*
 - **File:** `src/components/knowledge/KBBulkImportDialog.tsx`, `src/pages/admin/KnowledgeBasePage.tsx`
 - **What broke:** the success handler gated the only list refresh + toast on `result.processed > 0`, but the backend's `processed` excludes `partial` files whose resources ARE persisted (`bulk-knowledge-import.ts` writes the doc, then reports `status:'partial'`). A batch of only partially-OCR'd scans (>~15MB each) saved every resource server-side while the dialog showed no toast and the KB list never refreshed — inviting duplicate re-uploads. Fixed: `partial > 0` now shows a warning toast and (when there's no full success) refreshes the list via a new `onRefresh` prop WITHOUT closing the dialog, so the per-file "split this PDF" warnings stay readable.
@@ -682,6 +706,10 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-022 | #92 | editor regenerate overwrite | T2 | ⬜ |
 | R6-001 | #152 | editor stuck force-reload post-regen | T2 | ⬜ |
 | R6-002 | #153 | KB import all-partial invisible save | T2 | ⬜ |
+| R6-003 | #154 | template enhance logic-guard gap | T2 | ⬜ |
+| R6-004 | #154 | template preview client deselect | T2 | ⬜ |
+| R6-005 | #154 | invite-link clipboard FF/Safari | T2 | ⬜ |
+| R6-006 | #154 | invite-link anon session hijack | T2 | ⬜ |
 | R5-023 | #92 | editor per-property regen | T2 | ⬜ |
 | R5-024 | #92 | editor restore loses edits | T2 | ⬜ |
 | R5-025 | #92 | editor stale Replace offsets | T2 | ⬜ |
@@ -730,12 +758,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (84 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 34 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
+**Tally (88 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 38 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
 
 ---
 
 ## Changelog
 
+- **2026-07-09 (R6-003–006)** — the four Round-6 ⚪s fixed in one batch (#154): template enhance recomputes `isLogicTemplate` (AI-injected block helpers no longer corrupted on save); template preview gained a "— No client —" clear row; Copy Invite Link copies via `ClipboardItem`-promise inside the click's activation (Firefox/Safari) with an honest manual-copy fallback; the invite-link page no longer hijacks a signed-in session (`authStateReady()` + guidance instead of silent `signInAnonymously`). Four new T2 cases.
 - **2026-07-09 (R6-002)** — KB bulk import all-partial batches no longer save invisibly (#153): `partial > 0` now warns + refreshes the list via a new `onRefresh` prop while keeping the dialog open (per-file OCR warnings stay readable); mixed/pure-success paths unchanged. New T2 case R6-002. Found by audit Round 6.
 - **2026-07-09 (R6-001)** — editor stuck force-reload after successful regenerate fixed (#152): `regenBaseVersionRef` watermark (session-high `currentVersion` at regen start) lets the load effect clear `forceReloadRef` on consuming the version-bumped regenerated snapshot even mid-regen, so the flag can no longer stay stuck and force-reload the editor on the next autosave (reverting round-trip keystrokes). New T2 case R6-001. Found by audit Round 6.
 - **2026-07-09 (R5-048/049)** — chat document-generation intent made context-aware (Adam signed off): explicit requests generate immediately, bare affirmatives only after an assistant offer, negation guard, message doc type wins, reply-shape Strategy 2/3 removed. New unit test `chat-generation-intent.test.ts` (11).
