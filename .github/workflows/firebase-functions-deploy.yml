@@ -42,14 +42,12 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 5.5h headroom for the ONE-TIME full convergence: when every function is
-    # churned (local-build vs CI-build hash mismatch), all ~80 deploy in batches
-    # of 5, and each batch waits for the previous batch's LROs to fully finalize
-    # (not just serve ACTIVE) before starting — worst case ~9 min/batch × 16
-    # batches ≈ 2.5-3h. Normal pushes change a few functions → batches skip the
-    # unchanged ones and the ops-drain returns instantly (0 in-flight) → fast.
-    # The high ceiling only costs wall-clock on the rare full-convergence run.
-    timeout-minutes: 330
+    # Post-#64 simplification the deploy is: one full `firebase deploy` (all 80
+    # sent in parallel, ~15-25 min even on a full-convergence run) + the
+    # straggler pass (≤5 losers, 6 tries × ~4 min ≈ 24 min worst case). Realistic
+    # worst case ~50 min; 120 gives ~2× headroom without masking a genuinely
+    # stuck deploy. (Was 330 for the removed 16-batch serial convergence.)
+    timeout-minutes: 120
     # contents:read for checkout; issues:write so the failure handler below can
     # open/append a GitHub issue. Deploy auth is via google-github-actions/auth
     # (a SA key), NOT GITHUB_TOKEN, so this restriction doesn't affect the deploy.
@@ -143,52 +141,43 @@ jobs:
         # the SA `roles/firebase.viewer` (read-only) — verified the GET flips
         # 404->200 under SA impersonation. storage.rules now auto-deploys in CI.
         #
-        # CHUNKED DEPLOY WITH OP-QUEUE DRAIN (2026-06-30). A single
-        # `firebase deploy --only functions` of ~80 Cloud Functions v2 deploys
-        # them all at once, exceeding the v2 concurrent-op ceiling → updates fail
-        # with HTTP 409 "unable to queue the operation". `firebase deploy` logs
-        # those as WARNINGS and still EXITS 0, so CI used to report green while
-        # ~36 functions silently stayed on old code (stranding T6/T7/AR/T8/#62 —
-        # found when a SendGrid smoke test failed). Re-running the *full* deploy
-        # never converged (the op-queue cascades).
+        # DEPLOY STRATEGY (simplified 2026-07-09, issue #64).
+        # firebase computes ONE content-hash for the whole `functions/` codebase
+        # and stamps it onto every function (verified in firebase-tools 15.x:
+        # cache/applyHash.js applyBackendHashToEndpoints + prepareFunctionsUpload.js
+        # line 124 — sha1 of every file's CONTENT, sorted; mtimes/archive order
+        # are NOT hashed). So any source change marks all ~80 functions changed
+        # and a normal merge redeploys the whole codebase. That fan-out is
+        # intrinsic to a single codebase; the only lever CI has is HOW it pushes
+        # those 80.
         #
-        # The first chunked rework (#65) deployed in batches of 5 but fired them
-        # back-to-back, so each batch 409'd within ~3s — the PREVIOUS batch's
-        # operations were still in flight on the region's op-queue (its run timed
-        # out at 60 min, converging only ~22 of 80). The second rework (#69)
-        # paced batches with a drain() that polled `firebase functions:list`
-        # until every function showed ACTIVE — still 409'd, because a v2 update
-        # operation keeps FINALIZING for minutes after the function already
-        # serves ACTIVE (confirmed from the 2026-06-30 run logs). Manual
-        # convergence only ever worked because humans paced batches minutes
-        # apart — i.e. past the invisible finalization tail.
+        # History: one `firebase deploy --only functions` sends all 80 in
+        # parallel. On a CLEAN regional op-queue that leaves EXACTLY ONE random
+        # 409 straggler (empirical, runs #95-97, 2026-07-02); the "storm" seen on
+        # 2026-06-30 was a queue poisoned by orphaned ops from CANCELLED runs
+        # (fixed separately by concurrency: cancel-in-progress:false above). The
+        # earlier fix instead redeployed all 80 in serialized batches of 5 with
+        # an op-queue drain between each — safe but ~16 drains = 50-80 min/merge.
         #
-        # So drain() now polls the ACTUAL long-running operations
-        # (cloudfunctions.googleapis.com/v2 .../operations?filter=done=false)
-        # until ZERO are in flight, via gcloud print-access-token + curl
-        # (gcloud is preinstalled on ubuntu-latest; the SA key from auth@v3 is
-        # activated below — print-access-token re-mints, so no 1h-token expiry
-        # on a long convergence run). If the ops query is unavailable
-        # (permission/API change), drain falls back to the old ACTIVE-state
-        # poll — no worse than #69; the per-batch retries absorb any 409s.
-        # Now:
-        #   1. deploy firestore:rules + storage once,
-        #   2. redeploy the deployed default-codebase functions in batches of 5,
-        #      draining the op-queue (LRO done) before every batch + retry,
-        #   3. run a final full `firebase deploy --only functions` — catches
-        #      brand-new functions and deletes removed ones; everything converged
-        #      in step 2 is unchanged → skipped → no storm. This final deploy is
-        #      the authoritative gate: we FAIL the job on any per-function
-        #      failure, which trips the "Notify on failure" issue below.
-        # Enumeration still uses `firebase functions:list` (authed via
-        # GOOGLE_APPLICATION_CREDENTIALS).
+        # This version drops that batch loop: deploy rules, then ONE full
+        # functions deploy, then converge the ~1 straggler individually (single-
+        # function deploys don't hit the burst 409). Safety nets kept intact:
+        #   - drain() polls the ACTUAL long-running operations
+        #     (cloudfunctions.googleapis.com/v2 .../operations?filter=done=false)
+        #     to ZERO in-flight via gcloud print-access-token + curl, so a
+        #     straggler retry waits past the minutes-long finalization tail;
+        #     falls back to the ACTIVE-state poll if the ops API is unavailable.
+        #   - FAIL-LOUD gate: a non-zero firebase exit, or >5 failed functions,
+        #     still fails the job (a big failure set = something real is broken,
+        #     not 409 noise). The "Notify on failure" step opens a GitHub issue.
+        # Enumeration uses `firebase functions:list` (authed via
+        # GOOGLE_APPLICATION_CREDENTIALS) to validate straggler names.
         run: |
           # GitHub runs this with `bash -e`; disable errexit so a failing deploy
           # attempt doesn't abort before we read its exit code and retry.
           set +e -uo pipefail
           PROJECT=estate-plan-generator
           REGION=us-east1
-          CHUNK_SIZE=5
           RUNNER_TEMP="${RUNNER_TEMP:-/tmp}"
           FAIL_RE='failed to (update|create) function|unable to queue the operation'
 
@@ -297,46 +286,35 @@ jobs:
           deploy_with_retry "rules" "firestore:rules,storage" 3 || {
             echo "❌ firestore:rules / storage failed to deploy."; exit 1; }
 
-          # 2. Redeploy every deployed default-codebase function in small batches.
-          #    (The 3 dormant backfill-codebase jobs are left to the final deploy.)
+          # 2. Enumerate the default-codebase functions — used only to validate
+          #    straggler names below. The batched pre-deploy was removed in the
+          #    #64 simplification; the single full deploy (step 3) handles the
+          #    mass and the straggler pass converges the ~1 loser.
+          #    (The 3 dormant backfill-codebase jobs are left to the full deploy.)
           mapfile -t FUNCS < <(firebase functions:list --project "$PROJECT" --json 2>/dev/null \
             | node "$RUNNER_TEMP/list-default.js" | sort -u)
-          echo "Discovered ${#FUNCS[@]} default-codebase functions; converging in batches of $CHUNK_SIZE."
-          if [ "${#FUNCS[@]}" -eq 0 ]; then
-            echo "⚠️ Enumeration returned 0 functions — skipping batches, relying on the final full deploy."
-          fi
-          batch_warned=0
-          i=0
-          while [ "$i" -lt "${#FUNCS[@]}" ]; do
-            chunk=("${FUNCS[@]:i:CHUNK_SIZE}")
-            targets=$(printf 'functions:default:%s,' "${chunk[@]}"); targets=${targets%,}
-            n=$((i / CHUNK_SIZE + 1))
-            echo "Batch $n: ${chunk[*]}"
-            deploy_with_retry "batch-$n" "$targets" 3 || {
-              echo "⚠️ Batch $n did not converge after retries — the final full deploy will pick up its stragglers."
-              batch_warned=1; }
-            i=$((i + CHUNK_SIZE))
-          done
+          echo "Discovered ${#FUNCS[@]} default-codebase functions."
 
-          # 3. Final full deploy — catches new functions, deletes removed ones,
-          #    and is the authoritative convergence gate. After step 2 the
-          #    existing functions are unchanged (same build) → skipped → no storm.
+          # 3. ONE full deploy — catches new functions, deletes removed ones, and
+          #    is the authoritative convergence gate. A single mass update leaves
+          #    at most ~1 random 409 straggler on a clean queue (2026-07-02).
+          #    tries=1: don't re-run the whole 80-function mass on a straggler —
+          #    hand off to the straggler pass, which targets just the loser.
           #
           # 4. STRAGGLER PASS (2026-07-02). Empirically (runs #95/#96), every
           #    mass update of ~80 functions gets EXACTLY ONE random 409 — a
-          #    different function each attempt, 10/10 attempts across both
-          #    convergence runs — so "retry the full deploy" can never reach
-          #    zero failures. Single-function deploys, by contrast, succeed
-          #    essentially always (the burst 409 only hits mass updates; it was
-          #    also the reliable manual pattern for weeks). So when the final
-          #    deploy fails on a SMALL tail (≤5 functions), parse exactly which
-          #    functions failed from the last attempt's log and deploy each one
-          #    individually. Anything larger still fails loud — a big failure
-          #    set means something real is broken, not burst-409 noise.
-          if ! deploy_with_retry "final" "functions,firestore:rules,storage" 5; then
-            # Parse failed function names from the LAST final attempt; the log is
+          #    different function each attempt — so "retry the full deploy" can
+          #    never reach zero failures. Single-function deploys, by contrast,
+          #    succeed essentially always (the burst 409 only hits mass updates;
+          #    it was also the reliable manual pattern for weeks). So when the
+          #    full deploy fails on a SMALL tail (≤5 functions), parse exactly
+          #    which functions failed from the deploy log and deploy each one
+          #    individually. Anything larger still fails loud — a big failure set
+          #    means something real is broken, not burst-409 noise.
+          if ! deploy_with_retry "final" "functions,firestore:rules,storage" 1; then
+            # Parse failed function names from the deploy attempt; the log is
             # tee'd raw (may carry ANSI codes), so keep only valid name chars.
-            mapfile -t STRAGGLERS < <(grep -hoE 'failed to (update|create) function [^ ]+' "deploy-final-5.log" \
+            mapfile -t STRAGGLERS < <(grep -hoE 'failed to (update|create) function [^ ]+' "deploy-final-1.log" \
               | awk '{print $NF}' | sed 's|.*/functions/||' | grep -oE '^[A-Za-z0-9_-]+' | sort -u)
             in_default() { local f; for f in "${FUNCS[@]}"; do [ "$f" = "$1" ] && return 0; done; return 1; }
             # Only take the straggler shortcut when firebase itself exited 0 on the
@@ -377,10 +355,6 @@ jobs:
             fi
           fi
 
-          if [ "$batch_warned" -ne 0 ]; then
-            echo "ℹ️ One or more batches needed the final deploy to converge, but the final"
-            echo "   deploy reported 0 per-function failures, so prod is current."
-          fi
           echo "✅ Functions + rules fully converged."
           exit 0
 
