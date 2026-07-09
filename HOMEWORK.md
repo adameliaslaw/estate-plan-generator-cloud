@@ -4,6 +4,14 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-09 PM #9 (JDK 21 installed · #64 root-cause fix shipped · AffiniPay selector fix shipped, AWAITING ADAM'S LIVE CARD TEST)
+
+**TL;DR — Three items in one session. (1) JDK: Temurin 21.0.11 permanently installed via winget (machine PATH) — `npm run test:emulator` ran 45/45 locally; the portable-JRE-per-session dance is retired. (2) CI #64: read the firebase-tools 15.x hash source directly — the deploy hash is ONE sha1 over file CONTENT per codebase (mtimes never hashed; the old mtime plan was dead on arrival). Adam signed off the simplify path: PR #155 dropped the 16-batch serial convergence → rules → one full deploy → straggler pass → fail-loud gate (net −26 lines, timeout 330→120). First validating run: green in 4.2 min (workflow-only change → hash matched → all 80 skipped, proving CI-built source is hash-stable). #64 stays open until the next `functions/src` merge exercises the mass-update path (expect ~20–40 min green). (3) AffiniPay: root cause found in the official docs — `initializeFields` requires CSS selectors (`'#af-card-number'`) and we passed bare ids; iframe mounts but input never registers. PR #156 fixes all 4 selectors + gates Review on real `getState()` field errors + drops the dead `initAttempted` ref. Hypothesis-2 (wipe/re-init churn) deliberately NOT touched — one variable per live test. Green: tsc, build, full lint 0 errors, 731/731.**
+
+**▶ NEXT (needs Adam live): test the card fix on prod** — Charge Payment → type `5466160519943714`, exp `04/2029`, CVV `212`, ZIP `08831` → watch console `[ChargePaymentDialog] Hosted Fields state:` for card `length: 16, luhn: true`. If still length 0, next single-variable iteration = remove the innerHTML-wipe/re-init effect. Then: T2 browser pass (38 cases) or close #64 after the next functions merge.
+
+---
+
 ## 📍 SESSION — 2026-07-09 PM #8 (R6-003–006 FIXED — Round 6 fully drained, all 6 findings closed same-day)
 
 **TL;DR — Knocked out the four Round-6 ⚪s in one batch PR (#154, frontend-only, auto-merged). R6-003: template Enhance now recomputes `isLogicTemplate` (AI-injected `{{#each}}`/`{{#if}}` no longer corrupted by the WYSIWYG round-trip on save — flips to Source view like the load path). R6-004: template preview gained a "— No client —" clear row (the Combobox swap had removed the native select's empty option). R6-005: Copy Invite Link now writes the clipboard via `ClipboardItem` with a promise payload started synchronously inside the click (Firefox/Safari reject a post-await `writeText`); a copy-only failure surfaces the minted URL for manual copy instead of the false "Failed to create invite link". R6-006: the invite-link page waits for `auth.authStateReady()` and, if a signed-in non-anonymous user opens the link, shows guidance instead of silently replacing their session + re-pointing `linkedUserId` to a throwaway anon uid. Green: tsc -b, build, FULL lint 0 errors, 731/731 unit. Round 6 is now 6/6 fixed (2 🟡 #152/#153 + 4 ⚪ #154), all same-day as the audit.**
@@ -119,6 +127,8 @@ Items requiring human action or decisions before the next agent session can proc
 
 ## 🔴 START HERE NEXT SESSION — Card charge (AffiniPay Hosted Fields) is BROKEN, never worked
 
+**➡️ UPDATE 2026-07-09 PM #9: fix candidate SHIPPED (PR #156, hypothesis 1 — `#`-prefixed CSS selectors, confirmed against the official AffiniPay guide) + a Review-gate on real field state. AWAITING ADAM'S LIVE CARD TEST (see the PM #9 session entry above for the test script). If it fails, next iteration = hypothesis 2 (remove the innerHTML-wipe/re-init effect) in isolation. The diagnosis below remains the reference.**
+
 **TL;DR — The "Charge Payment" card flow has never worked. Confirmed by live browser inspection 2026-07-06: the AffiniPay card-number hosted field displays typed digits but never registers them with the SDK, so `getPaymentToken` always sees an empty card and throws "field validation errors." This is a real integration bug in `src/components/payments/ChargePaymentDialog.tsx`, not user input. Needs a focused fix session — I can't type into the cross-origin iframe from automation, so every fix iteration needs Adam to test live.**
 
 **File:** `src/components/payments/ChargePaymentDialog.tsx` (hosted-fields init at `initializeHostedFields`, effect ~L333, config ~L275).
@@ -150,7 +160,9 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 🚩 START HERE NEXT SESSION — CI functions-deploy root-cause fix (issue #64)
+## 🚩 CI functions-deploy root-cause fix (issue #64) — FIX SHIPPED 2026-07-09 (PR #155), awaiting mass-update validation
+
+**➡️ UPDATE 2026-07-09 PM #9: the plan below is SUPERSEDED. The mtime hypothesis was disproven by reading firebase-tools 15.x source (hash = one sha1 of file CONTENT per codebase; mtimes never hashed — the fan-out to all ~80 is intrinsic to a single codebase). Shipped instead: dropped the 16-batch serial convergence → one full deploy + straggler pass + fail-loud gate (Adam signed off; net −26 lines; timeout 330→120). First run green in 4.2 min (workflow-only change → all skipped → CI-built source is hash-stable). CLOSE #64 after the next `functions/src` merge deploys green (~20–40 min expected). Guardrails below still apply — especially "never cancel a functions-deploy mid-run."**
 
 **TL;DR — Last session (2026-07-02) shipped BV (OAuth needs-reauth, #82, live) and four CI-workflow patches (#81–#84) that tried to make the functions-deploy *survive* a symptom. Prod is healthy the whole time; the only open thing is CI-green + a 2.5h deploy that should be 10 min. STOP patching the symptom. Fix the disease.**
 
