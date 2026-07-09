@@ -35,7 +35,8 @@ const v1Factory = vi.hoisted(() => () => {
     constructor(code: string, message: string) { super(message); this.code = code; }
   }
   const https = { onCall: (handler: unknown) => handler, HttpsError };
-  const builder: any = { https };
+  type Builder = { https: typeof https; runWith: () => Builder; region: () => Builder };
+  const builder = { https } as Builder;
   builder.runWith = () => builder;
   builder.region = () => builder;
   return { runWith: builder.runWith, region: builder.region, https };
@@ -64,14 +65,25 @@ vi.mock('../../functions/node_modules/@sparticuz/chromium', () => ({
 vi.mock('../../functions/src/export-pdf', () => ({ buildLegalDocumentHtml: () => '<html></html>' }));
 
 vi.mock('../../functions/node_modules/firebase-admin', () => {
-  const makeColl = (path: string): any => ({
+  type MockColl = {
+    doc: (id?: string) => MockRef;
+    add: (data: Record<string, unknown>) => Promise<{ id: string }>;
+  };
+  type MockRef = {
+    id: string | undefined;
+    path: string;
+    get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> }>;
+    set: (payload: Record<string, Record<string, unknown>>) => Promise<void>;
+    collection: (name: string) => MockColl;
+  };
+  const makeColl = (path: string): MockColl => ({
     doc: (id?: string) => makeRef(`${path}/${id ?? 'auto'}`),
     add: async (data: Record<string, unknown>) => {
       if (path.endsWith('activityLogs')) state.activityAdds.push(data);
       return { id: 'log' };
     },
   });
-  const makeRef = (path: string): any => ({
+  const makeRef = (path: string): MockRef => ({
     id: path.split('/').pop(),
     path,
     get: async () => {

@@ -19,11 +19,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+type SendGridPayload = {
+  personalizations?: Array<{ to?: Array<{ email?: string }>; subject?: string }>;
+};
+
 const state = vi.hoisted(() => ({
   firm: {} as Record<string, unknown>,
   client: {} as Record<string, unknown>,
   attorney: undefined as Record<string, unknown> | undefined,
-  sent: null as any,
+  sent: null as SendGridPayload | null,
 }));
 
 vi.mock('../../functions/node_modules/firebase-functions/lib/esm/v2/providers/https.mjs', () => ({
@@ -60,7 +64,7 @@ vi.mock('../../functions/node_modules/firebase-admin', () => {
   return { firestore, initializeApp: vi.fn() };
 });
 
-const fetchMock = vi.fn(async (_url: string, opts: any) => {
+const fetchMock = vi.fn(async (_url: string, opts: { body: string }) => {
   state.sent = JSON.parse(opts.body);
   return { ok: true, status: 200, statusText: 'OK', text: async () => '' };
 });
@@ -68,7 +72,7 @@ vi.stubGlobal('fetch', fetchMock);
 
 import { sendQuestionnaireCompleteNotification } from '../../functions/src/email-notifications';
 
-const handler = sendQuestionnaireCompleteNotification as unknown as (r: unknown) => Promise<any>;
+const handler = sendQuestionnaireCompleteNotification as unknown as (r: unknown) => Promise<{ success: boolean }>;
 
 // The caller ALWAYS supplies a hostile attorneyEmail/clientName; the fix must
 // ignore both.

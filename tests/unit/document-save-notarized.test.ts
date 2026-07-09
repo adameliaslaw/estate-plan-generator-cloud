@@ -23,18 +23,20 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('../../functions/node_modules/firebase-admin', () => {
-  const makeColl = (path: string): any => ({ doc: (id?: string) => makeRef(`${path}/${id ?? 'auto'}`) });
-  const makeRef = (path: string): any => ({
+  type MockColl = { doc: (id?: string) => MockRef };
+  type MockRef = { path: string; id: string | undefined; collection: (name: string) => MockColl };
+  const makeColl = (path: string): MockColl => ({ doc: (id?: string) => makeRef(`${path}/${id ?? 'auto'}`) });
+  const makeRef = (path: string): MockRef => ({
     path,
     id: path.split('/').pop(),
     collection: (name: string) => makeColl(`${path}/${name}`),
   });
-  const capture = (op: 'set' | 'update') => (ref: any, data: Record<string, unknown>) => {
+  const capture = (op: 'set' | 'update') => (ref: MockRef, data: Record<string, unknown>) => {
     if (!String(ref.path).includes('/versions/')) state.mainWrite = { op, data };
   };
   const db = {
     collection: (name: string) => makeColl(name),
-    runTransaction: async (fn: (tx: any) => Promise<unknown>) => {
+    runTransaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         get: async () => state.existing,
         set: capture('set'),

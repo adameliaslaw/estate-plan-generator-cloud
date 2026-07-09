@@ -38,9 +38,9 @@ import { generateFlexDocument } from '../../functions/src/generate-flex-document
 const REQ = {
   auth: { uid: 'u1', token: { role: 'attorney', firmId: 'firm-1' } },
   data: { firmId: 'firm-1', clientId: 'c1', docType: 'coverLetter' },
-} as any;
+};
 
-const handler = generateFlexDocument as unknown as (r: unknown) => Promise<any>;
+const handler = generateFlexDocument as unknown as (r: unknown) => Promise<{ success: boolean; status: string }>;
 
 describe('generateFlexDocument — honest success (R5-032)', () => {
   beforeEach(() => genDoc.fn.mockReset());

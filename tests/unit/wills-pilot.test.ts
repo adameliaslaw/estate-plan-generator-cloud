@@ -18,6 +18,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import type { WillsDocument } from '../../functions/src/wills-schema';
 
 // wills-pilot registers an onCall at import and imports googleapis/admin — none
 // of which the pure helpers touch. Stub them so the import is cheap and inert.
@@ -56,19 +57,19 @@ function sampleFile(id: string) {
 }
 
 // last_processed_at is at/after STARTED so the record is "this run", not stale.
-function willDoc(status: string, extra: Record<string, unknown> = {}): any {
+function willDoc(status: string, extra: Record<string, unknown> = {}): WillsDocument {
   return {
     processing_status: status,
     last_processed_at: '2026-01-01T00:00:30.000Z',
     needs_human_review: false,
     needs_human_review_reasons: [],
     ...extra,
-  };
+  } as unknown as WillsDocument;
 }
 
-function report(pairs: Array<[string, any]>) {
+function report(pairs: Array<[string, WillsDocument]>) {
   const sample = pairs.map(([id]) => sampleFile(id));
-  const results = new Map<string, any>(pairs);
+  const results = new Map<string, WillsDocument | null>(pairs);
   return buildReport({ runId: 'run-1', startedAt: STARTED, completedAt: COMPLETED, sample, results, thresholds: THRESHOLDS });
 }
 
