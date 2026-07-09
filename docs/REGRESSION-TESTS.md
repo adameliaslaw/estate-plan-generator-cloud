@@ -336,6 +336,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Steps:** open a doc → Regenerate, wait → type one char → hard-reload.
 - **Expected (pre-fix failure):** the editor kept the old draft and the first keystroke overwrote the regenerated document.
 
+#### `R6-001` · #152 · editor — stuck force-reload after successful regenerate reverts post-regen typing · ⬜ unverified *(timing)*
+- **File:** `src/components/editor/DocumentEditor.tsx`
+- **What broke:** the R5-022 fix left `forceReloadRef` with no success-path reset: when the regenerated snapshot arrived before the callable resolved, the load effect kept the flag (by design, to outlast the flush snapshot) but nothing cleared it afterward — the next autosave snapshot force-reloaded the editor, jumping the cursor and reverting keystrokes typed during the save round-trip. Fixed with a `currentVersion` watermark (`regenBaseVersionRef`, session-high baseline): the backend regen save bumps `currentVersion` transactionally while the pre-regen flush doesn't, so consuming a snapshot with a higher version clears the flag even mid-regen.
+- **Steps:** open a doc → Regenerate, wait for the new content → type continuously for ~5s (spanning the 2s autosave debounce + write round-trip) → stop; watch the cursor and last-typed chars.
+- **Expected (pre-fix failure):** on the autosave snapshot the editor force-reloaded — cursor jumped to start and the chars typed during the write round-trip vanished. Now: typing is uninterrupted; the editor never force-reloads outside a regenerate.
+
 #### `R5-023` · #92 · editor — per-property regenerate writes wrong doc · ⬜ unverified *(2-property seed)*
 - **File:** `src/components/editor/DocumentEditor.tsx`
 - **What broke:** regenerating a per-property doc (`deed_1`) sent no `propertyIndex`, so the backend wrote an un-suffixed `deed` built from the first property; the editor never updated.
@@ -668,6 +674,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-026 | #91 | questionnaire non-NJ state | T2 | ⬜ |
 | R5-027 | #91 | questionnaire false completed | T2 | ⬜ |
 | R5-022 | #92 | editor regenerate overwrite | T2 | ⬜ |
+| R6-001 | #152 | editor stuck force-reload post-regen | T2 | ⬜ |
 | R5-023 | #92 | editor per-property regen | T2 | ⬜ |
 | R5-024 | #92 | editor restore loses edits | T2 | ⬜ |
 | R5-025 | #92 | editor stale Replace offsets | T2 | ⬜ |
@@ -716,12 +723,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (82 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 32 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
+**Tally (83 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 33 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
 
 ---
 
 ## Changelog
 
+- **2026-07-09 (R6-001)** — editor stuck force-reload after successful regenerate fixed (#152): `regenBaseVersionRef` watermark (session-high `currentVersion` at regen start) lets the load effect clear `forceReloadRef` on consuming the version-bumped regenerated snapshot even mid-regen, so the flag can no longer stay stuck and force-reload the editor on the next autosave (reverting round-trip keystrokes). New T2 case R6-001. Found by audit Round 6.
 - **2026-07-09 (R5-048/049)** — chat document-generation intent made context-aware (Adam signed off): explicit requests generate immediately, bare affirmatives only after an assistant offer, negation guard, message doc type wins, reply-shape Strategy 2/3 removed. New unit test `chat-generation-intent.test.ts` (11).
 - **2026-07-09 (R5-047)** — chat conversation history no longer truncated to the ~20-message prompt window: `saveConversation` appends only the new turn (stable per-message id, transactional dedupe). New emulator test `conversation-append.test.ts` (4, negative-control-verified). Adam signed off on the append-only approach.
 - **2026-07-09 (T4)** — the five 🚫-blocked T4 rows automated with injected-failure emulator tests (7 new tests, 3 files; emulator suite 41/41): R5-055 watermark, R5-058/059/060 wills-processor failure paths, R5-061 backfill stale-running. Every case negative-control-verified against its pre-fix code. T4 now has one open row (R5-050, prod smoke). Tally 32→37 🤖.

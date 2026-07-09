@@ -167,6 +167,15 @@ export default function DocumentEditor({
   // regenerated-content snapshot is honored even if it arrives before the
   // generateSingleDocument callable resolves (R5-022).
   const regeneratingRef = useRef(false);
+  // The doc's persisted currentVersion at regenerate start. The backend regen
+  // save transactionally bumps currentVersion (document-save-helper), while the
+  // pre-regen editorContent flush does not — so a snapshot with a HIGHER
+  // version is the regenerated content, and the load effect can safely clear
+  // forceReloadRef on consuming it even mid-regen. Without this, a regenerated
+  // snapshot consumed while regeneratingRef was still true left forceReloadRef
+  // stuck, and the next autosave snapshot force-reloaded the editor, reverting
+  // keystrokes typed during the save round-trip (R6-001).
+  const regenBaseVersionRef = useRef<number | null>(null);
 
   // ── Derived state ──
   const isReadOnly =
@@ -285,8 +294,18 @@ export default function DocumentEditor({
       setContentLoaded(true);
       // Keep forcing reloads until the regenerate op finishes (see regeneratingRef),
       // otherwise the pre-regen editorContent snapshot clears the flag and the
-      // real regenerated snapshot that arrives next is skipped.
-      if (!regeneratingRef.current) forceReloadRef.current = false;
+      // real regenerated snapshot that arrives next is skipped (R5-022). But once
+      // the REGENERATED snapshot itself is consumed — identified by its bumped
+      // currentVersion — clear the flag even mid-regen, or it stays stuck true
+      // after the op and the next autosave snapshot force-reloads the editor,
+      // reverting keystrokes typed during the save round-trip (R6-001).
+      const regenBase = regenBaseVersionRef.current;
+      const regeneratedSnapshotConsumed =
+        regenBase !== null && (document.currentVersion ?? 0) > regenBase;
+      if (!regeneratingRef.current || regeneratedSnapshotConsumed) {
+        forceReloadRef.current = false;
+        regenBaseVersionRef.current = null;
+      }
       setHasUnsavedChanges(false);
       setSaveStatus('saved');
       setLastSavedAt(
@@ -451,6 +470,17 @@ export default function DocumentEditor({
     // next keystroke autosaved it over the regenerated document (R5-022).
     regeneratingRef.current = true;
     forceReloadRef.current = true;
+    // Watermark: the regenerated snapshot will carry a strictly higher
+    // currentVersion (the backend save bumps it transactionally); the
+    // editorContent flush below does not (R6-001). Use the session-high
+    // currentVersionRef, not the snapshot value — a just-clicked manual Save
+    // bumps persisted currentVersion before its snapshot delivers, and a
+    // baseline taken from the lagging snapshot would let THAT snapshot clear
+    // the flag prematurely and skip the regenerated one (R5-022 redux).
+    regenBaseVersionRef.current = Math.max(
+      document.currentVersion ?? 0,
+      currentVersionRef.current,
+    );
     // Cancel any pending debounced autosave — otherwise a timer scheduled from a
     // pre-regen keystroke could fire mid-regenerate and write stale editor HTML
     // to editorContent after the new draft lands (CV data-loss window).
@@ -491,12 +521,14 @@ export default function DocumentEditor({
       // silently reloading as if the regenerate worked (R5-072).
       if (!res.success || res.status === 'error') {
         forceReloadRef.current = false;
+        regenBaseVersionRef.current = null;
         setRegenError('Regeneration failed — the document was not saved. Please try again.');
         return;
       }
     } catch (err) {
       // Regen failed — cancel the forced reload so we keep the user's draft.
       forceReloadRef.current = false;
+      regenBaseVersionRef.current = null;
       const msg = err instanceof Error ? err.message : String(err);
       setRegenError(msg);
       console.error('[DocumentEditor] regenerate failed:', err);

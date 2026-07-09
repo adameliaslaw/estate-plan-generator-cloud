@@ -4,6 +4,18 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-09 PM #6 (R6-001 FIXED — editor stuck force-reload after regenerate)
+
+**TL;DR — Fixed the more complex of the two Round-6 🟡s: `DocumentEditor`'s regen success path never cleared `forceReloadRef`, so when the regenerated snapshot landed before the callable resolved (the exact race the R5-022 fix targets), the flag stayed stuck and the NEXT autosave snapshot force-reloaded the editor — cursor jump + keystrokes typed during the save round-trip reverted and marked saved. Fix: `regenBaseVersionRef` version watermark — the backend regen save transactionally bumps `currentVersion` while the pre-regen editorContent flush doesn't, so the load effect clears the flag on consuming a snapshot with a higher version even mid-regen. Baseline is the session-high (`Math.max(document.currentVersion, currentVersionRef)`) so a just-clicked manual Save's in-flight snapshot can't clear it prematurely (would've been an R5-022 redux). Failure paths also reset the watermark. Green: tsc -b, build, FULL lint 0 errors, 731/731 unit. Frontend-only, not Never-Break → PR #152, auto-merged.**
+
+**Traced safe:** flush snapshot mid-regen keeps forcing (R5-022 intact) · regenerated snapshot mid-regen clears (the fix) · post-`finally` clear unchanged · non-regen flows identical (baseline null) · known residual: a FAILED manual save immediately followed by regen degrades to pre-fix behavior (stuck flag, self-clears on next non-regen consume) — narrow, not worse than before.
+
+**✅ Shipped:** `DocumentEditor.tsx` (watermark ref + gate), REGRESSION-TESTS R6-001 T2 case + tally 83 rows + changelog, AUDIT-findings R6-001 → fixed.
+
+**▶ NEXT:** R6-002 (KB bulk-import all-partial refresh gate — the remaining 🟡, small); then R6-003–006 ⚪s or the T2 browser pass.
+
+---
+
 ## 📍 SESSION — 2026-07-09 PM #5 (context-burn fixed + audit Round 6 — frontend delta, 6 findings, 0 critical)
 
 **TL;DR — (1) Diagnosed the fast context-burn: HOMEWORK.md had grown to 283K chars (~75K tokens) and was re-read whole every session. Archived 7/07-and-older sessions to `HOMEWORK-ARCHIVE.md` (#150, docs-only) → 21K chars, ~70K tokens reclaimed per session. Secondary tax Adam can fix: ~11 account-level claude.ai connectors (Gmail, Trellis, Firecrawl, …) cost ~8–12K tokens/session — disable unused ones in claude.ai → Settings → Connectors. (2) Ran audit Round 6 per Adam's pick: 5 adversarially-verified subagents over the 37 `src/` files changed since Round-5 baseline `c29d310` (+3 never-audited new files). Result: 6 confirmed (0 🔴 / 0 🟠 / 2 🟡 / 4 ⚪) — R6-001–006 in `docs/AUDIT-findings.md`. The R5-fix wave held up; payments + questionnaire slices fully clean. Audit-only, no fixes applied.**
