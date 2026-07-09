@@ -95,6 +95,11 @@ describe('Firestore Rules — RBAC role helper functions', () => {
     expect(rulesContain("hasRole('admin')")).toBe(true);
   });
 
+  it('defines isFirmAdmin(firmId) = admin AND belongsToFirm (R5-037 firm-scoped admin)', () => {
+    expect(rulesContain(/function isFirmAdmin\(firmId\)/)).toBe(true);
+    expect(rulesContain(/isFirmAdmin\(firmId\)\s*\{\s*return isAdmin\(\) && belongsToFirm\(firmId\)/)).toBe(true);
+  });
+
   it('uses hasRole("attorney") inline for attorney checks', () => {
     // Rules use hasRole('attorney') inline rather than a dedicated isAttorney() wrapper
     expect(rulesContain("hasRole('attorney')")).toBe(true);
@@ -131,20 +136,21 @@ describe('Firestore Rules — /firms/{firmId} collection', () => {
     expect(rulesContain(/match\s+\/firms\/\{firmId\}/)).toBe(true);
   });
 
-  it('admin can read firm documents', () => {
-    // The read rule for firms must include isAdmin()
+  it('admin read of firm documents is firm-scoped (isFirmAdmin, not bare isAdmin)', () => {
+    // The read rule for firms must gate the admin branch through isFirmAdmin(firmId)
     const firmsBlock = rulesContent.match(
       /match\s+\/firms\/\{firmId\}[\s\S]*?(?=match\s+\/firms\/\{firmId\}\/clients|match\s+\/databases)/
     )?.[0] ?? '';
-    expect(firmsBlock).toMatch(/isAdmin\(\)/);
+    expect(firmsBlock).toMatch(/isFirmAdmin\(firmId\)/);
   });
 
-  it('only admin can create firm documents', () => {
-    expect(rulesContain(/allow\s+create\s*:\s*if\s+isAdmin\(\)/)).toBe(true);
-  });
-
-  it('only admin can delete firm documents', () => {
-    expect(rulesContain(/allow\s+delete\s*:\s*if\s+isAdmin\(\)/)).toBe(true);
+  it('firm-doc create/delete gate on firm-scoped staff (no bare isAdmin OR-branch)', () => {
+    // create is canManageFirmSettings()+belongsToFirm; delete is isFirmAdmin(firmId).
+    expect(rulesContain(/allow\s+delete\s*:\s*if\s+isFirmAdmin\(firmId\)/)).toBe(true);
+    // The old cross-firm `allow ...: if isAdmin()` grants must be gone from
+    // firm-scoped collections (R5-037). Bare `if isAdmin()` survives ONLY on the
+    // two global single-tenant pipeline collections.
+    expect(countOccurrences(/if\s+isAdmin\(\)/g)).toBe(2);
   });
 });
 
@@ -310,10 +316,15 @@ describe('Firestore Rules — data validation helpers', () => {
 // ============================================================================
 
 describe('Firestore Rules — access control principles', () => {
-  it('admin bypasses all role checks (isAdmin present throughout)', () => {
-    const adminCount = countOccurrences(/isAdmin\(\)/g);
-    // Admin should appear in multiple rules blocks
-    expect(adminCount).toBeGreaterThanOrEqual(4);
+  it('firm-scoped admin (isFirmAdmin) is used throughout firm collections (R5-037)', () => {
+    // Admin access to firm-scoped data goes through isFirmAdmin(firmId) /
+    // isFirmAdmin(resource.data.firmId), not bare isAdmin().
+    const firmAdminCount = countOccurrences(/isFirmAdmin\(/g);
+    expect(firmAdminCount).toBeGreaterThanOrEqual(10);
+    // pendingTranscripts + emailTemplates (the R5-037 exemplars) must be firm-scoped
+    const pendingBlock = rulesContent.match(/match\s+\/pendingTranscripts\/\{transcriptId\}[\s\S]*?\}/)?.[0] ?? '';
+    expect(pendingBlock).toMatch(/isFirmAdmin\(firmId\)/);
+    expect(pendingBlock).not.toMatch(/if\s+isAdmin\(\)/);
   });
 
   it('belongsToFirm() is used to scope attorney/paralegal access to their firm', () => {

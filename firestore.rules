@@ -7,7 +7,10 @@ rules_version = '2';
 // Role-Based Access Control (RBAC) using Firebase Auth custom claims.
 //
 // Roles (set as custom claims on the Firebase Auth token):
-//   admin     — Full access to everything across all firms
+//   admin     — Full read/write within their OWN firm (firm-scoped, like
+//               attorney; see isFirmAdmin). NOT cross-firm (audit R5-037).
+//               Bare isAdmin() remains only on global single-tenant pipeline
+//               collections (pipeline_state, pipeline_audit_log).
 //   attorney  — Full read/write to all client data within their firm
 //   paralegal — Read all client data within their firm; write only
 //               notes, calendar, and documents subcollections
@@ -51,10 +54,22 @@ service cloud.firestore {
           && cap in request.auth.token.capabilities;
     }
 
-    // Shortcut: admin role — full access to everything.
-    // Also explicitly grant them all custom capabilities under the hood
+    // Shortcut: admin role. NOTE: bare isAdmin() is NOT firm-scoped — use
+    // isFirmAdmin(firmId) for any firm-scoped collection so an admin of one firm
+    // cannot read/write another firm's data. Bare isAdmin() is reserved for
+    // genuinely global, single-tenant operational collections (pipeline_state,
+    // pipeline_audit_log).
     function isAdmin() {
       return hasRole('admin');
+    }
+
+    // Firm-scoped admin: an admin acting within their OWN firm. Admins are
+    // tenant-scoped like attorneys/paralegals — an admin of firm B must not read
+    // firm A's clients, documents, notes, payments, transcripts, etc.
+    // (audit R5-037). Use in every /firms/{firmId}/... rule; for collection-group
+    // queries pass resource.data.firmId.
+    function isFirmAdmin(firmId) {
+      return isAdmin() && belongsToFirm(firmId);
     }
 
     // Role fallbacks + programmatic capabilities
@@ -230,7 +245,7 @@ service cloud.firestore {
       // Attorneys and paralegals who belong to this firm can read
       // the firm document (e.g. to display firm name/branding).
       // Clients and unauthenticated users have no access.
-      allow read: if isAdmin()
+      allow read: if isFirmAdmin(firmId)
                   || (canManageFirmSettings() && belongsToFirm(firmId))
                   || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
 
@@ -238,7 +253,7 @@ service cloud.firestore {
 
       allow update: if canManageFirmSettings() && belongsToFirm(firmId);
 
-      allow delete: if isAdmin();
+      allow delete: if isFirmAdmin(firmId);
 
       // ========================================================
       // /firms/{firmId}/secrets/{docId}
@@ -260,7 +275,7 @@ service cloud.firestore {
       // ========================================================
       match /tasks/{taskId} {
         // Attorneys and paralegals can read and write tasks in their firm
-        allow read, write: if isAdmin()
+        allow read, write: if isFirmAdmin(firmId)
                            || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
       }
 
@@ -270,7 +285,7 @@ service cloud.firestore {
       // ========================================================
       match /users/{userId} {
         // Users can read their own profile. Admins/Attorneys can read all in their firm.
-        allow read: if isAdmin()
+        allow read: if isFirmAdmin(firmId)
                     || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
                     || request.auth.uid == userId;
 
@@ -294,10 +309,10 @@ service cloud.firestore {
         // own client record (the portal queries where('clientId','==',clientId));
         // resource.data.clientId == token.clientId enforces that boundary even if
         // the URL clientId is tampered with.
-        allow read: if isAdmin()
+        allow read: if isFirmAdmin(firmId)
                     || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
                     || (isClient() && belongsToFirm(firmId) && resource.data.clientId == request.auth.token.clientId);
-        allow write: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow write: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
       }
 
       // ========================================================
@@ -305,8 +320,8 @@ service cloud.firestore {
       // System activity logs for dashboard feed
       // ========================================================
       match /activities/{activityId} {
-        allow read: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
-        allow write: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow write: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
       }
 
       // ========================================================
@@ -315,7 +330,7 @@ service cloud.firestore {
       // (admin SDK). Staff may read for compliance review; no client access.
       // ========================================================
       match /auditLog/{logId} {
-        allow read: if isAdmin()
+        allow read: if isFirmAdmin(firmId)
                     || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
         allow create: if false; // Cloud Functions (admin SDK) only
         allow update, delete: if false;
@@ -331,7 +346,7 @@ service cloud.firestore {
       // writes; staff read-only.
       // ========================================================
       match /pendingTranscripts/{transcriptId} {
-        allow read: if isAdmin()
+        allow read: if isFirmAdmin(firmId)
                     || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
         allow create, update, delete: if false; // Cloud Functions (admin SDK) only
       }
@@ -341,8 +356,8 @@ service cloud.firestore {
       // Firm-wide email templates
       // ========================================================
       match /emailTemplates/{templateId} {
-        allow read: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
-        allow write: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow write: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
       }
 
       // ========================================================
@@ -359,7 +374,7 @@ service cloud.firestore {
         // Linked session (e.g. anonymous auth from questionnaire link): may read
         //   their own record when linkedUserId matches. linkedUserId is set only
         //   by the trusted admin SDK in registerClientFromLink, so this is safe.
-        allow read: if isAdmin()
+        allow read: if isFirmAdmin(firmId)
                     || ((hasRole('attorney') || hasRole('paralegal') || canManageClients()) && belongsToFirm(firmId))
                     || (isClient() && isOwnClientRecord(clientId))
                     || (isAuthenticated() && isOwnClientRecord(clientId));
@@ -370,7 +385,7 @@ service cloud.firestore {
         // Paralegal: NOT allowed to create new client records.
         // Client: NOT allowed to create client records directly
         //         (provisioned by the app backend / attorney).
-        allow create: if isAdmin()
+        allow create: if isFirmAdmin(firmId)
                       || (canManageClients()
                           && belongsToFirm(firmId)
                           && hasValidPersonalInfo()
@@ -385,7 +400,7 @@ service cloud.firestore {
         //         with status and personalInfo validation.
         // Linked session (e.g. anonymous auth from questionnaire link): same as
         //   client self-update. linkedUserId is set only by admin SDK.
-        allow update: if isAdmin()
+        allow update: if isFirmAdmin(firmId)
                       || (canManageClients()
                           && belongsToFirm(firmId)
                           && hasValidPersonalInfo()
@@ -407,7 +422,7 @@ service cloud.firestore {
 
         // --- DELETE ---
         // Only admins and capabilities managers may delete client records 
-        allow delete: if isAdmin()
+        allow delete: if isFirmAdmin(firmId)
                       || (canManageClients() && belongsToFirm(firmId));
 
         // ======================================================
@@ -421,7 +436,7 @@ service cloud.firestore {
           // Admin: always.
           // Attorney/Paralegal: within their firm.
           // Client: read-only access to their own documents.
-          allow read: if isAdmin()
+          allow read: if isFirmAdmin(firmId)
                       || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId))
                       || (isClient() && isLinkedClient(firmId, clientId));
 
@@ -429,13 +444,13 @@ service cloud.firestore {
           // Attorney or Paralegal: within their firm; docType, title,
           // and status fields are validated on every write.
           // Client: no write access to documents.
-          allow create: if isAdmin()
+          allow create: if isFirmAdmin(firmId)
                         || (canManageDocuments()
                             && belongsToFirm(firmId)
                             && hasValidDocumentFields()
                             && hasValidDocumentStatus());
 
-          allow update: if isAdmin()
+          allow update: if isFirmAdmin(firmId)
                         || (canManageDocuments()
                             && belongsToFirm(firmId)
                             && hasValidDocumentFields()
@@ -443,7 +458,7 @@ service cloud.firestore {
 
           // Only admins and attorneys may delete documents.
           // Paralegals should update status to 'archived' instead.
-          allow delete: if isAdmin()
+          allow delete: if isFirmAdmin(firmId)
                         || (canManageDocuments() && belongsToFirm(firmId));
         }
 
@@ -458,21 +473,21 @@ service cloud.firestore {
           // Attorney/Paralegal: within their firm.
           // Client: may read notes on their own record (e.g. visible
           //         case updates shared by the attorney).
-          allow read: if isAdmin()
+          allow read: if isFirmAdmin(firmId)
                       || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
                       || (isClient() && isLinkedClient(firmId, clientId));
 
           // Admin: always.
           // Attorney or Paralegal: within their firm.
           // Client: no write access to notes.
-          allow create: if isAdmin()
+          allow create: if isFirmAdmin(firmId)
                         || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
 
-          allow update: if isAdmin()
+          allow update: if isFirmAdmin(firmId)
                         || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
 
           // Only admins and attorneys may delete notes.
-          allow delete: if isAdmin()
+          allow delete: if isFirmAdmin(firmId)
                         || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
         }
 
@@ -488,7 +503,7 @@ service cloud.firestore {
           // Admin: always.
           // Attorney/Paralegal: within their firm (for billing review).
           // Client: read-only access to their own payment records.
-          allow read: if isAdmin()
+          allow read: if isFirmAdmin(firmId)
                       || ((hasRole('attorney') || hasRole('paralegal') || canManageBilling()) && belongsToFirm(firmId))
                       || (isClient() && isLinkedClient(firmId, clientId));
 
@@ -496,20 +511,20 @@ service cloud.firestore {
           // Attorney: within their firm; amount and status validated.
           // Paralegal: NOT allowed to create or modify payment records.
           // Client: NO write access.
-          allow create: if isAdmin()
+          allow create: if isFirmAdmin(firmId)
                         || (canManageBilling()
                             && belongsToFirm(firmId)
                             && hasValidPaymentAmount()
                             && hasValidPaymentStatus());
 
-          allow update: if isAdmin()
+          allow update: if isFirmAdmin(firmId)
                         || (canManageBilling()
                             && belongsToFirm(firmId)
                             && hasValidPaymentAmount()
                             && hasValidPaymentStatus());
 
           // Only admins may delete payment records (audit trail).
-          allow delete: if isAdmin();
+          allow delete: if isFirmAdmin(firmId);
         }
 
         // ======================================================
@@ -523,25 +538,25 @@ service cloud.firestore {
           // Admin: always.
           // Attorney/Paralegal: within their firm.
           // Client: read-only access to their own calendar events.
-          allow read: if isAdmin()
+          allow read: if isFirmAdmin(firmId)
                       || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId))
                       || (isClient() && isLinkedClient(firmId, clientId));
 
           // Admin: always.
           // Attorney or Paralegal: within their firm; event status validated.
           // Client: no write access to calendar events.
-          allow create: if isAdmin()
+          allow create: if isFirmAdmin(firmId)
                         || ((hasRole('attorney') || hasRole('paralegal'))
                             && belongsToFirm(firmId)
                             && hasValidEventStatus());
 
-          allow update: if isAdmin()
+          allow update: if isFirmAdmin(firmId)
                         || ((hasRole('attorney') || hasRole('paralegal'))
                             && belongsToFirm(firmId)
                             && hasValidEventStatus());
 
           // Only admins and attorneys may delete calendar events.
-          allow delete: if isAdmin()
+          allow delete: if isFirmAdmin(firmId)
                         || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
         }
 
@@ -556,7 +571,7 @@ service cloud.firestore {
     match /{path=**}/notes/{noteId} {
       // Allow read if the user belongs to the firm specified in the document
       // Note: This relies on the document having a 'firmId' field, which we query on
-      allow read: if isAdmin() 
+      allow read: if isFirmAdmin(resource.data.firmId) 
                   || ((hasRole('attorney') || hasRole('paralegal')) 
                       && isAuthenticated() 
                       && request.auth.token.firmId == resource.data.firmId);
@@ -564,7 +579,7 @@ service cloud.firestore {
 
     // Collection group query for dashboard Payments panel
     match /{path=**}/payments/{paymentId} {
-      allow read: if isAdmin() 
+      allow read: if isFirmAdmin(resource.data.firmId) 
                   || ((hasRole('attorney') || hasRole('paralegal') || canManageBilling()) 
                       && isAuthenticated() 
                       && request.auth.token.firmId == resource.data.firmId);
@@ -575,9 +590,9 @@ service cloud.firestore {
     // Legal knowledge base resources (CLE, case law, etc.)
     // ==========================================================
     match /firms/{firmId}/knowledgeBase/{resourceId} {
-      allow read: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
-      allow create, update: if isAdmin() || (canManageFirmSettings() && belongsToFirm(firmId));
-      allow delete: if isAdmin();
+      allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      allow create, update: if isFirmAdmin(firmId) || (canManageFirmSettings() && belongsToFirm(firmId));
+      allow delete: if isFirmAdmin(firmId);
     }
 
     // ==========================================================
@@ -585,9 +600,9 @@ service cloud.firestore {
     // Handlebars document templates
     // ==========================================================
     match /firms/{firmId}/documentTemplates/{templateId} {
-      allow read: if isAdmin() || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId));
-      allow create, update: if isAdmin() || (canManageDocuments() && belongsToFirm(firmId));
-      allow delete: if isAdmin();
+      allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId));
+      allow create, update: if isFirmAdmin(firmId) || (canManageDocuments() && belongsToFirm(firmId));
+      allow delete: if isFirmAdmin(firmId);
     }
 
     // ==========================================================
@@ -598,7 +613,7 @@ service cloud.firestore {
     // the security layer by checking the doc's own firmId field.
     // ==========================================================
     match /{path=**}/documents/{docId} {
-      allow read: if isAdmin()
+      allow read: if isFirmAdmin(resource.data.firmId)
                   || (canManageDocuments() && belongsToFirm(resource.data.firmId));
     }
 
