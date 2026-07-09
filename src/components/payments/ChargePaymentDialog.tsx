@@ -239,7 +239,6 @@ export function ChargePaymentDialog({
 
   // References
   const hostedFieldsRef = useRef<HostedFieldsInstance | null>(null);
-  const initAttempted = useRef(false);
 
   // Resolve client info
   const effectiveClientId = fixedClientId ?? selectedClientId;
@@ -276,15 +275,20 @@ export function ChargePaymentDialog({
       // Wait a tick for the DOM elements to be rendered
       await new Promise((r) => setTimeout(r, 100));
 
+      // AffiniPay's hosted-fields guide requires CSS selectors ('#id'), not
+      // bare element ids. With a bare id the SDK still mounts the iframe, but
+      // typed input never registers with it (every state event reports the
+      // card field empty), so tokenization always fails — the root cause of
+      // the "field validation errors" on every charge attempt (2026-07-06).
       const cardConfig: HostedFieldConfig = {
         publicKey: lawPayPublicKey,
         fields: [
           {
-            selector: 'af-card-number',
+            selector: '#af-card-number',
             input: { type: 'credit_card_number', css: HOSTED_FIELD_CSS },
           },
           {
-            selector: 'af-card-cvv',
+            selector: '#af-card-cvv',
             input: { type: 'cvv', css: HOSTED_FIELD_CSS },
           },
         ],
@@ -294,11 +298,11 @@ export function ChargePaymentDialog({
         publicKey: lawPayPublicKey,
         fields: [
           {
-            selector: 'af-routing-number',
+            selector: '#af-routing-number',
             input: { type: 'routing_number', css: HOSTED_FIELD_CSS },
           },
           {
-            selector: 'af-account-number',
+            selector: '#af-account-number',
             input: { type: 'bank_account_number', css: HOSTED_FIELD_CSS },
           },
         ],
@@ -336,7 +340,6 @@ export function ChargePaymentDialog({
 
   useEffect(() => {
     if (!open) {
-      initAttempted.current = false;
       hostedFieldsRef.current = null;
       return;
     }
@@ -376,7 +379,6 @@ export function ChargePaymentDialog({
     setAccountHolderType('individual');
     setAccountHolderName('');
     setBillingZip('');
-    initAttempted.current = false;
     hostedFieldsRef.current = null;
     onClose();
   }, [fixedClientId, onClose]);
@@ -419,6 +421,22 @@ export function ChargePaymentDialog({
     if (paymentType === 'card' && !billingZip.trim()) {
       toast.error('Please enter the billing ZIP code for the card.');
       return;
+    }
+    // Gate on the SDK's actual field state before showing the confirm screen —
+    // tokenizing while a hosted field is empty/invalid always throws the
+    // generic "field validation errors", so surface the per-field problem now.
+    // Best-effort: if getState() itself fails, fall through (the submit path
+    // still catches and details tokenization errors).
+    try {
+      const fieldErrors = (hostedFieldsRef.current.getState?.()?.fields ?? [])
+        .filter((f) => f.error)
+        .map((f) => `${f.type.replace(/_/g, ' ')}: ${f.error}`);
+      if (fieldErrors.length) {
+        toast.error(`Please check the payment details — ${fieldErrors.join('; ')}`);
+        return;
+      }
+    } catch {
+      /* getState is best-effort */
     }
     setShowConfirm(true);
   }, [hostedFieldsRef, effectiveClientId, description, amountStr, paymentType, expMonth, expYear, billingZip]);
