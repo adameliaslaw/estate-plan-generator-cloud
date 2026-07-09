@@ -17,7 +17,7 @@ vi.mock('firebase-functions/v1', () => ({
 vi.mock('firebase-admin', () => ({ firestore: () => ({}), storage: () => ({}) }));
 vi.mock('openai', () => ({ OpenAI: class {} }));
 
-import { stripEmpty } from '../../functions/src/process-ocr';
+import { stripEmpty, OCR_EXTRACTION_SCHEMA_PROMPT } from '../../functions/src/process-ocr';
 
 describe('stripEmpty — OCR blank-overwrite guard (BT)', () => {
   it('drops null, undefined, and empty-string scalars', () => {
@@ -56,5 +56,29 @@ describe('stripEmpty — OCR blank-overwrite guard (BT)', () => {
   it('preserves falsy-but-meaningful values (false, 0)', () => {
     const out = stripEmpty({ usCitizen: false, count: 0, note: null });
     expect(out).toEqual({ usCitizen: false, count: 0 });
+  });
+});
+
+describe('OCR extraction schema — canonical field names (R5-016)', () => {
+  it('uses the canonical model field names', () => {
+    // personalInfo
+    for (const field of ['firstName', 'middleName', 'lastName', 'suffix', 'dob', 'ssnLast4', 'citizenship', 'address', 'city', 'state', 'zip', 'county']) {
+      expect(OCR_EXTRACTION_SCHEMA_PROMPT).toContain(`"${field}"`);
+    }
+  });
+
+  it('does NOT invent the pre-fix alternate field names', () => {
+    // These wrong shapes caused the merge to write [object Object] addresses
+    // and clobber the children array (R5-016).
+    for (const wrong of ['"fullName"', '"dateOfBirth"', '"ssn4"', '"usCitizen"', '"zipCode"', '"street"']) {
+      expect(OCR_EXTRACTION_SCHEMA_PROMPT).not.toContain(wrong);
+    }
+  });
+
+  it('documents address as a single string, not a nested map', () => {
+    // The schema comment states address is a single street string; there must be
+    // no nested address object opening a brace on the address line.
+    expect(OCR_EXTRACTION_SCHEMA_PROMPT).toMatch(/"address":\s*null/);
+    expect(OCR_EXTRACTION_SCHEMA_PROMPT).not.toMatch(/"address":\s*\{/);
   });
 });

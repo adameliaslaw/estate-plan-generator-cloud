@@ -144,8 +144,10 @@ function stripFences(text: string): string {
  * {{^...}}), partials ({{>...}}), comments ({{!...}}), and loop-internal
  * references ({{this...}}, {{@...}}). Blanking those out destroys the loop /
  * conditional structure the AI cannot reliably reconstruct from underscores. (R5-065)
+ *
+ * Exported for unit tests (regression R5-065) — see retemplatize-templates.test.ts.
  */
-function stripLeafVariables(html: string): string {
+export function stripLeafVariables(html: string): string {
   return html.replace(/\{\{[^}]+\}\}/g, (match) => {
     const inner = match.slice(2, -2).trim();
     if (/^[#/^>!]/.test(inner)) return match;       // block open/close, partial, comment, inverse
