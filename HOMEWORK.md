@@ -4,6 +4,14 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-09 PM #4 (R5-048/049 chat generation-intent FIXED — context-aware confirm, Adam signed off)
+
+**TL;DR — Fixed the two chat over-eager-generation findings. Adam chose context-aware confirm. R5-048: split user-intent into EXPLICIT (generate now) vs AFFIRMATIVE (bare "yes" generates only if the assistant's prior turn offered), added a negation guard (won't match "no-contest" mid-sentence), and made the message's doc type win over the dropdown. R5-049: removed the reply-SHAPE Strategy 2/3 so a long formatted explanation is never saved as a document / never replaces the attorney's answer — deliberate generation flows only through the explicit JSON action or the explicit user request. Pure `detectUserGenerationIntent`/`detectGenerationIntent`/`docTypeFromMessage` exported + unit-tested (`chat-generation-intent.test.ts`, 11). Green: functions tsc, root tsc, full lint 0 errors, 731/731 unit. Functions change (not Never-Break) → PR #149, auto-merged.**
+
+**Known conservative edge (flagged):** "no, draft the trust instead" is suppressed by the leading-`no` negation guard even though it's a real request — safe direction (extra turn, never a surprise save); acceptable per the conservative lean.
+
+---
+
 ## 📍 SESSION — 2026-07-09 PM #3 (R5-047 chat-history truncation FIXED — append-only, Adam signed off)
 
 **TL;DR — Fixed the deferred R5-047 data-integrity finding: the AI chat's `saveConversation` overwrote stored history with the caller's ~20-message prompt window every turn, permanently truncating any longer conversation. Now append-only (stable per-message id + transactional dedupe-append); the 5 chat-ai call sites pass only the new turn. No client contract change needed — the server already knows the new turn. Verified green (functions tsc, root tsc, full lint 0 errors, 720/720 unit, 45/45 emulator incl. 4 new; negative-control-verified). Functions change (not Never-Break) → auto-merged.**
