@@ -9,6 +9,7 @@
 5. **Never tell the user to deploy manually.** This repo has GitHub Actions that auto-deploy hosting and functions on every push to `main` (`.github/workflows/firebase-hosting-deploy.yml` and `firebase-functions-deploy.yml`). Merging a PR is sufficient — no `firebase deploy` command needed.
 6. **Always confirm when a push or merge completes.** After every `git push` or PR merge, explicitly tell the user it's done and that CI/CD is deploying automatically.
 7. **Auto-merge PRs once verified.** After opening a PR for requested work, merge it yourself (squash) once verification passes (tsc, build, tests) — don't wait for manual approval. Exception: changes touching the Never-Break List (security rules, indexes, templates, data model, CI workflows) still require explicit user sign-off before merging.
+8. **Never idle while waiting.** When blocked on CI, a deploy, or any long-running background task, start the next backlog item (HOMEWORK.md `▶ NEXT` or the open task list) and check back when the watcher reports — don't sit on your hands or end the session to wait.
 
 ---
 
