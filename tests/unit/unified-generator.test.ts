@@ -24,13 +24,18 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+type GenClientData = { personalInfo: { gender?: string } };
+type TmplCtx = {
+  computed: { spouseTitle: string; clientTitle: string; spousePronouns: { subject: string } };
+};
+
 const H = vi.hoisted(() => ({
   clientDoc: {} as Record<string, unknown>,
   firmDoc: { firmName: 'Elias Counsel LLC' } as Record<string, unknown>,
   aggregateContext: null as unknown,
-  genCalls: [] as Array<{ clientData: any; firmData: any; packageType: string; trustTypes: unknown }>,
-  tmplCalls: [] as any[],
-  saveCalls: [] as any[],
+  genCalls: [] as Array<{ clientData: GenClientData; firmData: unknown; packageType: string; trustTypes: unknown }>,
+  tmplCalls: [] as TmplCtx[],
+  saveCalls: [] as unknown[],
   genResult: { docType: 'trust', title: 'Trust', content: '<p>x</p>', status: 'draft' as const },
 }));
 
@@ -58,14 +63,14 @@ vi.mock('../../functions/src/client-context-aggregator', () => ({
   aggregateClientContext: vi.fn(async () => H.aggregateContext),
 }));
 vi.mock('../../functions/src/template-engine', () => ({
-  generateFromTemplate: vi.fn(async (ctx: unknown) => {
+  generateFromTemplate: vi.fn(async (ctx: TmplCtx) => {
     H.tmplCalls.push(ctx);
     return { ...H.genResult, resolvedMode: 'hybrid' };
   }),
 }));
 vi.mock('../../functions/src/generators/trust-generator', () => ({
   generateTrust: vi.fn(
-    async (clientData: any, firmData: any, packageType: string, trustTypes: unknown) => {
+    async (clientData: GenClientData, firmData: unknown, packageType: string, trustTypes: unknown) => {
       H.genCalls.push({ clientData, firmData, packageType, trustTypes });
       return H.genResult;
     },

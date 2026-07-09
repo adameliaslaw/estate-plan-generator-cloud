@@ -33,7 +33,14 @@ vi.mock('../../functions/src/auth-guards', () => ({
   assertStaff: () => ({ uid: 'staff-1', firmId: 'firm-1' }),
 }));
 vi.mock('../../functions/node_modules/firebase-admin', () => {
-  const makeRef = (path: string): any => ({
+  type MockRef = {
+    id: string | undefined;
+    path: string;
+    get: () => Promise<{ exists: boolean; data?: () => Record<string, unknown> }>;
+    collection: (name: string) => MockColl;
+  };
+  type MockColl = { doc: (id?: string) => MockRef };
+  const makeRef = (path: string): MockRef => ({
     id: path.split('/').pop(),
     path,
     get: async () => {
@@ -43,9 +50,9 @@ vi.mock('../../functions/node_modules/firebase-admin', () => {
     },
     collection: (name: string) => makeColl(`${path}/${name}`),
   });
-  const makeColl = (path: string) => ({ doc: (id?: string) => makeRef(`${path}/${id ?? 'note-auto'}`) });
+  const makeColl = (path: string): MockColl => ({ doc: (id?: string) => makeRef(`${path}/${id ?? 'note-auto'}`) });
   const batch = () => ({
-    set: (ref: any, data: Record<string, unknown>) => {
+    set: (ref: MockRef, data: Record<string, unknown>) => {
       if (String(ref.path).includes('/notes/')) state.noteWrite = data;
     },
     update: vi.fn(),
@@ -60,11 +67,11 @@ vi.mock('../../functions/node_modules/firebase-admin', () => {
 
 import { fileTranscriptToMatter } from '../../functions/src/file-transcript-to-matter';
 
-const handler = fileTranscriptToMatter as unknown as (r: unknown) => Promise<any>;
+const handler = fileTranscriptToMatter as unknown as (r: unknown) => Promise<{ success: boolean }>;
 const REQ = {
   auth: { uid: 'staff-1', token: { role: 'attorney', firmId: 'firm-1' } },
   data: { transcriptId: 't1', matterId: 'm1' },
-} as any;
+};
 
 describe('fileTranscriptToMatter — content honesty (R5-038)', () => {
   beforeEach(() => {

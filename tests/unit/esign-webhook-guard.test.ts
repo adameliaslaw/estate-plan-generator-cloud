@@ -60,14 +60,24 @@ vi.mock('../../functions/node_modules/@sparticuz/chromium', () => ({
 vi.mock('../../functions/src/export-pdf', () => ({ buildLegalDocumentHtml: () => '' }));
 
 vi.mock('../../functions/node_modules/firebase-admin', () => {
-  const makeColl = (path: string): any => ({
+  type MockColl = {
+    doc: (id?: string) => MockRef;
+    add: (data: Record<string, unknown>) => Promise<{ id: string }>;
+  };
+  type MockRef = {
+    id: string | undefined;
+    path: string;
+    get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> }>;
+    collection: (name: string) => MockColl;
+  };
+  const makeColl = (path: string): MockColl => ({
     doc: (id?: string) => makeRef(`${path}/${id ?? 'auto'}`),
     add: async (data: Record<string, unknown>) => {
       if (path.endsWith('activityLogs')) state.activityAdds.push(data);
       return { id: 'log' };
     },
   });
-  const makeRef = (path: string): any => ({
+  const makeRef = (path: string): MockRef => ({
     id: path.split('/').pop(),
     path,
     get: async () => ({
@@ -78,10 +88,10 @@ vi.mock('../../functions/node_modules/firebase-admin', () => {
   });
   const db = {
     collection: (name: string) => makeColl(name),
-    runTransaction: async (fn: (tx: any) => Promise<void>) => {
+    runTransaction: async (fn: (tx: unknown) => Promise<void>) => {
       const tx = {
-        get: async (ref: any) => ref.get(),
-        update: (_ref: any, data: Record<string, unknown>) => { state.txUpdate = data; },
+        get: async (ref: MockRef) => ref.get(),
+        update: (_ref: MockRef, data: Record<string, unknown>) => { state.txUpdate = data; },
       };
       await fn(tx);
     },
@@ -98,7 +108,7 @@ vi.mock('../../functions/node_modules/firebase-admin', () => {
 
 import { dropboxSignWebhook } from '../../functions/src/esign-service';
 
-const handler = dropboxSignWebhook as unknown as (req: any, res: any) => Promise<void>;
+const handler = dropboxSignWebhook as unknown as (req: unknown, res: unknown) => Promise<void>;
 const WEBHOOK_ACK = 'Hello API Event Received';
 
 // Build a Dropbox Sign multipart/form-data callback with a correctly HMAC-signed

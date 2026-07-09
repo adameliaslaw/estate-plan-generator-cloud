@@ -53,9 +53,9 @@ import { generateSingleDocument } from '../../functions/src/generate-single-docu
 const REQ = {
   auth: { uid: 'u1', token: { role: 'attorney', firmId: 'firm-1' } },
   data: { firmId: 'firm-1', clientId: 'c1', docType: 'will' },
-} as any;
+};
 
-const handler = generateSingleDocument as unknown as (r: unknown) => Promise<any>;
+const handler = generateSingleDocument as unknown as (r: unknown) => Promise<{ success: boolean; status: string }>;
 
 describe('generateSingleDocument — honest success + error codes (E/A/AE/B)', () => {
   beforeEach(() => {
