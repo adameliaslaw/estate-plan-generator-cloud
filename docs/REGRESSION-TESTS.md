@@ -101,6 +101,13 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a property with `state:'FL'` serialized as "…, NJ".
 - **Test:** `tests/unit/client-data-serializer.test.ts` (2 R5-045 tests)
 
+#### `R5-048/R5-049` · #149 · chat over-eager document generation · 🤖 automated
+- **File:** `functions/src/chat-ai.ts`
+- **What broke:** (R5-048) the user-intent detector fired on bare affirmatives and negations — a "yes" answering *"include a no-contest clause?"* generated a whole will; *"don't draft it yet"* generated one too — and ignored the doc type named in the message. (R5-049) the AI-reply detector treated any reply with ≥3 markdown headings or >10 HTML tags as a finished document, saving it to the vault and replacing the attorney's answer. Fix (context-aware confirm): explicit requests generate immediately; a bare affirmative generates only if the assistant just offered; a negation suppresses; the message's doc type wins over the dropdown; reply-shape Strategy 2/3 removed (explicit JSON action only).
+- **Step:** `npm run test -- chat-generation-intent`
+- **Expected (pre-fix failure):** "yes" (answering a question) and "don't draft it yet" both returned `shouldGenerate:true`; a long markdown/HTML explanation returned `shouldGenerate:true`.
+- **Test:** `tests/unit/chat-generation-intent.test.ts` (11 tests) — explicit request generates + carries the message doc type; bare "yes" generates only with a prior offer, not on an ordinary question / no history / a buried affirmative; negations suppress (but "no-contest clause" mid-sentence does not); `docTypeFromMessage` specificity ordering; `detectGenerationIntent` fires on JSON but NOT on a long formatted explanation.
+
 #### `R5-042` · #110 · questionnaire-generator stored-XSS · 🤖 automated
 - **File:** `functions/src/generators/questionnaire-generator.ts`
 - **What broke:** the Questionnaire Summary interpolated client-controlled fields into vaulted HTML with no escaping — a client's `<script>` executes in the attorney's browser.
@@ -709,12 +716,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (82 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 32 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained — earlier tally lines undercounted the locked rows and carried a stale "4 to-automate"; this line is derived by counting table rows, not incremental arithmetic.
+**Tally (82 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 32 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
 
 ---
 
 ## Changelog
 
+- **2026-07-09 (R5-048/049)** — chat document-generation intent made context-aware (Adam signed off): explicit requests generate immediately, bare affirmatives only after an assistant offer, negation guard, message doc type wins, reply-shape Strategy 2/3 removed. New unit test `chat-generation-intent.test.ts` (11).
 - **2026-07-09 (R5-047)** — chat conversation history no longer truncated to the ~20-message prompt window: `saveConversation` appends only the new turn (stable per-message id, transactional dedupe). New emulator test `conversation-append.test.ts` (4, negative-control-verified). Adam signed off on the append-only approach.
 - **2026-07-09 (T4)** — the five 🚫-blocked T4 rows automated with injected-failure emulator tests (7 new tests, 3 files; emulator suite 41/41): R5-055 watermark, R5-058/059/060 wills-processor failure paths, R5-061 backfill stale-running. Every case negative-control-verified against its pre-fix code. T4 now has one open row (R5-050, prod smoke). Tally 32→37 🤖.
 - **2026-07-09 (CI)** — `npm run test:emulator` wired into `firebase-functions-deploy.yml` (setup-java JDK 21 + emulator-jar cache, before the deploy steps) — all 33 emulator tests now gate every functions/rules deploy. Adam sign-off.

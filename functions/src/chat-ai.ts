@@ -425,24 +425,86 @@ async function buildContextString(
 // ---------------------------------------------------------------------------
 
 /**
- * Patterns that indicate the user is explicitly requesting document generation.
- * When matched in draft mode, we skip the chat LLM call and go straight to
- * the unified generator — eliminating the double-LLM-call bottleneck.
+ * Explicit generation requests — the user names the action ("draft the will").
+ * These generate immediately (skip the chat LLM, go straight to the generator).
  */
-const USER_GENERATION_PATTERNS: RegExp[] = [
-  /\b(?:draft|generate|create|produce|write|prepare|make)\s+(?:a\s+|the\s+|my\s+)?(?:will|trust|poa|power\s+of\s+attorney|deed|advance\s+directive|living\s+will|document)/i,
+const EXPLICIT_GENERATION_PATTERNS: RegExp[] = [
+  /\b(?:draft|generate|create|produce|write|prepare|make)\s+(?:a\s+|an\s+|the\s+|my\s+)?(?:will|trust|poa|power\s+of\s+attorney|deed|advance\s+directive|living\s+will|document)/i,
   /\b(?:draft|generate|create|produce)\s+(?:it|this|the\s+document|the\s+draft)/i,
   /\bgo\s+ahead\s+and\s+(?:draft|generate|create)/i,
   /\b(?:please\s+)?(?:draft|generate)\b.*\btemplate\b/i,
   /\bready\s+to\s+(?:draft|generate)/i,
   /\blet'?s\s+(?:draft|generate|create)/i,
-  // Affirmative intent — user confirming they want generation to proceed
-  /^\s*(?:go\s+ahead|do\s+it|yes(?:\s*,?\s*please)?|sounds?\s+good|perfect|proceed|make\s+it|yes\s+go)\s*[.!]?\s*$/i,
-  /\b(?:go\s+ahead|proceed)\b/i,
 ];
 
-function detectUserGenerationIntent(message: string): boolean {
-  return USER_GENERATION_PATTERNS.some((p) => p.test(message));
+/**
+ * Bare affirmations. These count as generation intent ONLY when the assistant's
+ * previous turn actually offered to generate — otherwise a "yes" answering an
+ * ordinary question ("Should this include a no-contest clause?") would wrongly
+ * generate a document. Anchored to the whole message so an affirmative buried in
+ * a longer clause ("yes, but change the executor") doesn't fire. (R5-048)
+ */
+const AFFIRMATIVE_PATTERNS: RegExp[] = [
+  /^\s*(?:go\s+ahead|do\s+it|yes(?:\s*,?\s*please)?|sounds?\s+good|perfect|proceed|make\s+it|yes\s+go)\s*[.!]?\s*$/i,
+];
+
+/**
+ * Negations that suppress generation even when a pattern matches ("don't draft
+ * it yet", "not ready", "hold off"). Leading no/stop/wait only — a bare `\bno\b`
+ * would match "no-contest clause" mid-sentence. (R5-048)
+ */
+const NEGATION_PATTERN = /\b(?:don'?t|do\s+not|not\s+yet|not\s+ready|hold\s+off|never\s*mind)\b|^\s*(?:no|stop|wait)\b/i;
+
+/**
+ * The assistant's previous turn offered to generate — an explicit offer phrase,
+ * or a generation verb phrased as a question.
+ */
+const ASSISTANT_OFFER_PATTERN =
+  /\b(?:want\s+me\s+to|shall\s+i|should\s+i|ready\s+to|would\s+you\s+like\s+me\s+to|i\s+can)\b[^.?!]*\b(?:generate|draft|create|produce|prepare)\b|\b(?:generate|draft|create|produce|prepare)\b[^?]*\?/i;
+
+/** The doc type named in the user's message, if any (overrides the dropdown). */
+export function docTypeFromMessage(message: string): string | undefined {
+  const m = message.toLowerCase();
+  if (/\bpour[-\s]?over\s+will\b/.test(m)) return 'pour-over-will';
+  if (/\bliving\s+will\b|\badvance\s+directive\b|\bhealth\s*care\s+(?:directive|proxy)\b/.test(m)) return 'advance-directive';
+  if (/\btrust\b/.test(m)) return 'trust';
+  if (/\b(?:power\s+of\s+attorney|poa)\b/.test(m)) return 'poa';
+  if (/\bdeed\b/.test(m)) return 'deed';
+  if (/\baffidavit\b/.test(m)) return 'affidavit';
+  if (/\bwill\b/.test(m)) return 'will';
+  return undefined;
+}
+
+export interface UserGenerationIntent {
+  shouldGenerate: boolean;
+  docType?: string; // doc type named in the message, if any
+}
+
+/**
+ * Decide whether the user's message is a request to generate + save a document.
+ * Explicit requests generate immediately; bare affirmations require the
+ * assistant to have just offered; any negation suppresses. (R5-048)
+ */
+export function detectUserGenerationIntent(
+  message: string,
+  history: Array<{ role: string; content: string }> = [],
+): UserGenerationIntent {
+  if (NEGATION_PATTERN.test(message)) return { shouldGenerate: false };
+
+  const docType = docTypeFromMessage(message);
+
+  if (EXPLICIT_GENERATION_PATTERNS.some((p) => p.test(message))) {
+    return { shouldGenerate: true, docType };
+  }
+
+  if (AFFIRMATIVE_PATTERNS.some((p) => p.test(message))) {
+    const lastAssistant = [...history].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistant && ASSISTANT_OFFER_PATTERN.test(lastAssistant.content)) {
+      return { shouldGenerate: true, docType };
+    }
+  }
+
+  return { shouldGenerate: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -455,8 +517,15 @@ interface GenerationAction {
   instructions?: string;
 }
 
-function detectGenerationIntent(raw: string, draftDocType?: string): GenerationAction {
-  // Strategy 1: AI returned a structured JSON action
+export function detectGenerationIntent(raw: string, draftDocType?: string): GenerationAction {
+  // The AI must EXPLICITLY signal generation with a structured JSON action.
+  // (R5-049) The old Strategy 2/3 inferred "this is a document" from the reply's
+  // SHAPE — ≥3 markdown headings, or >10 HTML tags — so an ordinary long,
+  // well-formatted explanation ("walk me through a will vs. a trust") was saved
+  // to the vault and REPLACED the user's answer with "I've generated your…".
+  // Formatting shape is not a reliable proxy for intent, so those are removed;
+  // deliberate generation still flows through this JSON signal or the explicit
+  // user-request short-circuit (detectUserGenerationIntent).
   try {
     const cleaned = raw
       .replace(/^```(?:json)?\s*/i, '')
@@ -474,20 +543,7 @@ function detectGenerationIntent(raw: string, draftDocType?: string): GenerationA
       }
     }
   } catch {
-    // Not JSON — check for other signals
-  }
-
-  // Strategy 2: AI produced a substantial HTML document in its response
-  const hasHtmlStructure = /<(?:h[1-6]|p|div|table|section|article)[^>]*>[\s\S]*?<\/(?:h[1-6]|p|div|table|section|article)>/i.test(raw);
-  const htmlTagCount = (raw.match(/<[^>]+>/g) || []).length;
-  if (hasHtmlStructure && htmlTagCount > 10 && raw.length > 500) {
-    return { shouldGenerate: true, docType: draftDocType };
-  }
-
-  // Strategy 3: AI produced a markdown-formatted document
-  const markdownHeadings = (raw.match(/^#{1,3}\s+.+$/gm) || []).length;
-  if (markdownHeadings >= 3 && raw.length > 1000) {
-    return { shouldGenerate: true, docType: draftDocType };
+    // Not JSON — no explicit generation signal.
   }
 
   return { shouldGenerate: false };
@@ -611,8 +667,13 @@ export const chatAi = functions
       //    route directly to the unified generator. This eliminates the
       //    double-LLM-call that was causing timeouts.
       // =====================================================================
-      if (mode === 'draft' && clientId && detectUserGenerationIntent(message)) {
-        const targetDocType = draftDocType ?? 'will';
+      const userIntent = mode === 'draft' && clientId
+        ? detectUserGenerationIntent(message, resolvedHistory)
+        : { shouldGenerate: false as const };
+      if (userIntent.shouldGenerate && clientId) {
+        // Message-named doc type wins over the dropdown ("draft the trust" while
+        // the dropdown says Will → generate a trust). (R5-048)
+        const targetDocType = userIntent.docType ?? draftDocType ?? 'will';
         console.log(`[chatAi] Short-circuit: user explicitly requested ${targetDocType} generation, skipping chat LLM call`);
 
         // Aggregate context once (will be reused by the generator)
