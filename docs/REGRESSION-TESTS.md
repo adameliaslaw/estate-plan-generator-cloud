@@ -560,35 +560,40 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** orphaned Auth account; every retry failed `already-exists`.
 - **Test:** `tests/emulator/create-firm-user-idempotency.test.ts` (2 tests) — drives the real `createFirmUser` onCall against the Auth + Firestore emulators. (1) A firm with no SendGrid key → the invite email fails → handler returns `success + warning` and the Auth user + profile PERSIST (not rolled back). (2) A `setCustomUserClaims` spy injects a post-create failure → handler throws `internal` and the just-created Auth user is deleted (`getUserByEmail` → `auth/user-not-found`), so no orphan and a retry won't hit `already-exists`.
 
-#### `R5-055` · #111 · calendar-sync advances watermark on partial failure · 🚫 blocked
+#### `R5-055` · #111 · calendar-sync advances watermark on partial failure · 🤖 automated (emulator)
 - **File:** `functions/src/calendar-sync.ts`
 - **What broke:** a mid-run `events.list` failure still advanced `googleCalendarLastSyncAt`, permanently dropping un-fetched changes. Fix skips the watermark advance on error.
-- **How to verify:** integration sync with an injected fetch failure → re-run re-fetches the dropped events (upsert-by-eventId is idempotent).
-- **Expected (pre-fix failure):** the watermark advanced past the failed fetch; events permanently dropped.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — the failed-fetch test FAILS against the pre-#111 code (negative control run at authoring time).
+- **Test:** `tests/emulator/calendar-sync-watermark.test.ts` (2 tests) — real `syncGoogleCalendar` handler, stubbed global fetch (future token expiry skips OAuth refresh): an injected 500 on `events.list` leaves the seeded watermark untouched; a clean empty-items run advances it (positive control).
 
-#### `R5-058` · #112 · wills-processor — corrupt file loses record · 🚫 blocked
+#### `R5-058` · #112 · wills-processor — corrupt file loses record · 🤖 automated (emulator)
 - **File:** `functions/src/wills-processor.ts`
-- **What broke:** `_extractText` had no try/catch; a corrupt/password-protected file made the Pub/Sub handler reject and the file vanished with no `wills_documents` record. **No pipeline test infra exists.**
-- **How to verify:** code-review sign-off, or a manual Drive-drop of a password-protected PDF → confirm a record is still written.
-- **Expected (pre-fix failure):** the file produced zero records (silent data loss).
+- **What broke:** `_extractText` had no try/catch; a corrupt/password-protected file made the Pub/Sub handler reject and the file vanished with no `wills_documents` record.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — this test FAILS against the pre-#112 code (negative control run at authoring time).
+- **Test:** `tests/emulator/wills-processor-failure-paths.test.ts` — the real Pub/Sub handler with garbage bytes under a `.docx` name (real mammoth throws): the handler resolves and a `processing_status:'error'` / `text_extraction_failed` record exists.
 
-#### `R5-059` · #112 · wills-processor — error record clobbers good record · 🚫 blocked
+#### `R5-059` · #112 · wills-processor — error record clobbers good record · 🤖 automated (emulator)
 - **File:** `functions/src/wills-processor.ts`
 - **What broke:** `_writeErrorRecord` merged `document_type:'Other'`+error over an already-good record, so a transient failure on a `modified` event corrupted a correctly-classified document.
-- **How to verify:** code-review, or emulated Firestore: seed a classified record → fire a failing modified event → assert the prior record is preserved.
-- **Expected (pre-fix failure):** the good record was overwritten with the error stub.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — this test FAILS against the pre-#112 code (negative control run at authoring time).
+- **Test:** `tests/emulator/wills-processor-failure-paths.test.ts` — seed a `classified` Will record → injected Drive-fetch failure → record keeps `document_type:'Will'`/`classified`, no error fields; companion test: the same failure with NO prior record still writes a visible error record.
 
-#### `R5-060` · #112 · wills-processor — daily-spend undercount · 🚫 blocked
+#### `R5-060` · #112 · wills-processor — daily-spend undercount · 🤖 automated (emulator, skip-path half)
 - **File:** `functions/src/wills-processor.ts`
 - **What broke:** the spend increment was fire-and-forget before return (droppable on CPU freeze) and the skip-extraction path never charged its classification cost → the cost circuit breaker undercounted.
-- **How to verify:** code-review, or a cost-accounting integration test (awaited increment; skip-path adds cost).
-- **Expected (pre-fix failure):** spend dropped on return; skip-path added zero cost.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — this test FAILS against the pre-#112 code (negative control run at authoring time).
+- **Test:** `tests/emulator/wills-processor-failure-paths.test.ts` — a real generated `.docx` classified (mocked) as `Correspondence` takes the skip-extraction path; after the handler RESOLVES, `control.daily_spend_usd > 0` (the awaited-transaction ordering is the fire-and-forget half of the fix; the pre-fix skip path charged zero).
 
-#### `R5-061` · #112 · wills-backfill — stuck 'running' blocks all runs · 🚫 blocked
+#### `R5-061` · #112 · wills-backfill — stuck 'running' blocks all runs · 🤖 automated (emulator)
 - **File:** `functions/src/wills-backfill.ts`
 - **What broke:** a 540s timeout mid-BFS left `backfill_progress.status='running'` forever and the idempotency guard permanently blocked every future run.
-- **How to verify:** code-review, or seed a stale `running` record → confirm a new run restarts.
-- **Expected (pre-fix failure):** all future backfill runs were blocked.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — the stale-restart test FAILS against the pre-#112 code (negative control run at authoring time).
+- **Test:** `tests/emulator/wills-backfill-stale-running.test.ts` (2 tests) — a FRESH `running` record still rejects `already-exists` (guard intact); a 20-minute-stale one admits the restart — the run proceeds to an injected googleapis Drive failure (`internal`), and `backfill_progress` is reset by the new caller and closed as `error`.
 
 #### `R5-050` · #114 · chat — unawaited memory extraction never ran · 🚫 blocked (prod smoke)
 - **File:** `functions/src/chat-ai.ts`
@@ -684,11 +689,11 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-037 | #121 | rules firm-scoped admin | T3 | 🤖 automated (emulator) |
 | R5-033 | #116 | vault-save version race | T4 | 🤖 automated (emulator) |
 | R5-052 | #117 | createFirmUser idempotency | T4 | 🤖 automated (emulator) |
-| R5-055 | #111 | calendar-sync watermark | T4 | 🚫 |
-| R5-058 | #112 | wills corrupt-file loses record | T4 | 🚫 |
-| R5-059 | #112 | wills error clobbers record | T4 | 🚫 |
-| R5-060 | #112 | wills daily-spend undercount | T4 | 🚫 |
-| R5-061 | #112 | wills-backfill stuck running | T4 | 🚫 |
+| R5-055 | #111 | calendar-sync watermark | T4 | 🤖 automated (emulator) |
+| R5-058 | #112 | wills corrupt-file loses record | T4 | 🤖 automated (emulator) |
+| R5-059 | #112 | wills error clobbers record | T4 | 🤖 automated (emulator) |
+| R5-060 | #112 | wills daily-spend undercount | T4 | 🤖 automated (emulator) |
+| R5-061 | #112 | wills-backfill stuck running | T4 | 🤖 automated (emulator) |
 | R5-050 | #114 | chat unawaited extraction | T4 | 🚫 prod-smoke |
 | R5-006 | #87 | reviewDocument secrets | Prod smoke | ⬜ |
 | R5-007 | #87 | checkDocumentCompliance secrets | Prod smoke | ⬜ |
@@ -697,12 +702,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (81 cases):** 🤖 32 locked · ⬜ 4 to-automate (T1) · ⬜ 29 manual (T2) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (81 cases):** 🤖 37 locked · ⬜ 4 to-automate (T1) · ⬜ 29 manual (T2) · 8 T4 (7 of them 🤖; R5-050 remains prod-smoke) · 4 prod-smoke · 2 blocked.
 
 ---
 
 ## Changelog
 
+- **2026-07-09 (T4)** — the five 🚫-blocked T4 rows automated with injected-failure emulator tests (7 new tests, 3 files; emulator suite 41/41): R5-055 watermark, R5-058/059/060 wills-processor failure paths, R5-061 backfill stale-running. Every case negative-control-verified against its pre-fix code. T4 now has one open row (R5-050, prod smoke). Tally 32→37 🤖.
 - **2026-07-09 (CI)** — `npm run test:emulator` wired into `firebase-functions-deploy.yml` (setup-java JDK 21 + emulator-jar cache, before the deploy steps) — all 33 emulator tests now gate every functions/rules deploy. Adam sign-off.
 - **2026-07-09 (#121)** — R5-037 firm-scoped admin rules fix merged with a new case entry, plus live rules-engine tests via `@firebase/rules-unit-testing` covering R5-037 (incl. collection-group scoping) and the AS rules half (`firestore-rules-firm-admin.test.ts`, 8 tests; negative control verified the cross-firm tests fail pre-fix). T3 is fully automated. Tally 30→32 🤖 (81 cases).
 - **2026-07-09** — T3 multi-tenant batch: R5-066, R5-010, and AP/AQ/AZ/BA/BB automated via the emulator harness (`tests/emulator/`, 22 new tests, emulator suite 25/25). Sole T3 remainder is `AS` (rules-layer check — needs `@firebase/rules-unit-testing`). Tally 27→30 🤖.
