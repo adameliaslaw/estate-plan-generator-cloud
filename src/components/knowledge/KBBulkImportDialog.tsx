@@ -19,11 +19,15 @@ export function BulkImportDialog({
   onClose,
   firmId,
   onSaved,
+  onRefresh,
 }: {
   open: boolean;
   onClose: () => void;
   firmId: string;
   onSaved: () => void;
+  /** Refresh the resource list WITHOUT closing the dialog (all-partial batches
+   *  keep the dialog open so the per-file OCR warnings stay readable). */
+  onRefresh: () => void;
 }) {
   const [mode, setMode] = useState<'files' | 'json'>('files');
 
@@ -120,6 +124,18 @@ export function BulkImportDialog({
       setProcessing(false);
       setUploadResults(result);
 
+      // A `partial` file still persists its resource (only the OCR is
+      // incomplete) — the backend's `processed` count excludes it. An
+      // all-partial batch therefore used to save resources server-side while
+      // showing no toast and never refreshing the list, inviting duplicate
+      // re-uploads. Refresh without closing so the per-file "split this PDF"
+      // warnings below stay readable. (R6-002)
+      if (result.partial > 0) {
+        toast.warning(
+          `${result.partial} file(s) imported with partial OCR — split large scanned PDFs to import the rest.`,
+        );
+        if (result.processed === 0) onRefresh();
+      }
       if (result.processed > 0) {
         toast.success(`Successfully processed ${result.processed} of ${result.total} files.`);
         onSaved();

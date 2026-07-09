@@ -879,6 +879,7 @@ export default function KnowledgeBasePage() {
         onClose={() => setShowBulkImport(false)}
         firmId={firmId ?? ''}
         onSaved={() => { setShowBulkImport(false); fetchResources(); }}
+        onRefresh={fetchResources}
       />
 
       {/* Bulk Template Upload Dialog */}

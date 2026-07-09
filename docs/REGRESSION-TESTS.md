@@ -336,6 +336,12 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Steps:** open a doc → Regenerate, wait → type one char → hard-reload.
 - **Expected (pre-fix failure):** the editor kept the old draft and the first keystroke overwrote the regenerated document.
 
+#### `R6-002` · #153 · KB bulk import — all-partial batch saves resources invisibly · ⬜ unverified *(needs >15MB scanned PDF)*
+- **File:** `src/components/knowledge/KBBulkImportDialog.tsx`, `src/pages/admin/KnowledgeBasePage.tsx`
+- **What broke:** the success handler gated the only list refresh + toast on `result.processed > 0`, but the backend's `processed` excludes `partial` files whose resources ARE persisted (`bulk-knowledge-import.ts` writes the doc, then reports `status:'partial'`). A batch of only partially-OCR'd scans (>~15MB each) saved every resource server-side while the dialog showed no toast and the KB list never refreshed — inviting duplicate re-uploads. Fixed: `partial > 0` now shows a warning toast and (when there's no full success) refreshes the list via a new `onRefresh` prop WITHOUT closing the dialog, so the per-file "split this PDF" warnings stay readable.
+- **Steps:** KB → Bulk Import → upload a single scanned PDF >15MB (partial OCR) → watch the toast, the dialog results panel, and the KB list behind it.
+- **Expected (pre-fix failure):** no toast, list unchanged (resource invisible until manual reload) — re-uploading created a duplicate. Now: warning toast, list refreshes behind the open dialog, per-file warning visible.
+
 #### `R6-001` · #152 · editor — stuck force-reload after successful regenerate reverts post-regen typing · ⬜ unverified *(timing)*
 - **File:** `src/components/editor/DocumentEditor.tsx`
 - **What broke:** the R5-022 fix left `forceReloadRef` with no success-path reset: when the regenerated snapshot arrived before the callable resolved, the load effect kept the flag (by design, to outlast the flush snapshot) but nothing cleared it afterward — the next autosave snapshot force-reloaded the editor, jumping the cursor and reverting keystrokes typed during the save round-trip. Fixed with a `currentVersion` watermark (`regenBaseVersionRef`, session-high baseline): the backend regen save bumps `currentVersion` transactionally while the pre-regen flush doesn't, so consuming a snapshot with a higher version clears the flag even mid-regen.
@@ -675,6 +681,7 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-027 | #91 | questionnaire false completed | T2 | ⬜ |
 | R5-022 | #92 | editor regenerate overwrite | T2 | ⬜ |
 | R6-001 | #152 | editor stuck force-reload post-regen | T2 | ⬜ |
+| R6-002 | #153 | KB import all-partial invisible save | T2 | ⬜ |
 | R5-023 | #92 | editor per-property regen | T2 | ⬜ |
 | R5-024 | #92 | editor restore loses edits | T2 | ⬜ |
 | R5-025 | #92 | editor stale Replace offsets | T2 | ⬜ |
@@ -723,12 +730,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (83 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 33 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
+**Tally (84 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 34 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
 
 ---
 
 ## Changelog
 
+- **2026-07-09 (R6-002)** — KB bulk import all-partial batches no longer save invisibly (#153): `partial > 0` now warns + refreshes the list via a new `onRefresh` prop while keeping the dialog open (per-file OCR warnings stay readable); mixed/pure-success paths unchanged. New T2 case R6-002. Found by audit Round 6.
 - **2026-07-09 (R6-001)** — editor stuck force-reload after successful regenerate fixed (#152): `regenBaseVersionRef` watermark (session-high `currentVersion` at regen start) lets the load effect clear `forceReloadRef` on consuming the version-bumped regenerated snapshot even mid-regen, so the flag can no longer stay stuck and force-reload the editor on the next autosave (reverting round-trip keystrokes). New T2 case R6-001. Found by audit Round 6.
 - **2026-07-09 (R5-048/049)** — chat document-generation intent made context-aware (Adam signed off): explicit requests generate immediately, bare affirmatives only after an assistant offer, negation guard, message doc type wins, reply-shape Strategy 2/3 removed. New unit test `chat-generation-intent.test.ts` (11).
 - **2026-07-09 (R5-047)** — chat conversation history no longer truncated to the ~20-message prompt window: `saveConversation` appends only the new turn (stable per-message id, transactional dedupe). New emulator test `conversation-append.test.ts` (4, negative-control-verified). Adam signed off on the append-only approach.
