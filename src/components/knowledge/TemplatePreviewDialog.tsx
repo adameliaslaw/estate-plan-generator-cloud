@@ -338,6 +338,13 @@ export function TemplatePreviewDialog({
         editor?.commands.setContent(data.enhancedContent, { emitUpdate: false });
         setEditorHtml(data.enhancedContent);
         setSourceContent(data.enhancedContent);
+        // The AI may inject block helpers ({{#each}}/{{#if}}) into a template
+        // that loaded as non-logic — recompute like the load path does, so Save
+        // serializes the pristine source instead of the editor's foster-parented
+        // round-trip (R6-003).
+        const logic = hasBlockHelpers(data.enhancedContent);
+        setIsLogicTemplate(logic);
+        if (logic) setViewMode('source');
         setIsDirty(true);
         setEnhanceFocus('');
         toast.success(

@@ -126,6 +126,21 @@ export default function QuestionnaireRegisterPage() {
     claimAttempted.current = true;
     (async () => {
       try {
+        // Wait for any persisted session to restore first — auth.currentUser
+        // is still null during the async restore on a fresh page load.
+        await auth.authStateReady();
+        const existing = auth.currentUser;
+        if (existing && !existing.isAnonymous) {
+          // A signed-in (staff) user opening a client's personal invite:
+          // signInAnonymously would silently replace their session app-wide
+          // AND the claim would re-point the client record's linkedUserId to
+          // a throwaway anonymous uid. Bail with guidance instead (R6-006).
+          setServerError(
+            'You are already signed in to an account. This personal invite is for the client — open it in a private/incognito window, or sign out first.',
+          );
+          setVerifying(false);
+          return;
+        }
         const anonCred = await signInAnonymously(auth);
         const fn = httpsCallable<RegisterRequest, RegisterResponse>(
           functions,

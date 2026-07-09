@@ -4,6 +4,16 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-09 PM #8 (R6-003–006 FIXED — Round 6 fully drained, all 6 findings closed same-day)
+
+**TL;DR — Knocked out the four Round-6 ⚪s in one batch PR (#154, frontend-only, auto-merged). R6-003: template Enhance now recomputes `isLogicTemplate` (AI-injected `{{#each}}`/`{{#if}}` no longer corrupted by the WYSIWYG round-trip on save — flips to Source view like the load path). R6-004: template preview gained a "— No client —" clear row (the Combobox swap had removed the native select's empty option). R6-005: Copy Invite Link now writes the clipboard via `ClipboardItem` with a promise payload started synchronously inside the click (Firefox/Safari reject a post-await `writeText`); a copy-only failure surfaces the minted URL for manual copy instead of the false "Failed to create invite link". R6-006: the invite-link page waits for `auth.authStateReady()` and, if a signed-in non-anonymous user opens the link, shows guidance instead of silently replacing their session + re-pointing `linkedUserId` to a throwaway anon uid. Green: tsc -b, build, FULL lint 0 errors, 731/731 unit. Round 6 is now 6/6 fixed (2 🟡 #152/#153 + 4 ⚪ #154), all same-day as the audit.**
+
+**✅ Shipped:** `TemplatePreviewDialog.tsx`, `TemplatePreviewPanel.tsx`, `ClientListPage.tsx`, `QuestionnaireRegisterPage.tsx`; REGRESSION-TESTS 4 new T2 cases (tally 88 rows) + changelog; AUDIT-findings R6-003–006 → fixed.
+
+**▶ NEXT:** the T2 browser pass (38 cases, needs Adam/live app); CI #64 codebase-split (needs sign-off); or card-charge (needs Adam live).
+
+---
+
 ## 📍 SESSION — 2026-07-09 PM #7 (R6-002 FIXED — KB all-partial import no longer invisible; both Round-6 🟡s closed)
 
 **TL;DR — Fixed the second Round-6 🟡: KB bulk import gated its only list-refresh + toast on `result.processed > 0`, but the backend's `processed` excludes `partial` files whose resources ARE persisted — so an all-partially-OCR'd batch (>15MB scans) saved everything server-side while showing nothing, inviting duplicate re-uploads. Fix: `partial > 0` → warning toast + list refresh via a new `onRefresh` prop that does NOT close the dialog (the per-file "split this PDF" warnings — the R5-051 surface — stay readable); when full successes exist, `onSaved` refreshes as before (no double fetch). Green: tsc -b, build, FULL lint 0 errors, 731/731 unit. Frontend-only → PR #153, auto-merged. R6-001's #152 hosting deploy confirmed green — both 🟡s live. Round 6 remainder: 4 ⚪s (R6-003–006).**

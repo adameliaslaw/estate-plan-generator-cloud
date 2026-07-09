@@ -254,13 +254,33 @@ export default function ClientListPage() {
 
   const handleCopyInviteLink = async (clientId: string) => {
     if (!firmId) return;
+    const urlPromise = clientService.getRegistrationLink(firmId, clientId);
     try {
-      const url = await clientService.getRegistrationLink(firmId, clientId);
-      await navigator.clipboard.writeText(url);
+      // Start the clipboard write synchronously inside the click's transient
+      // user activation, handing the pending URL to the clipboard as a promise.
+      // A plain writeText issued AFTER the callable resolves is rejected by
+      // Firefox/Safari (the activation is consumed by the async gap) even
+      // though the link minted fine (R6-005).
+      if (typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': urlPromise.then((u) => new Blob([u], { type: 'text/plain' })),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(await urlPromise);
+      }
       toast.success('Personal invite link copied to clipboard');
     } catch (error) {
-      console.error('Error creating invite link:', error);
-      toast.error('Failed to create invite link');
+      console.error('Error copying invite link:', error);
+      // The mint may have succeeded with only the clipboard write rejected —
+      // surface the link for manual copy instead of a false "failed to create".
+      const url = await urlPromise.catch(() => null);
+      if (url) {
+        window.prompt('Invite link created — press Ctrl+C to copy it:', url);
+      } else {
+        toast.error('Failed to create invite link');
+      }
     }
   };
 
