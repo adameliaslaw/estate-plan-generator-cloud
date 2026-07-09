@@ -501,25 +501,28 @@ Short, deliberate, post-deploy — never bulk regression:
 
 ## T3 — Multi-tenant / privileged (emulator, two firms)
 
-#### `R5-066` · #113 · wills pipeline — cross-tenant admin trigger · ⬜ unverified
+> **Emulator harness.** Three of the four T3 cases now have real passing integration tests under `tests/emulator/`, run via `npm run test:emulator` (needs Java 21+ — see the T4 harness note). They drive the REAL callables with crafted per-firm auth tokens against the Firestore emulator. The remaining case (`AS`) is a firestore.rules check, which the admin SDK bypasses — it needs `@firebase/rules-unit-testing` (a new devDependency) before it can be automated.
+
+#### `R5-066` · #113 · wills pipeline — cross-tenant admin trigger · 🤖 automated (emulator)
 - **File:** `functions/src/wills-pilot.ts`, `wills-backfill.ts`
 - **What broke:** `willsPilotRun`/`willsStartBackfill` gated only on `role=='admin'` with no firm scoping, so any firm's admin could trigger Elias Counsel's Drive ingestion and read pilot reports (client-identifying file names/paths). Fix requires `caller.firmId === pipeline_state/control.firmId`, checked before the kill-switch probe.
-- **Steps:** set `pipeline_state/control.firmId = Firm A` → as **Firm B admin** call `willsPilotRun` and `willsStartBackfill` → expect `permission-denied`, and no leak of whether the pipeline is enabled → with `firmId` unset expect `failed-precondition` (fails closed) → as **Firm A admin** expect it to proceed.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
 - **Expected (pre-fix failure):** Firm B admin could invoke both and read Firm A's pilot report.
+- **Test:** `tests/emulator/wills-cross-tenant-gate.test.ts` (8 tests, both callables) — Firm B admin → `permission-denied` whether the kill switch is on or off (no enabled-state leak); `control.firmId` unset → `failed-precondition` (fails closed) even for an admin; Firm A admin passes the firm gate and reaches the kill-switch check (proven without Drive access); non-admin denied outright.
 
-#### `R5-010` · #97 · client-claim — attorney-issued token required · ⬜ unverified
+#### `R5-010` · #97 · client-claim — attorney-issued token required · 🤖 automated (emulator)
 - **File:** `functions/src/register-client.ts`, `create-registration-link.ts`
 - **What broke:** `registerClientFromLink` claimed any unlinked client record on a bare name+email match (anonymous auth, no verified identity) — an account-takeover of another person's estate profile. Fix: claiming requires an attorney-issued `registrationToken`; without one it can only create a new prospect stub and never looks up by email.
-- **Steps:** unlinked Firm A client (email, no `linkedUserId`) + an unrelated anonymous session that knows the email + an attorney-minted token. (1) Claim **without** token → must NOT claim (only creates a stub; existing `linkedUserId` unchanged). (2) Claim **with** a valid token → succeeds.
-- **Expected (pre-fix failure):** step 1 handed over the existing estate profile with no token.
-- **Note:** candidate to encode in `security-rules.test.ts`/a callable test → promote to T1 if done.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** a tokenless claim handed over the existing estate profile.
+- **Test:** `tests/emulator/register-client-claim-token.test.ts` (3 tests) — tokenless registration with the victim's exact name+email creates a NEW prospect stub (victim's `linkedUserId` untouched, different clientId); an invalid token → `not-found`, claims nothing; a valid attorney-minted token claims the record and links the caller's session.
 
-#### `AP/AQ/AZ/BA/BB` · #54 · createFirmUser lockdown + template/KB firm-scope · ⬜ unverified
+#### `AP/AQ/AZ/BA/BB` · #54 · createFirmUser lockdown + template/KB firm-scope · 🤖 automated (emulator)
 - **File:** `functions/src/user-management.ts`, `knowledge-base.ts`, `seed-templates.ts`
 - **What broke:** `createFirmUser` was callable by any authenticated user and could mint an `admin` with arbitrary capabilities; the template/KB callables used a broken firm-scope predicate that leaked another firm's templates/resources. Now create is admin/attorney-only with allowlists; scope predicate rejects `callerFirmId !== firmId`.
-- **Steps:** (1) as a Firm A **attorney**, `createFirmUser` requesting `role:'admin'` → reject. (2) as a client/paralegal, `createFirmUser` at all → reject. (3) as any Firm A user, call `listTemplates`/`getTemplateContent`/`searchKnowledgeResources` targeting **Firm B**'s id → empty/denied, never Firm B data.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
 - **Expected (pre-fix failure):** an attorney (or any signed-in user) could mint a cross-privilege admin; the predicate returned another firm's data.
-- **Note:** `security-rules.test.ts` is a static text-match — it does NOT exercise these callables at runtime. No real coverage yet.
+- **Test:** `tests/emulator/callable-firm-scope.test.ts` (11 tests) — `createFirmUser`: attorney requesting `role:'admin'` denied; paralegal/client denied entirely; Firm B admin targeting Firm A denied. `listTemplates`/`getTemplateContent`/`searchKnowledgeResources`: Firm A **admin** targeting seeded Firm B data → `permission-denied` (old predicate admitted any admin); caller with NO firm claim → denied (old predicate let them through); same-firm positive control reads its own data.
 
 #### `AS` · #55 · paralegal dropped from billing + firm-settings · ⬜ unverified
 - **File:** `firestore.rules`, `src/hooks/usePermissions.ts`
@@ -666,9 +669,9 @@ Short, deliberate, post-deploy — never bulk regression:
 | R5-051 (frontend) | #115 | bulk-KB partial badge | T2 | ⬜ |
 | #101 | #101 | transcript auto-summary (feature) | T2 | ⬜ |
 | #102-#106 | #102-#106 | create-client entry points (feature) | T2 | ⬜ |
-| R5-066 | #113 | wills firm-scope cross-tenant | T3 | ⬜ |
-| R5-010 | #97 | client-claim token gate | T3 | ⬜ |
-| AP/AQ/AZ/BA/BB | #54 | createFirmUser lockdown + scope | T3 | ⬜ |
+| R5-066 | #113 | wills firm-scope cross-tenant | T3 | 🤖 automated (emulator) |
+| R5-010 | #97 | client-claim token gate | T3 | 🤖 automated (emulator) |
+| AP/AQ/AZ/BA/BB | #54 | createFirmUser lockdown + scope | T3 | 🤖 automated (emulator) |
 | AS | #55 | paralegal billing/settings | T3 | ⬜ |
 | R5-033 | #116 | vault-save version race | T4 | 🤖 automated (emulator) |
 | R5-052 | #117 | createFirmUser idempotency | T4 | 🤖 automated (emulator) |
@@ -685,10 +688,11 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (80 cases):** 🤖 27 locked · ⬜ 4 to-automate (T1) · ⬜ 33 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
+**Tally (80 cases):** 🤖 30 locked · ⬜ 4 to-automate (T1) · ⬜ 30 manual (T2/T3) · 8 T4 (race/pipeline) · 4 prod-smoke · 2 blocked.
 
 ---
 
 ## Changelog
 
+- **2026-07-09** — T3 multi-tenant batch: R5-066, R5-010, and AP/AQ/AZ/BA/BB automated via the emulator harness (`tests/emulator/`, 22 new tests, emulator suite 25/25). Sole T3 remainder is `AS` (rules-layer check — needs `@firebase/rules-unit-testing`). Tally 27→30 🤖.
 - **2026-07-07** — Populated all 80 cases from the commit log + `HOMEWORK.md` + `docs/AUDIT-findings.md` via 5 extraction subagents; each grounded in the actual diff and checked against `tests/unit/`. 7 fixes have real passing tests today; the rest are the build/run list. Approach: hybrid automation-first, emulator-first + prod smoke.
