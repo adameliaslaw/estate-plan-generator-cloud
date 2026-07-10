@@ -629,7 +629,6 @@ export default function PrintableQuestionnaire({
                     <CheckOption label="Provide all possible measures" checked={hp?.lifeSupport ? hp.lifeSupport === 'provide' : undefined} />
                     <CheckOption label="Withhold if terminally ill or permanently unconscious" checked={hp?.lifeSupport ? hp.lifeSupport === 'withhold' : undefined} />
                     <CheckOption label="Trial period, then withdraw if no improvement" />
-                    <CheckOption label="My healthcare representative decides" checked={hp?.lifeSupport ? hp.lifeSupport === 'undecided' : undefined} />
                   </div>
                 </div>
                 <div>
@@ -637,7 +636,6 @@ export default function PrintableQuestionnaire({
                   <div className="space-y-0.5">
                     <CheckOption label="Continue in all circumstances" checked={hp?.artificialNutrition ? hp.artificialNutrition === 'provide' : undefined} />
                     <CheckOption label="Withhold if terminally ill or permanently unconscious" checked={hp?.artificialNutrition ? hp.artificialNutrition === 'withhold' : undefined} />
-                    <CheckOption label="My healthcare representative decides" checked={hp?.artificialNutrition ? hp.artificialNutrition === 'undecided' : undefined} />
                   </div>
                 </div>
                 <div>
@@ -645,16 +643,13 @@ export default function PrintableQuestionnaire({
                   <div className="space-y-0.5">
                     <CheckOption label="Maximum relief, even if it may hasten death" checked={hp?.painManagement ? hp.painManagement === 'comfort_care' : undefined} />
                     <CheckOption label="Relief that does not risk hastening death" checked={hp?.painManagement ? hp.painManagement === 'all_measures' : undefined} />
-                    <CheckOption label="My healthcare representative decides" checked={hp?.painManagement ? hp.painManagement === 'undecided' : undefined} />
                   </div>
                 </div>
                 <div>
                   <SubHeader title="Organ Donation" />
                   <div className="space-y-0.5">
-                    <CheckOption label="Yes — all organs and tissues" checked={hp ? (hp.organDonation && !hp.organDonationDetails) : undefined} />
-                    <CheckOption label="Yes — specific organs only" checked={hp ? (hp.organDonation && !!hp.organDonationDetails) : undefined} />
+                    <CheckOption label="Yes" checked={hp ? !!hp.organDonation : undefined} />
                     <CheckOption label="No" checked={hp ? !hp.organDonation : undefined} />
-                    <CheckOption label="Already registered" />
                   </div>
                 </div>
               </div>
@@ -666,14 +661,6 @@ export default function PrintableQuestionnaire({
                     <CheckOption label="Burial" />
                     <CheckOption label="Cremation" />
                     <CheckOption label="No preference" />
-                  </div>
-                </div>
-                <div>
-                  <SubHeader title="Pregnancy Provision (if applicable)" />
-                  <div className="space-y-0.5">
-                    <CheckOption label="Follow directive even if pregnant" />
-                    <CheckOption label="Do not follow if pregnant" />
-                    <CheckOption label="My representative decides" />
                   </div>
                 </div>
               </div>
