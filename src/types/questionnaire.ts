@@ -2909,10 +2909,6 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
             value: 'provide',
             description: 'Use all measures to extend life.',
           },
-          {
-            label: 'Undecided — let my representative decide',
-            value: 'undecided',
-          },
         ],
       },
       {
@@ -2929,10 +2925,6 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
           {
             label: 'Full code — attempt resuscitation',
             value: 'full_code',
-          },
-          {
-            label: 'Undecided — let my representative decide',
-            value: 'undecided',
           },
         ],
       },
@@ -2951,10 +2943,6 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
             label: 'All measures to extend life',
             value: 'all_measures',
           },
-          {
-            label: 'Undecided',
-            value: 'undecided',
-          },
         ],
       },
     ],
@@ -2971,18 +2959,6 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         label: 'Would you like to be an organ donor?',
         type: 'yesno',
         width: 'full',
-      },
-      {
-        name: 'healthcarePreferences.organDonationDetails',
-        label: 'Specific organs or tissues (optional)',
-        type: 'text',
-        placeholder: 'e.g. All organs, Corneas only',
-        width: 'full',
-        condition: {
-          field: 'healthcarePreferences.organDonation',
-          operator: 'equals',
-          value: true,
-        },
       },
       {
         name: 'healthcarePreferences.anatomicalGift',
