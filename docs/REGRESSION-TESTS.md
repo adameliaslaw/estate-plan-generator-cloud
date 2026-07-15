@@ -122,6 +122,13 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** a `<script>` clientName landed raw in `bodyHtml`.
 - **Test:** `tests/unit/email-escape-html.test.ts` (processCustomTemplate block)
 
+#### `T` · #160 · ai-client — OpenAI SDK 5-minute socket timeout on long generations · 🤖 automated
+- **File:** `functions/src/ai-client.ts`
+- **What broke:** the OpenAI provider path uses the openai SDK, which bypasses `fetchWithRetry`/`LONG_REQUEST_AGENT`. The SDK's Node runtime (node-fetch + agentkeepalive) ships a default agent with a **5-minute socket-inactivity timeout**; a non-streaming chat completion sends no bytes until the whole response is ready, so any OpenAI generation slower than 5 minutes had its socket destroyed — and every SDK retry died the same way. Fix: `_callOpenAI` passes an explicit `httpAgent` (keepAlive, 10-minute socket timeout), matching the raw-fetch providers' budget.
+- **Step:** `npm run test -- ai-client-openai-timeout`
+- **Expected (pre-fix failure):** verified — the test FAILS against the pre-fix code (`httpAgent` undefined; negative control run at authoring time).
+- **Test:** `tests/unit/ai-client-openai-timeout.test.ts` (1 test) — drives the real `callAI` OpenAI dispatch with a mocked openai module and asserts the constructor receives an agent with `keepAlive` and a ≥10-minute socket timeout.
+
 #### `AF` · #47 · canonical client-data block not re-truncated at 5k · 🤖 automated
 - **File:** `functions/src/ai-client.ts`
 - **What broke:** `sanitizeObject` re-truncated the pre-serialized `_serializedClientData` at the 5,000-char cap, silently dropping legal input from every AI document. Cap lifted to 100k for those fields.
@@ -772,12 +779,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (88 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 38 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 6 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent), BL + BM-linkClient (verified-email claim gate + stub throttle), BK (Maps-key firm gate) — cases documented in T4/T1/T3 above.
+**Tally (88 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 38 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 7 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent), BL + BM-linkClient (verified-email claim gate + stub throttle), BK (Maps-key firm gate), T (OpenAI SDK socket timeout) — cases documented in T4/T1/T3 above.
 
 ---
 
 ## Changelog
 
+- **2026-07-15 (T)** — OpenAI SDK path no longer dies at 5 minutes (#160): `_callOpenAI` passes an explicit 10-minute-socket-timeout `httpAgent` (the SDK's default agentkeepalive agent killed any non-streaming generation slower than 5 min; retries died identically). Mechanism verified against the installed openai 4.104 Node runtime. New T1 case + test, negative-control-verified. Also corrected three stale ledger rows (CR/CS/CW — fixes already live in main). Residual flagged: `process-ocr.ts`/`transcribe-audio.ts` still use bare OpenAI clients (same latent cap, unobserved).
 - **2026-07-15 (BL/BK/BM)** — round-2 security leftovers drained (#159): `linkClient` now requires a VERIFIED email to claim an existing client record (unverified password sign-up with a victim's email → `failed-precondition` instead of a silent estate-profile takeover), verifies the firm exists before minting claims, rate-limits prospect stubs via `registerClientFromLink`'s shared per-firm throttle, and rethrows deliberate HttpsError codes instead of flattening to `internal`; `getFirmBranding` only hands out `googleMapsApiKey` to callers who belong to the firm (matching `firmId` claim, or a linked client record for claimless anonymous questionnaire sessions). 9 new emulator tests across 2 files, all negative-control-verified. BM remainder (App Check, willsDriveWebhook token model) stays open.
 - **2026-07-09 (R6-003–006)** — the four Round-6 ⚪s fixed in one batch (#154): template enhance recomputes `isLogicTemplate` (AI-injected block helpers no longer corrupted on save); template preview gained a "— No client —" clear row; Copy Invite Link copies via `ClipboardItem`-promise inside the click's activation (Firefox/Safari) with an honest manual-copy fallback; the invite-link page no longer hijacks a signed-in session (`authStateReady()` + guidance instead of silent `signInAnonymously`). Four new T2 cases.
 - **2026-07-09 (R6-002)** — KB bulk import all-partial batches no longer save invisibly (#153): `partial > 0` now warns + refreshes the list via a new `onRefresh` prop while keeping the dialog open (per-file OCR warnings stay readable); mixed/pure-success paths unchanged. New T2 case R6-002. Found by audit Round 6.

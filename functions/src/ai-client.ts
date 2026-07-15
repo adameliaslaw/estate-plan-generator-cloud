@@ -11,6 +11,7 @@
 
 import OpenAI from 'openai';
 import { Agent } from 'undici';
+import { Agent as HttpsAgent } from 'node:https';
 
 // Custom dispatcher with extended timeouts for long-running AI calls.
 // Node's default fetch (undici) has a 300s headersTimeout, which kills large
@@ -20,6 +21,18 @@ import { Agent } from 'undici';
 const LONG_REQUEST_AGENT = new Agent({
   headersTimeout: 10 * 60 * 1000,
   bodyTimeout: 10 * 60 * 1000,
+});
+
+// The OpenAI SDK doesn't go through fetchWithRetry/LONG_REQUEST_AGENT — its
+// Node runtime uses node-fetch with a default agent whose SOCKET-inactivity
+// timeout is 5 minutes (finding T). A non-streaming chat completion sends no
+// bytes until the whole response is ready, so any OpenAI generation slower
+// than 5 minutes had its socket destroyed (and every SDK retry died the same
+// way). Give the SDK an agent with the same 10-minute budget as the raw-fetch
+// providers.
+const OPENAI_HTTP_AGENT = new HttpsAgent({
+  keepAlive: true,
+  timeout: 10 * 60 * 1000,
 });
 
 // ---------------------------------------------------------------------------
@@ -269,7 +282,7 @@ async function _callOpenAI(
     throw new Error('OpenAI API key is missing. Configure it in Firm Settings.');
   }
 
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, httpAgent: OPENAI_HTTP_AGENT });
   const model = options.model ?? 'gpt-5.4'; // Default OpenAI model — validated upstream in callAI
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 128000;  // GPT-5.4 supports up to 128K output
