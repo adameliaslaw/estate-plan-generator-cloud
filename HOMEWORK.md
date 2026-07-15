@@ -4,6 +4,16 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 📍 SESSION — 2026-07-15 (BL/BK/BM security batch + finding T shipped · #64 VALIDATED — 8.9-min functions deploy)
+
+**TL;DR — Backlog session while the card test waits. (1) Security: PR #159 drained the round-2 leftovers — `linkClient` now requires a VERIFIED email to claim an existing client record (unverified password-signup takeover closed — same class as R5-010), checks the firm exists before minting claims, and rate-limits prospect stubs via the shared per-firm throttle; deliberate HttpsError codes rethrown (were flattened to `internal`); `getFirmBranding` only returns `googleMapsApiKey` to firm members (claim match, or linked client record for claimless anon questionnaire sessions). 9 new emulator tests (incl. the harness's first v1-callable mock), all negative-control-verified; suite 54/54. (2) **#64 validation COMPLETE:** #159 was the first `functions/src` merge since #155 — the deploy went green in 8.9 min (14:26→14:35Z), selective (only changed functions), far under the 20–40 min guess. The simplified CI path is proven end-to-end; #64 stays closed. (3) Finding T (PR #160): the OpenAI SDK path had a 5-MIN SOCKET timeout (openai 4.104 node runtime = node-fetch + agentkeepalive default agent; finding's undici-headersTimeout hypothesis was wrong, same 300s kill) — any >5-min OpenAI generation was impossible, retries died identically. `_callOpenAI` now passes a 10-min keepAlive `httpAgent`; dispatch untouched. Unit test + negative control. (4) Stale-ledger sweep: CR/CS/CW (truth-in-status trio) and DK/DP/DQ/DR/DM/H/V were ALREADY FIXED in main — rows corrected; the carry-forward list below is now accurate. Green: functions+root tsc, build, full lint 0 errors, unit 732/732, emulator 54/54.**
+
+**Flagged residuals:** `process-ocr.ts`/`transcribe-audio.ts` still construct bare OpenAI clients (same latent 5-min cap — unobserved, fix if long Whisper jobs ever time out). BM remainder: App Check on `registerClientFromLink` (needs reCAPTCHA provisioning — Adam) + `willsDriveWebhook` channel-token model. DZ remainder: server-side `sum()` aggregation needs composite indexes (Never-Break, needs sign-off).
+
+**▶ NEXT (needs Adam live): the card test** (see the 🔴 section below — PR #156 has been deployed since 7/09). Then: T2 browser pass (38 cases), or `willsDriveWebhook` token model, or App Check provisioning. Also: stale PR #21 (May 31 CLAUDE.md docs, fully superseded) — recommend closing unmerged.
+
+---
+
 ## 📍 SESSION — 2026-07-09 PM #9 (JDK 21 installed · #64 root-cause fix shipped · AffiniPay selector fix shipped, AWAITING ADAM'S LIVE CARD TEST)
 
 **TL;DR — Three items in one session. (1) JDK: Temurin 21.0.11 permanently installed via winget (machine PATH) — `npm run test:emulator` ran 45/45 locally; the portable-JRE-per-session dance is retired. (2) CI #64: read the firebase-tools 15.x hash source directly — the deploy hash is ONE sha1 over file CONTENT per codebase (mtimes never hashed; the old mtime plan was dead on arrival). Adam signed off the simplify path: PR #155 dropped the 16-batch serial convergence → rules → one full deploy → straggler pass → fail-loud gate (net −26 lines, timeout 330→120). First validating run: green in 4.2 min (workflow-only change → hash matched → all 80 skipped, proving CI-built source is hash-stable). #64 stays open until the next `functions/src` merge exercises the mass-update path (expect ~20–40 min green). (3) AffiniPay: root cause found in the official docs — `initializeFields` requires CSS selectors (`'#af-card-number'`) and we passed bare ids; iframe mounts but input never registers. PR #156 fixes all 4 selectors + gates Review on real `getState()` field errors + drops the dead `initAttempted` ref. Hypothesis-2 (wipe/re-init churn) deliberately NOT touched — one variable per live test. Green: tsc, build, full lint 0 errors, 731/731.**
@@ -160,9 +170,11 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 🚩 CI functions-deploy root-cause fix (issue #64) — FIX SHIPPED 2026-07-09 (PR #155), awaiting mass-update validation
+## ✅ CI functions-deploy root-cause fix (issue #64) — RESOLVED & VALIDATED 2026-07-15
 
-**➡️ UPDATE 2026-07-09 PM #9: the plan below is SUPERSEDED. The mtime hypothesis was disproven by reading firebase-tools 15.x source (hash = one sha1 of file CONTENT per codebase; mtimes never hashed — the fan-out to all ~80 is intrinsic to a single codebase). Shipped instead: dropped the 16-batch serial convergence → one full deploy + straggler pass + fail-loud gate (Adam signed off; net −26 lines; timeout 330→120). First run green in 4.2 min (workflow-only change → all skipped → CI-built source is hash-stable). CLOSE #64 after the next `functions/src` merge deploys green (~20–40 min expected). Guardrails below still apply — especially "never cancel a functions-deploy mid-run."**
+**➡️ FINAL UPDATE 2026-07-15: VALIDATION COMPLETE — section retained one cycle for the record, then delete. PR #159 was the first real `functions/src` merge since #155: the deploy ran green in 8.9 minutes (selective — only the changed functions redeployed), meeting the definition of done ("a functions merge deploys only its changed functions, finishes green in ~10 min"). #64 closed (Adam, 7/09) + validated. The guardrails below remain the standing rules — especially "never cancel a functions-deploy mid-run."**
+
+**➡️ UPDATE 2026-07-09 PM #9: the plan below is SUPERSEDED. The mtime hypothesis was disproven by reading firebase-tools 15.x source (hash = one sha1 of file CONTENT per codebase; mtimes never hashed — the fan-out to all ~80 is intrinsic to a single codebase). Shipped instead: dropped the 16-batch serial convergence → one full deploy + straggler pass + fail-loud gate (Adam signed off; net −26 lines; timeout 330→120). First run green in 4.2 min (workflow-only change → all skipped → CI-built source is hash-stable). Guardrails below still apply — especially "never cancel a functions-deploy mid-run."**
 
 **TL;DR — Last session (2026-07-02) shipped BV (OAuth needs-reauth, #82, live) and four CI-workflow patches (#81–#84) that tried to make the functions-deploy *survive* a symptom. Prod is healthy the whole time; the only open thing is CI-green + a 2.5h deploy that should be 10 min. STOP patching the symptom. Fix the disease.**
 
@@ -193,11 +205,11 @@ Items requiring human action or decisions before the next agent session can proc
 
 1. **✅ Smoke test — DONE/VERIFIED 2026-06-29.** "Test Connection" now returns **"API key is valid."** This conclusively closes **AR** and validates the full live path (migrated key → `loadFirmSecrets` merge → `testSendGridConnection`). The earlier *"not configured"* failure was NOT a data problem — the migration was fine; the live function + every email sender were frozen on **2026-06-25 pre-AR code** by the silent 409 deploy storm (see MAJOR FINDING below). Fixed by force-redeploying all stale functions from current `main` in small batches.
 
-2. **Remaining audit items (no open criticals; ledger `docs/AUDIT-findings.md`):**
+2. **Remaining audit items (no open criticals; ledger `docs/AUDIT-findings.md`; carry-forward list rechecked against code 2026-07-15):**
    - **T9 — mostly done (#62).** Zod length caps shipped on all 6 callables; HTML-escaping shipped on all email senders. **Deferred half:** "server-resolve email recipients" (ignore caller-supplied `to:` address, look it up from clientId server-side) — Adam chose to skip it: callable-contract + frontend change for marginal gain post-T6 staff-gating. Revisit only if that residual matters.
-   - **App Check** — `registerClientFromLink` is public; add App Check / rate-limit (BM).
-   - **Truth-in-status remainder** — CR/CU + the open halves of CS/CW.
-   - **Medium cleanups** — DK/DP/DQ/DR (bulk-import), DM, DZ, H/T/V/AO (backend leftovers).
+   - **App Check** — `registerClientFromLink` is public; rate-limit shipped, App Check still unset (needs reCAPTCHA provisioning by Adam). Plus `willsDriveWebhook` channel-token model (BM remainder).
+   - **DZ remainder** — payments `sum()` aggregation needs composite indexes (Never-Break, needs sign-off).
+   - ~~Truth-in-status remainder CR/CU/CS/CW~~ and ~~medium cleanups DK/DP/DQ/DR/DM/H/V/AO~~ — **all verified fixed/wontfix in current main 2026-07-15** (stale ledger rows corrected). **T fixed (#160).** BL/BK fixed (#159).
    - Never-Break gate (explicit sign-off) applies to: `firestore.rules`, `storage.rules`, `firestore.indexes.json`, `functions/src/templates/*.hbs`, `src/types/index.ts`, CI workflows.
 
 3. **Standing watch-item (passive):** OAuth durability alert — silence = healthy (see AUTOMATIC ALERTS section below).
