@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
+import { enforceRegistrationRateLimit } from './register-client';
 
 /**
  * linkClient
@@ -9,6 +10,16 @@ import * as logger from 'firebase-functions/logger';
  * This function looks up the client's email in the specified firm's clients collection.
  * If a match is found and the client is not already linked, it updates the
  * client document with `linkedUserId` and sets custom claims on the user.
+ *
+ * BL: claiming an EXISTING record by email match requires the auth token's
+ * `email_verified` — a password sign-up with someone else's email must not be
+ * able to take over their estate profile. Google / email-link sign-ins are
+ * verified, and attorney invite links (registerClientFromLink token path)
+ * bypass email matching entirely, so legitimate clients keep working.
+ *
+ * BM: prospect auto-creation checks the firm exists and draws from the same
+ * per-firm rate limit as registerClientFromLink, so an authenticated script
+ * can't flood a firm with stubs or mint claims for arbitrary firm ids.
  */
 export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
     // Ensure the user is authenticated
@@ -43,6 +54,14 @@ export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
 
     try {
         const db = admin.firestore();
+
+        // Verify the firm exists — otherwise this would mint custom claims for
+        // an arbitrary firmId and create orphan client records (BM).
+        const firmSnap = await db.doc(`firms/${firmId}`).get();
+        if (!firmSnap.exists) {
+            throw new HttpsError('not-found', 'Firm not found.');
+        }
+
         // In our architecture, collections are nested under the firm document, e.g., firms/{firmId}/clients
         // Instead of using COLLECTIONS from src/ (which might use client-side paths), we construct it for admin:
         const clientsRef = db.collection(`firms/${firmId}/clients`);
@@ -62,6 +81,10 @@ export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
 
         if (emailQuery.empty) {
             logger.info(`[linkClient] No unlinked client found for email ${email}. Auto-creating new prospect record.`);
+
+            // Bound per-firm flooding before writing a new record (BM) —
+            // shares registerClientFromLink's counter.
+            await enforceRegistrationRateLimit(db, firmId);
 
             // Auto-create a new client record with the "prospect" status
             const newClientData = {
@@ -88,6 +111,16 @@ export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
             clientDoc = await docRef.get();
             isNewClient = true;
         } else {
+            // BL: an email match only proves identity when the token email is
+            // verified. Password sign-ups start unverified, so without this
+            // gate anyone could claim a pre-created client's estate profile by
+            // signing up with their email.
+            if (request.auth.token.email_verified !== true) {
+                throw new HttpsError(
+                    'failed-precondition',
+                    'A client record already exists for this email address. Please open the invitation link your attorney sent you, or sign in with Google to verify you own this email.',
+                );
+            }
             clientDoc = emailQuery.docs[0];
         }
         const clientData = clientDoc.data() || {};
@@ -119,6 +152,11 @@ export const linkClient = onCall({ region: 'us-east1' }, async (request) => {
 
         return { success: true, clientId, isNewClient };
     } catch (err) {
+        // Preserve deliberate error codes (permission-denied, failed-precondition,
+        // not-found, resource-exhausted) instead of flattening them to `internal`.
+        if (err instanceof HttpsError) {
+            throw err;
+        }
         logger.error(`[linkClient] Error linking client for uid ${uid}:`, err);
         throw new HttpsError('internal', 'An error occurred while linking the client account.');
     }

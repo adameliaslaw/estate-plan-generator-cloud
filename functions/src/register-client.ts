@@ -43,8 +43,11 @@ const REGISTRATION_CAP = 50; // new stubs per firm per window
  * client can read or tamper with it and no firestore.rules change is needed.
  * `loadFirmSecrets()` reads only `secrets/apiKeys`, so this sibling doc does not
  * interfere. Throws `resource-exhausted` once the window cap is reached.
+ *
+ * Shared with `linkClient` (audit finding BM) — both endpoints mint prospect
+ * stubs for lightly-authenticated callers, so they draw from one per-firm cap.
  */
-async function enforceRegistrationRateLimit(
+export async function enforceRegistrationRateLimit(
   db: admin.firestore.Firestore,
   firmId: string,
 ): Promise<void> {

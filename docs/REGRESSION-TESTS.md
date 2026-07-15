@@ -588,6 +588,20 @@ Short, deliberate, post-deploy — never bulk regression:
 - **Expected (pre-fix failure):** verified — all 4 tests FAIL against the pre-fix `ai-memory.ts` (negative control run at authoring time).
 - **Test:** `tests/emulator/conversation-append.test.ts` (4 tests) — 21 appended turns keep all 42 messages (turn 1 still first, not dropped); every stored message gets a unique id; re-saving a turn with the same ids does not double-append; a legacy id-less stored history is preserved when a new turn appends.
 
+#### `BL` + `BM (linkClient half)` · #159 · linkClient — verified email required to claim; firm check + throttle on stub creation · 🤖 automated (emulator)
+- **File:** `functions/src/link-client.ts`, `functions/src/register-client.ts`
+- **What broke:** (BL) `linkClient` claimed an existing client record on a bare `auth.token.email` match with no `email_verified` check — a password sign-up with a victim's email took over their estate profile and minted client claims for it (same takeover class R5-010 closed in `registerClientFromLink`). (BM) prospect auto-creation had no firm-existence check (custom claims minted for arbitrary firm ids + orphan records) and no rate limit. Also: the catch-all flattened deliberate HttpsError codes (`permission-denied` etc.) to `internal`. Fix: unverified email + existing match → `failed-precondition` (verified Google/email-link sign-ins and attorney invite links unaffected); firm must exist; stub creation draws from `registerClientFromLink`'s shared per-firm throttle; HttpsErrors rethrown.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — all 5 tests FAIL against the pre-fix code (negative control run at authoring time).
+- **Test:** `tests/emulator/link-client-verified-email.test.ts` (5 tests) — unverified match → `failed-precondition`, victim record untouched; verified match claims + links + sets `{role, firmId, clientId}` claims; already-linked-to-another → `permission-denied` (not `internal`); unknown firm → `not-found` with no orphan record; fresh prospect creation works and a maxed shared throttle counter → `resource-exhausted`.
+
+#### `BK` · #159 · getFirmBranding — Maps key only for firm members · 🤖 automated (emulator)
+- **File:** `functions/src/branding.ts`
+- **What broke:** `getFirmBranding` returned `settings.googleMapsApiKey` to ANY authenticated caller for ANY `firmId` — a throwaway anonymous session could enumerate firm ids and harvest every firm's key (only mitigation: HTTP-referrer restriction). Fix: the key requires a matching `firmId` custom claim, or — for anonymous questionnaire sessions, which carry no claims — a client record in that firm with `linkedUserId == uid`. Logo/name stay public for the login page.
+- **Steps:** `npm run test:emulator` (needs Java 21+)
+- **Expected (pre-fix failure):** verified — the unrelated-caller test FAILS against the pre-fix code (negative control run at authoring time).
+- **Test:** `tests/emulator/branding-maps-key-gate.test.ts` (4 tests) — unauthenticated gets logo/name but a null key; matching `firmId` claim gets the key; an authenticated caller from another firm (and a claimless unlinked session) gets a null key but still logo/name; a linked anonymous session gets the key.
+
 ---
 
 ## T4 — Race / async / pipeline (code-review sign-off or integration test)
@@ -758,12 +772,13 @@ Short, deliberate, post-deploy — never bulk regression:
 | BN | #53 | LawPay reconciliation | Blocked | 🚫 |
 | card-charge | #89 | AffiniPay hosted fields | Blocked | 🚫 |
 
-**Tally (88 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 38 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 3 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent) — cases documented in T4/T1 above.
+**Tally (88 table rows, recounted from the table 2026-07-09):** 🤖 **43 locked** (31 T1 · 5 T3 · 7 T4) · ⬜ 38 manual (T2) · ⬜ 4 prod-smoke · 🚫 1 T4 (R5-050, prod smoke) · 🚫 2 blocked. The T1 build list is fully drained. **Plus 6 deferred audit findings now automated** (not in the 80-fix table): R5-047 (conversation append), R5-048/049 (chat generation intent), BL + BM-linkClient (verified-email claim gate + stub throttle), BK (Maps-key firm gate) — cases documented in T4/T1/T3 above.
 
 ---
 
 ## Changelog
 
+- **2026-07-15 (BL/BK/BM)** — round-2 security leftovers drained (#159): `linkClient` now requires a VERIFIED email to claim an existing client record (unverified password sign-up with a victim's email → `failed-precondition` instead of a silent estate-profile takeover), verifies the firm exists before minting claims, rate-limits prospect stubs via `registerClientFromLink`'s shared per-firm throttle, and rethrows deliberate HttpsError codes instead of flattening to `internal`; `getFirmBranding` only hands out `googleMapsApiKey` to callers who belong to the firm (matching `firmId` claim, or a linked client record for claimless anonymous questionnaire sessions). 9 new emulator tests across 2 files, all negative-control-verified. BM remainder (App Check, willsDriveWebhook token model) stays open.
 - **2026-07-09 (R6-003–006)** — the four Round-6 ⚪s fixed in one batch (#154): template enhance recomputes `isLogicTemplate` (AI-injected block helpers no longer corrupted on save); template preview gained a "— No client —" clear row; Copy Invite Link copies via `ClipboardItem`-promise inside the click's activation (Firefox/Safari) with an honest manual-copy fallback; the invite-link page no longer hijacks a signed-in session (`authStateReady()` + guidance instead of silent `signInAnonymously`). Four new T2 cases.
 - **2026-07-09 (R6-002)** — KB bulk import all-partial batches no longer save invisibly (#153): `partial > 0` now warns + refreshes the list via a new `onRefresh` prop while keeping the dialog open (per-file OCR warnings stay readable); mixed/pure-success paths unchanged. New T2 case R6-002. Found by audit Round 6.
 - **2026-07-09 (R6-001)** — editor stuck force-reload after successful regenerate fixed (#152): `regenBaseVersionRef` watermark (session-high `currentVersion` at regen start) lets the load effect clear `forceReloadRef` on consuming the version-bumped regenerated snapshot even mid-regen, so the flag can no longer stay stuck and force-reload the editor on the next autosave (reverting round-trip keystrokes). New T2 case R6-001. Found by audit Round 6.
