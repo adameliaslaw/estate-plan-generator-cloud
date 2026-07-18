@@ -6,6 +6,12 @@
  * Fetches a document from Firestore, renders its HTML content through
  * Puppeteer, and uploads the resulting PDF to Cloud Storage.
  * Returns a signed download URL valid for 1 hour.
+ *
+ * Security (audit #167): stored document HTML is client-influenced markup, so
+ * before rendering it is stripped of active content (sanitizeDocumentHtml)
+ * and the headless page is denied all network access (blockExternalRequests).
+ * Both helpers are shared by every Puppeteer render site (export-batch,
+ * google-drive-sync, esign-service).
  */
 
 import * as functions from 'firebase-functions/v1';
@@ -21,6 +27,75 @@ export function sanitizeFileName(name: string): string {
     .replace(/\s+/g, '_')
     .substring(0, 100)
     .replace(/^_+|_+$/g, '');
+}
+
+// ── Helper: strip active content from stored document HTML (#167) ────────────
+
+/**
+ * Sanitize stored document HTML before rendering it in headless Chromium.
+ * Document content is client-influenced markup (typed/pasted into the editor,
+ * or AI-generated from questionnaire answers); rendered raw, a <script> or
+ * <iframe> tag or an `on*` handler would execute inside the Cloud Function
+ * with full network access.
+ *
+ * This is a render-path sanitizer — the stored document is NOT modified.
+ * Ordinary legal-document markup (headings, lists, tables, signature blocks,
+ * .tr-* classes, inline styles) is preserved; tags that can execute code or
+ * embed external/active content are removed, inline event handlers are
+ * stripped, and javascript:/vbscript: URLs are neutralized. Network access is
+ * separately blocked at the page level via blockExternalRequests(), so even a
+ * bypass of this regex layer cannot reach the network.
+ */
+export function sanitizeDocumentHtml(html: string): string {
+  return (
+    html
+      // Paired tags whose content is executable or pulls in external content.
+      .replace(
+        /<(script|iframe|object|embed|applet|frame|frameset|form|link|meta|base|svg|math|audio|video|source|track)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
+        '',
+      )
+      // Self-closing / unclosed variants of the same tags.
+      .replace(
+        /<\/?(script|iframe|object|embed|applet|frame|frameset|form|link|meta|base|svg|math|audio|video|source|track)\b[^>]*>/gi,
+        '',
+      )
+      // Inline event handlers (onclick=, onerror=, onload=, …).
+      .replace(/\s+on[a-zA-Z]+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\s+on[a-zA-Z]+\s*=\s*'[^']*'/gi, '')
+      .replace(/\s+on[a-zA-Z]+\s*=\s*[^\s>]+/gi, '')
+      // javascript:/vbscript: URLs in href/src attributes.
+      .replace(
+        /(\s(?:href|src)\s*=\s*)(["']?)\s*(?:javascript|vbscript)\s*:[^"'>\s]*\2/gi,
+        '$1$2#$2',
+      )
+  );
+}
+
+// ── Helper: block all network access during PDF render (#167) ────────────────
+
+type PuppeteerBrowser = Awaited<ReturnType<typeof puppeteer.launch>>;
+type PuppeteerPage = Awaited<ReturnType<PuppeteerBrowser['newPage']>>;
+
+/**
+ * Block every network request issued while Chromium renders a document.
+ * The HTML passed to page.setContent() is fully self-contained (inline CSS,
+ * no external assets), so any outgoing request is by definition injected
+ * markup attempting a server-side fetch (SSRF) or data exfiltration.
+ * data:/blob: URLs (inline assets) are allowed; everything else is aborted.
+ */
+export async function blockExternalRequests(page: PuppeteerPage): Promise<void> {
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    const url = request.url();
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      void request.continue();
+    } else {
+      console.warn(
+        `[export-pdf] Blocked external request during PDF render: ${url.slice(0, 120)}`,
+      );
+      void request.abort();
+    }
+  });
 }
 
 // ── Helper: build a full, self-contained HTML document ───────────────────────
@@ -253,7 +328,7 @@ export function buildLegalDocumentHtml(
 <body>
   <div class="document-body">
     <div class="draft-banner">DRAFT — NOT YET EXECUTED — DO NOT RELY ON THIS DOCUMENT</div>
-    ${content}
+    ${sanitizeDocumentHtml(content)}
   </div>
 </body>
 </html>`;
@@ -327,7 +402,7 @@ export const exportDocumentPdf = functions
     const displayName: string = docData.displayName ?? 'Document';
     const status: string = docData.status ?? 'draft';
 
-    // ── 4. Build the full HTML page ──────────────────────────────────────────
+    // ── 4. Build the full HTML page (content is sanitized inside, #167) ─────
     const html = buildLegalDocumentHtml(displayName, htmlContent, status);
 
     // ── 5. Render PDF with Puppeteer ─────────────────────────────────────────
@@ -341,6 +416,9 @@ export const exportDocumentPdf = functions
       });
 
       const page = await browser.newPage();
+      // #167: the rendered HTML is client-influenced — deny all network access
+      // before setContent so injected markup cannot trigger server-side fetches.
+      await blockExternalRequests(page);
       await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
 
       const isDraft = status !== 'final'; // running-header DRAFT marker for any unexecuted doc (R5-039)
