@@ -6,8 +6,9 @@
  * Two Cloud Functions:
  *
  * 1. connectGoogleDrive (onCall)
- *    Exchanges an OAuth authorization code for tokens, then stores them
- *    at firms/{firmId}.googleDrive.  Requests the `drive.file` scope so
+ *    Exchanges an OAuth authorization code for tokens, then stores them in
+ *    the Functions-only secrets doc (audit #163) with status flags at
+ *    firms/{firmId}.googleDrive.  Requests the `drive.file` scope so
  *    the app can only access files it creates.
  *
  * 2. onDocumentWrittenSyncToDrive (Firestore onWrite trigger)
@@ -15,13 +16,21 @@
  *    Generates a PDF via Puppeteer and uploads/updates it in the firm's
  *    Google Drive under "Everybody (S) / Wills and Trusts / [Client Name]".
  *
+ * 3. disconnectGoogleDrive (onCall)
+ *    Revokes the grant with Google and deletes the tokens (audit #163).
+ *
  * Firestore paths:
- *   Firm Drive tokens:  firms/{firmId}.googleDrive
+ *   Firm Drive status flags (client-readable, non-secret):
+ *     firms/{firmId}.googleDrive
  *     ├─ connected        (boolean)
- *     ├─ accessToken       (string)
- *     ├─ refreshToken      (string)
- *     ├─ tokenExpiry       (epoch ms)
- *     └─ rootFolderId?     (string — cached Drive folder ID)
+ *     ├─ needsReauth?     (boolean — set on invalid_grant)
+ *     └─ rootFolderId?    (string — cached Drive folder ID)
+ *
+ *   Firm Drive OAuth tokens (Functions-only, audit #163):
+ *     firms/{firmId}/secrets/googleOAuth.drive
+ *     ├─ accessToken      (string)
+ *     ├─ refreshToken     (string)
+ *     └─ tokenExpiry      (epoch ms)
  *
  *   Document sync fields (set after upload):
  *     ├─ googleDriveFileId    (string)
@@ -34,8 +43,13 @@ import * as admin from 'firebase-admin';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { buildLegalDocumentHtml, sanitizeFileName } from './export-pdf';
+import { buildLegalDocumentHtml, sanitizeFileName, blockExternalRequests } from './export-pdf';
 import { assertStaff } from './auth-guards';
+import {
+  deleteGoogleOAuthTokens,
+  loadGoogleOAuthTokens,
+  saveGoogleOAuthTokens,
+} from './firm-secrets';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +71,10 @@ interface GoogleDriveTokens {
 // ---------------------------------------------------------------------------
 
 /**
- * Read the Google Drive OAuth tokens stored on a firm document.
+ * Read the Google Drive OAuth tokens for a firm. Status flags stay on the
+ * firm doc; the tokens themselves live in the Functions-only secrets doc
+ * (audit #163), with a legacy firm-doc fallback until the next refresh
+ * migrates them.
  */
 async function getDriveTokens(
   db: admin.firestore.Firestore,
@@ -68,17 +85,21 @@ async function getDriveTokens(
     throw new functions.https.HttpsError('not-found', `Firm ${firmId} not found.`);
   }
 
-  const data = firmSnap.data()!;
-  const tokens = data.googleDrive as GoogleDriveTokens | undefined;
+  const flags = (firmSnap.data()!.googleDrive ?? {}) as Partial<GoogleDriveTokens>;
+  const tokens = await loadGoogleOAuthTokens(firmId, 'drive');
+  const merged = {
+    ...flags,
+    ...(tokens ?? {}),
+  } as GoogleDriveTokens;
 
-  if (!tokens?.accessToken || !tokens?.refreshToken) {
+  if (!merged.accessToken || !merged.refreshToken) {
     throw new functions.https.HttpsError(
       'failed-precondition',
       'Google Drive not connected. Configure OAuth in Settings → Integrations.',
     );
   }
 
-  return tokens;
+  return merged;
 }
 
 /**
@@ -144,10 +165,17 @@ async function refreshDriveTokenIfNeeded(
   const { access_token, expires_in } = (await response.json()) as Record<string, unknown>;
   const newExpiry = Date.now() + (expires_in as number) * 1000;
 
+  // Persist the refreshed access token to the Functions-only secrets doc
+  // (audit #163). For pre-#163 connections this also migrates the tokens off
+  // the client-readable firm doc and deletes the legacy fields.
+  await saveGoogleOAuthTokens(firmId, 'drive', {
+    accessToken: access_token as string,
+    refreshToken: tokens.refreshToken,
+    tokenExpiry: newExpiry,
+  });
+
+  // A working refresh proves the grant is valid — clear any stale flag.
   await db.doc(`firms/${firmId}`).update({
-    'googleDrive.accessToken': access_token,
-    'googleDrive.tokenExpiry': newExpiry,
-    // A working refresh proves the grant is valid — clear any stale flag.
     'googleDrive.needsReauth': admin.firestore.FieldValue.delete(),
     'googleDrive.needsReauthAt': admin.firestore.FieldValue.delete(),
   });
@@ -356,6 +384,7 @@ async function generatePdfBuffer(
   htmlContent: string,
   status: string,
 ): Promise<Buffer> {
+  // buildLegalDocumentHtml sanitizes the stored HTML before render (#167).
   const html = buildLegalDocumentHtml(title, htmlContent, status);
 
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
@@ -367,6 +396,8 @@ async function generatePdfBuffer(
     });
 
     const page = await browser.newPage();
+    // #167: deny all network access from the rendered (client-influenced) HTML.
+    await blockExternalRequests(page);
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
 
     const pdfBuffer = await page.pdf({
@@ -457,11 +488,19 @@ export const connectGoogleDrive = onCall(
       const db = admin.firestore();
       const newExpiry = Date.now() + (tokenData.expires_in as number) * 1000;
 
+      // OAuth tokens go to the Functions-only secrets doc — never the
+      // client-readable firm doc (audit #163). This also deletes any legacy
+      // googleDrive.* token fields left over from before #163.
+      await saveGoogleOAuthTokens(firmId, 'drive', {
+        accessToken: tokenData.access_token as string,
+        refreshToken: tokenData.refresh_token as string,
+        tokenExpiry: newExpiry,
+      });
+
+      // Only non-secret status flags live on the firm doc (the Settings UI
+      // and GoogleReauthBanner read them from the client SDK).
       await db.doc(`firms/${firmId}`).update({
         'googleDrive.connected': true,
-        'googleDrive.accessToken': tokenData.access_token,
-        'googleDrive.refreshToken': tokenData.refresh_token,
-        'googleDrive.tokenExpiry': newExpiry,
         'googleDrive.needsReauth': admin.firestore.FieldValue.delete(),
         'googleDrive.needsReauthAt': admin.firestore.FieldValue.delete(),
         updatedBy: request.auth.uid,
@@ -481,7 +520,73 @@ export const connectGoogleDrive = onCall(
 );
 
 // ---------------------------------------------------------------------------
-// Cloud Function 2: onDocumentWrittenSyncToDrive (Firestore trigger)
+// Cloud Function 2: disconnectGoogleDrive (onCall)
+// ---------------------------------------------------------------------------
+
+/**
+ * disconnectGoogleDrive
+ *
+ * Server-side disconnect for Google Drive (audit #163). The OAuth tokens live
+ * in the Functions-only secrets doc, so the browser cannot revoke or delete
+ * them itself — this callable does both, then clears the non-secret status
+ * flags on the firm doc.
+ */
+export const disconnectGoogleDrive = onCall(
+  {
+    region: 'us-east1',
+    timeoutSeconds: 60,
+    memory: '512MiB',
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be logged in to disconnect Google Drive.');
+    }
+    assertStaff(request);
+
+    const { firmId } = request.data as { firmId: string };
+
+    if (!firmId) {
+      throw new HttpsError('invalid-argument', 'firmId is required.');
+    }
+
+    if (request.auth.token['firmId'] !== firmId) {
+      throw new HttpsError('permission-denied', 'Cannot update Google Drive credentials for a different firm.');
+    }
+
+    // Best-effort: revoke the grant with Google so the app doesn't stay
+    // listed in the user's Google Account permissions. Revoking the refresh
+    // token kills the whole grant; fall back to the access token.
+    try {
+      const tokens = await loadGoogleOAuthTokens(firmId, 'drive');
+      const token = tokens?.refreshToken ?? tokens?.accessToken;
+      if (token) {
+        await fetch('https://oauth2.googleapis.com/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token }),
+        });
+      }
+    } catch (revokeErr) {
+      console.warn('[disconnectGoogleDrive] Token revoke failed (non-fatal):', revokeErr);
+    }
+
+    const db = admin.firestore();
+    await deleteGoogleOAuthTokens(firmId, 'drive');
+    await db.doc(`firms/${firmId}`).update({
+      'googleDrive.connected': false,
+      'googleDrive.rootFolderId': admin.firestore.FieldValue.delete(),
+      'googleDrive.needsReauth': admin.firestore.FieldValue.delete(),
+      'googleDrive.needsReauthAt': admin.firestore.FieldValue.delete(),
+      updatedBy: request.auth.uid,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Cloud Function 3: onDocumentWrittenSyncToDrive (Firestore trigger)
 // ---------------------------------------------------------------------------
 
 export const onDocumentWrittenSyncToDrive = onDocumentWritten(
