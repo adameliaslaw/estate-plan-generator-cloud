@@ -511,6 +511,11 @@ export const lawpayWebhook = onRequest(
     region: 'us-east1',
     timeoutSeconds: 60,
     memory: '512MiB',
+    // Bind the webhook signing secret so verifyWebhookSignature can read it
+    // from process.env. Without this v2 `secrets` option the env var is never
+    // populated in production, the signature check fails closed, and every
+    // webhook is rejected with 401 (audit #165).
+    secrets: ['LAWPAY_WEBHOOK_SECRET'],
     // CORS: allow requests from LawPay / AffiniPay domains
     cors: [
       'https://secure.lawpay.com',

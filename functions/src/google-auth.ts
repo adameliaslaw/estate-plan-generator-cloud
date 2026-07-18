@@ -11,6 +11,11 @@ interface GoogleTokenResponse {
 }
 import * as admin from 'firebase-admin';
 import { assertStaff } from './auth-guards';
+import {
+  deleteGoogleOAuthTokens,
+  loadGoogleOAuthTokens,
+  saveGoogleOAuthTokens,
+} from './firm-secrets';
 
 export const exchangeGoogleAuthCode = onCall(
     {
@@ -76,11 +81,19 @@ export const exchangeGoogleAuthCode = onCall(
             const db = admin.firestore();
             const newExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
 
+            // OAuth tokens go to the Functions-only secrets doc — never the
+            // client-readable firm doc (audit #163). This also deletes any
+            // legacy googleCalendar.* token fields left over from before #163.
+            await saveGoogleOAuthTokens(firmId, 'calendar', {
+                accessToken: tokenData.access_token,
+                refreshToken: tokenData.refresh_token,
+                tokenExpiry: newExpiry,
+            });
+
+            // Only non-secret status flags live on the firm doc (the Settings
+            // UI and GoogleReauthBanner read them from the client SDK).
             await db.doc(`firms/${firmId}`).update({
                 'googleCalendar.connected': true,
-                'googleCalendar.accessToken': tokenData.access_token,
-                'googleCalendar.refreshToken': tokenData.refresh_token,
-                'googleCalendar.tokenExpiry': newExpiry,
                 'googleCalendar.needsReauth': admin.firestore.FieldValue.delete(),
                 'googleCalendar.needsReauthAt': admin.firestore.FieldValue.delete(),
                 'updatedBy': request.auth.uid,
@@ -94,5 +107,67 @@ export const exchangeGoogleAuthCode = onCall(
             const errMsg = error instanceof Error ? error.message : String(error);
             throw new HttpsError('internal', `Failed to exchange auth token: ${errMsg}`);
         }
+    }
+);
+
+/**
+ * disconnectGoogleCalendar
+ *
+ * Server-side disconnect for Google Calendar (audit #163). The OAuth tokens
+ * live in the Functions-only secrets doc, so the browser cannot revoke or
+ * delete them itself — this callable does both, then clears the non-secret
+ * status flags on the firm doc.
+ */
+export const disconnectGoogleCalendar = onCall(
+    {
+        region: 'us-east1',
+        timeoutSeconds: 60,
+        memory: '512MiB',
+    },
+    async (request: CallableRequest<unknown>) => {
+        if (!request.auth) {
+            throw new HttpsError('unauthenticated', 'Must be logged in to disconnect Google Calendar.');
+        }
+        assertStaff(request);
+
+        const { firmId } = request.data as { firmId: string };
+
+        if (!firmId) {
+            throw new HttpsError('invalid-argument', 'firmId is required.');
+        }
+
+        if (request.auth.token['firmId'] !== firmId) {
+            throw new HttpsError('permission-denied', 'Cannot update Google credentials for a different firm.');
+        }
+
+        // Best-effort: revoke the grant with Google so the app doesn't stay
+        // listed in the user's Google Account permissions. Revoking the
+        // refresh token kills the whole grant; fall back to the access token.
+        try {
+            const tokens = await loadGoogleOAuthTokens(firmId, 'calendar');
+            const token = tokens?.refreshToken ?? tokens?.accessToken;
+            if (token) {
+                await fetch('https://oauth2.googleapis.com/revoke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ token }),
+                });
+            }
+        } catch (revokeErr) {
+            console.warn('[disconnectGoogleCalendar] Token revoke failed (non-fatal):', revokeErr);
+        }
+
+        const db = admin.firestore();
+        await deleteGoogleOAuthTokens(firmId, 'calendar');
+        await db.doc(`firms/${firmId}`).update({
+            'googleCalendar.connected': false,
+            'googleCalendar.email': admin.firestore.FieldValue.delete(),
+            'googleCalendar.needsReauth': admin.firestore.FieldValue.delete(),
+            'googleCalendar.needsReauthAt': admin.firestore.FieldValue.delete(),
+            'updatedBy': request.auth.uid,
+            'updatedAt': admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { success: true };
     }
 );

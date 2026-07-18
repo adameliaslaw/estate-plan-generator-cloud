@@ -20,7 +20,7 @@ import { Readable } from 'stream';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { Packer } from 'docx';
-import { buildLegalDocumentHtml, sanitizeFileName } from './export-pdf';
+import { buildLegalDocumentHtml, sanitizeFileName, blockExternalRequests } from './export-pdf';
 import { buildDocxDocument } from './export-docx';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -42,10 +42,14 @@ async function generatePdfBuffer(
   htmlContent: string,
   status: string,
 ): Promise<Buffer> {
+  // buildLegalDocumentHtml sanitizes the stored HTML before render (#167).
   const html = buildLegalDocumentHtml(displayName, htmlContent, status);
   const page = await browser.newPage();
 
   try {
+    // #167: the rendered HTML is client-influenced — deny all network access
+    // before setContent so injected markup cannot trigger server-side fetches.
+    await blockExternalRequests(page);
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
 
     const isDraft = status !== 'final'; // running-header DRAFT marker for any unexecuted doc (R5-039)

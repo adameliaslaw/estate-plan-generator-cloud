@@ -1,6 +1,52 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // ==========================================================
+    // HELPER FUNCTIONS (mirror firestore.rules — see isFirmAdmin)
+    // ==========================================================
+
+    // Verify the request is coming from an authenticated user.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check whether the authenticated user holds a specific custom-claim role.
+    function hasRole(role) {
+      return isAuthenticated()
+          && request.auth.token.role == role;
+    }
+
+    // Verify the caller's firmId claim matches the firmId path segment.
+    function belongsToFirm(firmId) {
+      return isAuthenticated()
+          && request.auth.token.firmId == firmId;
+    }
+
+    // Firm-scoped admin: an admin acting within their OWN firm. A bare
+    // role=='admin' check granted an admin of one firm read/write access to
+    // every other firm's files (audit #164); firestore.rules fixed the same
+    // class in R5-037 by tenant-scoping admins like attorneys/paralegals.
+    function isFirmAdmin(firmId) {
+      return hasRole('admin') && belongsToFirm(firmId);
+    }
+
+    // Attorney/paralegal staff scoped to their own firm.
+    function isFirmStaff(firmId) {
+      return isAuthenticated()
+          && request.auth.token.role in ['attorney', 'paralegal']
+          && request.auth.token.firmId == firmId;
+    }
+
+    // Client-role session scoped to its own firm AND client record. The
+    // clientId claim is set only by the trusted admin SDK in linkClient
+    // (mirrors firestore.rules isLinkedClient).
+    function isLinkedClient(firmId, clientId) {
+      return isAuthenticated()
+          && request.auth.token.role == 'client'
+          && request.auth.token.firmId == firmId
+          && request.auth.token.clientId == clientId;
+    }
+
     // Deny all by default
     match /{allPaths=**} {
       allow read, write: if false;
@@ -9,91 +55,65 @@ service firebase.storage {
     // Audio files for transcription (Notes tab)
     // Only authenticated users within the same firm can upload/read
     match /firms/{firmId}/clients/{clientId}/audio/{audioFile} {
-      allow read: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId) ||
-        (request.auth.token.role == 'client' && request.auth.token.firmId == firmId && request.auth.token.clientId == clientId)
-      );
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 50 * 1024 * 1024
-        && request.resource.contentType.matches('audio/.*');
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId)
+                    || isLinkedClient(firmId, clientId);
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('audio/.*');
     }
 
     // Document uploads (executed copies, scans, etc.)
     match /firms/{firmId}/clients/{clientId}/documents/{docFile} {
-      allow read: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId) ||
-        (request.auth.token.role == 'client' && request.auth.token.firmId == firmId && request.auth.token.clientId == clientId)
-      );
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 100 * 1024 * 1024;
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId)
+                    || isLinkedClient(firmId, clientId);
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 100 * 1024 * 1024;
     }
 
     // Scanned questionnaire images (handwritten intake photos)
     match /firms/{firmId}/clients/{clientId}/scans/{scanFile} {
-      allow read: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId) ||
-        (request.auth.token.role == 'client' && request.auth.token.firmId == firmId && request.auth.token.clientId == clientId)
-      );
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 50 * 1024 * 1024;
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId)
+                    || isLinkedClient(firmId, clientId);
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 50 * 1024 * 1024;
     }
 
     // Draft document uploads from vault (docx/pdf files uploaded by staff for AI processing)
     match /firms/{firmId}/clients/{clientId}/uploads/{uploadFile} {
-      allow read: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      );
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 20 * 1024 * 1024;
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId);
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 20 * 1024 * 1024;
     }
 
 
     // Firm logos and branding assets
     match /firms/{firmId}/branding/{file} {
       // Anyone can read branding (displayed on client-facing pages)
-      allow read: if request.auth != null;
-      // Only attorneys/admins can upload
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow read: if isAuthenticated();
+      // Only attorneys/admins of THIS firm can upload
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
     }
 
     // Knowledge base file uploads (PDFs, Word docs for CLE materials, templates)
     match /firms/{firmId}/knowledgeBase/uploads/{file} {
-      allow read: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      );
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 200 * 1024 * 1024;
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId);
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 200 * 1024 * 1024;
     }
 
     // Template file uploads (docx, pdf for document generation)
     match /firms/{firmId}/templates/{file} {
-      allow read: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      );
-      allow write: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.role in ['attorney', 'paralegal'] && request.auth.token.firmId == firmId)
-      ) && request.resource.size < 200 * 1024 * 1024;
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId);
+      allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
+                    && request.resource.size < 200 * 1024 * 1024;
     }
   }
 }

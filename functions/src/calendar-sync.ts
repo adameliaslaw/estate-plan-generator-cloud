@@ -19,9 +19,13 @@
  * Firestore paths:
  *   Calendar events:  firms/{firmId}/calendarEvents/{eventId}
  *   Firm settings:    firms/{firmId}
- *     └─ googleCalendar.accessToken   (OAuth 2.0 access token)
- *     └─ googleCalendar.refreshToken  (OAuth 2.0 refresh token)
- *     └─ googleCalendar.tokenExpiry   (epoch ms)
+ *     └─ googleCalendar.connected     (non-secret status flag)
+ *     └─ googleCalendar.needsReauth   (non-secret status flag)
+ *   OAuth tokens (Functions-only, audit #163):
+ *     firms/{firmId}/secrets/googleOAuth.calendar
+ *     └─ accessToken   (OAuth 2.0 access token)
+ *     └─ refreshToken  (OAuth 2.0 refresh token)
+ *     └─ tokenExpiry   (epoch ms)
  *
  * Google Calendar API:  https://www.googleapis.com/calendar/v3/
  *
@@ -33,6 +37,7 @@
 import * as functions from 'firebase-functions/v1';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
+import { loadGoogleOAuthTokens, saveGoogleOAuthTokens } from './firm-secrets';
 
 // Typed shapes for Google OAuth token API responses
 interface GoogleOAuthTokenResponse {
@@ -83,7 +88,8 @@ interface CalendarEventDoc {
   updatedAt?: admin.firestore.FieldValue;
 }
 
-/** Firm-level Google Calendar OAuth token data (subset of firms/{firmId}). */
+/** Firm-level Google Calendar OAuth token data (from the Functions-only
+ *  firms/{firmId}/secrets/googleOAuth doc — audit #163). */
 interface GoogleCalendarTokens {
   accessToken: string;
   refreshToken: string;
@@ -177,20 +183,15 @@ async function listSyncableCalendars(accessToken: string): Promise<GoogleCalenda
 // ---------------------------------------------------------------------------
 
 /**
- * Retrieve the Google Calendar OAuth tokens stored under a firm's Firestore doc.
- * Throws `failed-precondition` if no tokens are found.
+ * Retrieve the firm's Google Calendar OAuth tokens from the Functions-only
+ * secrets document (audit #163). Falls back to the legacy firm-doc location
+ * until the next successful refresh migrates them into the secrets doc.
+ * Throws `failed-precondition` if Google Calendar was never connected.
  */
 async function getGoogleCalendarTokens(
-  db: admin.firestore.Firestore,
   firmId: string,
 ): Promise<GoogleCalendarTokens> {
-  const firmSnap = await db.doc(`firms/${firmId}`).get();
-  if (!firmSnap.exists) {
-    throw new functions.https.HttpsError('not-found', `Firm ${firmId} not found.`);
-  }
-
-  const firmData = firmSnap.data()!;
-  const tokens = firmData.googleCalendar as GoogleCalendarTokens | undefined;
+  const tokens = await loadGoogleOAuthTokens(firmId, 'calendar');
 
   if (!tokens?.accessToken || !tokens?.refreshToken) {
     throw new functions.https.HttpsError(
@@ -199,7 +200,7 @@ async function getGoogleCalendarTokens(
     );
   }
 
-  return tokens;
+  return tokens as GoogleCalendarTokens;
 }
 
 /**
@@ -226,8 +227,9 @@ async function getGoogleCalendarTokens(
  *                               client_id above.  Store in Firebase Secret
  *                               Manager as GOOGLE_CLIENT_SECRET.
  *     refresh_token  (required) The refresh token previously obtained during
- *                               the OAuth consent flow and stored at
- *                               firms/{firmId}/googleCalendar.refreshToken.
+ *                               the OAuth consent flow and stored in the
+ *                               Functions-only doc
+ *                               firms/{firmId}/secrets/googleOAuth (`calendar`).
  *
  *   Successful response (200 OK, application/json):
  *     {
@@ -245,10 +247,10 @@ async function getGoogleCalendarTokens(
  * ─── Implementation Notes ────────────────────────────────────────────────────
  *
  *   1. After a successful refresh, persist the new access_token and updated
- *      tokenExpiry back to Firestore so subsequent calls within the same
- *      expiry window skip the round-trip:
- *        firms/{firmId}.googleCalendar.accessToken  = access_token
- *        firms/{firmId}.googleCalendar.tokenExpiry  = Date.now() + expires_in * 1000
+ *      tokenExpiry back to the Functions-only secrets doc (audit #163) so
+ *      subsequent calls within the same expiry window skip the round-trip:
+ *        firms/{firmId}/secrets/googleOAuth.calendar.accessToken = access_token
+ *        firms/{firmId}/secrets/googleOAuth.calendar.tokenExpiry = Date.now() + expires_in * 1000
  *
  *   2. GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be provisioned as
  *      Firebase Secret Manager secrets (not plain environment variables) to
@@ -266,7 +268,7 @@ async function getGoogleCalendarTokens(
  *
  * @param db      — Firestore admin instance.
  * @param firmId  — Firm document ID; used to read and update token storage.
- * @param tokens  — Current tokens read from firms/{firmId}.googleCalendar.
+ * @param tokens  — Current tokens read from firms/{firmId}/secrets/googleOAuth.
  * @returns       The access token to use for the current API call (refreshed or
  *                still-valid existing token).
  */
@@ -333,10 +335,17 @@ async function refreshAccessTokenIfNeeded(
   const newExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
   const newAccessToken = tokenData.access_token ?? '';
 
+  // Persist the refreshed access token to the Functions-only secrets doc
+  // (audit #163). For pre-#163 connections this also migrates the tokens off
+  // the client-readable firm doc and deletes the legacy fields.
+  await saveGoogleOAuthTokens(firmId, 'calendar', {
+    accessToken: newAccessToken,
+    refreshToken: tokens.refreshToken,
+    tokenExpiry: newExpiry,
+  });
+
+  // A working refresh proves the grant is valid — clear any stale flag.
   await db.doc(`firms/${firmId}`).update({
-    'googleCalendar.accessToken': newAccessToken,
-    'googleCalendar.tokenExpiry': newExpiry,
-    // A working refresh proves the grant is valid — clear any stale flag.
     'googleCalendar.needsReauth': admin.firestore.FieldValue.delete(),
     'googleCalendar.needsReauthAt': admin.firestore.FieldValue.delete(),
   });
@@ -432,7 +441,7 @@ export const pushEventToGoogleCalendar = functions
     // ------------------------------------------------------------------
     // 3. Get Google Calendar OAuth tokens for this firm
     // ------------------------------------------------------------------
-    const tokens = await getGoogleCalendarTokens(db, firmId);
+    const tokens = await getGoogleCalendarTokens(firmId);
     const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
 
     // ------------------------------------------------------------------
@@ -617,7 +626,7 @@ export const pullGoogleCalendarEvents = functions
     // ------------------------------------------------------------------
     // 2. Get OAuth tokens
     // ------------------------------------------------------------------
-    const tokens = await getGoogleCalendarTokens(db, firmId);
+    const tokens = await getGoogleCalendarTokens(firmId);
     const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
 
     // ------------------------------------------------------------------
@@ -798,15 +807,20 @@ export const syncGoogleCalendar = onSchedule(
     for (const firmDoc of firmsSnap.docs) {
       const firmId = firmDoc.id;
       const data = firmDoc.data();
-      if (!data.googleCalendar || !data.googleCalendar.accessToken) continue;
-      if ((data.googleCalendar as GoogleCalendarTokens).needsReauth) {
+      const gcalFlags = (data.googleCalendar ?? {}) as { needsReauth?: boolean };
+      if (gcalFlags.needsReauth) {
         console.log(`[syncGoogleCalendar] firm=${firmId} skipped — Google Calendar needs re-authorization (revoked grant)`);
         continue;
       }
 
       try {
-        const tokens = data.googleCalendar as GoogleCalendarTokens;
-        const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
+        // Tokens live in the Functions-only secrets doc (audit #163); the
+        // loader falls back to the legacy firm-doc location until the next
+        // successful refresh migrates them.
+        const tokens = await loadGoogleOAuthTokens(firmId, 'calendar');
+        if (!tokens?.accessToken || !tokens?.refreshToken) continue;
+
+        const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens as GoogleCalendarTokens);
         const lastSync = (data.googleCalendarLastSyncAt as admin.firestore.Timestamp)?.toDate?.()?.toISOString()
           ?? new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
@@ -996,14 +1010,15 @@ export const triggerFirmCalendarSync = functions
       throw new functions.https.HttpsError('not-found', 'Firm document not found.');
     }
 
-    const firmData = firmDoc.data()!;
-    if (!firmData.googleCalendar || !firmData.googleCalendar.accessToken) {
+    // Tokens live in the Functions-only secrets doc (audit #163); falls back
+    // to the legacy firm-doc location until the next refresh migrates them.
+    const tokens = await loadGoogleOAuthTokens(firmId, 'calendar');
+    if (!tokens?.accessToken || !tokens?.refreshToken) {
       throw new functions.https.HttpsError('failed-precondition', 'Google Calendar not connected.');
     }
 
     try {
-      const tokens = firmData.googleCalendar as GoogleCalendarTokens;
-      const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens);
+      const accessToken = await refreshAccessTokenIfNeeded(db, firmId, tokens as GoogleCalendarTokens);
 
       // For a manual forced sync, we intentionally ignore the incremental watermark and pull 
       // everything modified in the last 2 years to ensure native Google Calendar events are captured.

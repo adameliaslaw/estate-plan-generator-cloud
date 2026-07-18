@@ -25,7 +25,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { buildLegalDocumentHtml } from './export-pdf';
+import { buildLegalDocumentHtml, blockExternalRequests } from './export-pdf';
 import { loadFirmSecrets } from './firm-secrets';
 import { verifyDropboxSignEventHash } from './esign-hmac';
 
@@ -41,6 +41,7 @@ async function renderDocumentPdf(
   htmlContent: string,
   status: string,
 ): Promise<Buffer> {
+  // buildLegalDocumentHtml sanitizes the stored HTML before render (#167).
   const html = buildLegalDocumentHtml(displayName, htmlContent, status);
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
   try {
@@ -50,6 +51,8 @@ async function renderDocumentPdf(
       args: chromium.args,
     });
     const page = await browser.newPage();
+    // #167: deny all network access from the rendered (client-influenced) HTML.
+    await blockExternalRequests(page);
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 });
     const pdfBuffer = await page.pdf({
       format: 'Letter',

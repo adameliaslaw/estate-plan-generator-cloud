@@ -181,23 +181,19 @@ interface FirmSettings {
   dropboxSignApiKeySet?: boolean; dropboxSignApiKeyLast4?: string;
   dropboxSignTestMode?: boolean;
 
-  // Google Calendar OAuth
+  // Google Calendar OAuth (status flags only). The OAuth tokens themselves
+  // live in the Functions-only firms/{firmId}/secrets/googleOAuth document
+  // (audit #163) and are never readable from the browser.
   googleCalendar?: {
     connected: boolean;
     email?: string;
-    accessToken?: string;
-    refreshToken?: string;
-    tokenExpiry?: number;
     /** Backend sets this when Google reports the grant revoked (invalid_grant). */
     needsReauth?: boolean;
   };
 
-  // Google Drive OAuth
+  // Google Drive OAuth (status flags only — see note above).
   googleDrive?: {
     connected: boolean;
-    accessToken?: string;
-    refreshToken?: string;
-    tokenExpiry?: number;
     rootFolderId?: string;
     /** Backend sets this when Google reports the grant revoked (invalid_grant). */
     needsReauth?: boolean;
@@ -725,35 +721,19 @@ export default function SettingsPage() {
   const handleDisconnectGoogleCalendar = useCallback(async () => {
     if (!firmDocPath) return;
     try {
-      // Best-effort: revoke the token with Google so the app doesn't stay listed
-      // in the user's Google Account permissions.
-      if (firmDoc?.googleCalendar?.accessToken) {
-        try {
-          await fetch('https://oauth2.googleapis.com/revoke', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ token: firmDoc.googleCalendar.accessToken }),
-          });
-        } catch {
-          // Non-critical — token may already be expired/revoked
-        }
-      }
-
-      await updateDoc(firmDocPath, {
-        'googleCalendar.connected': false,
-        'googleCalendar.accessToken': '',
-        'googleCalendar.refreshToken': '',
-        'googleCalendar.tokenExpiry': 0,
-        'googleCalendar.email': '',
-        'googleCalendar.needsReauth': false,
-        updatedBy: userProfile?.uid ?? '',
-      });
+      // Server-side disconnect (audit #163): the OAuth tokens now live in the
+      // Functions-only firms/{firmId}/secrets/googleOAuth doc, so the browser
+      // can neither revoke them with Google nor delete them itself. The
+      // callable revokes the grant, deletes the tokens, and clears the
+      // non-secret status flags on the firm doc.
+      const disconnectFn = httpsCallable(functions, 'disconnectGoogleCalendar');
+      await disconnectFn({ firmId });
       toast.success('Google Calendar disconnected.');
     } catch (err) {
       console.error(err);
       toast.error('Failed to disconnect Google Calendar.');
     }
-  }, [firmDocPath, firmDoc, userProfile]);
+  }, [firmDocPath, firmId]);
 
   // ── Google Drive OAuth ───────────────────────────────────────────────────
   const [connectingDrive, setConnectingDrive] = useState(false);
@@ -777,33 +757,19 @@ export default function SettingsPage() {
   const handleDisconnectGoogleDrive = useCallback(async () => {
     if (!firmDocPath) return;
     try {
-      if (firmDoc?.googleDrive?.accessToken) {
-        try {
-          await fetch('https://oauth2.googleapis.com/revoke', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ token: firmDoc.googleDrive.accessToken }),
-          });
-        } catch {
-          // Non-critical — token may already be expired/revoked
-        }
-      }
-
-      await updateDoc(firmDocPath, {
-        'googleDrive.connected': false,
-        'googleDrive.accessToken': '',
-        'googleDrive.refreshToken': '',
-        'googleDrive.tokenExpiry': 0,
-        'googleDrive.rootFolderId': '',
-        'googleDrive.needsReauth': false,
-        updatedBy: userProfile?.uid ?? '',
-      });
+      // Server-side disconnect (audit #163): the OAuth tokens now live in the
+      // Functions-only firms/{firmId}/secrets/googleOAuth doc, so the browser
+      // can neither revoke them with Google nor delete them itself. The
+      // callable revokes the grant, deletes the tokens, and clears the
+      // non-secret status flags on the firm doc.
+      const disconnectFn = httpsCallable(functions, 'disconnectGoogleDrive');
+      await disconnectFn({ firmId });
       toast.success('Google Drive disconnected.');
     } catch (err) {
       console.error(err);
       toast.error('Failed to disconnect Google Drive.');
     }
-  }, [firmDocPath, firmDoc, userProfile]);
+  }, [firmDocPath, firmId]);
 
   const handleSaveSecurity = useCallback(async () => {
     if (!firmDocPath) return;
