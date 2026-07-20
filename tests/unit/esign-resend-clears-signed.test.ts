@@ -62,7 +62,10 @@ vi.mock('../../functions/node_modules/puppeteer-core', () => ({
 vi.mock('../../functions/node_modules/@sparticuz/chromium', () => ({
   default: { executablePath: async () => '', args: [] },
 }));
-vi.mock('../../functions/src/export-pdf', () => ({ buildLegalDocumentHtml: () => '<html></html>' }));
+vi.mock('../../functions/src/export-pdf', () => ({
+  buildLegalDocumentHtml: () => '<html></html>',
+  blockExternalRequests: async () => {},
+}));
 
 vi.mock('../../functions/node_modules/firebase-admin', () => {
   type MockColl = {
