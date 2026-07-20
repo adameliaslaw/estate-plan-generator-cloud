@@ -19,6 +19,7 @@ import {
   CalendarClock,
   Link2,
   Check,
+  Printer,
 } from 'lucide-react';
 import { orderBy, limit, doc, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
@@ -530,6 +531,15 @@ export default function DashboardPage() {
           >
             <Mic className="h-4 w-4" />
             Record Note
+          </button>
+          <button
+            onClick={() => window.open('/questionnaire/print', '_blank', 'noopener,noreferrer')}
+            title="Open a blank printable questionnaire to print or hand out"
+            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+          >
+            <Printer className="h-4 w-4" />
+            <span className="sm:hidden">Blank Form</span>
+            <span className="hidden sm:inline">Blank Questionnaire</span>
           </button>
           <button
             onClick={handleCopyQuestionnaireLink}
