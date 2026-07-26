@@ -26,6 +26,16 @@ export { pushEventToGoogleCalendar, pullGoogleCalendarEvents, syncGoogleCalendar
 export { checkDocumentCompliance } from './ai-compliance-check';
 export { computeInheritanceTax } from './inheritance-tax-compute';
 export {
+  saveInheritanceMatter,
+  computeAndStoreInheritanceTax,
+  requestInheritanceReview,
+  approveInheritanceReview,
+  finalizeInheritanceReview,
+  getInheritanceForm,
+  listInheritanceMatters,
+  getInheritanceAuditTrail,
+} from './inheritance-tax-review';
+export {
   sendQuestionnaireInvitation,
   sendQuestionnaireCompleteNotification,
   sendDocumentReadyNotification,
