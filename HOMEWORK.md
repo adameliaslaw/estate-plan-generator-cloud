@@ -88,6 +88,40 @@ delete key id `c059f6a569611c0aa9f74fa93fe1d45707f36d21`, create a replacement. 
 account's usage logs, and decide whether to `git filter-repo` the history before the repo stays
 public.
 
+### ⚠️ What this engine is NOT wired to yet — read before assuming it works end to end
+
+The engine is verified, but it is currently an **island**. Two things stand between it and a
+usable feature, and neither is written:
+
+1. **No mapping from this app's data to the engine's input.** Every callable takes an IT-R
+   `Matter` (see `functions/src/inheritance-tax/types.ts`) — decedent, beneficiaries with
+   `relationship` per N.J.S.A. 54:34-2, bequests with `fairMarketValue`, deductions,
+   `personalRepresentative`. That is **not** this app's questionnaire/client shape. Nobody has
+   written the translation, and it is not mechanical: the beneficiary `relationship` enum drives
+   the entire tax class, so a sloppy mapping produces confident wrong numbers rather than an error.
+2. **No UI.** There is no page, no route, no service wrapper in `src/services/`. The callables
+   exist and are firm-scoped, but nothing in the frontend calls them.
+
+So a session that merges this and reports "inheritance tax is done" is wrong. What is done is the
+computation, the persistence, the review/freeze gate, and the proof that the figures match the
+State's published examples. What remains is connecting it to this app's data and screens.
+
+Estimate honestly before starting: the mapping is the risky half, and it deserves its own gold
+cases (take a matter whose answer is already known, run it through the mapping, and check the
+output against the hand-computed figures — the engine's own gold cases do not cover your mapping).
+
+### Where this came from — the source repo is archived
+
+`adameliaslaw/elias-estate-suite` is **an archive as of 2026-07-26** and is no longer developed.
+Do not open work there, and do not expect anyone to maintain the engine at its origin — this repo
+is now the only live home for it. Its `docs/HOMEWORK.md` has the full account of what that
+consolidation did and did not do (it moved one repo of four; this repo was named its centrepiece
+and never opened). If the branch was delivered via that repo's `transport/nj-inheritance-tax-engine`
+branch, that is why — the session that built this had read-only access here.
+
+The engine's provenance chain is `inheritnj` → `elias-estate-suite/apps/inherit` → here, and the
+gold cases came the whole way intact.
+
 ### Not carried over from the suite, on purpose
 `apps/generator` (one document type — this app has 22), the standalone HTTP servers, CLI, web UIs,
 the reviewer-invitation lifecycle, purge tooling, deployment manifests, `@elias/foundation` and
