@@ -4,6 +4,87 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔴 SESSION — 2026-07-26 (NJ inheritance-tax engine ported in from elias-estate-suite — 4 ITEMS NEED ADAM AT A DESK)
+
+**TL;DR — The NJ Transfer Inheritance Tax engine now lives in this repo.** It originates in
+`adameliaslaw/inheritnj`, was ported and gold-case-verified in `adameliaslaw/elias-estate-suite`
+(`apps/inherit`), and was the only thing that repo had which this one lacked. That repo is now an
+archive; development continues here. Three commits on branch `feat/nj-inheritance-tax-engine`:
+
+1. **Engine** — `functions/src/inheritance-tax/` (engine, rule sets by date of death, strict
+   validation, IT-R / IT-Estate / IT-EXT / L-9(A) form builders). Pure TypeScript: no Firebase, no
+   Chromium. PDF rendering deliberately NOT ported — this repo already renders PDF via jspdf and
+   DOCX via docxtemplater.
+2. **Persistence** — `inheritance-tax-store.ts` (Firestore + HMAC audit chain, appended inside a
+   transaction) and `inheritance-tax-review.ts` (save → compute → request review →
+   approve/finalize → IT-R). NOT a port of the suite's Firestore adapter: that one caches in memory
+   and writes behind, requiring `--max-instances=1`, which would mean stale reads and lost writes
+   under Cloud Functions.
+3. **Legal spec** — `docs/IT-R-SPECIFICATION.md`, the line-by-line decode of the State's IT-R
+   instructions. It is *why* the figures can be trusted. Cite it by section before changing
+   anything in the engine.
+
+**Verified:** gold cases 25/25 reproducing the State's own worked examples to the cent —
+**$558.71 / $191.43 / Class C $8,250**; full suite **774 passed**; `tsc --noEmit` clean in root and
+`functions/`.
+
+**Rules that must not be weakened:** the IT-R renders only from an **approved** checkpoint's frozen
+snapshot (so an edit can never retroactively change a signed-off form); `approveInheritanceReview`
+refuses a self-approval unconditionally, and `finalizeInheritanceReview` is a *separate*
+requester-only act audited as `matter_finalized`, never `review_approved`; out-of-scope estate
+structures (nonresident decedent, pre-2002 death, deductions exceeding the estate, non-pro-rata
+apportionment) are **refused**, never estimated.
+
+### ▶ NEXT (needs Adam at a desk) — do these in order
+
+**1. Apply the three commits.** They are not in this repo yet — the agent session had read-only
+access. Either approve the repo-push prompt in a Claude Code session, or apply the delivered bundle
+from a terminal:
+
+```bash
+git fetch /path/to/nj-inheritance-tax.bundle \
+  feat/nj-inheritance-tax-engine:feat/nj-inheritance-tax-engine
+git checkout feat/nj-inheritance-tax-engine
+npx vitest run && (cd functions && npx tsc --noEmit)   # expect 774 passed, clean
+```
+
+**2. Set the audit-chain signing key.**
+
+```bash
+firebase functions:secrets:set INHERITANCE_AUDIT_KEY
+```
+
+Any high-entropy value. The code **fails closed** without it rather than degrading to a plain
+SHA-256 that anyone who can read the log could recompute. **Never rotate it once chains exist** —
+a chain only verifies under the key that wrote it.
+
+**3. Deploy.**
+
+```bash
+firebase deploy --only functions,firestore:rules
+```
+
+The **rules matter as much as the functions**: this branch closes
+`/firms/{firmId}/inheritanceMatters/**` to the client SDK entirely. The stored record contains the
+decedent's SSN, the audit chain is append-only and hash-linked, and a checkpoint's `status` **is**
+the approval gate — client write access would let a matter approve itself.
+
+**4. Rotate the exposed service-account key** *(independent of 1–3, and time-sensitive)*. Per
+`AUDIT_HANDOFF.md` §1, a full GCP service-account JSON with private key was committed inside
+`.gitignore` and, although `4c01354` removed it from the working tree, **history was never
+rewritten** — it is still readable at commit `223bdeb`, and this repo is now public. Google Cloud
+Console → IAM → Service Accounts → `estate-plan-generator@appspot.gserviceaccount.com` → Keys →
+delete key id `c059f6a569611c0aa9f74fa93fe1d45707f36d21`, create a replacement. Then check that
+account's usage logs, and decide whether to `git filter-repo` the history before the repo stays
+public.
+
+### Not carried over from the suite, on purpose
+`apps/generator` (one document type — this app has 22), the standalone HTTP servers, CLI, web UIs,
+the reviewer-invitation lifecycle, purge tooling, deployment manifests, `@elias/foundation` and
+`@elias/canonical`. All of it was infrastructure for running the tax engine as a separate product.
+
+---
+
 ## 📍 SESSION — 2026-07-15 (BL/BK/BM security batch + finding T shipped · #64 VALIDATED — 8.9-min functions deploy)
 
 **TL;DR — Backlog session while the card test waits. (1) Security: PR #159 drained the round-2 leftovers — `linkClient` now requires a VERIFIED email to claim an existing client record (unverified password-signup takeover closed — same class as R5-010), checks the firm exists before minting claims, and rate-limits prospect stubs via the shared per-firm throttle; deliberate HttpsError codes rethrown (were flattened to `internal`); `getFirmBranding` only returns `googleMapsApiKey` to firm members (claim match, or linked client record for claimless anon questionnaire sessions). 9 new emulator tests (incl. the harness's first v1-callable mock), all negative-control-verified; suite 54/54. (2) **#64 validation COMPLETE:** #159 was the first `functions/src` merge since #155 — the deploy went green in 8.9 min (14:26→14:35Z), selective (only changed functions), far under the 20–40 min guess. The simplified CI path is proven end-to-end; #64 stays closed. (3) Finding T (PR #160): the OpenAI SDK path had a 5-MIN SOCKET timeout (openai 4.104 node runtime = node-fetch + agentkeepalive default agent; finding's undici-headersTimeout hypothesis was wrong, same 300s kill) — any >5-min OpenAI generation was impossible, retries died identically. `_callOpenAI` now passes a 10-min keepAlive `httpAgent`; dispatch untouched. Unit test + negative control. (4) Stale-ledger sweep: CR/CS/CW (truth-in-status trio) and DK/DP/DQ/DR/DM/H/V were ALREADY FIXED in main — rows corrected; the carry-forward list below is now accurate. Green: functions+root tsc, build, full lint 0 errors, unit 732/732, emulator 54/54.**
