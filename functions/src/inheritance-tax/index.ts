@@ -11,6 +11,10 @@
  *   interest example $558.71 · Example 1 $191.43 · Class C exemption $8,250.
  * Those figures are the contract. If a change moves one, the change is wrong.
  *
+ * The line-by-line legal specification this engine implements — schedules to summary lines, the
+ * class scale, the NJ interest capitalization method, holiday rules, and the refusal list — is
+ * `docs/IT-R-SPECIFICATION.md`. Cite it by section when changing anything in here.
+ *
  * Scope is deliberately bounded: unsupported estate structures (nonresident decedent,
  * pre-2002 death, deductions exceeding the estate, non-pro-rata apportionment) **throw
  * `UnsupportedMatterError`** rather than producing a plausible-but-wrong figure.
