@@ -91,8 +91,9 @@ public.
 ### It IS wired — here is what exists, and the one thing that still needs a human
 
 **UI:** `src/pages/admin/InheritanceTaxPage.tsx`, routed at `/inheritance-tax`
-(`ROUTES.INHERITANCE_TAX`), staff-only via `AppLayout allowedRoles={[...STAFF_ROLES]}`, with a
-sidebar entry. It walks the whole flow: decedent + flags → personal representative → beneficiaries
+(`ROUTES.INHERITANCE_TAX`), staff-only via `AppLayout allowedRoles={[...STAFF_ROLES]}`. Two ways
+in: an **"Inheritance Tax" button in the dashboard header** (beside New Client) and a sidebar
+entry. It walks the whole flow: decedent + flags → personal representative → beneficiaries
 and bequests → deductions → **Save → Compute → Request review → Approve | Finalize → Load IT-R**,
 plus the audit trail with a live chain-validity badge. Each button unlocks only when the server
 would allow it, and any edit clears the computation and checkpoint — mirroring the rule that a form
