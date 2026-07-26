@@ -58,16 +58,26 @@ Any high-entropy value. The code **fails closed** without it rather than degradi
 SHA-256 that anyone who can read the log could recompute. **Never rotate it once chains exist** —
 a chain only verifies under the key that wrote it.
 
-**3. Deploy.**
+**3. Merge — then deploy the RULES by hand.**
+
+Merging to `main` is enough for the code: `.github/workflows/firebase-functions-deploy.yml` and
+`firebase-hosting-deploy.yml` auto-deploy functions and hosting on every push to `main` (CLAUDE.md
+rule 5 — don't deploy those manually).
+
+**Firestore rules are NOT covered by either workflow.** This branch closes
+`/firms/{firmId}/inheritanceMatters/**` to the client SDK, and that change only takes effect when
+you run:
 
 ```bash
-firebase deploy --only functions,firestore:rules
+firebase deploy --only firestore:rules
 ```
 
-The **rules matter as much as the functions**: this branch closes
-`/firms/{firmId}/inheritanceMatters/**` to the client SDK entirely. The stored record contains the
-decedent's SSN, the audit chain is append-only and hash-linked, and a checkpoint's `status` **is**
-the approval gate — client write access would let a matter approve itself.
+It matters: the stored record contains the decedent's SSN, the audit chain is append-only and
+hash-linked, and a checkpoint's `status` **is** the approval gate — client write access would let a
+matter approve itself.
+
+⚠️ Because this touches `firestore.rules`, it is on the **Never-Break List** (CLAUDE.md rule 7):
+it needs explicit sign-off before merging, not agent auto-merge.
 
 **4. Rotate the exposed service-account key** *(independent of 1–3, and time-sensitive)*. Per
 `AUDIT_HANDOFF.md` §1, a full GCP service-account JSON with private key was committed inside
