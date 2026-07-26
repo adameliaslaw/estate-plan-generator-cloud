@@ -446,6 +446,7 @@ export const ROUTES = {
   SETTINGS_FIRM: '/settings/firm',
   SETTINGS_USERS: '/settings/users',
   SETTINGS_BILLING: '/settings/billing',
+  INHERITANCE_TAX: '/inheritance-tax',
   ADMIN_NAME_SPLITS: '/admin/name-splits',
 } as const;
 

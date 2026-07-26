@@ -285,7 +285,6 @@ describe('GOLD FND-IMMUT — approved IT-R is immune to post-approval matter edi
 
   test('a fresh compute after the edit DOES reflect it (a new checkpoint is required)', () => {
     const matter = baseMatter();
-    const ruleSet = getRuleSet(matter.decedent.dateOfDeath);
     const edited: Matter = {
       ...matter,
       beneficiaries: [matter.beneficiaries[0]!, { ...matter.beneficiaries[1]!, relationship: 'child' }],

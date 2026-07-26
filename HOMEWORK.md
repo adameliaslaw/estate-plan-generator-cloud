@@ -88,27 +88,36 @@ delete key id `c059f6a569611c0aa9f74fa93fe1d45707f36d21`, create a replacement. 
 account's usage logs, and decide whether to `git filter-repo` the history before the repo stays
 public.
 
-### ⚠️ What this engine is NOT wired to yet — read before assuming it works end to end
+### It IS wired — here is what exists, and the one thing that still needs a human
 
-The engine is verified, but it is currently an **island**. Two things stand between it and a
-usable feature, and neither is written:
+**UI:** `src/pages/admin/InheritanceTaxPage.tsx`, routed at `/inheritance-tax`
+(`ROUTES.INHERITANCE_TAX`), staff-only via `AppLayout allowedRoles={[...STAFF_ROLES]}`, with a
+sidebar entry. It walks the whole flow: decedent + flags → personal representative → beneficiaries
+and bequests → deductions → **Save → Compute → Request review → Approve | Finalize → Load IT-R**,
+plus the audit trail with a live chain-validity badge. Each button unlocks only when the server
+would allow it, and any edit clears the computation and checkpoint — mirroring the rule that a form
+renders only from a frozen, reviewed snapshot.
 
-1. **No mapping from this app's data to the engine's input.** Every callable takes an IT-R
-   `Matter` (see `functions/src/inheritance-tax/types.ts`) — decedent, beneficiaries with
-   `relationship` per N.J.S.A. 54:34-2, bequests with `fairMarketValue`, deductions,
-   `personalRepresentative`. That is **not** this app's questionnaire/client shape. Nobody has
-   written the translation, and it is not mechanical: the beneficiary `relationship` enum drives
-   the entire tax class, so a sloppy mapping produces confident wrong numbers rather than an error.
-2. **No UI.** There is no page, no route, no service wrapper in `src/services/`. The callables
-   exist and are firm-scoped, but nothing in the frontend calls them.
+**Service:** `src/services/inheritance-tax-service.ts` — `httpsCallable` wrappers, following
+`client-service.ts`.
 
-So a session that merges this and reports "inheritance tax is done" is wrong. What is done is the
-computation, the persistence, the review/freeze gate, and the proof that the figures match the
-State's published examples. What remains is connecting it to this app's data and screens.
+**Types:** `src/types/inheritance-tax.ts` — the input shape plus the enums. The relationship picker
+is **grouped by tax class** (A exempt / C $25k then 11–16% / D 15–16% no exemption / E exempt),
+because that field alone determines the class under N.J.S.A. 54:34-2 and a wrong pick produces
+confident wrong numbers rather than an error. Bequest types are labelled by IT-R schedule
+(A, B, B-1…B-4, C) so they reconcile against the form.
 
-Estimate honestly before starting: the mapping is the risky half, and it deserves its own gold
-cases (take a matter whose answer is already known, run it through the mapping, and check the
-output against the hand-computed figures — the engine's own gold cases do not cover your mapping).
+**Deliberately NOT built: any mapping from the estate-planning questionnaire.** A decedent is
+almost always a new intake, not a former planning client, so the two data models are kept apart.
+`saveInheritanceMatter` accepts an optional `clientId` for the occasional case where a planning
+client has died — an association for cross-reference, not data sharing. Do not build a
+questionnaire→IT-R importer on the strength of that field.
+
+**What still needs a human:** a browser pass. `tsc -b`, `npm run lint` (0 errors) and
+`npm run build` are green, and the 774-test suite passes, but per CLAUDE.md rule 4 type-checks
+prove the code, not the feature. Nobody has clicked through this page against a live Firestore.
+Walk one matter whose answer you already know, end to end, before it touches a client file — and
+expect the server to reject a malformed matter with a schema message rather than failing quietly.
 
 ### Where this came from — the source repo is archived
 

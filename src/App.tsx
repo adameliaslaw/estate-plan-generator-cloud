@@ -28,6 +28,7 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const CalendarPage = lazy(() => import('@/pages/admin/CalendarPage'));
 const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
+const InheritanceTaxPage = lazy(() => import('@/pages/admin/InheritanceTaxPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
 const PendingTranscriptsPage = lazy(() => import('@/pages/admin/PendingTranscriptsPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
@@ -85,6 +86,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <ClientListPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.INHERITANCE_TAX}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <InheritanceTaxPage />
                 </AppLayout>
               }
             />

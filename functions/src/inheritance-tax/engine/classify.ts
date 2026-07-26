@@ -37,10 +37,8 @@ export function classifyBeneficiary(relationship: Relationship): TaxClass {
     case 'step_grandchild':
     case 'stepbrother_stepsister':
     case 'stepparent':
-    // Spouse/CU/DP of a stepchild is Class D (not Class C) — N.J.A.C. 18:26-1.1
-    case 'stepchild_in_law':
-    // Spouse/CU/DP of a mutually acknowledged child is Class D — N.J.A.C. 18:26-1.1
-    case 'mutually_acknowledged_child_in_law':
+    case 'stepchild_in_law': // spouse/CU/DP of a stepchild — Class D, not C (N.J.A.C. 18:26-1.1)
+    case 'mutually_acknowledged_child_in_law': // spouse/CU/DP of a mutually acknowledged child — Class D (N.J.A.C. 18:26-1.1)
     case 'ex_spouse':
     case 'friend':
     case 'non_certified_domestic_partner':

@@ -414,8 +414,9 @@ export function computeEstate(
 
   // Capture attorney-provided inputs now so contingentAmounts feeds into the scale.
   const contingentAmounts = matter.contingentAmounts ?? 0;
+  // Line 9 balance. Held in cents only — the per-beneficiary scale is a cents ratio, so the
+  // dollars conversion had no consumer.
   const balanceOfEstateCents = Math.max(0, netEstateCents - toCents(contingentAmounts));
-  const balanceOfEstate = fromCents(balanceOfEstateCents);
 
   // Per N.J.A.C. 18:26-1.1 and the IT-R (12-24) Summary Page:
   // deductions are applied at the estate level; the resulting balance (Line 9) is
