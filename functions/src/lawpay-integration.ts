@@ -16,7 +16,8 @@
  *
  * Firestore path:  firms/{firmId}/clients/{clientId}/payments/{paymentId}
  * Environment:     LAWPAY_API_KEY, LAWPAY_MERCHANT_ID
- *                  LAWPAY_WEBHOOK_SECRET (for signature verification)
+ *                  LAWPAY_WEBHOOK_TOKEN (the token in the registered Event URL — 8am does not
+ *                  sign webhooks, so the token plus a gateway re-read establish authenticity)
  */
 
 import { onRequest, HttpsError } from 'firebase-functions/v2/https';
@@ -111,73 +112,137 @@ function getLawPayCredentials(): {
 }
 
 /**
- * Verify the HMAC-SHA256 signature on incoming LawPay webhooks.
+ * Verify that the caller knows the token embedded in the Event URL we registered with 8am.
  *
- * IMPORTANT: Before going live with real payments, replace this
- * placeholder with the actual HMAC-SHA256 verification using your
- * LawPay webhook signing secret.
+ * 8am does NOT sign webhooks. Their API reference documents webhook delivery — an Event URL set
+ * on the partner OAuth application, retried every 10 minutes up to 25 times until you answer 200
+ * — and specifies no signing secret, HMAC, signature header or IP allowlist. This matches what
+ * the LawPay dashboard does in practice: creating a webhook issues no secret. The previous
+ * implementation here verified an HMAC-SHA256 over `X-AffiniPay-Signature` against a
+ * LAWPAY_WEBHOOK_SECRET; that header is not sent, so it rejected every request with 401, and the
+ * secret it required never existed — which failed every functions deploy from 2026-07-18.
  *
- * Implementation steps:
- *   1. Set the signing secret: firebase functions:secrets:set LAWPAY_WEBHOOK_SECRET
- *   2. Compute HMAC-SHA256 of the raw request body using the secret
- *   3. Compare with the X-AffiniPay-Signature header (timing-safe comparison)
+ * So authenticity is established two ways instead, neither of which depends on 8am signing:
+ *   1. this token, which only we and 8am's configuration know; and
+ *   2. `fetchVerifiedCharge`, which re-reads the transaction from the API and trusts THAT rather
+ *      than the request body.
  *
- * Example:
- *   import { createHmac, timingSafeEqual } from 'crypto';
- *   const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
- *   const actual = req.headers['x-affinipay-signature'] as string;
- *   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+ * The token is read from `?token=` or any path segment, because which of those a Cloud Run v2
+ * request exposes depends on the URL form the Event URL uses. Both are compared against a
+ * SHA-256 digest so `timingSafeEqual` never sees mismatched lengths (it throws on those, and the
+ * throw itself would leak length).
  */
-function verifyWebhookSignature(
-  req: { headers: Record<string, string | string[] | undefined> },
-  rawBody: string,
-): boolean {
-  const webhookSecret = process.env.LAWPAY_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    // Only allow bypass in the Firebase emulator — reject in production
-    if (process.env.FUNCTIONS_EMULATOR === 'true') {
-      console.warn(
-        '[lawpayWebhook] LAWPAY_WEBHOOK_SECRET not set — skipping signature verification (emulator only).',
-      );
-      return true;
-    }
+function verifyWebhookToken(req: {
+  path?: string;
+  query?: Record<string, unknown>;
+}): boolean {
+  const expected = (process.env.LAWPAY_WEBHOOK_TOKEN || '').trim();
+  if (!expected) {
+    // Fail closed. An unset token must never mean "let everyone in".
     console.error(
-      '[lawpayWebhook] LAWPAY_WEBHOOK_SECRET not set — rejecting request. ' +
-      'Set this secret before deploying to production.',
+      '[lawpayWebhook] LAWPAY_WEBHOOK_TOKEN not set — rejecting. Register the Event URL with ' +
+      'its token before expecting webhooks to be accepted.',
     );
     return false;
   }
 
-  const signature = req.headers['x-affinipay-signature'] as string | undefined;
-  if (!signature) {
-    console.error('[lawpayWebhook] Missing X-AffiniPay-Signature header');
-    return false;
+  const fromQuery = typeof req.query?.['token'] === 'string' ? (req.query['token'] as string) : '';
+  const fromPath = (req.path ?? '').split('/').filter(Boolean);
+  const candidates = [fromQuery, ...fromPath].filter(Boolean);
+
+  const expectedDigest = crypto.createHash('sha256').update(expected).digest();
+  for (const candidate of candidates) {
+    const digest = crypto.createHash('sha256').update(candidate).digest();
+    if (crypto.timingSafeEqual(digest, expectedDigest)) return true;
   }
 
-  // crypto is imported at the top of the file
-  try {
-    const expected = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(rawBody)
-      .digest('hex');
-
-    // Use timingSafeEqual to prevent timing attacks
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expected)
-    );
-
-    if (!isValid) {
-      console.error('[lawpayWebhook] Signature mismatch');
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('[lawpayWebhook] Error verifying signature:', error);
-    return false;
-  }
+  console.error('[lawpayWebhook] No valid token on the request — rejecting');
+  return false;
 }
+
+/** A charge as re-read from the gateway. Only these fields are trusted downstream. */
+interface VerifiedCharge {
+  id: string;
+  status: string;
+  /** Cents, per the gateway's own unit. */
+  amount: number;
+  reference: string;
+  failureReason?: string;
+}
+
+type ChargeLookup =
+  | { outcome: 'verified'; charge: VerifiedCharge }
+  | { outcome: 'not-found' }
+  /** Network or 5xx — the caller should answer non-200 so 8am redelivers. */
+  | { outcome: 'unavailable'; detail: string };
+
+/**
+ * Re-read a charge from the gateway so the webhook body is never the source of truth.
+ *
+ * Because 8am does not sign its callbacks, anyone who learns the Event URL could post a
+ * plausible "charge.completed". Taking only the transaction id from the body and asking the API
+ * what actually happened makes that harmless: a forged payload can cause a lookup and nothing
+ * else. Every figure written to Firestore — amount, status, and the reference that identifies
+ * which Payment doc to touch — comes from this response.
+ *
+ * GET on the same `/v1/charges` resource `processDirectCharge` already POSTs to, with the same
+ * Basic auth. An unexpected response shape resolves to `not-found`, which is inert.
+ */
+async function fetchVerifiedCharge(transactionId: string): Promise<ChargeLookup> {
+  const apiKey = (process.env.LAWPAY_API_KEY || '').trim();
+  if (!apiKey) return { outcome: 'unavailable', detail: 'LAWPAY_API_KEY not set' };
+
+  const authHeader = 'Basic ' + Buffer.from(`${apiKey}:`).toString('base64');
+  let response: Response;
+  try {
+    response = await fetch(`https://api.8am.com/v1/charges/${encodeURIComponent(transactionId)}`, {
+      method: 'GET',
+      headers: { Authorization: authHeader, Accept: 'application/json' },
+    });
+  } catch (err) {
+    return { outcome: 'unavailable', detail: err instanceof Error ? err.message : String(err) };
+  }
+
+  if (response.status === 404) return { outcome: 'not-found' };
+  if (response.status >= 500) return { outcome: 'unavailable', detail: `gateway ${response.status}` };
+  if (!response.ok) {
+    // 401/403 means OUR credentials are wrong — worth redelivery once it is fixed.
+    return { outcome: 'unavailable', detail: `gateway ${response.status}` };
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await response.json() as Record<string, unknown>;
+  } catch {
+    return { outcome: 'not-found' };
+  }
+
+  const id = typeof body['id'] === 'string' ? body['id'] : '';
+  const status = typeof body['status'] === 'string' ? body['status'] : '';
+  if (!id || !status) return { outcome: 'not-found' };
+
+  return {
+    outcome: 'verified',
+    charge: {
+      id,
+      status,
+      amount: typeof body['amount'] === 'number' ? body['amount'] : 0,
+      reference: typeof body['reference'] === 'string' ? body['reference'] : '',
+      ...(typeof body['failure_reason'] === 'string' ? { failureReason: body['failure_reason'] } : {}),
+    },
+  };
+}
+
+/**
+ * Gateway statuses that mean the money is good.
+ *
+ * `processDirectCharge` observes AUTHORIZED on a successful card charge ("auto-captured daily"),
+ * and the settled/captured wording varies by method. The set is matched case-insensitively and
+ * is deliberately a WHITELIST: an unrecognised status never marks a payment paid, and gets
+ * logged verbatim so the first real delivery teaches us the vocabulary instead of being
+ * silently mis-read as success.
+ */
+const PAID_STATUSES = new Set(['authorized', 'completed', 'captured', 'settled', 'paid', 'succeeded']);
 
 /**
  * Build the Firestore reference for a Payment document.
@@ -503,8 +568,10 @@ export const createPaymentRequest = functions
  *   - charge.failed     → status: 'pending'  (allow retry)
  *   - charge.refunded   → status: 'refunded'
  *
- * LawPay signs each request with HMAC-SHA256 via X-AffiniPay-Signature.
- * Always return HTTP 200 so LawPay stops retrying — log errors internally.
+ * 8am does NOT sign these requests. The caller is authenticated by the token in the Event URL,
+ * and every figure is re-read from the gateway (see fetchVerifiedCharge) rather than taken from
+ * the body. Answer 200 on any definitive outcome so 8am stops retrying; answer 503 only when
+ * verification could not be completed, which is exactly when a redelivery helps.
  */
 export const lawpayWebhook = onRequest(
   {
@@ -515,7 +582,10 @@ export const lawpayWebhook = onRequest(
     // from process.env. Without this v2 `secrets` option the env var is never
     // populated in production, the signature check fails closed, and every
     // webhook is rejected with 401 (audit #165).
-    secrets: ['LAWPAY_WEBHOOK_SECRET'],
+    // LAWPAY_WEBHOOK_TOKEN authenticates the caller; LAWPAY_API_KEY re-reads the charge so the
+    // request body is never trusted. LAWPAY_WEBHOOK_SECRET is gone: 8am issues no signing
+    // secret, so binding one both rejected every webhook and failed every deploy.
+    secrets: ['LAWPAY_WEBHOOK_TOKEN', 'LAWPAY_API_KEY'],
     // CORS: allow requests from LawPay / AffiniPay domains
     cors: [
       'https://secure.lawpay.com',
@@ -531,15 +601,9 @@ export const lawpayWebhook = onRequest(
     }
 
     // ------------------------------------------------------------------
-    // 1. Verify webhook signature
+    // 1. Authenticate the caller by the token in the Event URL
     // ------------------------------------------------------------------
-    const rawBody =
-      typeof req.rawBody === 'object'
-        ? (req.rawBody as Buffer).toString('utf8')
-        : JSON.stringify(req.body);
-
-    if (!verifyWebhookSignature(req, rawBody)) {
-      console.error('[lawpayWebhook] Signature verification failed — rejecting request');
+    if (!verifyWebhookToken(req)) {
       res.status(401).send('Unauthorized');
       return;
     }
@@ -569,6 +633,38 @@ export const lawpayWebhook = onRequest(
     }
 
     // ------------------------------------------------------------------
+    // 2b. Re-read the charge from the gateway. The id above is the ONLY thing taken from the
+    //     body; the amount, status and reference used below all come from this response.
+    // ------------------------------------------------------------------
+    const lookup = await fetchVerifiedCharge(transactionId);
+    if (lookup.outcome === 'unavailable') {
+      // Could not establish what actually happened. Answer non-200 so 8am redelivers rather
+      // than acting on an unverified payload or dropping a real payment.
+      console.error(
+        `[lawpayWebhook] Could not verify transactionId=${transactionId} (${lookup.detail}) — asking for redelivery`,
+      );
+      res.status(503).send('Verification unavailable');
+      return;
+    }
+    if (lookup.outcome === 'not-found') {
+      console.error(
+        `[lawpayWebhook] Gateway does not know transactionId=${transactionId} — ignoring (payload was not authentic, or the charge is gone)`,
+      );
+      res.status(200).send('OK');
+      return;
+    }
+    const charge = lookup.charge;
+    if (type === 'charge.completed' && !PAID_STATUSES.has(charge.status.toLowerCase())) {
+      // The body claimed success; the gateway disagrees. Never mark a payment paid on the
+      // strength of the claim, and log the status verbatim so the vocabulary becomes known.
+      console.error(
+        `[lawpayWebhook] Refusing to mark paid — gateway status="${charge.status}" for transactionId=${transactionId}`,
+      );
+      res.status(200).send('OK');
+      return;
+    }
+
+    // ------------------------------------------------------------------
     // 3. Resolve the Firestore Payment doc from the `reference` field
     //    reference format: "{firmId}-{clientId}-{paymentDocId}"
     //    We stored the transactionId as the doc ID, so we do a collectionGroup query.
@@ -578,7 +674,8 @@ export const lawpayWebhook = onRequest(
 
     try {
       // Prefer a direct lookup if reference is available (fast path)
-      const reference: string = (data.reference as string) ?? '';
+      // From the gateway, not the caller.
+      const reference: string = charge.reference;
       const refParts = reference.split('::');
 
       let paymentDocRef: admin.firestore.DocumentReference | null = null;
@@ -655,15 +752,15 @@ export const lawpayWebhook = onRequest(
             // Persist the transactionId so a later charge.refunded (which may
             // arrive with only data.id and no reference) can be matched via the
             // fallback collectionGroup query.
-            updatePayload = { ...updatePayload, status: 'paid', amountPaid: data.amount, balanceDue: 0, paidAt: now, lawPayTransactionId: transactionId };
+            updatePayload = { ...updatePayload, status: 'paid', amountPaid: charge.amount, balanceDue: 0, paidAt: now, lawPayTransactionId: charge.id, lawPayChargeStatus: charge.status };
             console.log(`[lawpayWebhook] Marking payment PAID — transactionId=${transactionId}`);
             break;
           case 'charge.failed':
-            updatePayload = { ...updatePayload, status: 'pending', lastFailureReason: (data.failure_reason as string) ?? 'Charge failed' };
+            updatePayload = { ...updatePayload, status: 'pending', lastFailureReason: charge.failureReason ?? 'Charge failed' };
             console.log(`[lawpayWebhook] Charge FAILED — transactionId=${transactionId} (status stays pending)`);
             break;
           case 'charge.refunded':
-            updatePayload = { ...updatePayload, status: 'refunded', refundedAt: now, refundedAmount: data.amount };
+            updatePayload = { ...updatePayload, status: 'refunded', refundedAt: now, refundedAmount: charge.amount };
             console.log(`[lawpayWebhook] Charge REFUNDED — transactionId=${transactionId}`);
             break;
         }
