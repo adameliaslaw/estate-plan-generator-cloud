@@ -91,6 +91,27 @@ describe('GOLD FND-INTEREST — official it-rinst.pdf interest examples', () => 
     expect(() => validateMatter(EXAMPLE_2)).not.toThrow();
   });
 
+  test("a deduction's payee is accepted and reaches the frozen snapshot", () => {
+    // Schedule D column (B), "Name of Business/Person Paid". Every schema here is .strict(),
+    // so a field the server does not declare is rejected outright rather than dropped —
+    // which is how the form would end up printing a blank column.
+    const withPayee = makeMatter({
+      deductions: [{
+        id: 'd1', type: 'funeral_expenses', description: 'Funeral service',
+        amount: 9_000, payeeName: 'Hillside Funeral Home',
+      }],
+    });
+    expect(() => validateMatter(withPayee)).not.toThrow();
+    expect(buildFormSnapshot(withPayee).scheduleD[0]?.payeeName).toBe('Hillside Funeral Home');
+  });
+
+  test('a deduction without a payee stores no key at all (Firestore rejects undefined)', () => {
+    const noPayee = makeMatter({
+      deductions: [{ id: 'd1', type: 'funeral_expenses', description: 'Funeral', amount: 9_000 }],
+    });
+    expect(Object.hasOwn(buildFormSnapshot(noPayee).scheduleD[0] ?? {}, 'payeeName')).toBe(false);
+  });
+
   // Example 1 (Filing return late with payment, NO prior payments) — §6.3.
   // Tax Due $8,125.00; 86 days late (2023-04-22 → 2023-07-17): 8,125 × 10% × 86/365 = 191.4384.
   // The state worksheet rounds to $191.44; our engine floors in the client's favor → $191.43.

@@ -4,6 +4,46 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-27 PM #2 (Track 1's cheap wins are all shipped — the IT-R now files every figure it computes)
+
+**TL;DR — Took the previous session's ▶ NEXT (`docs/IT-R-FORMS-BUILD-PLAN.md`) and closed §4.1,
+§4.2 and §4.3 in one PR (#189). The Schedules B1–B4 Recap, Form IT-PMT and Schedule D (Parts I,
+II-A and III) are now filled from the approved snapshot. Both open questions in the plan answered
+themselves from the form: the voucher's own printed line says "Amount paid with return (From IT-R
+Summary Page, line 21)", and page 10's rows 1 and 2 really are mislabelled — `2 Schedule B2
+Sto111ckCoops_2` is the **B-1 accounts** row. No computed figure moved: the recap's line 5 and
+Schedule D's grand total are written from Lines 3 and 6 rather than re-added, so the schedules
+cannot contradict the Summary Page.**
+
+**Also fixed, found while mapping:** the deductions dropdown offered "Inheritance tax paid to
+another state" as `other_state_inheritance_tax`, which the server's strict enum has never
+accepted — picking it made the matter unsaveable. Now sends the server's
+`transfer_taxes_other_states`.
+
+**New intake field:** `payeeName` on a deduction ("Paid to" on the page) — Schedule D column (B),
+"Name of Business/Person Paid". Optional throughout, so existing matters keep working.
+
+**Green:** 821/821 (13 new), functions + root tsc, lint 0 errors, build. Two negative controls run
+(swapping the recap rows and misrouting counsel fees both fail the suite), and every assertion
+reads its value back **out of the produced PDF**.
+
+**▶ NEXT — four decisions, none blocking, in [docs/IT-R-FORMS-BUILD-PLAN.md](./docs/IT-R-FORMS-BUILD-PLAN.md) §5.**
+Decision 1 has narrowed: everything cheap is done, and what remains in Track 1 is §4.4 (a per-type
+detail group on `Bequest` for Schedules B-1/B-2/B-3/C) and §4.5 (Schedules A and B — a real intake
+expansion). Track 2 still needs legal research before code; Track 3 (IT-NR) is still a product
+question. Stopping here is defensible: every figure the engine computes is now on the filed form.
+
+**Known gap worth a decision of its own:** two deduction types demand an attorney attestation the
+server enforces and no screen collects — `transfer_taxes_other_states` needs
+`transferTaxEligibility` (N.J.A.C. 18:26-7.16), and `executor_commission` needs
+`executorCommissionEligibility` for a death on or after 2025-12-15 (R.2025 d.152). Both now fail
+with a clear server message rather than an opaque one, but neither can be saved from the UI.
+
+**Still needs Adam (unchanged from below):** the live card test on #185; a real payment through the
+payment page; and a browser pass on the Inheritance Tax page.
+
+---
+
 ## 🔵 SESSION — 2026-07-27 PM (official IT-R fill shipped · deploy outage root-caused and ended)
 
 **TL;DR — Four things shipped and are live. (1) The State's own Form IT-R is now filled from the

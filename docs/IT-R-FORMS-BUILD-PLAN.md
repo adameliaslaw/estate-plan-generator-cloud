@@ -20,20 +20,27 @@ has a **Download official IT-R** button.
 |---|---|---|
 | Cover page — estate info, the five yes/no questions, the two restated figures | 1 | ✅ filled |
 | Summary Page — lines 1–22, tax-class table, total distribution | 2 | ✅ filled |
-| IT-PMT payment voucher | 3 | ⬜ unmapped |
+| IT-PMT payment voucher | 3 | ✅ filled (#189) |
 | Schedule A — NJ real property | 4 | ⬜ needs intake |
 | Schedule B — closely held business | 5 | ⬜ needs intake |
 | Schedule B-1 — financial institution accounts | 6 | ⬜ needs intake |
 | Schedule B-2 — stocks / co-ops | 7 | ⬜ needs intake |
 | Schedule B-3 — municipal and corporate bonds | 8 | ⬜ needs intake |
 | Schedule B-4 — all other property | 9 | ✅ filled (18 rows) |
-| Schedules B1–B4 Recap | 10 | ⬜ **free win** — see 4.1 |
+| Schedules B1–B4 Recap | 10 | ✅ filled (#189) |
 | Schedule C — transfers | 11–12 | ⬜ needs intake |
-| Schedule D — deductions | 13–14 | ⬜ **mostly mappable** — see 4.2 |
+| Schedule D — deductions | 13–14 | ✅ filled — Parts I, II-A and III (#189) |
 | Schedule E — beneficiaries | 15 | ✅ filled (9 rows) |
 
 Every total the unmapped schedules feed **is already on the Summary Page**, so the return's
 arithmetic is complete. What is missing is the itemisation behind those totals.
+
+**Still blank inside the filled schedules**, each for a reason: Part II Section B of Schedule D
+(debts tied to a sale of the decedent's real property — the model has no sale concept); the SS#
+blocks beside the executor's commissions (no SSN is held for a personal representative); the
+Estimated/Agreed checkboxes beside the professional fees (nothing records which a fee is); and the
+eleven per-check boxes on the IT-PMT (how a remittance is split across checks is not in the estate
+record).
 
 Verified by `tests/unit/inheritance-tax-pdf-fill.test.ts`: the gold case is filled and the values
 are read back **out of the produced PDF**, so the State's own $68,389.70 and $558.71 are asserted
@@ -127,6 +134,31 @@ only one that changes how tax is computed.** Do not start it without deciding it
 
 ## 4. Track 1, in the order I would do it
 
+> **4.1, 4.2 and 4.3 are done (#189).** Their entries are kept below as the record of what was
+> decided and why. 4.4 and 4.5 are untouched and still need decision 1 in §5.
+>
+> What was learned doing them, worth keeping:
+> - **Page 10's rows 1 and 2 are the trap the section warned about, and worse than expected**:
+>   `2 Schedule B2 Sto111ckCoops_2` is the **B-1 accounts** row, not a B-2 row. Resolved by
+>   y-position (642 vs 615) against the printed labels; a test now fills B-1, B-2 and B-3 with
+>   distinct amounts so a swap cannot pass.
+> - **The IT-PMT question answered itself.** Printed above the box: *"Amount paid with return
+>   (From IT-R Summary Page, line 21)"*. No need to go to the instructions.
+> - **Schedule D's categories are pre-printed**, so a row's meaning comes from the block it sits
+>   in. Column (A) therefore carries the attorney's description in Parts I/II, and
+>   `type — description` in Part III, where the page names no category.
+> - **The payee field went in as `payeeName`** on `Deduction`/`ScheduleDeductionItem` — optional,
+>   declared in the Zod schema, carried through `buildFormSnapshot`, with a "Paid to" box on the
+>   page that drops the key when cleared. Exactly the `addressParts` pattern.
+> - **Found and fixed while mapping**: the frontend offered a deduction type
+>   (`other_state_inheritance_tax`) that the server's strict enum never accepted, so choosing
+>   "Inheritance tax paid to another state" made the matter unsaveable. The value is now the
+>   server's `transfer_taxes_other_states`. **It still needs the `transferTaxEligibility`
+>   attestation the server requires (N.J.A.C. 18:26-7.16), which no screen collects** — as is
+>   also true of `executorCommissionEligibility` for a death on or after 2025-12-15. Both now
+>   fail with a clear server message instead of an opaque one; collecting the attestations is
+>   unbuilt work.
+
 ### 4.1 Schedules B1–B4 Recap (page 10) — do this first
 Five boxes: the B-1, B-2, B-3 and B-4 totals, and their sum, which is Line 3. **The engine already
 has all four** (`it-r.ts` sums them into `otherPersonal`). No model change, no intake change.
@@ -175,8 +207,10 @@ attorney knows is theirs to complete. Either capture the fields or leave the sch
 
 ## 5. Decisions needed before starting
 
-1. **How far to take Track 1.** Through 4.3 gets every cheap win and leaves the two expensive
-   schedules alone. Through 4.4 covers most real estates. 4.5 is the completionist option.
+1. **How far to take Track 1.** ~~Through 4.3 gets every cheap win~~ — **done (#189)**. The open
+   choice is now 4.4 (a per-type detail group on `Bequest`, covering most real estates) and then
+   4.5 (Schedules A and B, a real intake expansion). Stopping here is a defensible place to stop:
+   every figure on the return is filed, and the two unmapped asset schedules are itemisation.
 2. **Whether Track 2 is wanted at all**, given IT-Estate needs legal research before code, and
    L-9(A)/IT-EXT may be rare enough in practice to hand-fill.
 3. **Whether Track 3 (IT-NR) is in the product at all.** Today a nonresident matter is refused

@@ -225,6 +225,12 @@ export interface Deduction {
   description: string;
   amount: number;
   /**
+   * Column (B) of Schedule D — "Name of Business/Person Paid" (Parts I and III) or "Owed"
+   * (Part II). Optional: matters entered before this field existed carry no payee, and the
+   * schedule prints the row with that column blank rather than refusing to render.
+   */
+  payeeName?: string;
+  /**
    * Required when type is 'executor_commission'.
    * Attorney must complete this to attest eligibility under N.J.A.C. 18:26-7.10(d).
    * Validated by validateMatter() — omitting it on an executor_commission deduction
@@ -486,6 +492,8 @@ export interface ScheduleDeductionItem {
   type: DeductionType;
   description: string;
   amount: number;
+  /** Schedule D column (B) — "Name of Business/Person Paid". Absent on older matters. */
+  payeeName?: string;
   executorCommissionEligibility?: ExecutorCommissionEligibility;
   transferTaxEligibility?: TransferTaxEligibility;
 }

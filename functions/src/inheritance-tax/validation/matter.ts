@@ -167,6 +167,9 @@ const DeductionSchema = z.object({
   type: DeductionTypeSchema,
   description: z.string().min(1),
   amount: z.number().finite().positive('Deduction amount must be > 0'),
+  // Schedule D column (B). Optional — a matter entered before this field existed has no payee,
+  // and a blank column is honest where a guessed name would not be.
+  payeeName: z.string().min(1).optional(),
   executorCommissionEligibility: ExecutorCommissionEligibilitySchema.optional(),
   transferTaxEligibility: TransferTaxEligibilitySchema.optional(),
 }).strict();
