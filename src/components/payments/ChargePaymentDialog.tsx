@@ -156,6 +156,25 @@ function loadHostedFieldsSdk(): Promise<void> {
   return sdkLoadPromise;
 }
 
+/**
+ * Tear the SDK out of the page so the next load starts from nothing.
+ *
+ * `AffiniPay.HostedFields` is a page-level singleton — it exposes `isInitialized` and gives us
+ * `getPaymentToken`/`getState` but NO teardown — and it keeps its own registry of the iframes it
+ * mounted. We destroy that DOM routinely: the dialog unmounts on close, and the
+ * `paymentType === 'card'` branch unmounts the card containers on a type switch. The singleton
+ * goes on holding those detached iframes, and its next `iframe.contentWindow.postMessage(...)`
+ * throws "Cannot read properties of null (reading 'postMessage')".
+ *
+ * With no destroy API, replacing the global is the only real reset available.
+ */
+function resetHostedFieldsSdk(): void {
+  const existing = document.querySelector(`script[src="${HOSTED_FIELDS_SDK_URL}"]`);
+  if (existing) existing.remove();
+  delete window.AffiniPay;
+  sdkLoadPromise = null;
+}
+
 /** Attempt to load SDK with retries */
 async function loadHostedFieldsSdkWithRetry(maxAttempts = 3): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -270,6 +289,10 @@ export function ChargePaymentDialog({
     setSdkReady(false);
 
     try {
+      // Every init gets a pristine SDK. A singleton carried over from a previous open still
+      // points at iframes React has since unmounted, and talking to those is the postMessage
+      // crash. Costs one (cached) script fetch per dialog open.
+      resetHostedFieldsSdk();
       await loadHostedFieldsSdkWithRetry();
 
       // Wait a tick for the DOM elements to be rendered
@@ -338,22 +361,29 @@ export function ChargePaymentDialog({
     }
   }, [lawPayPublicKey, open, paymentType]);
 
+  /**
+   * Which (open, paymentType) combination the SDK is currently initialized for. The effect's
+   * `initializeHostedFields` dependency changes identity whenever `lawPayPublicKey` arrives from
+   * the branding fetch, and stacking a second `initializeFields` call on the singleton is what
+   * corrupts its iframe registry. One init per combination, no more.
+   */
+  const initKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!open) {
       hostedFieldsRef.current = null;
+      initKeyRef.current = null;
       return;
     }
 
-    // Small delay to let the dialog DOM render before initializing iframes
-    const timer = setTimeout(() => {
-      // Clean up any existing iframes from a previous init (e.g. payment type change)
-      for (const containerId of ['af-card-number', 'af-card-cvv', 'af-routing-number', 'af-account-number']) {
-        const el = document.getElementById(containerId);
-        if (el) {
-          el.innerHTML = '';
-        }
-      }
+    const key = paymentType;
+    if (initKeyRef.current === key) return;
 
+    // Small delay to let the dialog DOM render before initializing iframes.
+    const timer = setTimeout(() => {
+      // The containers are NOT wiped. React owns those divs and the SDK owns the iframes inside
+      // them; emptying them by hand is what detached the iframe the SDK was still tracking.
+      initKeyRef.current = key;
       hostedFieldsRef.current = null;
       initializeHostedFields();
     }, 300);
