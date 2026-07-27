@@ -217,6 +217,13 @@ export interface CheckpointResult {
 export interface ITRFormResult {
   formData: Record<string, unknown>;
   html?: string;
+  /**
+   * The State's own Form IT-R booklet, filled from the approved snapshot and base64-encoded.
+   * Present only when the caller asks for it. Unlike `html` — which is the "NOT FOR FILING"
+   * workpaper — this is the official form, with its fields left interactive so the attorney
+   * can correct a box before signing.
+   */
+  pdfBase64?: string;
   finalizationKind: 'two-attorney' | 'solo';
   workpaper: true;
 }
