@@ -24,6 +24,17 @@ export { transcribeAudio, summarizeTranscription } from './transcribe-audio';
 export { createPaymentRequest, lawpayWebhook, processDirectCharge } from './lawpay-integration';
 export { pushEventToGoogleCalendar, pullGoogleCalendarEvents, syncGoogleCalendar, triggerFirmCalendarSync } from './calendar-sync';
 export { checkDocumentCompliance } from './ai-compliance-check';
+export { computeInheritanceTax } from './inheritance-tax-compute';
+export {
+  saveInheritanceMatter,
+  computeAndStoreInheritanceTax,
+  requestInheritanceReview,
+  approveInheritanceReview,
+  finalizeInheritanceReview,
+  getInheritanceForm,
+  listInheritanceMatters,
+  getInheritanceAuditTrail,
+} from './inheritance-tax-review';
 export {
   sendQuestionnaireInvitation,
   sendQuestionnaireCompleteNotification,

@@ -656,6 +656,30 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /firms/{firmId}/inheritanceMatters/{matterId}
+    // NJ inheritance-tax matters, their computations, review checkpoints,
+    // and the HMAC audit chain.
+    //
+    // Admin SDK ONLY — every path here is closed to the client SDK, and that
+    // is deliberate rather than an oversight:
+    //   * the stored record contains the decedent's SSN;
+    //   * the audit chain is append-only and hash-linked — a client write
+    //     would break verification for every later entry;
+    //   * a checkpoint's status IS the approval gate. Client write access
+    //     would let a matter approve itself.
+    // All access goes through the callables in
+    // functions/src/inheritance-tax-review.ts, which enforce firm scope,
+    // separation of duties, and the audit chain.
+    // ==========================================================
+    match /firms/{firmId}/inheritanceMatters/{matterId} {
+      allow read, write: if false;
+
+      match /{subcollection}/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ==========================================================
     // DEFAULT DENY
     // Any path not explicitly matched above is denied by default.
     // This is Firestore's built-in behaviour, but calling it out

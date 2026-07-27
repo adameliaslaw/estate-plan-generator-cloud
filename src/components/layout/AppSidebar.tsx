@@ -1,5 +1,6 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
+  Calculator,
   LayoutDashboard,
   Users,
   Calendar,
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Payments', href: ROUTES.PAYMENTS, icon: DollarSign },
   { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
   { label: 'Transcripts', href: ROUTES.PENDING_TRANSCRIPTS, icon: FileText },
+  { label: 'Inheritance Tax', href: ROUTES.INHERITANCE_TAX, icon: Calculator },
 ];
 
 interface AppSidebarProps {

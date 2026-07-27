@@ -4,6 +4,141 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔴 SESSION — 2026-07-26 (NJ inheritance-tax engine ported in from elias-estate-suite — 4 ITEMS NEED ADAM AT A DESK)
+
+**TL;DR — The NJ Transfer Inheritance Tax engine now lives in this repo.** It originates in
+`adameliaslaw/inheritnj`, was ported and gold-case-verified in `adameliaslaw/elias-estate-suite`
+(`apps/inherit`), and was the only thing that repo had which this one lacked. That repo is now an
+archive; development continues here. Three commits on branch `feat/nj-inheritance-tax-engine`:
+
+1. **Engine** — `functions/src/inheritance-tax/` (engine, rule sets by date of death, strict
+   validation, IT-R / IT-Estate / IT-EXT / L-9(A) form builders). Pure TypeScript: no Firebase, no
+   Chromium. PDF rendering deliberately NOT ported — this repo already renders PDF via jspdf and
+   DOCX via docxtemplater.
+2. **Persistence** — `inheritance-tax-store.ts` (Firestore + HMAC audit chain, appended inside a
+   transaction) and `inheritance-tax-review.ts` (save → compute → request review →
+   approve/finalize → IT-R). NOT a port of the suite's Firestore adapter: that one caches in memory
+   and writes behind, requiring `--max-instances=1`, which would mean stale reads and lost writes
+   under Cloud Functions.
+3. **Legal spec** — `docs/IT-R-SPECIFICATION.md`, the line-by-line decode of the State's IT-R
+   instructions. It is *why* the figures can be trusted. Cite it by section before changing
+   anything in the engine.
+
+**Verified:** gold cases 25/25 reproducing the State's own worked examples to the cent —
+**$558.71 / $191.43 / Class C $8,250**; full suite **774 passed**; `tsc --noEmit` clean in root and
+`functions/`.
+
+**Rules that must not be weakened:** the IT-R renders only from an **approved** checkpoint's frozen
+snapshot (so an edit can never retroactively change a signed-off form); `approveInheritanceReview`
+refuses a self-approval unconditionally, and `finalizeInheritanceReview` is a *separate*
+requester-only act audited as `matter_finalized`, never `review_approved`; out-of-scope estate
+structures (nonresident decedent, pre-2002 death, deductions exceeding the estate, non-pro-rata
+apportionment) are **refused**, never estimated.
+
+### ▶ NEXT (needs Adam at a desk) — do these in order
+
+**1. Apply the three commits.** They are not in this repo yet — the agent session had read-only
+access. Either approve the repo-push prompt in a Claude Code session, or apply the delivered bundle
+from a terminal:
+
+```bash
+git fetch /path/to/nj-inheritance-tax.bundle \
+  feat/nj-inheritance-tax-engine:feat/nj-inheritance-tax-engine
+git checkout feat/nj-inheritance-tax-engine
+npx vitest run && (cd functions && npx tsc --noEmit)   # expect 774 passed, clean
+```
+
+**2. Set the audit-chain signing key.**
+
+```bash
+firebase functions:secrets:set INHERITANCE_AUDIT_KEY
+```
+
+Any high-entropy value. The code **fails closed** without it rather than degrading to a plain
+SHA-256 that anyone who can read the log could recompute. **Never rotate it once chains exist** —
+a chain only verifies under the key that wrote it.
+
+**3. Merge — then deploy the RULES by hand.**
+
+Merging to `main` is enough for the code: `.github/workflows/firebase-functions-deploy.yml` and
+`firebase-hosting-deploy.yml` auto-deploy functions and hosting on every push to `main` (CLAUDE.md
+rule 5 — don't deploy those manually).
+
+**Firestore rules are NOT covered by either workflow.** This branch closes
+`/firms/{firmId}/inheritanceMatters/**` to the client SDK, and that change only takes effect when
+you run:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+It matters: the stored record contains the decedent's SSN, the audit chain is append-only and
+hash-linked, and a checkpoint's `status` **is** the approval gate — client write access would let a
+matter approve itself.
+
+⚠️ Because this touches `firestore.rules`, it is on the **Never-Break List** (CLAUDE.md rule 7):
+it needs explicit sign-off before merging, not agent auto-merge.
+
+**4. Rotate the exposed service-account key** *(independent of 1–3, and time-sensitive)*. Per
+`AUDIT_HANDOFF.md` §1, a full GCP service-account JSON with private key was committed inside
+`.gitignore` and, although `4c01354` removed it from the working tree, **history was never
+rewritten** — it is still readable at commit `223bdeb`, and this repo is now public. Google Cloud
+Console → IAM → Service Accounts → `estate-plan-generator@appspot.gserviceaccount.com` → Keys →
+delete key id `c059f6a569611c0aa9f74fa93fe1d45707f36d21`, create a replacement. Then check that
+account's usage logs, and decide whether to `git filter-repo` the history before the repo stays
+public.
+
+### It IS wired — here is what exists, and the one thing that still needs a human
+
+**UI:** `src/pages/admin/InheritanceTaxPage.tsx`, routed at `/inheritance-tax`
+(`ROUTES.INHERITANCE_TAX`), staff-only via `AppLayout allowedRoles={[...STAFF_ROLES]}`. Two ways
+in: an **"Inheritance Tax" button in the dashboard header** (beside New Client) and a sidebar
+entry. It walks the whole flow: decedent + flags → personal representative → beneficiaries
+and bequests → deductions → **Save → Compute → Request review → Approve | Finalize → Load IT-R**,
+plus the audit trail with a live chain-validity badge. Each button unlocks only when the server
+would allow it, and any edit clears the computation and checkpoint — mirroring the rule that a form
+renders only from a frozen, reviewed snapshot.
+
+**Service:** `src/services/inheritance-tax-service.ts` — `httpsCallable` wrappers, following
+`client-service.ts`.
+
+**Types:** `src/types/inheritance-tax.ts` — the input shape plus the enums. The relationship picker
+is **grouped by tax class** (A exempt / C $25k then 11–16% / D 15–16% no exemption / E exempt),
+because that field alone determines the class under N.J.S.A. 54:34-2 and a wrong pick produces
+confident wrong numbers rather than an error. Bequest types are labelled by IT-R schedule
+(A, B, B-1…B-4, C) so they reconcile against the form.
+
+**Deliberately NOT built: any mapping from the estate-planning questionnaire.** A decedent is
+almost always a new intake, not a former planning client, so the two data models are kept apart.
+`saveInheritanceMatter` accepts an optional `clientId` for the occasional case where a planning
+client has died — an association for cross-reference, not data sharing. Do not build a
+questionnaire→IT-R importer on the strength of that field.
+
+**What still needs a human:** a browser pass. `tsc -b`, `npm run lint` (0 errors) and
+`npm run build` are green, and the 774-test suite passes, but per CLAUDE.md rule 4 type-checks
+prove the code, not the feature. Nobody has clicked through this page against a live Firestore.
+Walk one matter whose answer you already know, end to end, before it touches a client file — and
+expect the server to reject a malformed matter with a schema message rather than failing quietly.
+
+### Where this came from — the source repo is archived
+
+`adameliaslaw/elias-estate-suite` is **an archive as of 2026-07-26** and is no longer developed.
+Do not open work there, and do not expect anyone to maintain the engine at its origin — this repo
+is now the only live home for it. Its `docs/HOMEWORK.md` has the full account of what that
+consolidation did and did not do (it moved one repo of four; this repo was named its centrepiece
+and never opened). If the branch was delivered via that repo's `transport/nj-inheritance-tax-engine`
+branch, that is why — the session that built this had read-only access here.
+
+The engine's provenance chain is `inheritnj` → `elias-estate-suite/apps/inherit` → here, and the
+gold cases came the whole way intact.
+
+### Not carried over from the suite, on purpose
+`apps/generator` (one document type — this app has 22), the standalone HTTP servers, CLI, web UIs,
+the reviewer-invitation lifecycle, purge tooling, deployment manifests, `@elias/foundation` and
+`@elias/canonical`. All of it was infrastructure for running the tax engine as a separate product.
+
+---
+
 ## 📍 SESSION — 2026-07-15 (BL/BK/BM security batch + finding T shipped · #64 VALIDATED — 8.9-min functions deploy)
 
 **TL;DR — Backlog session while the card test waits. (1) Security: PR #159 drained the round-2 leftovers — `linkClient` now requires a VERIFIED email to claim an existing client record (unverified password-signup takeover closed — same class as R5-010), checks the firm exists before minting claims, and rate-limits prospect stubs via the shared per-firm throttle; deliberate HttpsError codes rethrown (were flattened to `internal`); `getFirmBranding` only returns `googleMapsApiKey` to firm members (claim match, or linked client record for claimless anon questionnaire sessions). 9 new emulator tests (incl. the harness's first v1-callable mock), all negative-control-verified; suite 54/54. (2) **#64 validation COMPLETE:** #159 was the first `functions/src` merge since #155 — the deploy went green in 8.9 min (14:26→14:35Z), selective (only changed functions), far under the 20–40 min guess. The simplified CI path is proven end-to-end; #64 stays closed. (3) Finding T (PR #160): the OpenAI SDK path had a 5-MIN SOCKET timeout (openai 4.104 node runtime = node-fetch + agentkeepalive default agent; finding's undici-headersTimeout hypothesis was wrong, same 300s kill) — any >5-min OpenAI generation was impossible, retries died identically. `_callOpenAI` now passes a 10-min keepAlive `httpAgent`; dispatch untouched. Unit test + negative control. (4) Stale-ledger sweep: CR/CS/CW (truth-in-status trio) and DK/DP/DQ/DR/DM/H/V were ALREADY FIXED in main — rows corrected; the carry-forward list below is now accurate. Green: functions+root tsc, build, full lint 0 errors, unit 732/732, emulator 54/54.**

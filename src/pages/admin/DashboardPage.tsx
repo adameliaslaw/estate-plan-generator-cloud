@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Calculator,
   Users,
   ClipboardList,
   Search,
@@ -550,6 +551,15 @@ export default function DashboardPage() {
             {linkCopied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
             <span className="sm:hidden">{linkCopied ? 'Copied!' : 'Copy Link'}</span>
             <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Copy Questionnaire Link'}</span>
+          </button>
+          <button
+            onClick={() => navigate(ROUTES.INHERITANCE_TAX)}
+            title="Prepare an NJ Transfer Inheritance Tax (IT-R) workpaper for a decedent's estate"
+            className="flex items-center gap-2 rounded-lg border border-[#2b6cb0] bg-white px-4 py-2 text-sm font-semibold text-[#2b6cb0] shadow-sm hover:bg-[#ebf4ff] transition-colors"
+          >
+            <Calculator className="h-4 w-4" />
+            <span className="sm:hidden">IT-R</span>
+            <span className="hidden sm:inline">Inheritance Tax</span>
           </button>
           <button
             onClick={() => navigate(ROUTES.CLIENT_NEW)}
