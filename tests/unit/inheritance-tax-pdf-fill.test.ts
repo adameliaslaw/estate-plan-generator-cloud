@@ -150,3 +150,79 @@ describe('IT-R official-form fill', () => {
     expect(read('Date of Death')).toBe('09/18/2023');
   });
 });
+
+describe('Schedule E — beneficiaries', () => {
+  test('lists the beneficiary with their relationship, class and dollar amount', async () => {
+    const read = await fillAndRead();
+    expect(read('Name_4')).toBe('Fran Friend');
+    expect(read('B Relationship to DecedentName Address')).toBe('friend');
+    expect(read('C Tax ClassName Address@@$#@@@$#@')).toBe('455,931.33');
+  });
+
+  test('the tax-class dropdown is set to the engine’s class, not typed as free text', async () => {
+    const computation = computeEstate(MATTER, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(MATTER, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    // A friend is Class D under N.J.S.A. 54:34-2; the form offers only " ", A, C, D, E.
+    expect(form.getDropdown('Select 1').getSelected()).toEqual(['D']);
+  });
+
+  test('splits the address across the two printed lines', async () => {
+    const read = await fillAndRead();
+    // The fixture's beneficiary address is free text, so it lands on line 1 whole.
+    expect(read('Address 1_2')).toBe('2 Elm St, NJ');
+  });
+
+  test('uses structured parts for the address when intake captured them', async () => {
+    const withParts: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        address: '2 Elm St, Newark, NJ 07102',
+        addressParts: { street1: '2 Elm St', street2: 'Apt 5', city: 'Newark', state: 'NJ', zip: '07102' },
+      }],
+    };
+    const computation = computeEstate(withParts, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(withParts, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('Address 1_2').getText()).toBe('2 Elm St, Apt 5');
+    expect(form.getTextField('Address 2_2').getText()).toBe('Newark, NJ 07102');
+  });
+
+  test('more beneficiaries than the page holds sets "additional copies attached"', async () => {
+    // Ten beneficiaries against nine rows: the tenth must not vanish silently.
+    const many: Matter = {
+      ...MATTER,
+      beneficiaries: Array.from({ length: 10 }, (_, i) => ({
+        id: `b${i}`, lastName: `Friend${i}`, firstName: 'Fran', address: '2 Elm St, NJ',
+        relationship: 'friend' as const,
+        bequests: [{ id: `q${i}`, type: 'other_personal_property' as const, description: 'Cash', fairMarketValue: 10_000 }],
+      })),
+    };
+    const computation = computeEstate(many, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(many, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getCheckBox('Check if additional copies of the schedule are attached_11').isChecked()).toBe(true);
+    expect(form.getTextField('Name_12').getText()).toBe('Fran Friend8'); // the ninth row is the last
+  });
+
+  test('nine or fewer beneficiaries leaves the overflow box alone', async () => {
+    const computation = computeEstate(MATTER, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(MATTER, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getCheckBox('Check if additional copies of the schedule are attached_11').isChecked()).toBe(false);
+  });
+});
+
+describe('Schedule B-4 — all other property', () => {
+  test('each item lands as description, date-of-death value and equity', async () => {
+    const read = await fillAndRead();
+    expect(read('1113424 Date of Death ValueRow1_2')).toBe('Cash');
+    expect(read('B Date of Death ValueRow1_2')).toBe('455,931.33');
+    expect(read('C Decedents EquityRow1')).toBe('455,931.33');
+  });
+});

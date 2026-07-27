@@ -144,11 +144,29 @@ export interface ITRBequest {
   fairMarketValue: number;
 }
 
+/**
+ * An address already split into the parts the official IT-R asks for (Street / City / State /
+ * ZIP each have their own box). Captured at entry — Google Places returns the components
+ * pre-split — so the server never has to parse a free-text address back apart.
+ *
+ * Optional: a matter entered before this existed carries only the free-text `address`, and the
+ * server falls back to it.
+ */
+export interface ITRAddressParts {
+  street1: string;
+  street2?: string;
+  city: string;
+  /** Two-letter USPS abbreviation. */
+  state: string;
+  zip: string;
+}
+
 export interface ITRBeneficiary {
   id: string;
   lastName: string;
   firstName: string;
   address: string;
+  addressParts?: ITRAddressParts;
   relationship: Relationship;
   bequests: ITRBequest[];
 }
@@ -181,6 +199,7 @@ export interface ITRMatterInput {
     name: string;
     title: PersonalRepresentativeTitle;
     address: string;
+    addressParts?: ITRAddressParts;
     phone: string;
     email?: string;
   };

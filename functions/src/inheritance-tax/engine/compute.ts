@@ -366,6 +366,9 @@ export function buildFormSnapshot(matter: Matter): ITRFormSnapshot {
       firstName: b.firstName,
       lastName: b.lastName,
       address: b.address,
+      // Conditional so a beneficiary without structured parts stores no key at all —
+      // Firestore rejects an explicit undefined.
+      ...(b.addressParts !== undefined ? { addressParts: b.addressParts } : {}),
       relationship: b.relationship,
       isSpouseOrCU: b.relationship === 'spouse' || b.relationship === 'civil_union_partner',
     })),

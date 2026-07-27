@@ -117,6 +117,30 @@ export interface Bequest {
   fairMarketValue: number;
 }
 
+// ─── Addresses ────────────────────────────────────────────────────────────────
+
+/**
+ * An address already broken into the parts the official forms ask for.
+ *
+ * The IT-R gives Street / City / State / ZIP their own boxes, and a free-text string cannot be
+ * split back into them reliably — "c/o The Firm, Suite 4, Newark, NJ 07102" and
+ * "1 Main St, Trenton, NJ 08600" do not share a shape. So the parts are captured at intake
+ * (Google Places returns them pre-split) and carried through rather than parsed later.
+ *
+ * Optional everywhere it appears: matters created before this existed carry only the string,
+ * and their frozen snapshots must keep rendering unchanged (FND-IMMUT). Consumers prefer the
+ * parts when present and fall back to the string.
+ */
+export interface AddressParts {
+  street1: string;
+  /** Suite, floor, "c/o" line — whatever does not belong on the first line. */
+  street2?: string;
+  city: string;
+  /** Two-letter USPS abbreviation. */
+  state: string;
+  zip: string;
+}
+
 // ─── Beneficiary ──────────────────────────────────────────────────────────────
 
 export interface Beneficiary {
@@ -124,6 +148,8 @@ export interface Beneficiary {
   lastName: string;
   firstName: string;
   address: string;
+  /** Structured form of `address`, when intake captured it. See {@link AddressParts}. */
+  addressParts?: AddressParts;
   relationship: Relationship;
   /** If set, overrides the computed tax class. Requires written reason + attorney. */
   taxClassOverride?: {
@@ -275,6 +301,8 @@ export interface Matter {
     name: string;
     title: 'Executor' | 'Administrator' | 'Heir-at-law';
     address: string;
+    /** Structured form of `address`, when intake captured it. See {@link AddressParts}. */
+    addressParts?: AddressParts;
     phone: string;
     email?: string;
   };
@@ -462,12 +490,34 @@ export interface ScheduleDeductionItem {
   transferTaxEligibility?: TransferTaxEligibility;
 }
 
+/**
+ * One row of Schedule E Part I — "Beneficiary and address of each person who has an interest
+ * (vested, contingent, or otherwise) in this Estate". Every beneficiary appears, exempt classes
+ * included, because the schedule lists interests rather than taxable ones.
+ */
+export interface ScheduleEBeneficiaryRow {
+  name: string;
+  address: string;
+  addressParts?: AddressParts;
+  relationship: Relationship;
+  /** Column (C), which the form offers as a dropdown of exactly A / C / D / E. */
+  taxClass: TaxClass;
+  /**
+   * Column (E) "Dollar Amount". This is `scaledBequeathed`, the same figure that feeds the
+   * Summary Page's Total Distribution columns (lines 10–14) — so the schedule reconciles to the
+   * summary rather than contradicting it by a deduction's worth.
+   */
+  dollarAmount: number;
+}
+
 /** One row in the Class C or D per-beneficiary worksheet. */
 export interface BeneficiaryWorksheetRow {
   beneficiaryId: string;
   lastName: string;
   firstName: string;
   address: string;
+  /** Structured form of `address`, when intake captured it. See {@link AddressParts}. */
+  addressParts?: AddressParts;
   relationship: Relationship;
   result: BeneficiaryTaxResult;
 }
@@ -585,6 +635,8 @@ export interface ITRFormSnapshot {
     firstName: string;
     lastName: string;
     address: string;
+    /** Structured form of `address`, frozen with the rest. See {@link AddressParts}. */
+    addressParts?: AddressParts;
     relationship: Relationship;
     isSpouseOrCU: boolean;
   }>;
@@ -871,6 +923,8 @@ export interface ITRFormData {
   scheduleC: ScheduleItem[];
   /** Schedule D: Allowable deductions (feeds Line 6). N.J.A.C. 18:26-7. */
   scheduleD: ScheduleDeductionItem[];
+  /** Schedule E Part I: every beneficiary's interest in the estate, exempt classes included. */
+  scheduleE: ScheduleEBeneficiaryRow[];
   /** Class C Beneficiary Worksheet: per-beneficiary detail for Class C (sibling, child-in-law). */
   classCWorksheet: BeneficiaryWorksheetRow[];
   /** Class D Beneficiary Worksheet: per-beneficiary detail for Class D (niece/nephew, unrelated, etc.). */

@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calculator, Plus, Trash2, FileText, ShieldCheck, RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { AddressPartsInput } from '@/components/inheritance-tax/AddressPartsInput';
 import { useAuth } from '@/hooks/useAuth';
 import { inheritanceTaxService } from '@/services/inheritance-tax-service';
 import { Button } from '@/components/ui/button';
@@ -396,10 +397,16 @@ export default function InheritanceTaxPage() {
                   <option value="Heir-at-law">Heir-at-law</option>
                 </select>
               </div>
-              <div>
-                <Label htmlFor="pr-address">Address</Label>
-                <Input id="pr-address" value={matter.personalRepresentative.address}
-                  onChange={(e) => patch((d) => { d.personalRepresentative.address = e.target.value; })} />
+              <div className="sm:col-span-2">
+                <AddressPartsInput
+                  idPrefix="pr"
+                  parts={matter.personalRepresentative.addressParts}
+                  address={matter.personalRepresentative.address}
+                  onChange={({ parts, address }) => patch((d) => {
+                    d.personalRepresentative.addressParts = parts;
+                    d.personalRepresentative.address = address;
+                  })}
+                />
               </div>
               <div>
                 <Label htmlFor="pr-phone">Phone</Label>
@@ -447,10 +454,17 @@ export default function InheritanceTaxPage() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <Label>Address</Label>
-                    <Input value={b.address}
-                      onChange={(e) => patch((d) => { d.beneficiaries[bi]!.address = e.target.value; })} />
+                  <div className="md:col-span-2">
+                    {/* Schedule E prints the beneficiary's address, so it is captured in parts too. */}
+                    <AddressPartsInput
+                      idPrefix={`ben-${bi}`}
+                      parts={b.addressParts}
+                      address={b.address}
+                      onChange={({ parts, address }) => patch((d) => {
+                        d.beneficiaries[bi]!.addressParts = parts;
+                        d.beneficiaries[bi]!.address = address;
+                      })}
+                    />
                   </div>
                 </div>
 

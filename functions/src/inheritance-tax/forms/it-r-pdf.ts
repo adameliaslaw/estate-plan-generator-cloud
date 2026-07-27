@@ -23,7 +23,7 @@
  * producing a return with empty boxes.
  */
 import { PDFDocument, PDFForm } from 'pdf-lib';
-import type { ITRFormData, TaxClassLine } from '../types';
+import type { AddressParts, ITRFormData, ScheduleEBeneficiaryRow, ScheduleItem, TaxClassLine } from '../types';
 
 /** Cover page — "Estate Information" block and the five yes/no questions. */
 const COVER = {
@@ -143,6 +143,72 @@ const SUMMARY_LINES_15_TO_22: ReadonlyArray<{ dollars: string; cents: string; ke
 ];
 
 /**
+ * Schedule E Part I — "Beneficiary and address of each person who has an interest (vested,
+ * contingent, or otherwise) in this Estate". Nine rows on the page.
+ *
+ * Columns identified from the printed headers: (A) beneficiary and address at x57/x64 · (B)
+ * Relationship to Decedent at x215 · (C) Tax Class at x300, a dropdown offering exactly
+ * " ", A, C, D, E · (E) Dollar Amount at x453. Columns (D) fractional share and (F) age are
+ * left blank — the engine models neither, and inventing them is not on.
+ *
+ * Generated from the field inventory rather than transcribed: the names carry the State's own
+ * typos ("Deceaaaas1dent") and copying them by hand is how a row silently stops filling.
+ */
+const SCHEDULE_E_ROWS: ReadonlyArray<{
+  name: string; address1: string; address2: string; relationship: string; taxClass: string; amount: string;
+}> = [
+  { name: 'Name_4', address1: 'Address 1_2', address2: 'Address 2_2', relationship: 'B Relationship to DecedentName Address', taxClass: 'Select 1', amount: 'C Tax ClassName Address@@$#@@@$#@' },
+  { name: 'Name_5', address1: 'Address 1_3', address2: 'Address 2_3', relationship: 'B Relationship to DecedentName Address_2', taxClass: 'Select 2', amount: 'C Tax ClassName Address_2@@$#@@@$#@' },
+  { name: 'Name_6', address1: 'Address 1_4', address2: 'Address 2_4', relationship: 'B Relationship to DecedentName Address_3', taxClass: 'Select 3', amount: 'C Tax ClassName@@$#@ Address_3' },
+  { name: 'Name_7', address1: 'Address 1_5', address2: 'Address 2_5', relationship: 'B Relationship to DecedentName Address_4', taxClass: 'Select 4', amount: 'C @@$#@Tax ClassName Address_4' },
+  { name: 'Name_8', address1: 'Address 1_6', address2: 'Address 2_6', relationship: 'B Relationship to DecedentName Address_5', taxClass: 'Select 5', amount: 'C Tax ClassName Address@@$#@_5' },
+  { name: 'Name_9', address1: 'Address 1_7', address2: 'Address 2_7', relationship: 'B Relationship to DecedentName Address_6', taxClass: 'Select 6', amount: 'C Tax ClassName Ad@@$#@dress_6' },
+  { name: 'Name_10', address1: 'Address 1_8', address2: 'Address 2_8', relationship: 'B Relationship to DecedentName Address_7', taxClass: 'Select 7', amount: 'C Tax ClassName Address_7@@$#@' },
+  { name: 'Name_11', address1: 'Address 1_9', address2: 'Address 2_9', relationship: 'B Relationship to DecedentName Address_8', taxClass: 'Select 8', amount: 'C Tax ClassName Address_8@@$#@@@$#@' },
+  { name: 'Name_12', address1: 'Address 1_10', address2: 'Address 2_10', relationship: 'B Relationship to Deceaaaas1dentName Address_9', taxClass: 'Select 9', amount: 'C Tax ClassName Address_9@@$#@' },
+];
+
+/**
+ * Schedule B-4 — "All Other Property". Eighteen flat rows of description · (B) Date of Death
+ * Value · (C) Decedent's Equity.
+ *
+ * B-4 is the one asset schedule whose columns the engine can answer in full: the model holds a
+ * description and a fair market value per item, which is exactly what this schedule asks for.
+ * Decedent's Equity is the same figure — the model has no partial-interest concept, and the
+ * whole value is what the estate reported.
+ */
+const SCHEDULE_B4_ROWS: ReadonlyArray<{ description: string; value: string; equity: string }> = [
+  { description: '1113424 Date of Death ValueRow1_2', value: 'B Date of Death ValueRow1_2', equity: 'C Decedents EquityRow1' },
+  { description: 'B Date1113424 Date of Death V of Death ValueRow2_2', value: 'B Date of Death ValueRow2_2', equity: 'C Decedents EquityRow2' },
+  { description: 'B Date of Dea1113424 Date of Death Vth ValueRow3_2', value: 'B Date of Death ValueRow3_2', equity: 'C Decedents EquityRow3' },
+  { description: 'B Date of Death ValueRow4_21113424 Date of Death V', value: 'B Date of Death ValueRow4_2', equity: 'C Decedents EquityRow4' },
+  { description: 'B Date of 1113424 Date of Death VValueRow5_2', value: 'B Date of Death ValueRow5_2', equity: 'C Decedents EquityRow5' },
+  { description: 'B Date of Death ValueRow6_21113424 Date of Death V', value: 'B Date of Death ValueRow6_2', equity: 'C Decedents EquityRow6' },
+  { description: 'B Date of Dea1113424 Date of Death Vth ValueRow7_2', value: 'B Date of Death ValueRow7_2', equity: 'C Decedents EquityRow7' },
+  { description: 'B Date of D1113424 Date of Death Veath ValueRow8_2', value: 'B Date of Death ValueRow8_2', equity: 'C Decedents EquityRow8' },
+  { description: 'B Date 1113424 Date of Death Vof Death ValueRow9_2', value: 'B Date of Death ValueRow9_2', equity: 'C Decedents EquityRow9' },
+  { description: 'B Date of Death ValueRow10_21113424 Date of Death V', value: 'B Date of Death ValueRow10_2', equity: 'C Decedents EquityRow10' },
+  { description: 'B Date of Death Val1113424 Date of Death VueRow11_2', value: 'B Date of Death ValueRow11_2', equity: 'C Decedents EquityRow11' },
+  { description: 'B Date of Deat1113424 Date of Death Vh ValueRow12_2', value: 'B Date of Death ValueRow12_2', equity: 'C Decedents EquityRow12' },
+  { description: 'B Date of Death ValueRow131113424 Date of Death V', value: 'B Date of Death ValueRow13', equity: 'C Decedents EquityRow13' },
+  { description: 'B Date of Death Value1113424 Date of Death VRow14', value: 'B Date of Death ValueRow14', equity: 'C Decedents EquityRow14' },
+  { description: 'B 1113424 Date of Death VDate of Death ValueRow15', value: 'B Date of Death ValueRow15', equity: 'C Decedents EquityRow15' },
+  { description: 'B Date of 1113424 Date of Death VValueRow16', value: 'B Date of Death ValueRow16', equity: 'C Decedents EquityRow16' },
+  { description: 'B Date of De1113424 Date of Death Vath ValueRow17', value: 'B Date of Death ValueRow17', equity: 'C Decedents EquityRow17' },
+  { description: 'B Date1113424 Date of Death V of Death ValueRow18', value: 'B Date of Death ValueRow18', equity: 'C Decedents EquityRow18' },
+];
+
+/**
+ * "Check if additional copies of the schedule are attached" — one per schedule page. Set when
+ * the estate has more items than the page has rows, because the alternative is a return that
+ * silently reports fewer assets or beneficiaries than the estate contains.
+ */
+const ADDITIONAL_COPIES = {
+  scheduleB4: 'Check if additional copies of the schedule are attached_6',
+  scheduleE: 'Check if additional copies of the schedule are attached_11',
+} as const;
+
+/**
  * Decedent header repeated on every schedule page (A through E). One field name serves all 12
  * pages, so a single write fills them all.
  */
@@ -182,6 +248,22 @@ class FieldWriter {
     }
   }
 
+  dropdown(name: string, option: string): void {
+    try {
+      this.form.getDropdown(name).select(option);
+    } catch {
+      this.missing.push(`dropdown ${JSON.stringify(name)} option ${JSON.stringify(option)}`);
+    }
+  }
+
+  check(name: string): void {
+    try {
+      this.form.getCheckBox(name).check();
+    } catch {
+      this.missing.push(`checkbox ${JSON.stringify(name)}`);
+    }
+  }
+
   /** Throws once, listing everything that failed, so a broken mapping is impossible to miss. */
   assertComplete(): void {
     if (this.missing.length > 0) {
@@ -213,12 +295,31 @@ function splitPhone(phone: string): [string, string] {
 }
 
 /**
- * The matter model holds the representative's address as one free-text string, while the form
- * wants Street / City / State / ZIP in separate boxes. Only the unambiguous
- * "street, city, ST 08600" shape is split; anything else goes into Street 1 whole rather than
- * being guessed at, because a wrong county/state box on a filed return is worse than an
- * inelegant one.
+ * Resolve an address to the form's separate boxes.
+ *
+ * Intake captures the parts directly (Google Places returns them pre-split), and when they are
+ * present they are used verbatim — no parsing involved. Matters predating that carry only a
+ * free-text string; for those, only the unambiguous "street, city, ST 08600" shape is split, and
+ * anything else goes into Street 1 whole rather than being guessed at, because a wrong state box
+ * on a filed return is worse than an inelegant one.
  */
+function resolveAddress(
+  address: string,
+  parts: AddressParts | undefined,
+): { street1: string; street2: string; city: string; state: string; zip: string } {
+  if (parts) {
+    return {
+      street1: parts.street1,
+      street2: parts.street2 ?? '',
+      city: parts.city,
+      state: parts.state,
+      zip: parts.zip,
+    };
+  }
+  return splitAddress(address);
+}
+
+/** Legacy path: the best that can be made of a single free-text address string. */
 function splitAddress(address: string): { street1: string; street2: string; city: string; state: string; zip: string } {
   const empty = { street1: address, street2: '', city: '', state: '', zip: '' };
   const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
@@ -248,6 +349,44 @@ function fillTaxClassRow(w: FieldWriter, row: (typeof TAX_CLASS_ROWS)[number], l
 /** The tax-class columns are single boxes with a printed "$" and ".", so cents go inline. */
 function formatMoneyInline(n: number): string {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Schedule E Part I. The page holds nine beneficiaries; a tenth sets "additional copies of the
+ * schedule are attached" rather than being dropped, so the return never reports fewer interests
+ * than the estate has.
+ *
+ * The address is written as two lines: street (with any suite) on the first, "City, ST ZIP" on
+ * the second. Where structured parts are absent the free-text address goes on line 1 whole.
+ */
+function fillScheduleE(w: FieldWriter, rows: ReadonlyArray<ScheduleEBeneficiaryRow>): void {
+  rows.slice(0, SCHEDULE_E_ROWS.length).forEach((row, i) => {
+    const f = SCHEDULE_E_ROWS[i];
+    if (!f) return;
+    const a = resolveAddress(row.address, row.addressParts);
+    w.text(f.name, row.name);
+    w.text(f.address1, [a.street1, a.street2].filter(Boolean).join(', '));
+    w.text(f.address2, [a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '));
+    // The workpaper prints the relationship the same way, so the two documents agree.
+    w.text(f.relationship, row.relationship.replace(/_/g, ' '));
+    w.dropdown(f.taxClass, row.taxClass);
+    w.text(f.amount, formatMoneyInline(row.dollarAmount));
+  });
+
+  if (rows.length > SCHEDULE_E_ROWS.length) w.check(ADDITIONAL_COPIES.scheduleE);
+}
+
+/** Schedule B-4, "All Other Property" — eighteen rows, then the overflow checkbox. */
+function fillScheduleB4(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  items.slice(0, SCHEDULE_B4_ROWS.length).forEach((item, i) => {
+    const f = SCHEDULE_B4_ROWS[i];
+    if (!f) return;
+    w.text(f.description, item.description);
+    w.text(f.value, formatMoneyInline(item.fairMarketValue));
+    w.text(f.equity, formatMoneyInline(item.fairMarketValue));
+  });
+
+  if (items.length > SCHEDULE_B4_ROWS.length) w.check(ADDITIONAL_COPIES.scheduleB4);
 }
 
 /**
@@ -282,7 +421,7 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
 
   const rep = data.representative;
   const [area, rest] = splitPhone(rep.phone);
-  const addr = splitAddress(rep.address);
+  const addr = resolveAddress(rep.address, rep.addressParts);
   w.text(COVER.repName, rep.name);
   w.text(COVER.repPhoneArea, area);
   w.text(COVER.repPhoneRest, rest);
@@ -334,6 +473,9 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
   w.text(SCHEDULE_HEADER.decedentName, fullName);
   w.text(SCHEDULE_HEADER.ssn, data.decedentSSN);
   w.text(SCHEDULE_HEADER.dateOfDeath, `${dodMonth}/${dodDay}/${dodYear}`);
+
+  fillScheduleE(w, data.scheduleE);
+  fillScheduleB4(w, data.scheduleB4);
 
   w.assertComplete();
   return pdf.save();
