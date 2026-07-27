@@ -4,6 +4,27 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-27 PM (official IT-R fill shipped · deploy outage root-caused and ended)
+
+**TL;DR — Four things shipped and are live. (1) The State's own Form IT-R is now filled from the
+approved snapshot and downloadable: cover page, Summary Page lines 1–22, Schedule E and Schedule
+B-4 (#184). (2) The nine-day functions-deploy outage is over — its cause was `LAWPAY_WEBHOOK_SECRET`
+being bound but never created, which fails validation for the whole codebase before anything
+uploads. (3) That secret should never have existed: 8am does not sign webhooks, so the HMAC check
+rejected every real callback. Replaced with an Event-URL token plus a gateway re-read, and verified
+against the live endpoint (#186). (4) The hosted-fields card dialog's postMessage crash was
+root-caused to a singleton SDK being handed iframes we had already destroyed (#185).**
+
+**▶ NEXT — [docs/IT-R-FORMS-BUILD-PLAN.md](./docs/IT-R-FORMS-BUILD-PLAN.md)** scopes the remaining
+form work for a fresh session: three tracks, tiered by cost, with the hard-won mapping facts and
+four decisions needed from Adam before starting.
+
+**Still needs Adam:** the live card test on #185 (`length: 16, luhn: true` in the console); a real
+payment through the payment page to prove the webhook end to end; and a browser pass on the
+Inheritance Tax page now that the download is live.
+
+---
+
 ## 🔴 SESSION — 2026-07-27 (7/26's four items are all closed — but EVERY functions deploy has been failing since 7/18 on a secret that was never created)
 
 **TL;DR — Worked the 7/26 list; all four items are done, and doing them surfaced a bigger one. `LAWPAY_WEBHOOK_SECRET` does not exist in Secret Manager, so `firebase deploy --only functions` dies at secret validation before uploading anything. Every CI functions deploy since 2026-07-18 has failed this way. PR #176's security work — Google OAuth tokens moved to server-only storage, PDF-render network blocking, the webhook signature binding itself — has never reached production, and neither has #180. 87 of the 96 deployed functions were last updated 2026-07-15; the 9 inheritance-tax callables are live only because they were deployed by hand at 15:42 today.**
