@@ -4,7 +4,35 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## 🔴 SESSION — 2026-07-26 (NJ inheritance-tax engine ported in from elias-estate-suite — 4 ITEMS NEED ADAM AT A DESK)
+## 🔴 SESSION — 2026-07-27 (7/26's four items are all closed — but EVERY functions deploy has been failing since 7/18 on a secret that was never created)
+
+**TL;DR — Worked the 7/26 list; all four items are done, and doing them surfaced a bigger one. `LAWPAY_WEBHOOK_SECRET` does not exist in Secret Manager, so `firebase deploy --only functions` dies at secret validation before uploading anything. Every CI functions deploy since 2026-07-18 has failed this way. PR #176's security work — Google OAuth tokens moved to server-only storage, PDF-render network blocking, the webhook signature binding itself — has never reached production, and neither has #180. 87 of the 96 deployed functions were last updated 2026-07-15; the 9 inheritance-tax callables are live only because they were deployed by hand at 15:42 today.**
+
+**▶ NEXT (needs Adam): paste the LawPay webhook signing secret.** From the LawPay/AffiniPay dashboard → webhook subscription → signing secret. Then:
+
+```bash
+printf %s '<the-secret>' | firebase functions:secrets:set LAWPAY_WEBHOOK_SECRET --data-file -
+gh workflow run "Firebase Functions deploy"
+```
+
+Adam chose the real value over a random placeholder, so functions stay undeployed until this is set. Nothing is *newly* broken by waiting — the live webhook has rejected every request since it was written (the env var was never bound to the deployed revision) — but the #176 security fixes stay out of prod.
+
+### The 7/26 list — all four closed
+
+1. **Engine commits applied** ✅ — merged as #181; hosting deploy green.
+2. **`INHERITANCE_AUDIT_KEY` set** ✅ — created 2026-07-27 14:56, version 1 enabled. Do not rotate.
+3. **Firestore rules deployed** ✅ — and the note below that "Firestore rules are NOT covered by either workflow" was **wrong**: `firebase-functions-deploy.yml` releases `firestore.rules` and `storage.rules` in a step *before* the functions deploy. Both released successfully at 15:43 today even though that run failed. `/firms/{firmId}/inheritanceMatters/**` is closed to the client SDK in production right now. No manual `firebase deploy --only firestore:rules` is needed.
+4. **Exposed service-account key rotated** ✅ — with two corrections to the 7/26 account. The key at risk was **not** the appspot one: `service-account.json` for `firebase-adminsdk-fbsvc@` (key `bdb5f411…cd74`) was committed in `5ee4084` (2026-03-02), deleted from the tree in `febfd72`, and left readable in the history of a **public** repo. That SA holds `firebaseauth.admin`, `storage.admin` and `iam.serviceAccountTokenCreator` — enough to mint a token for any user and read every client file. Google's scanner had already auto-disabled the key (`SERVICE_ACCOUNT_KEY_DISABLE_REASON_EXPOSED`), so the window closed before anyone acted on it. This session created a replacement (`eec904f5…`), verified it against live Firestore, and deleted the exposed key. The appspot key `c059f6a5…` named in the 7/26 note no longer exists either — that SA now has only Google-managed keys.
+
+**Left for Adam on the key:** two other user-managed keys on `firebase-adminsdk-fbsvc@` — `4b07cda0…` (2026-05-30) and `8fbb46e4…` (2026-07-06) — are active and unaccounted for. Delete them if you don't know what holds them. And `estate-plan-generator-dc05f6c617b4.json` in the repo root is a dead key file (that key id is gone from the appspot SA); it's gitignored, safe to delete. Rewriting history for `5ee4084` is now optional — the credential in it is deleted, so the blob is inert.
+
+**Also shipped:** #182 — the Inheritance Tax page formats the SSN as you type and names blank required fields instead of letting the server report a missing date of death as "before 2002-01-01". Green: tsc, lint 0 errors, 774/774, build; hosting deploy green.
+
+**Still true from 7/26:** nobody has clicked through the Inheritance Tax page against live Firestore. The callables are deployed, so that browser pass is now actually possible.
+
+---
+
+## 📍 SESSION — 2026-07-26 (NJ inheritance-tax engine ported in from elias-estate-suite — ALL 4 ITEMS CLOSED 7/27, see above)
 
 **TL;DR — The NJ Transfer Inheritance Tax engine now lives in this repo.** It originates in
 `adameliaslaw/inheritnj`, was ported and gold-case-verified in `adameliaslaw/elias-estate-suite`
@@ -35,7 +63,7 @@ requester-only act audited as `matter_finalized`, never `review_approved`; out-o
 structures (nonresident decedent, pre-2002 death, deductions exceeding the estate, non-pro-rata
 apportionment) are **refused**, never estimated.
 
-### ▶ NEXT (needs Adam at a desk) — do these in order
+### ▶ ~~NEXT (needs Adam at a desk) — do these in order~~ — ALL FOUR DONE 2026-07-27; kept for the reasoning, not the instructions. Item 3's claim that the workflows don't deploy Firestore rules is wrong (see the 7/27 entry).
 
 **1. Apply the three commits.** They are not in this repo yet — the agent session had read-only
 access. Either approve the repo-push prompt in a Claude Code session, or apply the delivered bundle
