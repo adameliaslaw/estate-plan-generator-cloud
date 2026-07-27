@@ -144,11 +144,29 @@ export interface ITRBequest {
   fairMarketValue: number;
 }
 
+/**
+ * An address already split into the parts the official IT-R asks for (Street / City / State /
+ * ZIP each have their own box). Captured at entry — Google Places returns the components
+ * pre-split — so the server never has to parse a free-text address back apart.
+ *
+ * Optional: a matter entered before this existed carries only the free-text `address`, and the
+ * server falls back to it.
+ */
+export interface ITRAddressParts {
+  street1: string;
+  street2?: string;
+  city: string;
+  /** Two-letter USPS abbreviation. */
+  state: string;
+  zip: string;
+}
+
 export interface ITRBeneficiary {
   id: string;
   lastName: string;
   firstName: string;
   address: string;
+  addressParts?: ITRAddressParts;
   relationship: Relationship;
   bequests: ITRBequest[];
 }
@@ -181,6 +199,7 @@ export interface ITRMatterInput {
     name: string;
     title: PersonalRepresentativeTitle;
     address: string;
+    addressParts?: ITRAddressParts;
     phone: string;
     email?: string;
   };
@@ -217,6 +236,13 @@ export interface CheckpointResult {
 export interface ITRFormResult {
   formData: Record<string, unknown>;
   html?: string;
+  /**
+   * The State's own Form IT-R booklet, filled from the approved snapshot and base64-encoded.
+   * Present only when the caller asks for it. Unlike `html` — which is the "NOT FOR FILING"
+   * workpaper — this is the official form, with its fields left interactive so the attorney
+   * can correct a box before signing.
+   */
+  pdfBase64?: string;
   finalizationKind: 'two-attorney' | 'solo';
   workpaper: true;
 }

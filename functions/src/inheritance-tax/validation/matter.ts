@@ -121,12 +121,30 @@ const ENTITY_RELATIONSHIPS: ReadonlySet<Relationship> = new Set<Relationship>([
   'medical_institution', 'governmental_entity', 'corporation_non_charitable',
 ]);
 
+/**
+ * Structured address, as the official forms want it. Optional wherever it appears: a matter
+ * created before intake captured the parts carries only the free-text `address`, and must keep
+ * validating. When present the parts are authoritative, so each is required to be non-blank —
+ * a half-filled parts object would put an empty box on a filed return, which is worse than
+ * falling back to the string.
+ *
+ * `state` is the two-letter USPS abbreviation; `zip` is 5 or 5+4.
+ */
+const AddressPartsSchema = z.object({
+  street1: z.string().min(1),
+  street2: z.string().min(1).optional(),
+  city: z.string().min(1),
+  state: z.string().regex(/^[A-Z]{2}$/, 'State must be a two-letter abbreviation'),
+  zip: z.string().regex(/^\d{5}(-\d{4})?$/, 'ZIP must be 5 digits, or 5+4'),
+}).strict();
+
 const BeneficiarySchema = z.object({
   id: z.string().min(1),
   lastName: z.string().min(1),
   // Non-empty enforced for INDIVIDUALS in the superRefine (entities legitimately have none).
   firstName: z.string(),
   address: z.string().min(1),
+  addressParts: AddressPartsSchema.optional(),
   relationship: RelationshipSchema,
   taxClassOverride: TaxClassOverrideSchema.optional(),
   bequests: z.array(BequestSchema).min(1, 'A beneficiary must have at least one bequest'),
@@ -166,6 +184,7 @@ const PersonalRepresentativeSchema = z.object({
   name: z.string().min(1),
   title: z.enum(['Executor', 'Administrator', 'Heir-at-law']),
   address: z.string().min(1),
+  addressParts: AddressPartsSchema.optional(),
   phone: z.string().min(1),
   email: z.string().email().optional(),
 }).strict();

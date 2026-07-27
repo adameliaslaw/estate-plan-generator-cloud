@@ -27,7 +27,10 @@ import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { assertFirmStaff } from './auth-guards';
+import { fillITRPdf } from './inheritance-tax/forms/it-r-pdf';
 import {
   computeEstate,
   getRuleSet,
@@ -61,6 +64,19 @@ const CALL_OPTS = {
   memory: '512MiB' as const,
   secrets: [INHERITANCE_AUDIT_KEY],
 };
+
+/**
+ * The State's blank Form IT-R booklet, held on the instance after the first read. It ships in
+ * `functions/assets/` — one directory up from both `src/` and the compiled `lib/`, so the same
+ * path resolves in tests and in production.
+ */
+let blankITR: Uint8Array | null = null;
+function loadBlankITR(): Uint8Array {
+  if (!blankITR) {
+    blankITR = new Uint8Array(readFileSync(join(__dirname, '..', 'assets', 'itr-blank.pdf')));
+  }
+  return blankITR;
+}
 
 function requireFirmId(data: unknown): { firmId: string; body: Record<string, unknown> } {
   if (!data || typeof data !== 'object') throw new HttpsError('invalid-argument', 'Request body is required.');
@@ -261,9 +277,15 @@ export const getInheritanceForm = onCall(CALL_OPTS, async (request: CallableRequ
   try {
     const formData = buildITRFormData(matter, approved);
     const html = body['html'] === true ? renderITRHtml(formData) : undefined;
+    // The filled official form is opt-in: it costs ~700KB on the wire, and most callers
+    // (the audit view, the on-screen workpaper) only want the figures.
+    const pdfBase64 = body['pdf'] === true
+      ? Buffer.from(await fillITRPdf(formData, loadBlankITR())).toString('base64')
+      : undefined;
     return {
       formData,
       ...(html ? { html } : {}),
+      ...(pdfBase64 ? { pdfBase64 } : {}),
       finalizationKind: approved.finalizationKind ?? 'two-attorney',
       workpaper: true as const,
     };

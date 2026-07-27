@@ -13,11 +13,15 @@
  * cannot retroactively change a form that was signed off. It just leaves the matter needing a new
  * computation and a new review.
  *
- * Everything on screen is a WORKPAPER for attorney review, not a filed return.
+ * What renders ON SCREEN is a WORKPAPER for attorney review, stamped as such. "Download official
+ * IT-R" is the exception: it returns the State's own booklet filled from the same approved
+ * snapshot, with its fields still interactive. That one is a real return — every figure on it is
+ * the attorney's to verify before signing.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Plus, Trash2, FileText, ShieldCheck, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Calculator, Plus, Trash2, FileText, ShieldCheck, RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { AddressPartsInput } from '@/components/inheritance-tax/AddressPartsInput';
 import { useAuth } from '@/hooks/useAuth';
 import { inheritanceTaxService } from '@/services/inheritance-tax-service';
 import { Button } from '@/components/ui/button';
@@ -226,7 +230,34 @@ export default function InheritanceTaxPage() {
 
   const onLoadForm = () => run('form', async () => {
     if (!matter) return;
-    setForm(await inheritanceTaxService.getForm(firmId, matter.matterId, true));
+    setForm(await inheritanceTaxService.getForm(firmId, matter.matterId, { html: true }));
+  });
+
+  /**
+   * Download the State's own IT-R, filled from the approved snapshot. The form fields are left
+   * interactive, so it opens in any PDF reader as a return the attorney can correct and sign.
+   */
+  const onDownloadForm = () => run('pdf', async () => {
+    if (!matter) return;
+    const res = await inheritanceTaxService.getForm(firmId, matter.matterId, { html: false, pdf: true });
+    // Hosting and functions deploy independently, so a browser can be a version ahead of the
+    // backend. Say which half is behind rather than reporting a bare failure.
+    if (!res.pdfBase64) {
+      throw new Error(
+        'This page can request the official IT-R, but the server has not been updated to fill it yet. ' +
+        'The workpaper above is unaffected.',
+      );
+    }
+
+    const bytes = Uint8Array.from(atob(res.pdfBase64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    const who = `${matter.decedent.lastName || 'decedent'}`.replace(/[^\w-]+/g, '-');
+    a.download = `IT-R-${who}-${matter.decedent.dateOfDeath || 'undated'}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('IT-R downloaded. Review every figure before signing.');
   });
 
   const onLoadAudit = () => run('audit', async () => {
@@ -366,10 +397,16 @@ export default function InheritanceTaxPage() {
                   <option value="Heir-at-law">Heir-at-law</option>
                 </select>
               </div>
-              <div>
-                <Label htmlFor="pr-address">Address</Label>
-                <Input id="pr-address" value={matter.personalRepresentative.address}
-                  onChange={(e) => patch((d) => { d.personalRepresentative.address = e.target.value; })} />
+              <div className="sm:col-span-2">
+                <AddressPartsInput
+                  idPrefix="pr"
+                  parts={matter.personalRepresentative.addressParts}
+                  address={matter.personalRepresentative.address}
+                  onChange={({ parts, address }) => patch((d) => {
+                    d.personalRepresentative.addressParts = parts;
+                    d.personalRepresentative.address = address;
+                  })}
+                />
               </div>
               <div>
                 <Label htmlFor="pr-phone">Phone</Label>
@@ -417,10 +454,17 @@ export default function InheritanceTaxPage() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <Label>Address</Label>
-                    <Input value={b.address}
-                      onChange={(e) => patch((d) => { d.beneficiaries[bi]!.address = e.target.value; })} />
+                  <div className="md:col-span-2">
+                    {/* Schedule E prints the beneficiary's address, so it is captured in parts too. */}
+                    <AddressPartsInput
+                      idPrefix={`ben-${bi}`}
+                      parts={b.addressParts}
+                      address={b.address}
+                      onChange={({ parts, address }) => patch((d) => {
+                        d.beneficiaries[bi]!.addressParts = parts;
+                        d.beneficiaries[bi]!.address = address;
+                      })}
+                    />
                   </div>
                 </div>
 
@@ -573,6 +617,10 @@ export default function InheritanceTaxPage() {
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={onLoadForm} disabled={!approved || busy !== null}>
                 <FileText className="mr-2 h-4 w-4" /> {busy === 'form' ? 'Loading…' : 'Load IT-R'}
+              </Button>
+              <Button onClick={onDownloadForm} disabled={!approved || busy !== null}>
+                <Download className="mr-2 h-4 w-4" />
+                {busy === 'pdf' ? 'Filling…' : 'Download official IT-R'}
               </Button>
               <Button variant="ghost" onClick={onLoadAudit} disabled={!saved || busy !== null}>
                 <RefreshCw className="mr-2 h-4 w-4" /> Audit trail

@@ -75,10 +75,20 @@ export const inheritanceTaxService = {
     return res.data;
   },
 
-  /** The IT-R. Only available once a checkpoint is approved; renders from its frozen snapshot. */
-  async getForm(firmId: string, matterId: string, html = true): Promise<ITRFormResult> {
-    const fn = call<{ firmId: string; matterId: string; html: boolean }, ITRFormResult>('getInheritanceForm');
-    const res = await fn({ firmId, matterId, html });
+  /**
+   * The IT-R. Only available once a checkpoint is approved; renders from its frozen snapshot.
+   *
+   * `html` is the on-screen workpaper; `pdf` is the State's own booklet filled in and ready to
+   * sign. The PDF is opt-in because it costs roughly 700KB on the wire.
+   */
+  async getForm(
+    firmId: string,
+    matterId: string,
+    opts: { html?: boolean; pdf?: boolean } = {},
+  ): Promise<ITRFormResult> {
+    const { html = true, pdf = false } = opts;
+    const fn = call<{ firmId: string; matterId: string; html: boolean; pdf: boolean }, ITRFormResult>('getInheritanceForm');
+    const res = await fn({ firmId, matterId, html, pdf });
     return res.data;
   },
 

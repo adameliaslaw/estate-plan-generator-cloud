@@ -6,6 +6,7 @@ import type {
   Matter,
   PriorPayment,
   ReviewCheckpoint,
+  ScheduleEBeneficiaryRow,
   ScheduleItem,
   TaxClassLine,
 } from '../types';
@@ -124,10 +125,21 @@ export function buildITRFormData(
 
   const classCWorksheet: BeneficiaryWorksheetRow[] = [];
   const classDWorksheet: BeneficiaryWorksheetRow[] = [];
+  // Schedule E lists every interest in the estate, exempt classes included — so it is built in
+  // the same pass but without the class filter the worksheets apply.
+  const scheduleE: ScheduleEBeneficiaryRow[] = [];
 
   for (const b of src.beneficiaries) {
     const r = resultById.get(b.id);
     if (r === undefined) continue;
+    scheduleE.push({
+      name: [b.firstName, b.lastName].filter(Boolean).join(' '),
+      address: b.address,
+      ...(b.addressParts !== undefined ? { addressParts: b.addressParts } : {}),
+      relationship: b.relationship,
+      taxClass: r.taxClass,
+      dollarAmount: r.scaledBequeathed,
+    });
     if (r.taxClass === 'A') {
       if (b.isSpouseOrCU) {
         classASpouse.push(r);
@@ -228,6 +240,7 @@ export function buildITRFormData(
     scheduleB4,
     scheduleC,
     scheduleD,
+    scheduleE,
     classCWorksheet,
     classDWorksheet,
 
