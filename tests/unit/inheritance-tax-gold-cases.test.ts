@@ -229,6 +229,49 @@ describe('GOLD FND-DISTRIB — deductions exceeding the estate are refused', () 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Phase 0 — a nonresident decedent is refused at COMPUTE, not just at form time
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Phase 0 — nonresident decedent is out of scope', () => {
+  const nonresident = () => makeMatter({
+    decedent: {
+      lastName: 'Gold', firstName: 'Ada', ssn: '999-00-1234',
+      dateOfDeath: '2023-09-18', countyOfResidence: 'Mercer', isNJResident: false,
+    },
+    beneficiaries: [{
+      id: 'b1', lastName: 'Kid', firstName: 'Kim', address: '5 St, NJ', relationship: 'child',
+      bequests: [{ id: 'q', type: 'bank_account', description: 'Acct', fairMarketValue: 50_000 }],
+    }],
+  });
+
+  test('computeEstate refuses rather than returning a resident-basis figure', () => {
+    // NJ taxes a nonresident only on NJ-situs property (N.J.A.C. 18:26-2.15); valuing every
+    // bequest would produce a confidently wrong number. The UI promises this refusal — before
+    // this guard existed, the promise was false and Compute happily returned a figure.
+    expect(() => computeEstate(nonresident(), getRuleSet('2023-09-18'))).toThrow(UnsupportedMatterError);
+  });
+
+  test('the refusal names IT-NR so the attorney knows which form is required', () => {
+    expect(() => computeEstate(nonresident(), getRuleSet('2023-09-18'))).toThrow(/IT-NR/);
+  });
+
+  test('an unset residency flag is still treated as resident and computes normally', () => {
+    // Only an explicit false is out of scope — matters predating the flag must keep working.
+    const legacy = makeMatter({
+      decedent: {
+        lastName: 'Gold', firstName: 'Ada', ssn: '999-00-1234',
+        dateOfDeath: '2023-09-18', countyOfResidence: 'Mercer',
+      },
+      beneficiaries: [{
+        id: 'b1', lastName: 'Kid', firstName: 'Kim', address: '5 St, NJ', relationship: 'child',
+        bequests: [{ id: 'q', type: 'bank_account', description: 'Acct', fairMarketValue: 50_000 }],
+      }],
+    });
+    expect(() => computeEstate(legacy, getRuleSet('2023-09-18'))).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FND-IMMUT — an approved IT-R renders ONLY from the frozen snapshot (§10)
 // ═══════════════════════════════════════════════════════════════════════════
 
