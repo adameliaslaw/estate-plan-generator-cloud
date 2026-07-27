@@ -336,6 +336,9 @@ export function buildFormSnapshot(matter: Matter): ITRFormSnapshot {
     type: d.type,
     description: d.description,
     amount: d.amount,
+    // Conditional so a deduction without a payee stores no key at all — Firestore rejects an
+    // explicit undefined.
+    ...(d.payeeName !== undefined ? { payeeName: d.payeeName } : {}),
     ...(d.executorCommissionEligibility !== undefined
       ? { executorCommissionEligibility: d.executorCommissionEligibility }
       : {}),

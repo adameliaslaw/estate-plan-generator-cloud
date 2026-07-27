@@ -23,7 +23,10 @@
  * producing a return with empty boxes.
  */
 import { PDFDocument, PDFForm } from 'pdf-lib';
-import type { AddressParts, ITRFormData, ScheduleEBeneficiaryRow, ScheduleItem, TaxClassLine } from '../types';
+import type {
+  AddressParts, DeductionType, ITRFormData, ScheduleDeductionItem, ScheduleEBeneficiaryRow,
+  ScheduleItem, TaxClassLine,
+} from '../types';
 
 /** Cover page — "Estate Information" block and the five yes/no questions. */
 const COVER = {
@@ -143,6 +146,67 @@ const SUMMARY_LINES_15_TO_22: ReadonlyArray<{ dollars: string; cents: string; ke
 ];
 
 /**
+ * Form IT-PMT (page 3) — the payment voucher that travels with the return.
+ *
+ * It carries its own copy of the decedent and representative blocks, with its own field names,
+ * and one figure. The form answers for itself which figure that is: printed above the box is
+ * "Amount paid with return (From IT-R Summary Page, line 21)" — the balance due, not line 19's
+ * total, because payments already made are not remitted again.
+ *
+ * Two differences from the cover page worth noting, both the State's own:
+ *   - the SSN boxes are named out of order (`undefined_31` is the middle pair, `undefined_30` the
+ *     last four) — resolved by x-position, 127 / 171 / 215, never by the name;
+ *   - the date of death is printed "(mm/dd/yy)" and the field is named `Date of Death mmddyy`,
+ *     against the cover's `…mmddyyyy`. The two-digit year is what this voucher asks for.
+ *
+ * The eleven "list each check individually" boxes and their total are deliberately left blank:
+ * how the attorney splits the remittance across checks is not something the estate record knows,
+ * and the form only asks for the list when there is more than one check.
+ */
+const IT_PMT = {
+  decedentName: 'Decedents Name_3',                     // "Decedent's Name — Last First Middle"
+  ssn3: 'Decedents SS No_3',                            // "Decedent's S.S. No." — first 3 digits
+  ssn2: 'undefined_31',                                 //   … middle 2
+  ssn4: 'undefined_30',                                 //   … last 4
+  dodMonth: 'Date of Death mmddyy',                     // "Date of Death (mm/dd/yy)"
+  dodDay: 'undefined_32',
+  dodYear: 'undefined_33',
+  county: 'County of Residence',
+  repName: 'Name_2',
+  repPhoneArea: 'Daytime Phone_3',                      // "Daytime Phone ( ___ )"
+  repPhoneRest: 'undefined_34',
+  repStreet: 'Street',
+  repCity: 'City_2',
+  repState: 'State_2',
+  repZip: 'ZIP Code_2',
+  repEmail: 'Email Address',
+  amount: 'undefined_35',                               // "1. Inheritance Tax (Total of checks remitted with this form)"
+} as const;
+
+/**
+ * Schedules B1–B4 Recap (page 10) — "Enter totals from each of the following schedules", whose
+ * line 5 is the figure the Summary Page prints on line 3.
+ *
+ * Line 5 is written from `line3_allOtherPersonalProperty` rather than re-added here, so the recap
+ * and the Summary Page cannot disagree: one figure, printed twice.
+ *
+ * ⚠️ Rows 1 and 2 carry near-identical names — `2 Schedule B2 Sto111ckCoops_2` is the
+ * **B-1 accounts** row at y642, and `2 Schedule B2 StockCoops_2` the B-2 stocks row at y615.
+ * They are resolved by y-position against the printed labels at y646 and y619. Reading the names
+ * gets this backwards.
+ *
+ * The page's own note — "If there are no assets reported on any of these schedules … enter zero on
+ * the line corresponding to that schedule" — is why all five boxes are written unconditionally.
+ */
+const RECAP = {
+  scheduleB1: '2 Schedule B2 Sto111ckCoops_2',                    // "1. Schedule B-1: Financial Institution Accounts"
+  scheduleB2: '2 Schedule B2 StockCoops_2',                       // "2. Schedule B-2: Stock/Co-ops"
+  scheduleB3: '3 Schedule B3 Municipal and Corporate Bonds_2',    // "3. Schedule B-3: Municipal and Corporate Bonds"
+  scheduleB4: '4 Schedule B4 All Other Property_2',               // "4. Schedule B-4: All Other Property"
+  total: '5 Total Lines 14 Enter here and on Form ITR Summary Page line 3',
+} as const;
+
+/**
  * Schedule E Part I — "Beneficiary and address of each person who has an interest (vested,
  * contingent, or otherwise) in this Estate". Nine rows on the page.
  *
@@ -199,12 +263,115 @@ const SCHEDULE_B4_ROWS: ReadonlyArray<{ description: string; value: string; equi
 ];
 
 /**
+ * Schedule D — "Deductions Claimed", pages 13 and 14. Three parts, and unlike the asset
+ * schedules the categories are PRE-PRINTED: a row's meaning comes from the block it sits in, not
+ * from anything written in it.
+ *
+ * Part I, "Allowable Estate Administration Expenses", has fixed slots — one Funeral line, four
+ * Administration lines, one Counsel Fees, one CPA/Enrolled Agent, and two Commissions blocks.
+ * Column (A) is a free-text box under the printed category, (B) is "Name of Business/Person
+ * Paid", (C) the amount.
+ *
+ * Row tables generated from `scripts/itr-field-inventory.mjs` by y-position within each column's
+ * x-band, never transcribed — page 14 alone has 24 rows whose names differ only in where the
+ * State's `21#$%%$` noise was spliced into them.
+ *
+ * Left deliberately blank: the two SS# blocks beside the commissions (the model holds no SSN for
+ * a personal representative, and inventing one on a filed return is not on) and the
+ * Estimated/Agreed checkboxes beside the professional fees (nothing in the matter records which
+ * a fee is).
+ */
+const SCHEDULE_D_PART_I = {
+  funeral: { type: 'Funeral list additional funeral expenses', name: 'Names1121', amount: 'C AmountNames' },
+  administration: [
+    { type: 'Administration list additional expenses', name: 'Names4t656', amount: 'C AmountNames_2' },
+    { type: 'undefined_69', name: 'Names4t656aa', amount: 'C AmountNames_2bb' },
+    { type: 'undefined_68', name: 'Names4t656cc', amount: 'C AmountNames_2ff' },
+    { type: 'undefined_70', name: 'Names4t656aarr', amount: 'C AmountNames_2bbgg' },
+  ],
+  counsel: { name: 'Names3332', amount: 'C AmountNames_3' },
+  accountant: { name: 'Namesa32', amount: 'C AmountNames_4' },
+  commissions: [
+    { name: 'Names', amount: 'C AmountNames SS   Name SS!##' },
+    { name: 'Name_3', amount: 'C AmountNames SS   Name SS' },
+  ],
+  total: 'C AmountTotal  Part I',
+} as const;
+
+/**
+ * Part II — "Real Property Debts of the Decedent". Section A is mortgages on property reported
+ * on Schedule A, at date-of-death balances only; Section B is debts tied to the sale of the
+ * decedent's real property. Four rows each.
+ */
+const SCHEDULE_D_PART_II = {
+  mortgages: [
+    { type: '1_4', name: '1_42233', amount: 'C AmountTotal  Part I221@##' },
+    { type: '2_4', name: '2_41_42233', amount: 'C Amrt I221@##ountTotal  Part I221' },
+    { type: '3_4', name: '3_41_42233', amount: 'Crt I221@## AmountTotal  Part I221' },
+    { type: '4_4', name: '4_41_42233', amount: 'C AmountTotal rt I221@## Part I221' },
+  ],
+  saleDebts: [
+    { type: '1_5', name: '1_51_422331_42233', amount: 'C AmountTotal  Part I221#$%%$' },
+    { type: '2_5', name: '2_51_422331_42233', amount: 'C AmountTotal  Pa21#$%%$rt I221' },
+    { type: '3_5', name: '3_51_422331_42233', amount: 'C Am21#$%%$ountTotal  Part I221' },
+    { type: '4_5', name: '4_51_422331_42233', amount: '21#$%%$C AmountTotal  Part I221' },
+  ],
+  total: 'Total  Part II Section21#$%%$ A and Section B_2',
+} as const;
+
+/**
+ * Part III (page 14) — "Other administration/funeral expenses or debts of the decedent as of the
+ * date of death". Twenty-four free rows, and the form's own home for anything Part I's fixed
+ * slots cannot hold: it is where the printed page sends extra funeral and administration
+ * expenses, and where every deduction type without a printed block belongs.
+ */
+const SCHEDULE_D_PART_III_ROWS: ReadonlyArray<{ type: string; name: string; amount: string }> = [
+  { type: 'B Name of BusinessPerson21#$%%$ Owed1', name: 'B Name of BusinessPerson Owed1', amount: 'C Amount1' },
+  { type: 'B Nam21#$%%$e of BusinessPerson Owed2', name: 'B Name of BusinessPerson Owed2', amount: 'C Amount2' },
+  { type: 'B Name of BusinessPerson Owed321#$%%$', name: 'B Name of BusinessPerson Owed3', amount: 'C Amount3' },
+  { type: 'B Na21#$%%$me of BusinessPerson Owed4', name: 'B Name of BusinessPerson Owed4', amount: 'C Amount4' },
+  { type: 'B Name of BusinessPerson Owe!@@#!d5', name: 'B Name of BusinessPerson Owed5@@#', amount: 'C Amount5' },
+  { type: 'BOwe!@@#! Name of BusinessPerson Owed6', name: 'B Name of @@#BusinessPerson Owed6', amount: 'C Amount6' },
+  { type: 'B Name of BusiOwe!@@#!nessPerson Owed7', name: 'B Nam@@#e of BusinessPerson Owed7', amount: 'C Amount7' },
+  { type: 'B Name of BusinessPOwe!@@#!erson Owed8', name: 'B Name of BusinessPerson Owed8', amount: 'C Amount8' },
+  { type: 'B Name of BusinessPerson Owed921#$%%$', name: 'B Name of BusinessPerson Owed9', amount: 'C Amount9' },
+  { type: 'B Name of Bu21#$%%$sinessPerson Owed10', name: 'B Name of BusinessPerson Owed10', amount: 'C Amount10' },
+  { type: 'B Name of BusinessPerson Owed1121#$%%$', name: 'B Name of BusinessPerson Owed11', amount: 'C Amount11' },
+  { type: 'B Name of21#$%%$ BusinessPerson Owed12', name: 'B Name of BusinessPerson Owed12', amount: 'C Amount12' },
+  { type: 'B Name of BusinessPerson Owed1321#$%%$', name: 'B Name of BusinessPerson Owed13', amount: 'C Amount13' },
+  { type: 'B Name of BusinessPerson Owed1421#$%%$', name: 'B Name of BusinessPerson Owed14', amount: 'C Amount14' },
+  { type: 'B Name of BusinessPerson Owe21#$%%$d15', name: 'B Name of BusinessPerson Owed15', amount: 'C Amount15' },
+  { type: 'B Name of BusinessPerson Owed1621#$%%$', name: 'B Name of BusinessPerson Owed16', amount: 'C Amount16' },
+  { type: 'B Name of BusinessPerson Owed1721#$%%$', name: 'B Name of BusinessPerson Owed17', amount: 'C Amount17' },
+  { type: 'B Name of BusinessPerson Owed1821#$%%$', name: 'B Name of BusinessPerson Owed18', amount: 'C Amount18' },
+  { type: 'B Name of Busine21#$%%$ssPerson Owed19', name: 'B Name of BusinessPerson Owed19', amount: 'C Amount19' },
+  { type: 'B Name of BusinessPerson Owed2021#$%%$', name: 'B Name of BusinessPerson Owed20', amount: 'C Amount20' },
+  { type: 'B Name of BusinessPerson Owed2121#$%%$', name: 'B Name of BusinessPerson Owed21', amount: 'C Amount21' },
+  { type: 'B Name of Busi21#$%%$nessPerson Owed22', name: 'B Name of BusinessPerson Owed22', amount: 'C Amount22' },
+  { type: 'B Name of BusinessPerson Owed2321#$%%$', name: 'B Name of BusinessPerson Owed23', amount: 'C Amount23' },
+  { type: 'B Name of Busines21#$%%$sPerson Owed24', name: 'B Name of BusinessPerson Owed24', amount: 'C Amount24' },
+];
+
+/**
+ * The three totals at the foot of page 14. `allDeductions` is written from Line 6 rather than
+ * re-added here, so the schedule and the Summary Page cannot disagree — the parts above it are
+ * the itemisation of that one figure.
+ */
+const SCHEDULE_D_TOTALS = {
+  partIII: 'C AmountTotal  Part III',
+  additionalSchedules: 'C AmountTotal of all additional schedules Part I Part II and Part III if none enter zero',
+  allDeductions: 'C AmountTotal of all deductions claimed Part I Part II and Part III Enter here and on Form ITR Summary Page line 6',
+} as const;
+
+/**
  * "Check if additional copies of the schedule are attached" — one per schedule page. Set when
  * the estate has more items than the page has rows, because the alternative is a return that
  * silently reports fewer assets or beneficiaries than the estate contains.
  */
 const ADDITIONAL_COPIES = {
   scheduleB4: 'Check if additional copies of the schedule are attached_6',
+  scheduleD1: 'Check if additional copies of the schedule are attached_9',   // Schedule D, page 13
+  scheduleD2: 'Check if additional copies of the schedule are attached_10',  // Schedule D, page 14
   scheduleE: 'Check if additional copies of the schedule are attached_11',
 } as const;
 
@@ -376,6 +543,179 @@ function fillScheduleE(w: FieldWriter, rows: ReadonlyArray<ScheduleEBeneficiaryR
   if (rows.length > SCHEDULE_E_ROWS.length) w.check(ADDITIONAL_COPIES.scheduleE);
 }
 
+/**
+ * Form IT-PMT, the payment voucher.
+ *
+ * The decedent block is written whatever the outcome — the voucher is part of the booklet and
+ * identifies it. The amount and the representative's address are written only when there is a
+ * balance to remit, because the form says so in as many words: "Do not include address if you are
+ * not submitting a payment." An estate that owes nothing files a return, not a payment.
+ */
+function fillPaymentVoucher(
+  w: FieldWriter,
+  data: ITRFormData,
+  identity: { fullName: string; ssn: [string, string, string]; dod: [string, string, string] },
+): void {
+  const [ssn3, ssn2, ssn4] = identity.ssn;
+  const [dodMonth, dodDay, dodYear] = identity.dod;
+
+  w.text(IT_PMT.decedentName, identity.fullName);
+  w.text(IT_PMT.ssn3, ssn3);
+  w.text(IT_PMT.ssn2, ssn2);
+  w.text(IT_PMT.ssn4, ssn4);
+  w.text(IT_PMT.dodMonth, dodMonth);
+  w.text(IT_PMT.dodDay, dodDay);
+  // "(mm/dd/yy)" — the voucher's own label, unlike the four-digit boxes on the cover page.
+  w.text(IT_PMT.dodYear, dodYear.slice(-2));
+  w.text(IT_PMT.county, data.countyOfResidence);
+
+  if (data.line21_balanceDue <= 0) return;
+
+  const rep = data.representative;
+  const [area, rest] = splitPhone(rep.phone);
+  const addr = resolveAddress(rep.address, rep.addressParts);
+  w.text(IT_PMT.repName, rep.name);
+  w.text(IT_PMT.repPhoneArea, area);
+  w.text(IT_PMT.repPhoneRest, rest);
+  // One Street box here, against the cover page's two.
+  w.text(IT_PMT.repStreet, [addr.street1, addr.street2].filter(Boolean).join(', '));
+  w.text(IT_PMT.repCity, addr.city);
+  w.text(IT_PMT.repState, addr.state);
+  w.text(IT_PMT.repZip, addr.zip);
+
+  w.text(IT_PMT.amount, formatMoneyInline(data.line21_balanceDue));
+}
+
+/**
+ * Column (A) on Part III, where — unlike every other block on Schedule D — the printed page
+ * names no category. The deduction's own type has to say what the expense is.
+ *
+ * Deliberately shorter than the workpaper's labels in `render.ts`, which carry the N.J.A.C.
+ * citation: this box is 181pt wide on a filed return, and a citation would push the attorney's
+ * description out of view.
+ */
+const DEDUCTION_TYPE_LABELS: Record<DeductionType, string> = {
+  funeral_expenses: 'Funeral expense',
+  last_illness_expenses: 'Last illness expense',
+  administration_expenses: 'Administration expense',
+  debt_of_decedent: 'Debt of decedent',
+  mortgage: 'Mortgage',
+  executor_commission: "Executor's commission",
+  attorney_fee: 'Counsel fee',
+  accounting_fee: 'Accounting fee',
+  accrued_property_taxes: 'Accrued property taxes',
+  transfer_taxes_other_states: 'Transfer tax — other jurisdiction',
+  other: 'Other',
+};
+
+/** One printed row of Schedule D. Blocks whose category is pre-printed have no column (A). */
+interface DeductionSlot {
+  readonly type?: string;
+  readonly name: string;
+  readonly amount: string;
+}
+
+/**
+ * Schedule D — "Deductions Claimed".
+ *
+ * Every deduction goes to the block the State prints for it: funeral to the Funeral line,
+ * administration to the four Administration lines, counsel and accountant fees to their own
+ * lines, commissions to the two commission blocks, mortgages to Part II Section A. Everything
+ * else — last illness, debts, accrued taxes, other-jurisdiction transfer taxes — belongs to Part
+ * III, which is what that part is for.
+ *
+ * Anything that will not fit its block falls through to Part III rather than being dropped; the
+ * page itself directs the overflow there ("list additional funeral expenses in Part III"). Past
+ * Part III's 24 rows, the remainder is reported as a total on "Total of all additional schedules"
+ * with both "additional copies attached" boxes set — the attorney attaches the continuation, but
+ * the return's arithmetic still adds up to Line 6 rather than silently under-reporting.
+ *
+ * Part II Section B (debts tied to a sale of the decedent's real property) is left blank: the
+ * model has no sale concept, and a mortgage balance is not a sale debt.
+ */
+function fillScheduleD(w: FieldWriter, data: ITRFormData): void {
+  const overflow: ScheduleDeductionItem[] = [];
+  let partITotal = 0;
+  let partIITotal = 0;
+
+  const ofType = (...types: DeductionType[]): ScheduleDeductionItem[] =>
+    data.scheduleD.filter((d) => types.includes(d.type));
+
+  /** Fills `slots` in order; anything left over goes to Part III. Returns what was placed. */
+  const place = (slots: ReadonlyArray<DeductionSlot>, items: ScheduleDeductionItem[]): number => {
+    let placed = 0;
+    items.forEach((item, i) => {
+      const slot = slots[i];
+      if (!slot) {
+        overflow.push(item);
+        return;
+      }
+      // The category is printed beside these rows, so column (A) carries the attorney's own
+      // description rather than repeating it.
+      if (slot.type) w.text(slot.type, item.description);
+      w.text(slot.name, item.payeeName ?? '');
+      w.text(slot.amount, formatMoneyInline(item.amount));
+      placed += item.amount;
+    });
+    return placed;
+  };
+
+  // ── Part I — allowable estate administration expenses ────────────────────
+  partITotal += place([SCHEDULE_D_PART_I.funeral], ofType('funeral_expenses'));
+  partITotal += place(SCHEDULE_D_PART_I.administration, ofType('administration_expenses'));
+  partITotal += place([SCHEDULE_D_PART_I.counsel], ofType('attorney_fee'));
+  partITotal += place([SCHEDULE_D_PART_I.accountant], ofType('accounting_fee'));
+  partITotal += place(SCHEDULE_D_PART_I.commissions, ofType('executor_commission'));
+  w.text(SCHEDULE_D_PART_I.total, formatMoneyInline(partITotal));
+
+  // ── Part II — real property debts ────────────────────────────────────────
+  partIITotal += place(SCHEDULE_D_PART_II.mortgages, ofType('mortgage'));
+  w.text(SCHEDULE_D_PART_II.total, formatMoneyInline(partIITotal));
+
+  // ── Part III — everything without a printed block, plus the overflow ──────
+  const partIII = [
+    ...ofType('last_illness_expenses', 'debt_of_decedent', 'accrued_property_taxes',
+      'transfer_taxes_other_states', 'other'),
+    ...overflow,
+  ];
+
+  let partIIITotal = 0;
+  partIII.slice(0, SCHEDULE_D_PART_III_ROWS.length).forEach((item, i) => {
+    const row = SCHEDULE_D_PART_III_ROWS[i];
+    if (!row) return;
+    w.text(row.type, `${DEDUCTION_TYPE_LABELS[item.type]} — ${item.description}`);
+    w.text(row.name, item.payeeName ?? '');
+    w.text(row.amount, formatMoneyInline(item.amount));
+    partIIITotal += item.amount;
+  });
+  w.text(SCHEDULE_D_TOTALS.partIII, formatMoneyInline(partIIITotal));
+
+  const attached = partIII.slice(SCHEDULE_D_PART_III_ROWS.length);
+  const attachedTotal = attached.reduce((sum, item) => sum + item.amount, 0);
+  // "(if none, enter zero)" — the form's instruction, so this box is written either way.
+  w.text(SCHEDULE_D_TOTALS.additionalSchedules, formatMoneyInline(attachedTotal));
+  if (attached.length > 0) {
+    w.check(ADDITIONAL_COPIES.scheduleD1);
+    w.check(ADDITIONAL_COPIES.scheduleD2);
+  }
+
+  // Line 6, printed once and taken from the computation — never re-added from the rows above.
+  w.text(SCHEDULE_D_TOTALS.allDeductions, formatMoneyInline(data.line6_deductions));
+}
+
+/** Schedules B1–B4 Recap — the four schedule totals and their sum, which is Summary Page line 3. */
+function fillRecap(w: FieldWriter, data: ITRFormData): void {
+  w.text(RECAP.scheduleB1, formatMoneyInline(sumScheduleItems(data.scheduleB1)));
+  w.text(RECAP.scheduleB2, formatMoneyInline(sumScheduleItems(data.scheduleB2)));
+  w.text(RECAP.scheduleB3, formatMoneyInline(sumScheduleItems(data.scheduleB3)));
+  w.text(RECAP.scheduleB4, formatMoneyInline(sumScheduleItems(data.scheduleB4)));
+  w.text(RECAP.total, formatMoneyInline(data.line3_allOtherPersonalProperty));
+}
+
+function sumScheduleItems(items: ReadonlyArray<ScheduleItem>): number {
+  return items.reduce((sum, item) => sum + item.fairMarketValue, 0);
+}
+
 /** Schedule B-4, "All Other Property" — eighteen rows, then the overflow checkbox. */
 function fillScheduleB4(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
   items.slice(0, SCHEDULE_B4_ROWS.length).forEach((item, i) => {
@@ -474,6 +814,11 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
   w.text(SCHEDULE_HEADER.ssn, data.decedentSSN);
   w.text(SCHEDULE_HEADER.dateOfDeath, `${dodMonth}/${dodDay}/${dodYear}`);
 
+  // ── Form IT-PMT — the payment voucher bound into the booklet ──────────────
+  fillPaymentVoucher(w, data, { fullName, ssn: [ssn3, ssn2, ssn4], dod: [dodMonth, dodDay, dodYear] });
+
+  fillRecap(w, data);
+  fillScheduleD(w, data);
   fillScheduleE(w, data.scheduleE);
   fillScheduleB4(w, data.scheduleB4);
 

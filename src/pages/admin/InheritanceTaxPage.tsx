@@ -526,7 +526,7 @@ export default function InheritanceTaxPage() {
               engine's scope — compute it by hand.
             </p>
             {matter.deductions.map((d0, di) => (
-              <div key={d0.id} className="grid items-end gap-3 md:grid-cols-4">
+              <div key={d0.id} className="grid items-end gap-3 md:grid-cols-5">
                 <div>
                   <Label>Type</Label>
                   <select className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
@@ -539,6 +539,17 @@ export default function InheritanceTaxPage() {
                   <Label>Description</Label>
                   <Input value={d0.description}
                     onChange={(e) => patch((d) => { d.deductions[di]!.description = e.target.value; })} />
+                </div>
+                <div>
+                  <Label>Paid to</Label>
+                  <Input value={d0.payeeName ?? ''} placeholder="Optional"
+                    onChange={(e) => patch((d) => {
+                      const value = e.target.value;
+                      // The server's schema is strict and requires a non-empty string, so a
+                      // cleared box drops the key rather than sending ''.
+                      if (value) d.deductions[di]!.payeeName = value;
+                      else delete d.deductions[di]!.payeeName;
+                    })} />
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">

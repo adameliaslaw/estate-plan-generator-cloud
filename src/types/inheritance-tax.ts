@@ -116,10 +116,15 @@ export const BEQUEST_TYPES: ReadonlyArray<{ value: BequestType; label: string }>
   { value: 'transfer', label: 'Transfer within 3 years / POD (Schedule C)' },
 ];
 
+/**
+ * Mirrors the server's `DeductionTypeSchema`, which is `.strict()` — a value this list carries
+ * that the server does not know is rejected at save, so the two must stay identical.
+ * `transfer_taxes_other_states` is the server's name (N.J.A.C. 18:26-7.16).
+ */
 export type DeductionType =
   | 'funeral_expenses' | 'last_illness_expenses' | 'administration_expenses' | 'debt_of_decedent'
   | 'mortgage' | 'executor_commission' | 'attorney_fee' | 'accounting_fee'
-  | 'accrued_property_taxes' | 'other_state_inheritance_tax' | 'other';
+  | 'accrued_property_taxes' | 'transfer_taxes_other_states' | 'other';
 
 export const DEDUCTION_TYPES: ReadonlyArray<{ value: DeductionType; label: string }> = [
   { value: 'funeral_expenses', label: 'Funeral expenses' },
@@ -131,7 +136,7 @@ export const DEDUCTION_TYPES: ReadonlyArray<{ value: DeductionType; label: strin
   { value: 'attorney_fee', label: 'Attorney fee' },
   { value: 'accounting_fee', label: 'Accounting fee' },
   { value: 'accrued_property_taxes', label: 'Accrued property taxes' },
-  { value: 'other_state_inheritance_tax', label: 'Inheritance tax paid to another state' },
+  { value: 'transfer_taxes_other_states', label: 'Inheritance tax paid to another state' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -176,6 +181,8 @@ export interface ITRDeduction {
   type: DeductionType;
   description: string;
   amount: number;
+  /** Schedule D column (B), "Name of Business/Person Paid". Omitted when left blank. */
+  payeeName?: string;
 }
 
 export interface ITRMatterInput {

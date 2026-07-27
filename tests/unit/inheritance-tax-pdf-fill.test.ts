@@ -226,3 +226,210 @@ describe('Schedule B-4 — all other property', () => {
     expect(read('C Decedents EquityRow1')).toBe('455,931.33');
   });
 });
+
+describe('Schedules B1–B4 Recap', () => {
+  test('the B-4 total reaches the recap and the empty schedules read zero, not blank', async () => {
+    const read = await fillAndRead();
+    // Rows 1 and 2 have near-identical names; row 1 is the B-1 accounts line despite its name.
+    expect(read('2 Schedule B2 Sto111ckCoops_2')).toBe('0.00');                    // 1. B-1 accounts
+    expect(read('2 Schedule B2 StockCoops_2')).toBe('0.00');                       // 2. B-2 stock
+    expect(read('3 Schedule B3 Municipal and Corporate Bonds_2')).toBe('0.00');    // 3. B-3 bonds
+    expect(read('4 Schedule B4 All Other Property_2')).toBe('455,931.33');         // 4. B-4 other
+  });
+
+  test('an account goes on row 1 and stock on row 2, despite the names saying otherwise', async () => {
+    // `2 Schedule B2 Sto111ckCoops_2` is the B-1 row. Distinct amounts, so a swap cannot pass.
+    const mixed: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        bequests: [
+          { id: 'q1', type: 'bank_account', description: 'Checking', fairMarketValue: 11_000 },
+          { id: 'q2', type: 'securities', description: 'Shares', fairMarketValue: 22_000 },
+          { id: 'q3', type: 'bonds', description: 'Municipal bonds', fairMarketValue: 33_000 },
+        ],
+      }],
+    };
+    const computation = computeEstate(mixed, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(mixed, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('2 Schedule B2 Sto111ckCoops_2').getText()).toBe('11,000.00');
+    expect(form.getTextField('2 Schedule B2 StockCoops_2').getText()).toBe('22,000.00');
+    expect(form.getTextField('3 Schedule B3 Municipal and Corporate Bonds_2').getText()).toBe('33,000.00');
+    expect(form.getTextField('4 Schedule B4 All Other Property_2').getText()).toBe('0.00');
+    expect(
+      form.getTextField('5 Total Lines 14 Enter here and on Form ITR Summary Page line 3').getText(),
+    ).toBe('66,000.00');
+  });
+
+  test('line 5 of the recap is the same figure the Summary Page prints on line 3', async () => {
+    const read = await fillAndRead();
+    expect(read('5 Total Lines 14 Enter here and on Form ITR Summary Page line 3')).toBe('455,931.33');
+    // Summary Page line 3, dollars and cents in their own boxes.
+    expect(read('3')).toBe('455,931');
+    expect(read('00_22aa2aau65t!!@')).toBe('33');
+  });
+});
+
+describe('Schedule D — deductions', () => {
+  /** A deduction of each kind that has its own printed block, plus two that do not. */
+  const DEDUCTED: Matter = {
+    ...MATTER,
+    deductions: [
+      { id: 'd1', type: 'funeral_expenses', description: 'Funeral service', amount: 9_000, payeeName: 'Hillside Funeral Home' },
+      { id: 'd2', type: 'administration_expenses', description: 'Probate filing', amount: 1_200, payeeName: 'Mercer Surrogate' },
+      { id: 'd3', type: 'attorney_fee', description: 'Estate counsel', amount: 7_500, payeeName: 'Elias Law' },
+      { id: 'd4', type: 'accounting_fee', description: 'Final 1040', amount: 900, payeeName: 'Ledger CPA' },
+      { id: 'd5', type: 'mortgage', description: 'Mortgage on 12 Oak St', amount: 40_000, payeeName: 'First Bank' },
+      { id: 'd6', type: 'last_illness_expenses', description: 'Hospital', amount: 3_100, payeeName: 'Capital Health' },
+      { id: 'd7', type: 'debt_of_decedent', description: 'Credit card', amount: 400 },
+    ],
+  };
+
+  async function fillDeducted(): Promise<(name: string) => string | undefined> {
+    const computation = computeEstate(DEDUCTED, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(DEDUCTED, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    return (name: string) => form.getTextField(name).getText();
+  }
+
+  test('each deduction lands in the block the State prints for it', async () => {
+    const read = await fillDeducted();
+    // Part I — the category is printed, so column (A) carries the description.
+    expect(read('Funeral list additional funeral expenses')).toBe('Funeral service');
+    expect(read('Names1121')).toBe('Hillside Funeral Home');
+    expect(read('C AmountNames')).toBe('9,000.00');
+    expect(read('Administration list additional expenses')).toBe('Probate filing');
+    expect(read('C AmountNames_2')).toBe('1,200.00');
+    expect(read('Names3332')).toBe('Elias Law');            // Counsel Fees
+    expect(read('C AmountNames_3')).toBe('7,500.00');
+    expect(read('Namesa32')).toBe('Ledger CPA');            // CPA/Enrolled Agent Fees
+    expect(read('C AmountNames_4')).toBe('900.00');
+    // Part II Section A — mortgages on Schedule A property.
+    expect(read('1_4')).toBe('Mortgage on 12 Oak St');
+    expect(read('C AmountTotal  Part I221@##')).toBe('40,000.00');
+  });
+
+  test('a type with no printed block goes to Part III, labelled by its type', async () => {
+    const read = await fillDeducted();
+    expect(read('B Name of BusinessPerson21#$%%$ Owed1')).toBe('Last illness expense — Hospital');
+    expect(read('B Name of BusinessPerson Owed1')).toBe('Capital Health');
+    expect(read('C Amount1')).toBe('3,100.00');
+    expect(read('B Nam21#$%%$e of BusinessPerson Owed2')).toBe('Debt of decedent — Credit card');
+    expect(read('C Amount2')).toBe('400.00');
+  });
+
+  test('the part totals add up to Line 6, and Line 6 comes from the computation', async () => {
+    const read = await fillDeducted();
+    expect(read('C AmountTotal  Part I')).toBe('18,600.00');                          // 9,000+1,200+7,500+900
+    expect(read('Total  Part II Section21#$%%$ A and Section B_2')).toBe('40,000.00');
+    expect(read('C AmountTotal  Part III')).toBe('3,500.00');                         // 3,100+400
+    // "(if none, enter zero)" — written either way.
+    expect(read('C AmountTotal of all additional schedules Part I Part II and Part III if none enter zero')).toBe('0.00');
+    const total = 'C AmountTotal of all deductions claimed Part I Part II and Part III Enter here and on Form ITR Summary Page line 6';
+    expect(read(total)).toBe('62,100.00');
+    // The same figure the Summary Page prints on line 6, dollars and cents.
+    expect(read('6')).toBe('62,100');
+    expect(read('0_2t4gsdxv0_22aa2aau65t')).toBe('00');
+  });
+
+  test('a deduction with no payee prints a blank column, not a guess', async () => {
+    const read = await fillDeducted();
+    expect(read('B Name of BusinessPerson Owed2')).toBeFalsy();  // 'Credit card' has no payee
+  });
+
+  test('more administration expenses than the block holds fall through to Part III', async () => {
+    // The page directs its own overflow: "Administration (list additional expenses in Part III)".
+    const many: Matter = {
+      ...MATTER,
+      deductions: Array.from({ length: 6 }, (_, i) => ({
+        id: `a${i}`, type: 'administration_expenses' as const,
+        description: `Expense ${i}`, amount: 100 * (i + 1),
+      })),
+    };
+    const computation = computeEstate(many, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(many, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    // Four slots filled, the fifth and sixth pushed to Part III rather than dropped.
+    expect(form.getTextField('undefined_70').getText()).toBe('Expense 3');
+    expect(form.getTextField('B Name of BusinessPerson21#$%%$ Owed1').getText())
+      .toBe('Administration expense — Expense 4');
+    expect(form.getTextField('C Amount1').getText()).toBe('500.00');
+    expect(form.getTextField('C Amount2').getText()).toBe('600.00');
+    // 100+200+300+400 in Part I, 500+600 in Part III — and the two still sum to Line 6.
+    expect(form.getTextField('C AmountTotal  Part I').getText()).toBe('1,000.00');
+    expect(form.getTextField('C AmountTotal  Part III').getText()).toBe('1,100.00');
+  });
+
+  test('past Part III’s 24 rows the remainder is totalled, not dropped', async () => {
+    const overflowing: Matter = {
+      ...MATTER,
+      deductions: Array.from({ length: 26 }, (_, i) => ({
+        id: `o${i}`, type: 'debt_of_decedent' as const, description: `Debt ${i}`, amount: 1_000,
+      })),
+    };
+    const computation = computeEstate(overflowing, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(overflowing, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('C AmountTotal  Part III').getText()).toBe('24,000.00');
+    expect(form.getTextField(
+      'C AmountTotal of all additional schedules Part I Part II and Part III if none enter zero',
+    ).getText()).toBe('2,000.00');
+    expect(form.getCheckBox('Check if additional copies of the schedule are attached_9').isChecked()).toBe(true);
+    expect(form.getCheckBox('Check if additional copies of the schedule are attached_10').isChecked()).toBe(true);
+    expect(form.getTextField(
+      'C AmountTotal of all deductions claimed Part I Part II and Part III Enter here and on Form ITR Summary Page line 6',
+    ).getText()).toBe('26,000.00');
+  });
+
+  test('an estate with no deductions still reports zeros across the schedule', async () => {
+    const read = await fillAndRead();
+    expect(read('C AmountTotal  Part I')).toBe('0.00');
+    expect(read('C AmountTotal  Part III')).toBe('0.00');
+    expect(read(
+      'C AmountTotal of all deductions claimed Part I Part II and Part III Enter here and on Form ITR Summary Page line 6',
+    )).toBe('0.00');
+  });
+});
+
+describe('Form IT-PMT — payment voucher', () => {
+  test('carries the decedent block, with the two-digit year this page asks for', async () => {
+    const read = await fillAndRead();
+    expect(read('Decedents Name_3')).toBe('Gold, Ada');
+    expect([read('Decedents SS No_3'), read('undefined_31'), read('undefined_30')]).toEqual(['999', '00', '1234']);
+    // "(mm/dd/yy)" here, against "(mm/dd/yyyy)" on the cover page.
+    expect([read('Date of Death mmddyy'), read('undefined_32'), read('undefined_33')]).toEqual(['09', '18', '23']);
+    expect(read('County of Residence')).toBe('Mercer');
+  });
+
+  test('the amount remitted is line 21, the balance due — not line 19', async () => {
+    const read = await fillAndRead();
+    // $68,389.70 tax + $558.71 interest − $48,901.58 already paid.
+    expect(read('19')).toBe('68,948');       // line 19, total amount due
+    expect(read('21')).toBe('20,046');       // line 21, balance due
+    expect(read('016aa46tefg0_22aa2aau65t')).toBe('83');
+    expect(read('undefined_35')).toBe('20,046.83');
+    expect(read('Street')).toBe('1 Main St');
+  });
+
+  test('an estate with nothing left to remit leaves the amount and address blank', async () => {
+    // The voucher's own instruction: "Do not include address if you are not submitting a payment."
+    const overpaid: Matter = {
+      ...MATTER,
+      priorPayments: [{ id: 'p1', amount: 100_000, paidOn: '2024-05-12' }],
+    };
+    const computation = computeEstate(overpaid, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(overpaid, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    // pdf-lib reports an empty text field as undefined rather than ''.
+    expect(form.getTextField('undefined_35').getText()).toBeFalsy();
+    expect(form.getTextField('Street').getText()).toBeFalsy();
+    // The decedent block is still filled — the voucher is part of the booklet either way.
+    expect(form.getTextField('Decedents Name_3').getText()).toBe('Gold, Ada');
+  });
+});
