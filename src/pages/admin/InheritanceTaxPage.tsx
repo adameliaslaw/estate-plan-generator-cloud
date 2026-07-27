@@ -86,6 +86,40 @@ function emptyDeduction(): ITRDeduction {
   return { id: uid('ded'), type: 'funeral_expenses', description: '', amount: 0 };
 }
 
+/**
+ * Format an SSN as the attorney types. People type nine digits; the schema wants NNN-NN-NNNN,
+ * and bouncing that off the server as a regex failure is a poor way to find out.
+ */
+function formatSSN(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+/**
+ * Catch empty required fields before the round trip. The server is still the real validator —
+ * this exists because its message for a BLANK date of death is "before 2002-01-01", which sends
+ * you looking for the wrong problem.
+ */
+function missingRequired(m: ITRMatterInput): string[] {
+  const missing: string[] = [];
+  if (!m.decedent.firstName.trim()) missing.push('Decedent first name');
+  if (!m.decedent.lastName.trim()) missing.push('Decedent last name');
+  if (!m.decedent.ssn.trim()) missing.push('Decedent SSN');
+  else if (!/^\d{3}-\d{2}-\d{4}$/.test(m.decedent.ssn)) missing.push('Decedent SSN (needs 9 digits)');
+  if (!m.decedent.dateOfDeath) missing.push('Date of death');
+  if (!m.personalRepresentative.name.trim()) missing.push('Personal representative name');
+  if (!m.personalRepresentative.address.trim()) missing.push('Personal representative address');
+  if (!m.personalRepresentative.phone.trim()) missing.push('Personal representative phone');
+  if (m.beneficiaries.length === 0) missing.push('At least one beneficiary');
+  m.beneficiaries.forEach((b, i) => {
+    if (!b.lastName.trim()) missing.push(`Beneficiary ${i + 1}: name`);
+    if (!b.address.trim()) missing.push(`Beneficiary ${i + 1}: address`);
+  });
+  return missing;
+}
+
 /** Server errors arrive as Firebase callable errors; surface the real message, not "internal". */
 function errorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
@@ -151,6 +185,11 @@ export default function InheritanceTaxPage() {
 
   const onSave = () => run('save', async () => {
     if (!matter) return;
+    const missing = missingRequired(matter);
+    if (missing.length > 0) {
+      toast.error(`Still needed: ${missing.join(', ')}`);
+      return;
+    }
     const res = await inheritanceTaxService.save(firmId, matter);
     setSaved(true);
     toast.success(res.created ? 'Matter created.' : 'Matter saved.');
@@ -256,8 +295,9 @@ export default function InheritanceTaxPage() {
               </div>
               <div>
                 <Label htmlFor="ssn">SSN</Label>
-                <Input id="ssn" placeholder="NNN-NN-NNNN" value={matter.decedent.ssn}
-                  onChange={(e) => patch((d) => { d.decedent.ssn = e.target.value; })} />
+                <Input id="ssn" placeholder="123-45-6789" inputMode="numeric" value={matter.decedent.ssn}
+                  onChange={(e) => patch((d) => { d.decedent.ssn = formatSSN(e.target.value); })} />
+                <p className="text-muted-foreground mt-1 text-xs">Dashes are added for you.</p>
               </div>
               <div>
                 <Label htmlFor="dod">Date of death</Label>
