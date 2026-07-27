@@ -143,6 +143,67 @@ const SUMMARY_LINES_15_TO_22: ReadonlyArray<{ dollars: string; cents: string; ke
 ];
 
 /**
+ * Form IT-PMT (page 3) — the payment voucher that travels with the return.
+ *
+ * It carries its own copy of the decedent and representative blocks, with its own field names,
+ * and one figure. The form answers for itself which figure that is: printed above the box is
+ * "Amount paid with return (From IT-R Summary Page, line 21)" — the balance due, not line 19's
+ * total, because payments already made are not remitted again.
+ *
+ * Two differences from the cover page worth noting, both the State's own:
+ *   - the SSN boxes are named out of order (`undefined_31` is the middle pair, `undefined_30` the
+ *     last four) — resolved by x-position, 127 / 171 / 215, never by the name;
+ *   - the date of death is printed "(mm/dd/yy)" and the field is named `Date of Death mmddyy`,
+ *     against the cover's `…mmddyyyy`. The two-digit year is what this voucher asks for.
+ *
+ * The eleven "list each check individually" boxes and their total are deliberately left blank:
+ * how the attorney splits the remittance across checks is not something the estate record knows,
+ * and the form only asks for the list when there is more than one check.
+ */
+const IT_PMT = {
+  decedentName: 'Decedents Name_3',                     // "Decedent's Name — Last First Middle"
+  ssn3: 'Decedents SS No_3',                            // "Decedent's S.S. No." — first 3 digits
+  ssn2: 'undefined_31',                                 //   … middle 2
+  ssn4: 'undefined_30',                                 //   … last 4
+  dodMonth: 'Date of Death mmddyy',                     // "Date of Death (mm/dd/yy)"
+  dodDay: 'undefined_32',
+  dodYear: 'undefined_33',
+  county: 'County of Residence',
+  repName: 'Name_2',
+  repPhoneArea: 'Daytime Phone_3',                      // "Daytime Phone ( ___ )"
+  repPhoneRest: 'undefined_34',
+  repStreet: 'Street',
+  repCity: 'City_2',
+  repState: 'State_2',
+  repZip: 'ZIP Code_2',
+  repEmail: 'Email Address',
+  amount: 'undefined_35',                               // "1. Inheritance Tax (Total of checks remitted with this form)"
+} as const;
+
+/**
+ * Schedules B1–B4 Recap (page 10) — "Enter totals from each of the following schedules", whose
+ * line 5 is the figure the Summary Page prints on line 3.
+ *
+ * Line 5 is written from `line3_allOtherPersonalProperty` rather than re-added here, so the recap
+ * and the Summary Page cannot disagree: one figure, printed twice.
+ *
+ * ⚠️ Rows 1 and 2 carry near-identical names — `2 Schedule B2 Sto111ckCoops_2` is the
+ * **B-1 accounts** row at y642, and `2 Schedule B2 StockCoops_2` the B-2 stocks row at y615.
+ * They are resolved by y-position against the printed labels at y646 and y619. Reading the names
+ * gets this backwards.
+ *
+ * The page's own note — "If there are no assets reported on any of these schedules … enter zero on
+ * the line corresponding to that schedule" — is why all five boxes are written unconditionally.
+ */
+const RECAP = {
+  scheduleB1: '2 Schedule B2 Sto111ckCoops_2',                    // "1. Schedule B-1: Financial Institution Accounts"
+  scheduleB2: '2 Schedule B2 StockCoops_2',                       // "2. Schedule B-2: Stock/Co-ops"
+  scheduleB3: '3 Schedule B3 Municipal and Corporate Bonds_2',    // "3. Schedule B-3: Municipal and Corporate Bonds"
+  scheduleB4: '4 Schedule B4 All Other Property_2',               // "4. Schedule B-4: All Other Property"
+  total: '5 Total Lines 14 Enter here and on Form ITR Summary Page line 3',
+} as const;
+
+/**
  * Schedule E Part I — "Beneficiary and address of each person who has an interest (vested,
  * contingent, or otherwise) in this Estate". Nine rows on the page.
  *
@@ -376,6 +437,62 @@ function fillScheduleE(w: FieldWriter, rows: ReadonlyArray<ScheduleEBeneficiaryR
   if (rows.length > SCHEDULE_E_ROWS.length) w.check(ADDITIONAL_COPIES.scheduleE);
 }
 
+/**
+ * Form IT-PMT, the payment voucher.
+ *
+ * The decedent block is written whatever the outcome — the voucher is part of the booklet and
+ * identifies it. The amount and the representative's address are written only when there is a
+ * balance to remit, because the form says so in as many words: "Do not include address if you are
+ * not submitting a payment." An estate that owes nothing files a return, not a payment.
+ */
+function fillPaymentVoucher(
+  w: FieldWriter,
+  data: ITRFormData,
+  identity: { fullName: string; ssn: [string, string, string]; dod: [string, string, string] },
+): void {
+  const [ssn3, ssn2, ssn4] = identity.ssn;
+  const [dodMonth, dodDay, dodYear] = identity.dod;
+
+  w.text(IT_PMT.decedentName, identity.fullName);
+  w.text(IT_PMT.ssn3, ssn3);
+  w.text(IT_PMT.ssn2, ssn2);
+  w.text(IT_PMT.ssn4, ssn4);
+  w.text(IT_PMT.dodMonth, dodMonth);
+  w.text(IT_PMT.dodDay, dodDay);
+  // "(mm/dd/yy)" — the voucher's own label, unlike the four-digit boxes on the cover page.
+  w.text(IT_PMT.dodYear, dodYear.slice(-2));
+  w.text(IT_PMT.county, data.countyOfResidence);
+
+  if (data.line21_balanceDue <= 0) return;
+
+  const rep = data.representative;
+  const [area, rest] = splitPhone(rep.phone);
+  const addr = resolveAddress(rep.address, rep.addressParts);
+  w.text(IT_PMT.repName, rep.name);
+  w.text(IT_PMT.repPhoneArea, area);
+  w.text(IT_PMT.repPhoneRest, rest);
+  // One Street box here, against the cover page's two.
+  w.text(IT_PMT.repStreet, [addr.street1, addr.street2].filter(Boolean).join(', '));
+  w.text(IT_PMT.repCity, addr.city);
+  w.text(IT_PMT.repState, addr.state);
+  w.text(IT_PMT.repZip, addr.zip);
+
+  w.text(IT_PMT.amount, formatMoneyInline(data.line21_balanceDue));
+}
+
+/** Schedules B1–B4 Recap — the four schedule totals and their sum, which is Summary Page line 3. */
+function fillRecap(w: FieldWriter, data: ITRFormData): void {
+  w.text(RECAP.scheduleB1, formatMoneyInline(sumScheduleItems(data.scheduleB1)));
+  w.text(RECAP.scheduleB2, formatMoneyInline(sumScheduleItems(data.scheduleB2)));
+  w.text(RECAP.scheduleB3, formatMoneyInline(sumScheduleItems(data.scheduleB3)));
+  w.text(RECAP.scheduleB4, formatMoneyInline(sumScheduleItems(data.scheduleB4)));
+  w.text(RECAP.total, formatMoneyInline(data.line3_allOtherPersonalProperty));
+}
+
+function sumScheduleItems(items: ReadonlyArray<ScheduleItem>): number {
+  return items.reduce((sum, item) => sum + item.fairMarketValue, 0);
+}
+
 /** Schedule B-4, "All Other Property" — eighteen rows, then the overflow checkbox. */
 function fillScheduleB4(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
   items.slice(0, SCHEDULE_B4_ROWS.length).forEach((item, i) => {
@@ -474,6 +591,10 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
   w.text(SCHEDULE_HEADER.ssn, data.decedentSSN);
   w.text(SCHEDULE_HEADER.dateOfDeath, `${dodMonth}/${dodDay}/${dodYear}`);
 
+  // ── Form IT-PMT — the payment voucher bound into the booklet ──────────────
+  fillPaymentVoucher(w, data, { fullName, ssn: [ssn3, ssn2, ssn4], dod: [dodMonth, dodDay, dodYear] });
+
+  fillRecap(w, data);
   fillScheduleE(w, data.scheduleE);
   fillScheduleB4(w, data.scheduleB4);
 

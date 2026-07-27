@@ -226,3 +226,86 @@ describe('Schedule B-4 — all other property', () => {
     expect(read('C Decedents EquityRow1')).toBe('455,931.33');
   });
 });
+
+describe('Schedules B1–B4 Recap', () => {
+  test('the B-4 total reaches the recap and the empty schedules read zero, not blank', async () => {
+    const read = await fillAndRead();
+    // Rows 1 and 2 have near-identical names; row 1 is the B-1 accounts line despite its name.
+    expect(read('2 Schedule B2 Sto111ckCoops_2')).toBe('0.00');                    // 1. B-1 accounts
+    expect(read('2 Schedule B2 StockCoops_2')).toBe('0.00');                       // 2. B-2 stock
+    expect(read('3 Schedule B3 Municipal and Corporate Bonds_2')).toBe('0.00');    // 3. B-3 bonds
+    expect(read('4 Schedule B4 All Other Property_2')).toBe('455,931.33');         // 4. B-4 other
+  });
+
+  test('an account goes on row 1 and stock on row 2, despite the names saying otherwise', async () => {
+    // `2 Schedule B2 Sto111ckCoops_2` is the B-1 row. Distinct amounts, so a swap cannot pass.
+    const mixed: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        bequests: [
+          { id: 'q1', type: 'bank_account', description: 'Checking', fairMarketValue: 11_000 },
+          { id: 'q2', type: 'securities', description: 'Shares', fairMarketValue: 22_000 },
+          { id: 'q3', type: 'bonds', description: 'Municipal bonds', fairMarketValue: 33_000 },
+        ],
+      }],
+    };
+    const computation = computeEstate(mixed, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(mixed, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('2 Schedule B2 Sto111ckCoops_2').getText()).toBe('11,000.00');
+    expect(form.getTextField('2 Schedule B2 StockCoops_2').getText()).toBe('22,000.00');
+    expect(form.getTextField('3 Schedule B3 Municipal and Corporate Bonds_2').getText()).toBe('33,000.00');
+    expect(form.getTextField('4 Schedule B4 All Other Property_2').getText()).toBe('0.00');
+    expect(
+      form.getTextField('5 Total Lines 14 Enter here and on Form ITR Summary Page line 3').getText(),
+    ).toBe('66,000.00');
+  });
+
+  test('line 5 of the recap is the same figure the Summary Page prints on line 3', async () => {
+    const read = await fillAndRead();
+    expect(read('5 Total Lines 14 Enter here and on Form ITR Summary Page line 3')).toBe('455,931.33');
+    // Summary Page line 3, dollars and cents in their own boxes.
+    expect(read('3')).toBe('455,931');
+    expect(read('00_22aa2aau65t!!@')).toBe('33');
+  });
+});
+
+describe('Form IT-PMT — payment voucher', () => {
+  test('carries the decedent block, with the two-digit year this page asks for', async () => {
+    const read = await fillAndRead();
+    expect(read('Decedents Name_3')).toBe('Gold, Ada');
+    expect([read('Decedents SS No_3'), read('undefined_31'), read('undefined_30')]).toEqual(['999', '00', '1234']);
+    // "(mm/dd/yy)" here, against "(mm/dd/yyyy)" on the cover page.
+    expect([read('Date of Death mmddyy'), read('undefined_32'), read('undefined_33')]).toEqual(['09', '18', '23']);
+    expect(read('County of Residence')).toBe('Mercer');
+  });
+
+  test('the amount remitted is line 21, the balance due — not line 19', async () => {
+    const read = await fillAndRead();
+    // $68,389.70 tax + $558.71 interest − $48,901.58 already paid.
+    expect(read('19')).toBe('68,948');       // line 19, total amount due
+    expect(read('21')).toBe('20,046');       // line 21, balance due
+    expect(read('016aa46tefg0_22aa2aau65t')).toBe('83');
+    expect(read('undefined_35')).toBe('20,046.83');
+    expect(read('Street')).toBe('1 Main St');
+  });
+
+  test('an estate with nothing left to remit leaves the amount and address blank', async () => {
+    // The voucher's own instruction: "Do not include address if you are not submitting a payment."
+    const overpaid: Matter = {
+      ...MATTER,
+      priorPayments: [{ id: 'p1', amount: 100_000, paidOn: '2024-05-12' }],
+    };
+    const computation = computeEstate(overpaid, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(overpaid, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    // pdf-lib reports an empty text field as undefined rather than ''.
+    expect(form.getTextField('undefined_35').getText()).toBeFalsy();
+    expect(form.getTextField('Street').getText()).toBeFalsy();
+    // The decedent block is still filled — the voucher is part of the booklet either way.
+    expect(form.getTextField('Decedents Name_3').getText()).toBe('Gold, Ada');
+  });
+});
