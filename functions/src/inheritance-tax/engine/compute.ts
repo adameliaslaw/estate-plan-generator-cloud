@@ -388,6 +388,21 @@ export function computeEstate(
   matter: Matter,
   ruleSet: RuleSet,
 ): Omit<EstateComputation, 'computedAt'> {
+  // Phase 0 guardrail: a nonresident decedent is out of scope, and the refusal belongs HERE
+  // rather than only at form generation. NJ taxes a nonresident's estate on NJ-situs real and
+  // tangible property alone (N.J.A.C. 18:26-2.15), while this engine values every bequest in the
+  // matter. Computing anyway produces a resident-basis figure that is simply wrong for a
+  // nonresident — and putting a confident wrong number in front of an attorney is the failure
+  // this engine exists to avoid. Refuse, exactly as for deductions exceeding the estate.
+  if (matter.decedent.isNJResident === false) {
+    throw new UnsupportedMatterError(
+      `Matter '${matter.matterId}': the decedent was a nonresident of New Jersey. ` +
+      'NJ taxes a nonresident estate only on NJ-situs real and tangible personal property ' +
+      '(N.J.A.C. 18:26-2.15) and requires Form IT-NR, neither of which this engine models. ' +
+      'No figure is produced rather than a resident-basis one that would be wrong.',
+    );
+  }
+
   // Disclaimed bequests are reallocated to alternate takers before any computation
   // so Lines 10-14 reflect the correct post-disclaimer class distribution (N.J.A.C. 18:26-2.11).
   const effectiveBeneficiaries = applyDisclaimers(matter);
