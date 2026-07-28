@@ -23,6 +23,8 @@ import { Calculator, Plus, Trash2, FileText, ShieldCheck, RefreshCw, AlertTriang
 import { toast } from 'sonner';
 import { AddressPartsInput } from '@/components/inheritance-tax/AddressPartsInput';
 import { BequestDetailFields } from '@/components/inheritance-tax/BequestDetailFields';
+import { DeductionAttestationFields } from '@/components/inheritance-tax/DeductionAttestationFields';
+import { attestationProblems, withApplicableAttestations } from '@/lib/inheritance-tax-attestations';
 import { useAuth } from '@/hooks/useAuth';
 import { inheritanceTaxService } from '@/services/inheritance-tax-service';
 import { Button } from '@/components/ui/button';
@@ -125,6 +127,9 @@ function missingRequired(m: ITRMatterInput): string[] {
     if (!b.lastName.trim()) missing.push(`Beneficiary ${i + 1}: name`);
     if (!b.address.trim()) missing.push(`Beneficiary ${i + 1}: address`);
   });
+  // The two deduction attestations the server requires. Same reason as the rest of this function:
+  // unanswered, they come back as a Zod path rather than as the question they are.
+  missing.push(...attestationProblems(m));
   return missing;
 }
 
@@ -199,7 +204,7 @@ export default function InheritanceTaxPage() {
       toast.error(`Still needed: ${missing.join(', ')}`);
       return;
     }
-    const res = await inheritanceTaxService.save(firmId, matter);
+    const res = await inheritanceTaxService.save(firmId, withApplicableAttestations(matter));
     setSaved(true);
     toast.success(res.created ? 'Matter created.' : 'Matter saved.');
     await refreshList();
@@ -583,6 +588,10 @@ export default function InheritanceTaxPage() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+                <DeductionAttestationFields
+                  deduction={d0}
+                  dateOfDeath={matter.decedent.dateOfDeath}
+                  onChange={(mutate) => patch((d) => { mutate(d.deductions[di]!); })} />
               </div>
             ))}
           </Card>

@@ -4,6 +4,52 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-28 PM (the attestation gap is closed — both deduction types can now be entered)
+
+**TL;DR — Took the one unblocked item off the previous session's list. Two deduction types could
+not be saved from the UI at all: the server requires an attorney attestation for
+`executor_commission` (death on/after 2025-12-15, R.2025 d.152) and for
+`transfer_taxes_other_states` (N.J.A.C. 18:26-7.16), and no screen collected either. Picking one
+made the matter unsaveable. Both are now asked for beside the deduction they belong to.**
+
+**Confirming the steer, since it decides the shape:** these are *single-attorney statements of
+fact about the estate*, not a two-person review. The regulation makes each deduction allowable
+only on those facts, so the attorney filing the return attests them alone — exactly what a solo
+firm can do. Nothing here asks for a second attorney. (`approveInheritanceReview`'s refusal of a
+self-approval is a different rule and is untouched.)
+
+**Judgement call, in the same direction as the last session's:** an unticked box is a *real
+answer*, not a blank field. It says the estate fails the regulation's test, so the deduction
+belongs off the return — and the block says that, rather than nagging for a tick that would make
+the return claim something untrue.
+
+**Shipped:** `DeductionAttestationFields` (the questions, gated on type and date of death);
+`src/lib/inheritance-tax-attestations.ts` (when each attestation is demanded, what is still
+outstanding, and which stale one to drop from the payload when the attorney changes a deduction's
+type or moves the date of death back before R.2025 d.152 — it stays on screen so the typing is not
+lost, but a half-filled leftover must never be sent to a `.strict()` schema); the page's pre-flight
+now names the attestation instead of letting a Zod path arrive in a toast.
+
+**Green:** 864/864 (up from 847 — 12 rule tests, 5 component tests), root + functions tsc, lint 0
+errors, build. Four negative controls run and reverted (wrong effective date, no-op strip, dead
+checkbox, jurisdiction typed into the notes field) — each failed exactly the assertions it should.
+Every rule test asserts **both** what the page reports and what the server's real `validateMatter`
+does with the payload the page would send, so a client rule that drifts from the regulation fails
+on the server assertion rather than agreeing with itself.
+
+**▶ NEXT — unchanged, and both need Adam.** Track 3 (IT-NR, nonresident decedents) is still the
+only untouched track and still a product decision: it changes how tax is computed (NJ-situs
+property only, N.J.A.C. 18:26-2.15, its own gold cases). Today a nonresident matter is refused
+cleanly at compute, which is defensible. The smaller follow-up is an official filled **PDF** for
+IT-EXT / L-9 / IT-Estate — each is a separate State form needing its own blank and inventory; they
+render as HTML workpapers today.
+
+**Still needs Adam (unchanged):** the live card test on #185; a real payment through the payment
+page; and a browser pass on the Inheritance Tax page — including one deduction of each attested
+type, since the component test drives the clicks in jsdom, not a browser.
+
+---
+
 ## 🔵 SESSION — 2026-07-28 (every IT-R schedule is filled, and the three orphaned forms are reachable)
 
 **TL;DR — Continued straight through the build plan on Adam's instruction. #189 merged (Recap,
@@ -42,7 +88,8 @@ follow-ups: an official filled **PDF** for IT-EXT / L-9 / IT-Estate (each is a s
 needing its own blank and inventory — they render as HTML workpapers today), and the attestation
 gap below.
 
-**Still open — the attestation gap.** Two deduction types demand an attorney attestation the
+**~~Still open~~ — the attestation gap. CLOSED the same day, see the entry above; kept for the
+reasoning.** Two deduction types demand an attorney attestation the
 server enforces and no screen collects: `transfer_taxes_other_states` needs
 `transferTaxEligibility` (N.J.A.C. 18:26-7.16) and `executor_commission` needs
 `executorCommissionEligibility` for a death on/after 2025-12-15 (R.2025 d.152). Adam's steer was
