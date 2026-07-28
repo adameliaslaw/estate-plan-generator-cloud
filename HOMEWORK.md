@@ -41,12 +41,44 @@ not the case.
 from assets — where the six duplication bugs actually die; (3) intake, inventory-then-allocate with
 the share arithmetic done for you. Each independently shippable and revertible.
 
-**Two questions for Adam before PR 3** (in §7 of the doc): allocate by fraction or by amount, and
-whether to model residue ("everything else, split equally"), which is how most wills read and which
-has no representation today.
+**Question 1 — ANSWERED 2026-07-28: store the fraction, derive the amount.** A re-appraisal then
+keeps the split intact; the schedules print the derived amount.
+
+**🛑 Question 2 — RESIDUE MUST BE SCOPED BEFORE ANY CODE IS WRITTEN.** Adam's instruction: scope it
+first, ahead of PR 1. "Everything else, split equally" is how most wills actually read and has no
+representation today — an allocation model that cannot express it would have to be reopened
+immediately, and the residue rules decide the shape of `Allocation` itself (a residuary share is a
+fraction of *what is left after specific gifts*, not of a named asset). Do not start PR 1 until
+this is scoped and signed off.
 
 **Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. It would be
 throwaway work covering one sixth of the problem.
+
+---
+
+## 🔴 CARRIED-FORWARD ITEMS — what they actually are
+
+These have been repeated verbatim for weeks without saying what they mean. Written out once here.
+
+**1. "The live card test on #185" — nothing to do with inheritance tax.** It is the
+**Charge Payment** dialog under a client's Payments tab (`ChargePaymentDialog.tsx`), which takes a
+credit card through AffiniPay/LawPay Hosted Fields. It has never successfully captured a card.
+Two fixes shipped blind because browser automation cannot type into a cross-origin iframe — #156
+(the SDK needs CSS selectors, not bare element ids) and #185 (the SDK was being handed iframes the
+component had already destroyed). **Neither has ever been confirmed by a human typing a card.**
+
+To test: open a client → Payments → **Charge Payment** → type card `5466160519943714`, exp
+`04/2029`, CVV `212`, ZIP `08831` → open the browser console and look for
+`[ChargePaymentDialog] Hosted Fields state:`. Success is `length: 16, luhn: true`. If it still says
+`length: 0, "Input field is empty"`, the fix did not work and the next single-variable step is
+removing the innerHTML-wipe/re-init effect. **Do not click Charge until the console shows the card
+captured.**
+
+**2. "A real payment through the payment page"** — separate from the above. It proves the LawPay
+webhook end to end after #186 replaced a signature check (8am never signs its callbacks, so the
+old HMAC check rejected every real callback) with an Event-URL token plus a gateway re-read. The
+existing "Paid" records came from Record Payment and the payment-page link, never from the card
+dialog.
 
 ---
 

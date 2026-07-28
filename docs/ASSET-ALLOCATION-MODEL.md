@@ -150,10 +150,21 @@ job. Two things to get right:
 
 ---
 
-## 7. Still open for Adam
+## 7. Answers, and the gate before PR 1
 
-- **Allocation by fraction or by amount?** Fractions survive a revaluation (a re-appraised house
-  keeps the 1/3 : 2/3 split); amounts are what the schedules print. Recommendation: store the
-  fraction, derive the amount, and show both — but this decides what the attorney types.
-- **Residue.** "Everything else, split equally" has no representation today and is how most wills
-  actually read. Worth deciding whether PR 3 models it or continues to require explicit allocation.
+**Fraction or amount — ANSWERED 2026-07-28: store the fraction, derive the amount.** A re-appraised
+house keeps its 1/3 : 2/3 split; the schedules print the derived figure. Show both in the UI.
+
+**🛑 Residue must be scoped before PR 1 starts.** Adam's instruction, and it is the right call —
+this is not a PR 3 concern, it is a constraint on the shape of `Allocation` itself:
+
+- A specific gift is a fraction *of a named asset*. A residuary share is a fraction *of whatever is
+  left after the specific gifts and the deductions* — a different denominator, resolved late.
+- "Everything else, split equally between my three children" is how most wills read. A model that
+  can only express per-asset fractions cannot represent it, and would have to be reopened
+  immediately after being built.
+- It interacts with the sum-check in §3: an asset allocated 100% to residue is fully allocated even
+  though no beneficiary is named against it directly, so "allocations must sum to the asset value"
+  needs a residuary case or it will reject valid estates.
+
+Scope residue first, get it signed off, then start PR 1.
