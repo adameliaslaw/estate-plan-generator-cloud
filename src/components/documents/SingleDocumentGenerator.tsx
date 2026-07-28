@@ -76,6 +76,30 @@ const STANDARD_DOC_TYPES = [
   { value: 'estatePlanSummary', label: 'Estate Plan Summary', description: 'Client-facing summary with action steps checklist' },
 ] as const;
 
+// Filename keywords that suggest a .docx template matches a docType. Used only
+// for a soft mismatch warning in high-fidelity mode — the docType selection
+// labels the vault entry but nothing verifies the file's contents, so a
+// wrong pairing (e.g. docType "will" + "POA - Smith.docx") is easy to miss.
+const DOC_TYPE_FILENAME_KEYWORDS: Record<string, string[]> = {
+  will: ['will', 'testament'],
+  pourOverWill: ['pour', 'will', 'testament'],
+  poa: ['poa', 'power', 'attorney'],
+  livingWill: ['advance', 'directive', 'healthcare', 'health', 'living'],
+  trust: ['trust'],
+  deed: ['deed'],
+  affidavitOfConsideration: ['affidavit', 'consideration'],
+  gitRep3: ['git', 'rep', 'rep3', 'rep-3'],
+  estatePlanSummary: ['summary', 'estate plan'],
+};
+
+/** True when the template filename contains none of the docType's keywords. */
+function looksLikeDocTypeMismatch(docType: string, templateName: string): boolean {
+  const keywords = DOC_TYPE_FILENAME_KEYWORDS[docType];
+  if (!keywords || !templateName) return false;
+  const name = templateName.toLowerCase();
+  return !keywords.some((k) => name.includes(k));
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -230,6 +254,11 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   const showSpouseRole = isMarried && docTypeSupportsSpouseRole && !!spouseFullName
     && generationMode !== 'high-fidelity';
   const isHighFidelity = generationMode === 'high-fidelity';
+  const selectedTemplateName =
+    docxTemplates.find((t) => t.fullPath === selectedTemplatePath)?.name ?? '';
+  const docTypeMismatch =
+    isHighFidelity && !!selectedDocType && !!selectedTemplateName
+    && looksLikeDocTypeMismatch(selectedDocType, selectedTemplateName);
 
   const handleGenerate = async () => {
     if (!selectedDocType) return;
@@ -438,6 +467,16 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
                 <p className="text-[11px] text-gray-500">
                   Unfilled {'{{placeholders}}'} render blank and are listed as warnings on the saved document.
                 </p>
+                {docTypeMismatch && (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertDescription className="text-xs text-amber-800">
+                      ⚠️ "{selectedTemplateName}" doesn't look like a{' '}
+                      {selectedDoc?.label ?? selectedDocType} template. The file is filled
+                      as-is regardless of document type — double-check you picked the right
+                      one before generating.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             )}
             {!isHighFidelity && (<>
