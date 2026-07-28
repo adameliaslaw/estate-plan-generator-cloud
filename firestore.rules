@@ -664,5 +664,20 @@ service cloud.firestore {
     // No rule matches → access denied.
     // ==========================================================
 
+    // ==========================================================
+    // /njsaStatutes/{citation} and /njsaImportMeta/{docId}
+    // Imported New Jersey statute text (public law, global — not
+    // firm-scoped). Written by scripts/import-njsa.ts and read by
+    // Cloud Functions via the admin SDK only; browser clients never
+    // touch these collections directly. Explicit deny so a future
+    // rules refactor cannot accidentally open them.
+    // ==========================================================
+    match /njsaStatutes/{citation} {
+      allow read, write: if false; // Cloud Functions (admin SDK) only
+    }
+    match /njsaImportMeta/{docId} {
+      allow read, write: if false; // Cloud Functions (admin SDK) only
+    }
+
   } // end match /databases/{database}/documents
 } // end service cloud.firestore
