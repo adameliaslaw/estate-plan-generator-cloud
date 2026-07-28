@@ -105,6 +105,38 @@ describe('GOLD FND-INTEREST — official it-rinst.pdf interest examples', () => 
     expect(buildFormSnapshot(withPayee).scheduleD[0]?.payeeName).toBe('Hillside Funeral Home');
   });
 
+  test('schedule detail on a bequest validates and reaches the frozen snapshot', () => {
+    const detailed = makeMatter({
+      beneficiaries: [{
+        id: 'b1', lastName: 'Friend', firstName: 'Fran', address: '2 Elm St, NJ',
+        relationship: 'friend',
+        bequests: [{
+          id: 'q1', type: 'bank_account', description: 'Checking', fairMarketValue: 10_000,
+          accountDetails: {
+            institutionName: 'First Bank', accountNumberLast4: '4821',
+            registeredOwners: 'Ada Gold',
+          },
+        }],
+      }],
+    });
+    expect(() => validateMatter(detailed)).not.toThrow();
+    expect(buildFormSnapshot(detailed).scheduleB1[0]?.accountDetails?.institutionName).toBe('First Bank');
+  });
+
+  test('an account number longer than the four digits the schedule asks for is rejected', () => {
+    const tooMuch = makeMatter({
+      beneficiaries: [{
+        id: 'b1', lastName: 'Friend', firstName: 'Fran', address: '2 Elm St, NJ',
+        relationship: 'friend',
+        bequests: [{
+          id: 'q1', type: 'bank_account', description: 'Checking', fairMarketValue: 10_000,
+          accountDetails: { institutionName: 'First Bank', accountNumberLast4: '123456789' },
+        }],
+      }],
+    });
+    expect(() => validateMatter(tooMuch)).toThrow();
+  });
+
   test('a deduction without a payee stores no key at all (Firestore rejects undefined)', () => {
     const noPayee = makeMatter({
       deductions: [{ id: 'd1', type: 'funeral_expenses', description: 'Funeral', amount: 9_000 }],

@@ -272,6 +272,164 @@ describe('Schedules B1–B4 Recap', () => {
   });
 });
 
+describe('Schedules B-1, B-2, B-3 and C — the itemisation behind lines 3 and 4', () => {
+  const DETAILED: Matter = {
+    ...MATTER,
+    beneficiaries: [{
+      ...MATTER.beneficiaries[0]!,
+      bequests: [
+        {
+          id: 'q1', type: 'bank_account', description: 'Checking', fairMarketValue: 11_000,
+          accountDetails: {
+            institutionName: 'First Bank', accountNumberLast4: '4821',
+            registeredOwners: 'Ada Gold and Fran Friend',
+          },
+        },
+        {
+          id: 'q2', type: 'securities', description: '200 shares', fairMarketValue: 22_000,
+          securityDetails: {
+            corporationName: 'Acme Corp', tickerSymbol: 'ACME', isNJCorporation: true,
+            numberOfShares: 200, perShareValue: 110,
+          },
+        },
+        {
+          id: 'q3', type: 'securities', description: 'Co-op shares', fairMarketValue: 15_000,
+          securityDetails: {
+            corporationName: 'Riverside Co-op', isCoOp: true,
+            registeredOwners: 'Ada Gold, 4 River Rd, Trenton NJ', numberOfShares: 50,
+          },
+        },
+        {
+          id: 'q4', type: 'bonds', description: 'Bonds', fairMarketValue: 33_000,
+          bondDetails: { issuerAndTerms: 'Trenton GO 4% due 2030', registeredOwners: 'Ada Gold' },
+        },
+        {
+          id: 'q5', type: 'transfer', description: 'Gift of car', fairMarketValue: 8_000,
+          transferDetails: {
+            dateOfTransfer: '2022-04-01', transfereeName: 'Nephew Ned',
+            transfereeRelationship: 'nephew',
+          },
+        },
+        {
+          id: 'q6', type: 'transfer', description: 'Life estate retained', fairMarketValue: 5_000,
+          transferDetails: { part: 'incomplete', transfereeName: 'Niece Nan' },
+        },
+        {
+          id: 'q7', type: 'transfer', description: 'Annuity', fairMarketValue: 4_000,
+          transferDetails: {
+            part: 'pod_to_beneficiary', transfereeName: 'Fran Friend',
+            issuerName: 'Prudential #55', transfereeRelationship: 'friend',
+          },
+        },
+        {
+          id: 'q8', type: 'transfer', description: 'Pension to estate', fairMarketValue: 2_000,
+          transferDetails: { part: 'pod_to_estate', transfereeName: 'Estate', issuerName: 'State Pension #9' },
+        },
+      ],
+    }],
+  };
+
+  async function fillDetailed() {
+    const computation = computeEstate(DETAILED, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(DETAILED, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    return (await PDFDocument.load(filled)).getForm();
+  }
+
+  test('B-1 composes the column the State asks for, and names the account holders', async () => {
+    const form = await fillDetailed();
+    expect(form.getTextField('InstitutionAccount Number 2').getText()).toBe('First Bank — Acct •••• 4821');
+    expect(form.getTextField('Names on account 2').getText()).toBe('Ada Gold and Fran Friend');
+    expect(form.getTextField(
+      'C Value of Decedents EquityTotal of all financial institution accounts Enter here and on Schedule B1B4 Recap line 1',
+    ).getText()).toBe('11,000.00');
+  });
+
+  test('B-2 fills all seven stock columns and ticks the NJ box', async () => {
+    const form = await fillDetailed();
+    expect(form.getTextField('B Ticker SymbolRow1aaw2').getText()).toBe('Acme Corp');
+    expect(form.getTextField('B Ticker SymbolRow1').getText()).toBe('ACME');
+    expect(form.getCheckBox('Check if additional copies of the s11sschedule are attached_4').isChecked()).toBe(true);
+    expect(form.getTextField('D Number of Shares').getText()).toBe('200');
+    expect(form.getTextField('E Per Share Value on Date of Death').getText()).toBe('110.00');
+    expect(form.getTextField('F Total Market Value Col D x Col E').getText()).toBe('22,000.00');
+  });
+
+  test('a co-op lists in Part II, not among the stocks', async () => {
+    const form = await fillDetailed();
+    expect(form.getTextField('B Ticker SymbolRow13w1aaw222454').getText()).toBe('Riverside Co-op');
+    expect(form.getTextField('Name 1').getText()).toBe('Ada Gold, 4 River Rd, Trenton NJ');
+    expect(form.getTextField('G Value of Decedents EquityTotal  Part I').getText()).toBe('22,000.00');
+    expect(form.getTextField('E Value of Decedents EquityTotal  Part II').getText()).toBe('15,000.00');
+    // Both parts still reconcile to the recap's line 2.
+    expect(form.getTextField(
+      'E Value of Decedents EquityTotal of all stocks Enter here and on Schedule B1B4 Recap line 2',
+    ).getText()).toBe('37,000.00');
+  });
+
+  test('B-3 prints the bond and its registered owner', async () => {
+    const form = await fillDetailed();
+    expect(form.getTextField('B Date of Daaa22eath ValueRow1').getText())
+      .toBe('Trenton GO 4% due 2030 — Ada Gold');
+    expect(form.getTextField('B Date of Death ValueRow1').getText()).toBe('33,000.00');
+  });
+
+  test('Schedule C splits transfers across its three parts and answers the questions', async () => {
+    const form = await fillDetailed();
+    // Part I — a lifetime transfer, with the date in the form's own mm/dd/yyyy.
+    expect(form.getTextField('B Describe Property Transferred See instructionsRaaa123ow1').getText()).toBe('04/01/2022');
+    expect(form.getTextField('C Name of TransfereeRow1').getText()).toBe('Nephew Ned');
+    expect(form.getTextField('E Market Value of Property as of Date of DeathTotal  Part I').getText()).toBe('8,000.00');
+    expect(form.getTextField('E Market Value of Property as of Date of DeathTotal  Part II').getText()).toBe('5,000.00');
+    // Part III — Section A names a beneficiary, Section B does not.
+    expect(form.getTextField('Total  Part III Section A and Section B_2').getText()).toBe('6,000.00');
+    expect(form.getTextField(
+      'Total of all transfers Part I Part II Part III and totals of all additional schedules Enter here and on Form ITR Summary Page line 4',
+    ).getText()).toBe('19,000.00');
+    // Each printed question is answered Yes because the estate reports such a transfer.
+    expect(form.getRadioGroup(
+      '1 Did the decedent within 3 years of date of death transfer property valued at 500 or more without receiving full',
+    ).getSelected()).toBe('Yes_9');
+  });
+
+  test('a question the estate says nothing about is left unmarked, never answered No', async () => {
+    // MATTER has no transfers at all: an unmarked pair is visible on review, a wrong No is not.
+    const computation = computeEstate(MATTER, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(MATTER, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getRadioGroup(
+      '1 Did the decedent within 3 years of date of death transfer property valued at 500 or more without receiving full',
+    ).getSelected()).toBeUndefined();
+  });
+
+  test('the four schedules reconcile to the Summary Page lines they feed', async () => {
+    const form = await fillDetailed();
+    const read = (n: string) => form.getTextField(n).getText();
+    // Recap line 3 = B-1 11,000 + B-2 37,000 + B-3 33,000 + B-4 0.
+    expect(read('5 Total Lines 14 Enter here and on Form ITR Summary Page line 3')).toBe('81,000.00');
+    expect(read('3')).toBe('81,000');
+    // Summary Page line 4 = Schedule C's total.
+    expect(read('4')).toBe('19,000');
+  });
+
+  test('an item entered before the detail fields existed still prints its description', async () => {
+    const legacy: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        bequests: [{ id: 'q1', type: 'bank_account', description: 'Old checking account', fairMarketValue: 1_000 }],
+      }],
+    };
+    const computation = computeEstate(legacy, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(legacy, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('InstitutionAccount Number 2').getText()).toBe('Old checking account');
+    expect(form.getTextField('Names on account 2').getText()).toBeFalsy();
+  });
+});
+
 describe('Schedule D — deductions', () => {
   /** A deduction of each kind that has its own printed block, plus two that do not. */
   const DEDUCTED: Matter = {

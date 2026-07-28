@@ -109,12 +109,98 @@ export type BequestType =
   | 'other_personal_property' // Schedule B-4 — all other property (US Savings Bonds, autos, tangible personal property, cash)
   | 'transfer';               // Schedule C — transfers (lifetime within 3 years, incomplete, payable-on-death)
 
+/**
+ * Schedule B-1, whose column (A) asks for "Name of Institution, Last Four Digits of Account
+ * Number, and Registered Owners" — three facts a free-text description cannot be relied on to
+ * carry in the order the State prints them.
+ */
+export interface AccountDetails {
+  institutionName: string;
+  /**
+   * Last four digits only. The schedule asks for no more than that, so no more is stored:
+   * a full account number on a legal record is a liability with no offsetting use.
+   */
+  accountNumberLast4?: string;
+  /** "the names of all registered owner(s) and named beneficiaries on the account". */
+  registeredOwners?: string;
+}
+
+/**
+ * Schedule B-2 columns (A) through (E). (F) Total Market Value and (G) Decedent's Equity are the
+ * value the model already holds, so they are not repeated here.
+ */
+export interface SecurityDetails {
+  /** Column (A) — "Name of Corporation/Registered Owner(s)". */
+  corporationName: string;
+  tickerSymbol?: string;
+  /** Column (C) — the printed "Check Box if NJ". */
+  isNJCorporation?: boolean;
+  numberOfShares?: number;
+  /** Column (E) — per-share value on the date of death. */
+  perShareValue?: number;
+  /**
+   * Schedule B-2 Part II is "Co-ops", a separate block with its own columns — the registered
+   * owner's name and address instead of a ticker and per-share value. Shares in a co-op belong
+   * there, not in the stock table above it.
+   */
+  isCoOp?: boolean;
+  /** Part II column (B) — "Registered Owner and Address of Co-op". */
+  registeredOwners?: string;
+}
+
+/** Schedule B-3 column (A) — "Name of Bond and Registered Owner", including the bond's terms. */
+export interface BondDetails {
+  issuerAndTerms: string;
+  registeredOwners?: string;
+}
+
+/**
+ * Which part of Schedule C a transfer is reported in. The parts total separately on the form and
+ * each answers a different printed question, so this is the transfer's legal character, not a
+ * presentation choice:
+ *
+ *   - `lifetime_within_3_years` — Part I, a transfer within 3 years of death for less than full
+ *     consideration (the form's question 1);
+ *   - `incomplete` — Part II, transferred while reserving the use, possession, enjoyment of, or
+ *     income from the property (question 2);
+ *   - `pod_to_beneficiary` / `pod_to_estate` — Part III Sections A and B, a plan, annuity,
+ *     contract or policy payable on death to a named beneficiary or to the estate (question 3).
+ */
+export type TransferPart =
+  | 'lifetime_within_3_years'
+  | 'incomplete'
+  | 'pod_to_beneficiary'
+  | 'pod_to_estate';
+
+/** Schedule C columns (A), (C) and (D), plus which Part the transfer belongs to. */
+export interface TransferDetails {
+  /** Defaults to Part I when absent, which is the schedule's ordinary case. */
+  part?: TransferPart;
+  /** ISO date. Part I/II column (A), "Date of Transfer". Not asked for in Part III. */
+  dateOfTransfer?: string;
+  /** Column (C) — "Name of Transferee", or in Part III "Name of Beneficiary". */
+  transfereeName: string;
+  /** Part III column (B) — "Name of Company Issuing Policy and Policy Number". */
+  issuerName?: string;
+  /** Column (D) — relationship of that person to the decedent. */
+  transfereeRelationship?: string;
+}
+
 export interface Bequest {
   id: string;
   type: BequestType;
   description: string;
   /** Fair market value at date of death. */
   fairMarketValue: number;
+  /**
+   * Columns the official schedule asks for that a description cannot answer. Each is optional
+   * and belongs to one schedule; a bequest carrying none prints exactly as it did before, with
+   * the description in column (A) — the same fallback `addressParts` uses.
+   */
+  accountDetails?: AccountDetails;      // Schedule B-1
+  securityDetails?: SecurityDetails;    // Schedule B-2
+  bondDetails?: BondDetails;            // Schedule B-3
+  transferDetails?: TransferDetails;    // Schedule C
 }
 
 // ─── Addresses ────────────────────────────────────────────────────────────────
@@ -451,6 +537,15 @@ export interface ScheduleItem {
   beneficiaryName: string;
   description: string;
   fairMarketValue: number;
+  /**
+   * The bequest's schedule-specific columns, frozen with the rest of the snapshot (FND-IMMUT).
+   * Absent on items entered before the fields existed, and on schedules that ask for nothing
+   * beyond a description.
+   */
+  accountDetails?: AccountDetails;
+  securityDetails?: SecurityDetails;
+  bondDetails?: BondDetails;
+  transferDetails?: TransferDetails;
 }
 
 /**

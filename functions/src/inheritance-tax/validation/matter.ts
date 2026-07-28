@@ -98,11 +98,50 @@ const DecedentSchema = z.object({
   isNJResident: z.boolean().optional(),
 }).strict();
 
+// ── Schedule-specific columns (IT-R Schedules B-1, B-2, B-3 and C) ───────────
+// Optional throughout: a bequest entered before these existed still validates, and the
+// schedule falls back to its description. The one required field in each is the column the
+// schedule leads with — an object present but empty would be worse than none at all.
+
+const AccountDetailsSchema = z.object({
+  institutionName: NonBlankString,
+  // The schedule asks for four digits and the record keeps no more than it asks for.
+  accountNumberLast4: z.string().regex(/^\d{4}$/, 'Enter the last four digits only').optional(),
+  registeredOwners: z.string().min(1).optional(),
+}).strict();
+
+const SecurityDetailsSchema = z.object({
+  corporationName: NonBlankString,
+  tickerSymbol: z.string().min(1).optional(),
+  isNJCorporation: z.boolean().optional(),
+  numberOfShares: z.number().finite().positive().optional(),
+  perShareValue: z.number().finite().nonnegative().optional(),
+  isCoOp: z.boolean().optional(),
+  registeredOwners: z.string().min(1).optional(),
+}).strict();
+
+const BondDetailsSchema = z.object({
+  issuerAndTerms: NonBlankString,
+  registeredOwners: z.string().min(1).optional(),
+}).strict();
+
+const TransferDetailsSchema = z.object({
+  part: z.enum(['lifetime_within_3_years', 'incomplete', 'pod_to_beneficiary', 'pod_to_estate']).optional(),
+  dateOfTransfer: ISODateSchema.optional(),
+  transfereeName: NonBlankString,
+  issuerName: z.string().min(1).optional(),
+  transfereeRelationship: z.string().min(1).optional(),
+}).strict();
+
 const BequestSchema = z.object({
   id: z.string().min(1),
   type: BequestTypeSchema,
   description: z.string().min(1),
   fairMarketValue: z.number().finite().nonnegative('Fair market value must be ≥ 0'),
+  accountDetails: AccountDetailsSchema.optional(),
+  securityDetails: SecurityDetailsSchema.optional(),
+  bondDetails: BondDetailsSchema.optional(),
+  transferDetails: TransferDetailsSchema.optional(),
 }).strict();
 
 const TaxClassOverrideSchema = z.object({

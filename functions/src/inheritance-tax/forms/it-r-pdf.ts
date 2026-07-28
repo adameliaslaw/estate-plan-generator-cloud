@@ -25,7 +25,7 @@
 import { PDFDocument, PDFForm } from 'pdf-lib';
 import type {
   AddressParts, DeductionType, ITRFormData, ScheduleDeductionItem, ScheduleEBeneficiaryRow,
-  ScheduleItem, TaxClassLine,
+  ScheduleItem, TaxClassLine, TransferPart,
 } from '../types';
 
 /** Cover page — "Estate Information" block and the five yes/no questions. */
@@ -263,6 +263,175 @@ const SCHEDULE_B4_ROWS: ReadonlyArray<{ description: string; value: string; equi
 ];
 
 /**
+ * Schedule B-1 — "Financial Institution Accounts". Six accounts to a page, each printed over two
+ * lines: "Institution/Account Number" then "Name(s) on account", against one date-of-death value
+ * and one decedent's-equity column.
+ *
+ * The value and equity field names on this page are the same absurd 300-character strings the
+ * State reused across several schedules; they were resolved by position, like everything else
+ * here, and are distinct per row.
+ */
+const SCHEDULE_B1_ROWS: ReadonlyArray<{ institution: string; names: string; value: string; equity: string }> = [
+  { institution: 'InstitutionAccount Number 2', names: 'Names on account 2', value: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope34534rtffffy reportedvvv o776565n Schedule D', equity: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property r@@@ff354eported o776565n Schedule D' },
+  { institution: 'InstitutionAccount Number 2_2', names: 'Names on account 2_2', value: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope34534rtffffy r222aa##eportedvvv o776565n Schedule D', equity: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property r@@@ff354eported o776565n Schedy r222aa##ule D' },
+  { institution: 'InstitutionAccount Number 2_3', names: 'Names on account 2_3', value: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope345y r222aa##34rtffffy reportedvvv o776565n Schedule D', equity: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property r@@@ff354eported o776565n Schedule y r222aa##D' },
+  { institution: 'InstitutionAccount Number 2_4', names: 'Names on account 2_4', value: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope34534rtffffy reportedvvv o776565n Schedule Dy r222aa##', equity: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property r@@@ff354eporty r222aa##ed o776565n Schedule D' },
+  { institution: 'InstitutionAccount Number 2_5', names: 'Names on account 2_5', value: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope34534ry r222aa##tffffy reportedvvv o776565n Schedule D', equity: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property r@@@ff354eported oy r222aa##776565n Schedule D' },
+  { institution: 'InstitutionAccount Number 2_6', names: 'Names on account 2_6', value: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope34534rtffffy repy r222aa##ortedvvv o776565n Schedule D', equity: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property r@@@ff354eported o776565n Scy r222aa##hedul1!e D' },
+];
+
+/** B-1's two totals; `all` is line 1 of the B1–B4 Recap. */
+const SCHEDULE_B1_TOTALS = {
+  additionalSchedules: 'C Value of Decedents EquityTotal of all additional schedules if none enter zero',
+  all: 'C Value of Decedents EquityTotal of all financial institution accounts Enter here and on Schedule B1B4 Recap line 1',
+} as const;
+
+/**
+ * Schedule B-2 — "Stock / Co-ops". Part I is fourteen stock rows across seven columns:
+ * (A) corporation and registered owners · (B) ticker · (C) a checkbox "if NJ Corp." · (D) shares ·
+ * (E) per-share value · (F) total (D × E) · (G) decedent's equity.
+ *
+ * The (C) checkboxes carry names recycled from the page's "additional copies" box — one of the
+ * State's odder reuses — so they are identified by position, and the page's real overflow box is
+ * the one at y702.
+ */
+const SCHEDULE_B2_STOCK_ROWS: ReadonlyArray<{
+  corporation: string; ticker: string; isNJ: string; shares: string;
+  perShare: string; total: string; equity: string;
+}> = [
+  { corporation: 'B Ticker SymbolRow1aaw2', ticker: 'B Ticker SymbolRow1', isNJ: 'Check if additional copies of the s11sschedule are attached_4', shares: 'D Number of Shares', perShare: 'E Per Share Value on Date of Death', total: 'F Total Market Value Col D x Col E', equity: 'G Value of Decedents Equity' },
+  { corporation: 'B Ticker SymbolRow2w1aaw2', ticker: 'B Ticker SymbolRow2', isNJ: 'Check if additional copies of the s1122sschedule are attached_4', shares: 'D Number of Shares_2', perShare: 'E Per Share Value on Date of Death_2', total: 'F Total Market Value Col D x Col E_2', equity: 'G Value of Decedents Equity_2' },
+  { corporation: 'B Ticker SymbolRow3w1aaw2', ticker: 'B Ticker SymbolRow3', isNJ: 'Check if additio33nal copies of the s11sschedule are attached_4', shares: 'D Number of Shares_3', perShare: 'E Per Share Value on Date of Death_3', total: 'F Total Market Value Col D x Col E_3', equity: 'G Value of Decedents Equity_3' },
+  { corporation: 'B Ticker SymbolRow4w1aaw2', ticker: 'B Ticker SymbolRow4', isNJ: 'Check if additional copies of the s144122sschedule are attached_4', shares: 'D Number of Shares_4', perShare: 'E Per Share Value on Date of Death_4', total: 'F Total Market Value Col D x Col E_4', equity: 'G Value of Decedents Equity_4' },
+  { corporation: 'B Ticker SymbolRow5w1aaw2', ticker: 'B Ticker SymbolRow5', isNJ: 'Check if additional copies of the 55s11sschedule are attached_4', shares: 'D Number of Shares_5', perShare: 'E Per Share Value on Date of Death_5', total: 'F Total Market Value Col D x Col E_5', equity: 'G Value of Decedents Equity_5' },
+  { corporation: 'B Ticker SymbolRow6w1aaw2', ticker: 'B Ticker SymbolRow6', isNJ: 'Check if additional copies of the s661122sschedule are attached_4', shares: 'D Number of Shares_6', perShare: 'E Per Share Value on Date of Death_6', total: 'F Total Market Value Col D x Col E_6', equity: 'G Value of Decedents Equity_6' },
+  { corporation: 'B Ticker SymbolRow7w1aaw2', ticker: 'B Ticker SymbolRow7', isNJ: 'Check if additio33nal copies of the s7711sschedule are attached_4', shares: 'D Number of Shares_7', perShare: 'E Per Share Value on Date of Death_7', total: 'F Total Market Value Col D x Col E_7', equity: 'G Value of Decedents Equity_7' },
+  { corporation: 'B Ticker SymbolRow8w1aaw2', ticker: 'B Ticker SymbolRow8', isNJ: 'Check if additional copies of the s14412288sschedule are attached_4', shares: 'D Number of Shares_8', perShare: 'E Per Share Value on Date of Death_8', total: 'F Total Market Value Col D x Col E_8', equity: 'G Value of Decedents Equity_8' },
+  { corporation: 'B Ticker SymbolRow9w1aaw2', ticker: 'B Ticker SymbolRow9', isNJ: 'Check if additional copies o99f the s11sschedule are attached_4', shares: 'D Number of Shares_9', perShare: 'E Per Share Value on Date of Death_9', total: 'F Total Market Value Col D x Col E_9', equity: 'G Value of Decedents Equity_9' },
+  { corporation: 'B Ticker SymbolRow10w1aaw2', ticker: 'B Ticker SymbolRow10', isNJ: 'Check if additional copies o@@f the s1122sschedule are attached_4', shares: 'D Number of Shares_10', perShare: 'E Per Share Value on Date of Death_10', total: 'F Total Market Value Col D x Col E_10', equity: 'G Value of Decedents Equity_10' },
+  { corporation: 'B Ticker SymbolRow11w1aaw2', ticker: 'B Ticker SymbolRow11', isNJ: 'Check if additio33nal copies of the s11sschedule are!! attached_4', shares: 'D Number of Shares_11', perShare: 'E Per Share Value on Date of Death_11', total: 'F Total Market Value Col D x Col E_11', equity: 'G Value of Decedents Equity_11' },
+  { corporation: 'B Ticker SymbolRow12w1aaw2', ticker: 'B Ticker SymbolRow12', isNJ: 'Check if additional copies of the s14422122sschedule are attached_4', shares: 'D Number of Shares_12', perShare: 'E Per Share Value on Date of Death_12', total: 'F Total Market Value Col D x Col E_12', equity: 'G Value of Decedents Equity_12' },
+  { corporation: 'B Ticker SymbolRow13w1aaw2', ticker: 'B Ticker SymbolRow13', isNJ: 'Check if additio33nal copies of the s11sschedule are attached44_4', shares: 'D Number of Shares_13', perShare: 'E Per Share Value on Date of Death_13', total: 'F Total Market Value Col D x Col E_13', equity: 'G Value of Decedents Equity_13' },
+  { corporation: 'B Ticker SymbolRow14w1aaw2', ticker: 'B Ticker SymbolRow14', isNJ: 'Check if additional copies of the s144122sschedule are attached777_4', shares: 'D Number of Shares_14', perShare: 'E Per Share Value on Date of Death_14', total: 'F Total Market Value Col D x Col E_14', equity: 'G Value of Decedents Equity_14' },
+];
+
+/**
+ * Part II — "Co-ops: Report shares held by the decedent in a co-op." Two rows, and different
+ * columns from the stock table: the registered owner's name and address instead of a ticker and
+ * a per-share value.
+ */
+const SCHEDULE_B2_COOP_ROWS: ReadonlyArray<{
+  company: string; ownerName: string; ownerAddress: string;
+  shares: string; total: string; equity: string;
+}> = [
+  { company: 'B Ticker SymbolRow13w1aaw222454', ownerName: 'Name 1', ownerAddress: 'Address', shares: 'C Number of SharesName Address', total: 'D Total Market ValueName Address', equity: 'E Value of Decedents EquityName Address' },
+  { company: '23wtaset t66ty', ownerName: 'Name 1_2', ownerAddress: 'Address_2', shares: 'C Number of SharesName Address_2', total: 'D Total Market ValueName Address_2', equity: 'E Value of Decedents EquityName Address_2' },
+];
+
+const SCHEDULE_B2_TOTALS = {
+  partI: 'G Value of Decedents EquityTotal  Part I',
+  partII: 'E Value of Decedents EquityTotal  Part II',
+  additionalSchedules: 'E Value of Decedents EquityTotal of Part I and Part II of all additional schedules if none enter zero',
+  all: 'E Value of Decedents EquityTotal of all stocks Enter here and on Schedule B1B4 Recap line 2',
+} as const;
+
+/**
+ * Schedule B-3 — "Municipal and Corporate Bonds". Twelve rows of (A) name of bond and registered
+ * owner, including the bond's terms · (B) date-of-death value, accrued interest included ·
+ * (C) decedent's equity. US Savings Bonds are not reported here; the page says so, and the model
+ * routes them to B-4 by bequest type.
+ */
+const SCHEDULE_B3_ROWS: ReadonlyArray<{ description: string; value: string; equity: string }> = [
+  { description: 'B Date of Daaa22eath ValueRow1', value: 'B Date of Death ValueRow1', equity: 'C Value of Decedents EquityRow1' },
+  { description: 'B Date of Death ValueRow2B Date of Daaa22', value: 'B Date of Death ValueRow2', equity: 'C Value of Decedents EquityRow2' },
+  { description: 'B Date of Death ValB Date of Daaa22ueRow3', value: 'B Date of Death ValueRow3', equity: 'C Value of Decedents EquityRow3' },
+  { description: 'BB Date of Daaa22 Date of Death ValueRow4', value: 'B Date of Death ValueRow4', equity: 'C Value of Decedents EquityRow4' },
+  { description: 'B DatB Date of Daaa22e of Death ValueRow5', value: 'B Date of Death ValueRow5', equity: 'C Value of Decedents EquityRow5' },
+  { description: 'B Date of Death ValueRow6B Date of Daaa22', value: 'B Date of Death ValueRow6', equity: 'C Value of Decedents EquityRow6' },
+  { description: 'B Date of Death VaB Date of Daaa22lueRow7', value: 'B Date of Death ValueRow7', equity: 'C Value of Decedents EquityRow7' },
+  { description: 'B DB Date of Daaa22ate of Death ValueRow8', value: 'B Date of Death ValueRow8', equity: 'C Value of Decedents EquityRow8' },
+  { description: 'B Date of Death VaB Date of Daaa22lueRow9', value: 'B Date of Death ValueRow9', equity: 'C Value of Decedents EquityRow9' },
+  { description: 'B DB Date of Daaa22ate of Death ValueRow10', value: 'B Date of Death ValueRow10', equity: 'C Value of Decedents EquityRow10' },
+  { description: 'B Date of Death ValueRowB Date of Daaa2211', value: 'B Date of Death ValueRow11', equity: 'C Value of Decedents EquityRow11' },
+  { description: 'B Date oB Date of Daaa22f Death ValueRow12', value: 'B Date of Death ValueRow12', equity: 'C Value of Decedents EquityRow12' },
+];
+
+const SCHEDULE_B3_TOTALS = {
+  additionalSchedules: 'C Value of Decedents EquityTotal of all additional schedules if none enter zero_2',
+  all: 'C Value of Decedents EquityTotal of all municipal and corporate bonds Enter here and on Schedule B1B4 Recap line 3',
+} as const;
+
+/**
+ * Schedule C Parts I and II — transfers during the decedent's lifetime, and incomplete transfers.
+ * The two parts print the same five columns (date · property · transferee · relationship · value)
+ * and total separately, which is why a transfer carries the part it belongs to rather than being
+ * placed by guesswork.
+ */
+const SCHEDULE_C_TRANSFER_ROWS = {
+  partI: [
+  { date: 'B Describe Property Transferred See instructionsRaaa123ow1', description: 'B Describe Property Transferred See instructionsRow1', transferee: 'C Name of TransfereeRow1', relationship: 'D Relationship of Transferee to DecedentRow1', value: 'E Market Value of Property as of Date of DeathRow1' },
+  { date: 'B Describe PropensRaaa123rty Transferred See instructionsRow3', description: 'B Describe Property Transferred See instructionsRow3', transferee: 'C Name of TransfereeRow3', relationship: 'D Relationship of Transferee to DecedentRow3', value: 'E Market Value of Property as of Date of DeathRow3' },
+  { date: 'B Describe PropertnsRaaa123y Transferred See instructionsRow5', description: 'B Describe Property Transferred See instructionsRow5', transferee: 'C Name of TransfereeRow5', relationship: 'D Relationship of Transferee to DecedentRow5', value: 'E Market Value of Property as of Date of DeathRow5' },
+  { date: 'B Describe Property Transferred See innsRaaa123structionsRow7', description: 'B Describe Property Transferred See instructionsRow7', transferee: 'C Name of TransfereeRow7', relationship: 'D Relationship of Transferee to DecedentRow7', value: 'E Market Value of Property as of Date of DeathRow7' },
+  ],
+  partII: [
+  { date: 'B Describe Property Transferred See instr64354uctionsRow1_2', description: 'B Describe Property Transferred See instructionsRow1_2', transferee: 'C Name of TransfereeRow1_2', relationship: 'D Relationship of Transferee to DecedentRow1_2', value: 'E Market Value of Property as of Date of DeathRow1_2' },
+  { date: 'B Describe Property Tratr64354nsferred See instructionsRow3_2', description: 'B Describe Property Transferred See instructionsRow3_2', transferee: 'C Name of TransfereeRow3_2', relationship: 'D Relationship of Transferee to DecedentRow3_2', value: 'E Market Value of Property as of Date of DeathRow3_2' },
+  { date: 'B Describe Propertytr64354 Transferred See instructionsRow5_2', description: 'B Describe Property Transferred See instructionsRow5_2', transferee: 'C Name of TransfereeRow5_2', relationship: 'D Relationship of Transferee to DecedentRow5_2', value: 'E Market Value of Property as of Date of DeathRow5_2' },
+  { date: 'B Describe Property Transferred See instructionsRow7_tr643542', description: 'B Describe Property Transferred See instructionsRow7_2', transferee: 'C Name of TransfereeRow7_2', relationship: 'D Relationship of Transferee to DecedentRow7_2', value: 'E Market Value of Property as of Date of DeathRow7_2' },
+  ],
+} as const;
+
+/**
+ * Schedule C Part III — "Payable on Death Policies/Plans". Section A is payable to a named
+ * beneficiary, Section B to the estate — and Section B prints no beneficiary or relationship
+ * column, because on those there is no one to name.
+ */
+const SCHEDULE_C_POD_ROWS = {
+  toBeneficiary: [
+  { policyType: 'Estate_2@$@43', issuer: 'Estateoijbn345_2', beneficiary: 'Estate_2s67u6tate_2oijbn3s67u6tate_2oijbn3', relationship: 'EsEs65#$@!664e7tate_2', value: 'Estate_2Es65#$@!664e7Es65#$@!664e7' },
+  { policyType: 'EsEstate_2@$@43tate_4', issuer: 'Estoijbn345ate_4', beneficiary: 'Estate_4s67u6tate_2oijbn35665#$@!', relationship: 'Estate_4Es65#$@!664e7', value: 'EsEs65#$@!664e7tate_4' },
+  { policyType: 'Estate_6Estate_2@$@43', issuer: 'Esoijbn345tate_6', beneficiary: 'Estat65#$@!e_6', relationship: 'E778**state_6Es65#$@!664e7', value: 'Estate_6Es65#$@!664e7!!' },
+  { policyType: 'EstaEstate_2@$@43Estate_2@$@43te_8', issuer: 'Estate_8oijbn345', beneficiary: '65#$@!Estate_8', relationship: 'Estate_8Es65#$@778**!664e7', value: 'Estate_8Es65#$@!66441de7' },
+  { policyType: 'Estate_10Estate_2@$@43', issuer: 'Eoijbn345state_10', beneficiary: 'Estate_1065#$@!', relationship: 'Estate_10Es65#$@!664e778**', value: 'Estate_10Es65#ggd$@!664e7' },
+  { policyType: 'EstEstate_2@$@43ate_12', issuer: 'Estate_12oijbn345oijbn345', beneficiary: 'Estate_1265#$@!65#$@!', relationship: 'Es65#$@!664e74tate_12', value: 'EstatEs65#$@!664e7e_12' },
+  ],
+  toEstate: [
+  { policyType: 'Estate_254ruy78.uoijbn', issuer: 'Es67u6tate_2oijbn3455', value: 'Estate_2' },
+  { policyType: 'EstEstate_254ruy78.uoijbnate_4', issuer: 'Estate_4s67u6tate_2oijbn3', value: 'Estate_4' },
+  { policyType: 'Estate_6Estate_254ruy78.uoijbnEstate_254ruy78.uoijbn', issuer: 'Estas67u6tate_2oijbn3te_6', value: 'Estate_6' },
+  { policyType: 'EEstate_254ruy78.uoijbnstate_8', issuer: 'Ess67u6tate_2oijbn3tate_8', value: 'Estate_8' },
+  { policyType: 'EsEstate_254ruy78.uoijbntate_10', issuer: 'Estate_10s67u6tate_2oijbn3', value: 'Estate_10' },
+  { policyType: 'Estate_12Estate_254ruy78.uoijbn345', issuer: 'Estate_12s67u6tate_2oijbn3', value: 'Estate_12' },
+  ],
+} as const;
+
+/**
+ * Schedule C's three printed questions, each marked "(required)".
+ *
+ * Answered YES from the estate's own contents: if the matter reports a transfer of that kind,
+ * the answer is not in doubt. When it reports none the pair is left UNMARKED rather than ticked
+ * No, because "the attorney entered no such transfer" and "the decedent made no such transfer"
+ * are different statements, and only the second is what No asserts. The unmarked box is visible
+ * on review; a wrong No would not be.
+ */
+const SCHEDULE_C_QUESTIONS = {
+  lifetimeTransfers: { field: '1 Did the decedent within 3 years of date of death transfer property valued at 500 or more without receiving full', yes: 'Yes_9', no: 'No_6' },
+  incompleteTransfers: { field: '2 Did the decedent at any time prior to death transfer property without receiving full financial consideration while still', yes: 'Yes_10', no: 'No_7' },
+  payableOnDeath: { field: 'payment lump sum or annuity to a beneficiary or the Estate upon the decedents death other than life insurance', yes: 'Yes_11', no: 'No_8' },
+} as const;
+
+/** Schedule C's six totals. `all` is Line 4 on the Summary Page. */
+const SCHEDULE_C_TOTALS = {
+  partI: 'E Market Value of Property as of Date of DeathTotal  Part I',
+  partII: 'E Market Value of Property as of Date of DeathTotal  Part II',
+  partIandIIAdditional: 'E Market Value of Property as of Date of DeathTotal of Part I and Part II of all additional schedules if none enter zero',
+  partIII: 'Total  Part III Section A and Section B_2',
+  partIIIAdditional: 'Total of Part III of all additional schedules if none enter zero_2',
+  all: 'Total of all transfers Part I Part II Part III and totals of all additional schedules Enter here and on Form ITR Summary Page line 4',
+} as const;
+
+/**
  * Schedule D — "Deductions Claimed", pages 13 and 14. Three parts, and unlike the asset
  * schedules the categories are PRE-PRINTED: a row's meaning comes from the block it sits in, not
  * from anything written in it.
@@ -369,7 +538,12 @@ const SCHEDULE_D_TOTALS = {
  * silently reports fewer assets or beneficiaries than the estate contains.
  */
 const ADDITIONAL_COPIES = {
+  scheduleB1: 'Check if additional copies of the schedule are attached_3',
+  scheduleB2: 'Check if additional copies of the schedule are attached_4',
+  scheduleB3: 'Check if additional copies of the schedule are attached_5',
   scheduleB4: 'Check if additional copies of the schedule are attached_6',
+  scheduleC1: 'Check if additional copies of the schedule are attached_7',   // Parts I and II
+  scheduleC2: 'Check if additional copies of the schedule are attached_8',   // Part III
   scheduleD1: 'Check if additional copies of the schedule are attached_9',   // Schedule D, page 13
   scheduleD2: 'Check if additional copies of the schedule are attached_10',  // Schedule D, page 14
   scheduleE: 'Check if additional copies of the schedule are attached_11',
@@ -716,6 +890,197 @@ function sumScheduleItems(items: ReadonlyArray<ScheduleItem>): number {
   return items.reduce((sum, item) => sum + item.fairMarketValue, 0);
 }
 
+/**
+ * Schedule B-1 — financial institution accounts.
+ *
+ * Column (A) wants three things in one box: institution, last four digits of the account number,
+ * and the registered owners. Intake captures them separately, so they are composed here in the
+ * order the printed header lists them; an item entered before those fields existed falls back to
+ * its description, exactly as it printed before.
+ */
+function fillScheduleB1(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  items.slice(0, SCHEDULE_B1_ROWS.length).forEach((item, i) => {
+    const row = SCHEDULE_B1_ROWS[i];
+    if (!row) return;
+    const d = item.accountDetails;
+    const account = d
+      ? [d.institutionName, d.accountNumberLast4 ? `Acct •••• ${d.accountNumberLast4}` : '']
+        .filter(Boolean).join(' — ')
+      : item.description;
+    w.text(row.institution, account);
+    w.text(row.names, d?.registeredOwners ?? '');
+    w.text(row.value, formatMoneyInline(item.fairMarketValue));
+    w.text(row.equity, formatMoneyInline(item.fairMarketValue));
+  });
+
+  const overflow = items.slice(SCHEDULE_B1_ROWS.length);
+  w.text(SCHEDULE_B1_TOTALS.additionalSchedules, formatMoneyInline(sumScheduleItems(overflow)));
+  w.text(SCHEDULE_B1_TOTALS.all, formatMoneyInline(sumScheduleItems(items)));
+  if (overflow.length > 0) w.check(ADDITIONAL_COPIES.scheduleB1);
+}
+
+/**
+ * Schedule B-2 — stocks in Part I, co-op shares in Part II.
+ *
+ * (F) Total Market Value is printed as "Col D x Col E", but the figure written is the item's own
+ * fair market value rather than shares × per-share price: that value is what the estate reported
+ * and what every total on the return is built from, and recomputing it here could put a number on
+ * the form that contradicts Line 3 by a rounding error.
+ */
+function fillScheduleB2(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  const stocks = items.filter((i) => i.securityDetails?.isCoOp !== true);
+  const coops = items.filter((i) => i.securityDetails?.isCoOp === true);
+
+  let partITotal = 0;
+  stocks.slice(0, SCHEDULE_B2_STOCK_ROWS.length).forEach((item, i) => {
+    const row = SCHEDULE_B2_STOCK_ROWS[i];
+    if (!row) return;
+    const d = item.securityDetails;
+    w.text(row.corporation, [d?.corporationName ?? item.description, d?.registeredOwners]
+      .filter(Boolean).join(' — '));
+    w.text(row.ticker, d?.tickerSymbol ?? '');
+    if (d?.isNJCorporation) w.check(row.isNJ);
+    w.text(row.shares, d?.numberOfShares === undefined ? '' : String(d.numberOfShares));
+    w.text(row.perShare, d?.perShareValue === undefined ? '' : formatMoneyInline(d.perShareValue));
+    w.text(row.total, formatMoneyInline(item.fairMarketValue));
+    w.text(row.equity, formatMoneyInline(item.fairMarketValue));
+    partITotal += item.fairMarketValue;
+  });
+
+  let partIITotal = 0;
+  coops.slice(0, SCHEDULE_B2_COOP_ROWS.length).forEach((item, i) => {
+    const row = SCHEDULE_B2_COOP_ROWS[i];
+    if (!row) return;
+    const d = item.securityDetails;
+    w.text(row.company, d?.corporationName ?? item.description);
+    w.text(row.ownerName, d?.registeredOwners ?? '');
+    w.text(row.shares, d?.numberOfShares === undefined ? '' : String(d.numberOfShares));
+    w.text(row.total, formatMoneyInline(item.fairMarketValue));
+    w.text(row.equity, formatMoneyInline(item.fairMarketValue));
+    partIITotal += item.fairMarketValue;
+  });
+
+  const dropped = stocks.length - Math.min(stocks.length, SCHEDULE_B2_STOCK_ROWS.length)
+    + coops.length - Math.min(coops.length, SCHEDULE_B2_COOP_ROWS.length);
+  w.text(SCHEDULE_B2_TOTALS.partI, formatMoneyInline(partITotal));
+  w.text(SCHEDULE_B2_TOTALS.partII, formatMoneyInline(partIITotal));
+  w.text(
+    SCHEDULE_B2_TOTALS.additionalSchedules,
+    formatMoneyInline(sumScheduleItems(items) - partITotal - partIITotal),
+  );
+  w.text(SCHEDULE_B2_TOTALS.all, formatMoneyInline(sumScheduleItems(items)));
+  if (dropped > 0) w.check(ADDITIONAL_COPIES.scheduleB2);
+}
+
+/** Schedule B-3 — municipal and corporate bonds. Column (A) is the bond and its owners. */
+function fillScheduleB3(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  items.slice(0, SCHEDULE_B3_ROWS.length).forEach((item, i) => {
+    const row = SCHEDULE_B3_ROWS[i];
+    if (!row) return;
+    const d = item.bondDetails;
+    w.text(row.description, d
+      ? [d.issuerAndTerms, d.registeredOwners].filter(Boolean).join(' — ')
+      : item.description);
+    w.text(row.value, formatMoneyInline(item.fairMarketValue));
+    w.text(row.equity, formatMoneyInline(item.fairMarketValue));
+  });
+
+  const overflow = items.slice(SCHEDULE_B3_ROWS.length);
+  w.text(SCHEDULE_B3_TOTALS.additionalSchedules, formatMoneyInline(sumScheduleItems(overflow)));
+  w.text(SCHEDULE_B3_TOTALS.all, formatMoneyInline(sumScheduleItems(items)));
+  if (overflow.length > 0) w.check(ADDITIONAL_COPIES.scheduleB3);
+}
+
+/**
+ * Schedule C — transfers.
+ *
+ * A transfer's `part` decides which block it prints in, because the parts are legally distinct
+ * and each answers its own printed question. Absent a part, it lists in Part I, the schedule's
+ * ordinary case.
+ */
+function fillScheduleC(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  const partOf = (item: ScheduleItem): TransferPart =>
+    item.transferDetails?.part ?? 'lifetime_within_3_years';
+  const bucket = (part: TransferPart) => items.filter((i) => partOf(i) === part);
+
+  const lifetime = bucket('lifetime_within_3_years');
+  const incomplete = bucket('incomplete');
+  const podBeneficiary = bucket('pod_to_beneficiary');
+  const podEstate = bucket('pod_to_estate');
+
+  const fillTransferRows = (
+    rows: ReadonlyArray<{ date: string; description: string; transferee: string; relationship: string; value: string }>,
+    bucketItems: ReadonlyArray<ScheduleItem>,
+  ): number => {
+    let total = 0;
+    bucketItems.slice(0, rows.length).forEach((item, i) => {
+      const row = rows[i];
+      if (!row) return;
+      const d = item.transferDetails;
+      w.text(row.date, d?.dateOfTransfer ? formatUSDate(d.dateOfTransfer) : '');
+      w.text(row.description, item.description);
+      w.text(row.transferee, d?.transfereeName ?? '');
+      w.text(row.relationship, d?.transfereeRelationship?.replace(/_/g, ' ') ?? '');
+      w.text(row.value, formatMoneyInline(item.fairMarketValue));
+      total += item.fairMarketValue;
+    });
+    return total;
+  };
+
+  const partITotal = fillTransferRows(SCHEDULE_C_TRANSFER_ROWS.partI, lifetime);
+  const partIITotal = fillTransferRows(SCHEDULE_C_TRANSFER_ROWS.partII, incomplete);
+
+  let partIIITotal = 0;
+  podBeneficiary.slice(0, SCHEDULE_C_POD_ROWS.toBeneficiary.length).forEach((item, i) => {
+    const row = SCHEDULE_C_POD_ROWS.toBeneficiary[i];
+    if (!row) return;
+    const d = item.transferDetails;
+    w.text(row.policyType, item.description);
+    w.text(row.issuer, d?.issuerName ?? '');
+    w.text(row.beneficiary, d?.transfereeName ?? '');
+    w.text(row.relationship, d?.transfereeRelationship?.replace(/_/g, ' ') ?? '');
+    w.text(row.value, formatMoneyInline(item.fairMarketValue));
+    partIIITotal += item.fairMarketValue;
+  });
+  podEstate.slice(0, SCHEDULE_C_POD_ROWS.toEstate.length).forEach((item, i) => {
+    const row = SCHEDULE_C_POD_ROWS.toEstate[i];
+    if (!row) return;
+    // Section B names no beneficiary — the estate is the beneficiary — so it prints three columns.
+    w.text(row.policyType, item.description);
+    w.text(row.issuer, item.transferDetails?.issuerName ?? '');
+    w.text(row.value, formatMoneyInline(item.fairMarketValue));
+    partIIITotal += item.fairMarketValue;
+  });
+
+  w.text(SCHEDULE_C_TOTALS.partI, formatMoneyInline(partITotal));
+  w.text(SCHEDULE_C_TOTALS.partII, formatMoneyInline(partIITotal));
+  w.text(SCHEDULE_C_TOTALS.partIII, formatMoneyInline(partIIITotal));
+
+  const placedIandII = partITotal + partIITotal;
+  const allIandII = sumScheduleItems([...lifetime, ...incomplete]);
+  const allIII = sumScheduleItems([...podBeneficiary, ...podEstate]);
+  w.text(SCHEDULE_C_TOTALS.partIandIIAdditional, formatMoneyInline(allIandII - placedIandII));
+  w.text(SCHEDULE_C_TOTALS.partIIIAdditional, formatMoneyInline(allIII - partIIITotal));
+  w.text(SCHEDULE_C_TOTALS.all, formatMoneyInline(sumScheduleItems(items)));
+
+  if (allIandII > placedIandII) w.check(ADDITIONAL_COPIES.scheduleC1);
+  if (allIII > partIIITotal) w.check(ADDITIONAL_COPIES.scheduleC2);
+
+  // The three printed questions. Yes when the estate reports such a transfer; otherwise left
+  // unmarked rather than asserting a No the record does not support.
+  if (lifetime.length > 0) w.radio(SCHEDULE_C_QUESTIONS.lifetimeTransfers.field, SCHEDULE_C_QUESTIONS.lifetimeTransfers.yes);
+  if (incomplete.length > 0) w.radio(SCHEDULE_C_QUESTIONS.incompleteTransfers.field, SCHEDULE_C_QUESTIONS.incompleteTransfers.yes);
+  if (podBeneficiary.length + podEstate.length > 0) {
+    w.radio(SCHEDULE_C_QUESTIONS.payableOnDeath.field, SCHEDULE_C_QUESTIONS.payableOnDeath.yes);
+  }
+}
+
+/** "2023-09-18" → "09/18/2023", the form's printed date shape. */
+function formatUSDate(iso: string): string {
+  const [month, day, year] = splitDate(iso);
+  return `${month}/${day}/${year}`;
+}
+
 /** Schedule B-4, "All Other Property" — eighteen rows, then the overflow checkbox. */
 function fillScheduleB4(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
   items.slice(0, SCHEDULE_B4_ROWS.length).forEach((item, i) => {
@@ -818,6 +1183,10 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
   fillPaymentVoucher(w, data, { fullName, ssn: [ssn3, ssn2, ssn4], dod: [dodMonth, dodDay, dodYear] });
 
   fillRecap(w, data);
+  fillScheduleB1(w, data.scheduleB1);
+  fillScheduleB2(w, data.scheduleB2);
+  fillScheduleB3(w, data.scheduleB3);
+  fillScheduleC(w, data.scheduleC);
   fillScheduleD(w, data);
   fillScheduleE(w, data.scheduleE);
   fillScheduleB4(w, data.scheduleB4);

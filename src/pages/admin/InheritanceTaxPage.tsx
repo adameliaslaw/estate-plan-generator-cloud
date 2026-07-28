@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calculator, Plus, Trash2, FileText, ShieldCheck, RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddressPartsInput } from '@/components/inheritance-tax/AddressPartsInput';
+import { BequestDetailFields } from '@/components/inheritance-tax/BequestDetailFields';
 import { useAuth } from '@/hooks/useAuth';
 import { inheritanceTaxService } from '@/services/inheritance-tax-service';
 import { Button } from '@/components/ui/button';
@@ -469,7 +470,8 @@ export default function InheritanceTaxPage() {
                 </div>
 
                 {b.bequests.map((q, qi) => (
-                  <div key={q.id} className="grid items-end gap-3 md:grid-cols-4">
+                  <div key={q.id} className="space-y-2">
+                  <div className="grid items-end gap-3 md:grid-cols-4">
                     <div>
                       <Label>Asset type</Label>
                       <select className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
@@ -494,6 +496,10 @@ export default function InheritanceTaxPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+                  </div>
+                  <BequestDetailFields
+                    bequest={q}
+                    onChange={(mutate) => patch((d) => { mutate(d.beneficiaries[bi]!.bequests[qi]!); })} />
                   </div>
                 ))}
 
