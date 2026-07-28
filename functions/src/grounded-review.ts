@@ -19,6 +19,10 @@ import { loadFirmSecrets } from './firm-secrets';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { callAI, parseAIJson, FirmData } from './ai-client';
 import { assertStaff } from './auth-guards';
+import {
+  verifyNjsaCitations,
+  NjsaCitationCheck,
+} from './njsa-statutes';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +37,14 @@ export interface GroundedReviewResult {
   summary: string;
   /** Timestamp of the review */
   reviewedAt: string;
+  /**
+   * Deterministic N.J.S.A. checks against the imported official statute
+   * text (njsa-statutes.ts). Present when the statute database is loaded;
+   * omitted when it has not been imported on this instance.
+   */
+  njsaChecks?: NjsaCitationCheck[];
+  /** Currency line for the imported statutes, e.g. "current through P.L.2025, c.346". */
+  njsaCurrency?: string | null;
 }
 
 export interface CitationIssue {
@@ -124,6 +136,35 @@ export async function runGroundedReview(
     };
   }
 
+  // Deterministic pass first: prove every N.J.S.A. citation against the
+  // imported official statute text. Fabricated or repealed citations become
+  // hard errors regardless of what the search-grounded model concludes.
+  let njsaChecks: NjsaCitationCheck[] | undefined;
+  let njsaCurrency: string | null | undefined;
+  const njsaIssues: CitationIssue[] = [];
+  try {
+    const verification = await verifyNjsaCitations(content);
+    if (verification.status !== 'not_imported') {
+      njsaChecks = verification.checks;
+      njsaCurrency = verification.currency;
+      for (const check of verification.checks) {
+        if (!check.exists) {
+          njsaIssues.push({
+            citation: `N.J.S.A. ${check.citation ?? check.raw}`,
+            issue:
+              'Citation not found in the imported New Jersey statutes ' +
+              `(${verification.currency ?? 'currency unknown'}). ` +
+              'The section may be fabricated, repealed, or renumbered.',
+            severity: 'error',
+            source: 'njsa-database',
+          });
+        }
+      }
+    }
+  } catch (njsaErr) {
+    console.warn('[groundedReview] NJSA deterministic pass failed:', njsaErr);
+  }
+
   const userPrompt = buildUserPrompt(docTitle, content);
 
   // Force Gemini with grounding enabled
@@ -143,23 +184,30 @@ export async function runGroundedReview(
   // Parse the response
   try {
     const parsed = parseAIJson<GroundedReviewResult>(response);
+    const aiIssues = Array.isArray(parsed.issues) ? parsed.issues : [];
+    const aiStatus = parsed.status ?? 'pass';
     return {
-      status: parsed.status ?? 'pass',
-      issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+      status: njsaIssues.length > 0 ? 'errors' : aiStatus,
+      issues: [...njsaIssues, ...aiIssues],
       summary: parsed.summary ?? 'Review completed.',
       reviewedAt: new Date().toISOString(),
+      ...(njsaChecks ? { njsaChecks, njsaCurrency } : {}),
     };
   } catch (parseErr) {
     console.error('[groundedReview] Failed to parse Gemini response:', parseErr);
     return {
-      status: 'warnings',
-      issues: [{
-        citation: 'N/A',
-        issue: 'Unable to parse grounded review response. Manual review recommended.',
-        severity: 'warning',
-      }],
+      status: njsaIssues.length > 0 ? 'errors' : 'warnings',
+      issues: [
+        ...njsaIssues,
+        {
+          citation: 'N/A',
+          issue: 'Unable to parse grounded review response. Manual review recommended.',
+          severity: 'warning',
+        },
+      ],
       summary: 'Grounded review completed but response could not be parsed.',
       reviewedAt: new Date().toISOString(),
+      ...(njsaChecks ? { njsaChecks, njsaCurrency } : {}),
     };
   }
 }

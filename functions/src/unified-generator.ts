@@ -10,6 +10,7 @@ import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper'
 import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt } from './ai-client';
 import { serializeClientData } from './client-data-serializer';
+import { checkClientFactConsistency } from './client-facts';
 import { validateDocumentStructure, buildRetryInstruction } from './document-structure-validator';
 import { checkContentIntegrity } from './doc-content-integrity-checker';
 import { buildEstatePlanSummaryTemplateData } from './generators/summary-docs-generator';
@@ -515,6 +516,22 @@ export async function generateDocument(
     } catch (ctxErr) {
       contextFailed = true;
       console.warn(`[unifiedGenerator] Context aggregation failed for ${docType} — document will generate in AI-only mode:`, ctxErr);
+    }
+  }
+
+  // Deterministic pre-generation consistency check (client-facts.ts): never
+  // send a contradictory prompt silently. Findings are logged and attached to
+  // the generated document for attorney review; they do not block generation.
+  let dataConsistencyWarnings: string[] = [];
+  if (clientContext) {
+    const findings = checkClientFactConsistency(clientContext.client);
+    if (findings.length > 0) {
+      dataConsistencyWarnings = findings.map(
+        (f) => `[${f.severity}] ${f.code}: ${f.message}`,
+      );
+      for (const line of dataConsistencyWarnings) {
+        console.warn(`[unifiedGenerator] client-fact check (${docType}): ${line}`);
+      }
     }
   }
 
@@ -1135,7 +1152,10 @@ export async function generateDocument(
       propertyAddress: generatedDoc.propertyAddress,
       changeNotes,
       tags,
-      warnings: completenessWarnings.length > 0 ? completenessWarnings : undefined,
+      warnings:
+        completenessWarnings.length > 0 || dataConsistencyWarnings.length > 0
+          ? [...dataConsistencyWarnings, ...completenessWarnings]
+          : undefined,
       validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
       promptVersion: generatedDoc.promptVersion,
       templateBaseline: generatedDoc.templateBaseline,
