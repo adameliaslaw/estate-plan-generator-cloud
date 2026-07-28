@@ -23,6 +23,7 @@
  * producing a return with empty boxes.
  */
 import { PDFDocument } from 'pdf-lib';
+import { formatInterestNotation } from './state-format';
 import {
   FieldWriter, formatMoneyInline, resolveAddress, splitDate, splitPhone, splitSSN,
 } from './pdf-fields';
@@ -847,7 +848,9 @@ function fillScheduleA(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void
     if (!b) return;
     const d = item.realPropertyDetails;
     w.text(b.county, d?.county ?? '');
-    w.text(b.fractionalInterest, d?.fractionalInterest ?? '');
+    // "If decedent was sole owner, enter 100%" — the instruction is about the notation,
+    // not just the number. See formatInterestNotation.
+    w.text(b.fractionalInterest, formatInterestNotation(d?.fractionalInterest));
     // Without structured parts the description is all there is, and the street line is where a
     // reader looks for it.
     w.text(b.streetAddress, d?.streetAddress ?? item.description);
@@ -882,7 +885,7 @@ function fillScheduleB(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void
     if (d?.isFamilyLimitedPartnership !== undefined) {
       w.radio(b.flp, d.isFamilyLimitedPartnership ? flp.yes : flp.no);
     }
-    w.text(b.ownershipPercentage, d?.ownershipPercentage ?? '');
+    w.text(b.ownershipPercentage, formatInterestNotation(d?.ownershipPercentage));
     w.text(b.numberOfShares, d?.numberOfShares === undefined ? '' : String(d.numberOfShares));
     w.text(b.entireValue, d?.entireBusinessValue === undefined ? '' : formatMoneyInline(d.entireBusinessValue));
     w.text(b.decedentsShare, formatMoneyInline(item.fairMarketValue));
