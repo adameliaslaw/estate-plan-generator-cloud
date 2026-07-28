@@ -259,6 +259,30 @@ export interface ITRBeneficiary {
   bequests: ITRBequest[];
 }
 
+/**
+ * N.J.A.C. 18:26-7.10(d) as amended by R.2025 d.152 — an executor's commission on a real-estate
+ * sale is allowable only on residue property the representative itself sold. Both statements must
+ * be attested for the deduction to be allowable; the server rejects the save otherwise.
+ */
+export interface ITRExecutorCommissionEligibility {
+  propertyWasResidueNotSpecificallyDevised: boolean;
+  propertyWasSoldByExecutor: boolean;
+  /** The factual basis. The server requires it to be non-blank. */
+  notes: string;
+}
+
+/**
+ * N.J.A.C. 18:26-7.16 — transfer/inheritance tax paid to another jurisdiction is deductible only
+ * where the property it was assessed on is also subject to NJ Transfer Inheritance Tax.
+ */
+export interface ITRTransferTaxEligibility {
+  taxedPropertyIsAlsoNJTaxable: boolean;
+  /** The other taxing jurisdiction — "New York", "Pennsylvania", "United Kingdom". */
+  taxingJurisdiction: string;
+  /** The factual basis. The server requires it to be non-blank. */
+  notes: string;
+}
+
 export interface ITRDeduction {
   id: string;
   type: DeductionType;
@@ -266,6 +290,10 @@ export interface ITRDeduction {
   amount: number;
   /** Schedule D column (B), "Name of Business/Person Paid". Omitted when left blank. */
   payeeName?: string;
+  /** Required by the server for `executor_commission` on a death from 2025-12-15. */
+  executorCommissionEligibility?: ITRExecutorCommissionEligibility;
+  /** Required by the server for `transfer_taxes_other_states`, whatever the date of death. */
+  transferTaxEligibility?: ITRTransferTaxEligibility;
 }
 
 export interface ITRMatterInput {

@@ -194,11 +194,22 @@ only one that changes how tax is computed.** Do not start it without deciding it
 > - **Found and fixed while mapping**: the frontend offered a deduction type
 >   (`other_state_inheritance_tax`) that the server's strict enum never accepted, so choosing
 >   "Inheritance tax paid to another state" made the matter unsaveable. The value is now the
->   server's `transfer_taxes_other_states`. **It still needs the `transferTaxEligibility`
->   attestation the server requires (N.J.A.C. 18:26-7.16), which no screen collects** — as is
->   also true of `executorCommissionEligibility` for a death on or after 2025-12-15. Both now
->   fail with a clear server message instead of an opaque one; collecting the attestations is
->   unbuilt work.
+>   server's `transfer_taxes_other_states`. It still needed the `transferTaxEligibility`
+>   attestation (N.J.A.C. 18:26-7.16), as did `executorCommissionEligibility` for a death on or
+>   after 2025-12-15 — **both are now collected** (see below).
+
+> **The attestation gap is closed.** `DeductionAttestationFields` asks for both attestations
+> beside the deduction they belong to, and `src/lib/inheritance-tax-attestations.ts` carries the
+> rules the page needs: when each is demanded, what is still outstanding, and which stale
+> attestation to drop from the payload when the attorney changes a deduction's type or moves the
+> date of death back before R.2025 d.152. The server remains the validator — every test asserts
+> the client's answer *and* runs the real `validateMatter` over what the page would send, so a
+> client rule that drifts from the regulation fails on the server assertion.
+>
+> Neither attestation is a second-attorney review. Both are statements of fact about this estate
+> that the regulation makes the deduction depend on, so a sole practitioner attests them alone.
+> An unticked box is a real answer — the estate fails the regulation's test and the deduction
+> belongs off the return — so the UI says that rather than treating it as a missing field.
 
 ### 4.1 Schedules B1–B4 Recap (page 10) — do this first
 Five boxes: the B-1, B-2, B-3 and B-4 totals, and their sum, which is Line 3. **The engine already
