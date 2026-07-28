@@ -44,12 +44,66 @@ the share arithmetic done for you. Each independently shippable and revertible.
 **Question 1 — ANSWERED 2026-07-28: store the fraction, derive the amount.** A re-appraisal then
 keeps the split intact; the schedules print the derived amount.
 
-**🛑 Question 2 — RESIDUE MUST BE SCOPED BEFORE ANY CODE IS WRITTEN.** Adam's instruction: scope it
-first, ahead of PR 1. "Everything else, split equally" is how most wills actually read and has no
-representation today — an allocation model that cannot express it would have to be reopened
-immediately, and the residue rules decide the shape of `Allocation` itself (a residuary share is a
-fraction of *what is left after specific gifts*, not of a named asset). Do not start PR 1 until
-this is scoped and signed off.
+**Question 2 — RESIDUE: SCOPED 2026-07-28, below. PR 1 may start once Adam signs this off.**
+
+### Residue — the scope PR 1 must build to
+
+**No interview was needed: the firm's own will model already says how its wills read.**
+`src/types/index.ts` carries `SpecificBequest`, `ResidualDistribution { recipient, percentage
+0–100 summing to 100, perStirpes, alternateRecipient }` and `CharitableBequest { amount?,
+percentage? }`. So: **specific gifts off the top, residue split by percentage.** That is the
+pattern to support — not a general-purpose bequest algebra.
+
+**The shape:**
+
+```
+Matter
+  assets: Asset[]
+    fairMarketValue                  // decedent's interest
+    allocations: Allocation[]        // SPECIFIC gifts only; may be empty
+      beneficiaryId + fraction       // fraction, per the decision above
+  residuary: ResiduaryShare[]        // beneficiaryId + fraction, summing to 1
+```
+
+**The residuary pool is a computed figure, never entered:**
+
+```
+pool = Σ(asset.fairMarketValue) − Σ(all specific allocations)
+each residuary taker receives  share.fraction × pool
+```
+
+**The sum-check from §3 of the doc is WRONG as written and must be corrected.** It says
+allocations must *equal* the asset value. That would reject every ordinary will. The rule is:
+
+- Σ(an asset's specific allocations) **≤** its value — the remainder falls into residue.
+- If the pool is > 0 there must be residuary shares, and they must sum to 1.
+- If the pool is 0, residuary shares must be absent or empty.
+- An asset with no allocations at all is wholly residuary — that is the common case, not an error.
+
+This is the single most important correction in this section: an asset passing wholly into residue
+is *fully allocated* with **no beneficiary named against it**, so a naive equality check rejects
+valid estates.
+
+**Three cases that must all be expressible**, and are the acceptance criteria:
+1. Whole asset to one person (today's only case).
+2. Whole asset into residue, no allocation entry.
+3. Part specific, part residue — "$50,000 from my Chase account to my niece, the rest falls into
+   residue." Allocation of $50,000, remainder to the pool.
+
+**⚠️ Per stirpes is deliberately NOT computed, and this must be stated on screen.** `perStirpes`
+decides who takes when a residuary beneficiary predeceases — and the substitute can be a
+**different tax class**, which changes the tax. A deceased child's share to grandchildren stays
+Class A; a deceased sibling's share to nieces and nephews moves **Class C → Class D**. The engine
+must not resolve that. The attorney enters the **actual** takers, and the UI says so. Resolving it
+silently would produce a confidently wrong return — the failure mode this whole tool is built
+against.
+
+**Two smaller interactions to handle, not to discover later:**
+- **Charities take residue by percentage too** (`CharitableBequest.percentage`). A residuary share
+  must accept an entity beneficiary — Class E, exempt. Do not assume residuary takers are people.
+- **Disclaimers reference `bequestIds` today** (`applyDisclaimers`). A disclaimed *residuary* share
+  has no bequest id, so the disclaimer model needs a way to name a residuary share, or residuary
+  disclaimers must be explicitly refused rather than silently ignored.
 
 **Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. It would be
 throwaway work covering one sixth of the problem.
