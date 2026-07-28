@@ -152,6 +152,22 @@ Mapping work, plus intake fields for the schedules whose columns the model canno
 > **Left for a follow-up**: an official filled PDF for each of the three (each is a separate State
 > form with its own blank and its own inventory) — today they render as HTML workpapers only.
 
+**Where the blanks live** (checked 2026-07-28 — none is at the filename you would guess, and the
+State's own index page is the only reliable way to find one). Index:
+<https://www.nj.gov/treasury/taxation/prntinh.shtml>. All paths are relative to
+`https://www.nj.gov/treasury/taxation/pdf/other_forms/inheritance/`.
+
+| Builder | Blank(s) | Note |
+|---|---|---|
+| `buildITEXTFormData` | `itext.pdf` | Application for Extension of Time to File. One form, no date split. |
+| `buildL9AFormData` | `itl9a.pdf` **and** `itl9.pdf` | The builder already sets `formDesignation` to `L-9(A)` or `L-9` off `dateOfDeath < '2018-01-01'` — but those are **two separate State PDFs**, so a filled-PDF follow-up needs both blanks and both inventories. |
+| `buildITEstateFormData` | `itestate.pdf` **and** `it-estate2017.pdf` | Same shape: `itestate.pdf` is "prior to January 1, 2017", `it-estate2017.pdf` is the 2017-only return. The builder covers both ranges, returning a null tax for 2017 (the State's §2058 calculator). |
+| Track 3 | `itnrai.pdf` | IT-NR: nonresident return, instructions and voucher. `itnrfaq.pdf` alongside it. |
+
+**The trap:** one builder does not mean one blank. Two of the three span a date boundary the State
+answers with a different printed form, so the PDF filler must pick the blank from the date of
+death — the way `getRuleSet` already picks a rule set — not from the builder's name.
+
 ### Track 2 — the three orphaned forms (original scoping, kept for the record)
 `buildITEXTFormData`, `buildITEstateFormData`, `buildL9AFormData` and their HTML renderers are
 exported from `functions/src/inheritance-tax/forms/index.ts` **and called by nothing** — no
