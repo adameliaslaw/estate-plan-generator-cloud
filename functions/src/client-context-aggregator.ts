@@ -13,6 +13,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { estimateTotalAssets, hasSpousalStatus, isMinorChild } from './client-facts';
 import { loadFirmSecrets } from './firm-secrets';
 import { searchKnowledgeBase, buildContextQuery, VectorSearchResult } from './kb-vector-search';
 
@@ -346,9 +347,9 @@ function computeFields(
       .join(' ')
     : '';
 
-  const hasSpouse = ['Married', 'Domestic Partnership'].includes(pi.maritalStatus);
-  const minorChildren = children.filter((c) => c.isMinor === true);
-  const adultChildren = children.filter((c) => c.isMinor !== true);
+  const hasSpouse = hasSpousalStatus(pi.maritalStatus);
+  const minorChildren = children.filter((c) => isMinorChild(c));
+  const adultChildren = children.filter((c) => !isMinorChild(c));
   const hasSpecialNeedsChild = children.some((c) => c.specialNeeds === true);
   const propertiesForTrust = realEstate.filter((p) => p.transferToTrust === true);
 
@@ -457,19 +458,8 @@ function computeFields(
     return { ...c, childTitle };
   });
 
-  // Estimate total assets
-  let estimatedTotalAssets = 0;
-  for (const p of realEstate) estimatedTotalAssets += (p.estimatedValue as number) ?? 0;
-  for (const a of assets.bankAccounts ?? []) estimatedTotalAssets += (a.estimatedBalance as number) ?? 0;
-  for (const a of assets.investmentAccounts ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
-  for (const a of assets.retirementAccounts ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
-  for (const a of assets.lifeInsurance ?? []) estimatedTotalAssets += (a.cashValue as number) ?? (a.faceValue as number) ?? 0;
-  for (const a of assets.businessInterests ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
-  for (const a of assets.personalProperty ?? []) estimatedTotalAssets += (a.estimatedValue as number) ?? 0;
-
-  if (typeof assets.estimatedTotalEstate === 'number' && assets.estimatedTotalEstate > 0) {
-    estimatedTotalAssets = assets.estimatedTotalEstate;
-  }
+  // Estimate total assets (single source of truth: client-facts.ts)
+  const estimatedTotalAssets = estimateTotalAssets(assets);
 
   const primaryTrustName = trusts[0]?.trustName ??
     client.distribution?.trustName ??

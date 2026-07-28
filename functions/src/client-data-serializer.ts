@@ -18,6 +18,10 @@
 
 import { sanitizeForPrompt, sanitizeObject } from './ai-client';
 import * as admin from 'firebase-admin';
+import { hasSpousalStatus, isMinorChild } from './client-facts';
+
+// Back-compat re-export: earlier consumers import isMinorChild from here.
+export { isMinorChild } from './client-facts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +45,7 @@ export interface SerializedClientData {
   /** Package type */
   packageType: string;
 }
+
 
 // ---------------------------------------------------------------------------
 // Name formatting — THE canonical way to build a full name
@@ -129,9 +134,9 @@ export function serializeClientData(
   // ── Canonical names ─────────────────────────────────────────────────────
   const clientFullName = formatFullName(pi);
   const spouseFullName = spouse ? formatFullName(spouse) : '';
-  const hasSpouse = ['Married', 'Domestic Partnership'].includes(pi.maritalStatus);
+  const hasSpouse = hasSpousalStatus(pi.maritalStatus);
   const hasMinorChildren = children.some(
-    (c: admin.firestore.DocumentData) => c.isMinor === true,
+    (c: admin.firestore.DocumentData) => isMinorChild(c),
   );
   const hasSpecialNeedsChild = children.some(
     (c: admin.firestore.DocumentData) => c.specialNeeds === true,
@@ -180,7 +185,7 @@ export function serializeClientData(
   if (children.length > 0) {
     const childLines = children.map((c: admin.firestore.DocumentData, i: number) => {
       const name = sanitizeForPrompt(c.name ?? formatFullName(c));
-      const age = c.isMinor ? 'minor' : 'adult';
+      const age = isMinorChild(c) ? 'minor' : 'adult';
       const flags: string[] = [];
       if (c.specialNeeds) flags.push('SPECIAL NEEDS');
       if (c.relationship === 'stepchild') flags.push('stepchild');
