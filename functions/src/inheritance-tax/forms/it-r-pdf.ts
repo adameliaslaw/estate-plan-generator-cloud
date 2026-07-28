@@ -22,7 +22,8 @@
  * module collects every such failure and throws with the full list rather than quietly
  * producing a return with empty boxes.
  */
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import type { PDFFont, PDFPage } from 'pdf-lib';
 import { formatInterestNotation } from './state-format';
 import {
   FieldWriter, formatMoneyInline, resolveAddress, splitDate, splitPhone, splitSSN,
@@ -1109,6 +1110,90 @@ function fillScheduleB4(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): voi
  * @returns the filled PDF. Form fields are left interactive so the attorney can correct a box
  *          before signing; nothing here flattens the document.
  */
+
+/**
+ * Schedule E column D — *"Fractional/percentage of residuary Estate and/or specific asset"*.
+ *
+ * The State prints this column but the fillable booklet has **no form field for it**: 808 fields,
+ * none for column D or column F. So it is drawn onto the page rather than written into a widget.
+ *
+ * The position is derived from the form's own geometry, never hardcoded: column D is the gap
+ * between the tax-class dropdown and the dollar-amount box on the same row, so each row's text is
+ * placed from those two widgets' rectangles. If the State reissues the booklet and moves the
+ * table, the text moves with it — and if it renames the fields, `assertComplete` fails loudly
+ * first.
+ */
+function drawScheduleEColumnD(
+  pdf: PDFDocument,
+  form: ReturnType<PDFDocument['getForm']>,
+  font: PDFFont,
+  rows: ReadonlyArray<ScheduleEBeneficiaryRow>,
+): void {
+  const SIZE = 6.5;
+  const PAD = 3;
+  const rect = (name: string): { x: number; y: number; width: number; height: number; page: PDFPage } | null => {
+    let out: { x: number; y: number; width: number; height: number; page: PDFPage } | null = null;
+    try {
+      const widgets = form.getField(name).acroField.getWidgets();
+      const w = widgets[0];
+      if (w === undefined) return null;
+      const r = w.getRectangle();
+      const ref = w.P();
+      for (const page of pdf.getPages()) {
+        if (page.ref === ref) { out = { ...r, page }; break; }
+      }
+    } catch { return null; }
+    return out;
+  };
+
+  rows.slice(0, SCHEDULE_E_ROWS.length).forEach((row, i) => {
+    const text = row.interestDescription?.trim();
+    if (!text) return;
+    const f = SCHEDULE_E_ROWS[i];
+    if (f === undefined) return;
+    const cls = rect(f.taxClass);
+    const amt = rect(f.amount);
+    if (cls === null || amt === null) return;
+
+    const left = cls.x + cls.width + PAD;
+    const width = Math.max(0, amt.x - PAD - left);
+    if (width <= 0) return;
+
+    // Wrap on words, then hard-break anything that still will not fit (a long description with
+    // no spaces). Never spill outside the column — the neighbouring boxes are other answers.
+    const lines: string[] = [];
+    let line = '';
+    for (const word of text.split(/\s+/)) {
+      const candidate = line === '' ? word : `${line} ${word}`;
+      if (font.widthOfTextAtSize(candidate, SIZE) <= width) { line = candidate; continue; }
+      if (line !== '') lines.push(line);
+      line = word;
+      while (font.widthOfTextAtSize(line, SIZE) > width && line.length > 1) {
+        let cut = line.length - 1;
+        while (cut > 1 && font.widthOfTextAtSize(line.slice(0, cut), SIZE) > width) cut -= 1;
+        lines.push(line.slice(0, cut));
+        line = line.slice(cut);
+      }
+    }
+    if (line !== '') lines.push(line);
+
+    const maxLines = Math.max(1, Math.floor(amt.height / (SIZE + 1)));
+    const shown = lines.slice(0, maxLines);
+    // Truncating in silence would assert a smaller interest than the will gives. Mark it so the
+    // attorney knows to complete the row by hand.
+    if (lines.length > maxLines && shown.length > 0) {
+      shown[shown.length - 1] = `${shown[shown.length - 1]!.replace(/.{2}$/, '')}…`;
+    }
+
+    // Top-aligned within the row box, matching how the State's own boxes read.
+    let y = amt.y + amt.height - SIZE - 1;
+    for (const l of shown) {
+      cls.page.drawText(l, { x: left, y, size: SIZE, font, color: rgb(0, 0, 0) });
+      y -= SIZE + 1;
+    }
+  });
+}
+
 export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(blank);
   const form = pdf.getForm();
@@ -1201,5 +1286,11 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
   fillScheduleB4(w, data.scheduleB4);
 
   w.assertComplete();
+
+  // Column D has no form field on the State's booklet, so it is drawn last — after every field
+  // write and after assertComplete, so a mapping failure surfaces before anything is painted.
+  const helvetica = await pdf.embedFont(StandardFonts.Helvetica);
+  drawScheduleEColumnD(pdf, form, helvetica, data.scheduleE);
+
   return pdf.save();
 }

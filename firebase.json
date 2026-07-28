@@ -17,6 +17,14 @@
         ]
       },
       {
+        "//": "Every route is a REWRITE to /index.html, and Firebase matches these rules against the REQUEST path, not the rewrite destination — so the rule above only ever fired for a literal /index.html, which nobody visits. Measured 2026-07-28 in production: /index.html no-cache, but / and /admin/inheritance-tax max-age=3600 (Firebase's default). A returning browser then replayed hour-old HTML naming content-hashed chunks the new release had deleted, the dynamic import failed, and the page rendered blank.",
+        "//2": "This glob excludes every extension the immutable rule below claims, so the two can never both match one path and precedence never has to be relied on. Worst case it under-matches and a path keeps today's behaviour; it cannot take immutable caching away from a hashed asset.",
+        "source": "**/!(*.@(js|css|ico|svg|png|jpg|jpeg|gif|woff|woff2|ttf|eot|map|json|txt|webmanifest|xml))",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
         "source": "**/*.@(js|css|ico|svg|png|jpg|jpeg|gif|woff|woff2|ttf|eot)",
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }

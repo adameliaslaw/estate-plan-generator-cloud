@@ -196,7 +196,27 @@ describe('normalizeMatterToAssets → deriveEngineMatter round-trips a legacy ma
 
   test('the whole computation is identical, snapshot and ids included', () => {
     const roundTripped = deriveEngineMatter(normalizeMatterToAssets(LEGACY));
-    expect(computeEstate(roundTripped, RULES)).toEqual(computeEstate(LEGACY, RULES));
+    const after = computeEstate(roundTripped, RULES);
+    const before = computeEstate(LEGACY, RULES);
+
+    // The ONE thing normalising adds is Schedule E column D — the State's
+    // "Fractional/percentage of residuary Estate and/or specific asset", which the nested model
+    // could not express and which therefore went out blank. Strip it and the two computations
+    // must be indistinguishable: every figure, every id, every schedule row.
+    const withoutColumnD = (c: typeof after) => ({
+      ...c,
+      formSnapshot: c.formSnapshot === undefined ? undefined : {
+        ...c.formSnapshot,
+        beneficiaries: c.formSnapshot.beneficiaries.map(
+          ({ interestDescription: _dropped, ...rest }) => rest,
+        ),
+      },
+    });
+    expect(withoutColumnD(after)).toEqual(withoutColumnD(before));
+
+    // And that addition is real: the legacy shape describes nothing, the normalised one does.
+    expect(before.formSnapshot?.beneficiaries[0]?.interestDescription).toBeUndefined();
+    expect(after.formSnapshot?.beneficiaries[0]?.interestDescription).toBe('12 Oak Ave; Chase …4821');
   });
 
   test('the normalised matter is one asset per bequest, each wholly allocated', () => {

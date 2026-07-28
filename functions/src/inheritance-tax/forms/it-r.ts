@@ -138,6 +138,7 @@ export function buildITRFormData(
       ...(b.addressParts !== undefined ? { addressParts: b.addressParts } : {}),
       relationship: b.relationship,
       taxClass: r.taxClass,
+      ...(b.interestDescription ? { interestDescription: b.interestDescription } : {}),
       dollarAmount: r.scaledBequeathed,
     });
     if (r.taxClass === 'A') {

@@ -123,6 +123,58 @@ export function describeAssetTakers(asset: Asset, matter: Pick<Matter, 'benefici
   return parts.join(', ');
 }
 
+/**
+ * A share written the way Schedule E's own examples write it: "1/3", "50%".
+ *
+ * The State's instruction gives both notations — *"Examples: '50% Residue,' '1/3 of Estate,'
+ * '100% Residue.'"* — and a third is exact as a fraction and endless as a decimal, so a simple
+ * ratio is printed as a ratio. Anything that is not a small whole ratio prints as a percentage.
+ */
+export function shareNotation(fraction: number): string {
+  for (let d = 2; d <= 16; d += 1) {
+    const n = fraction * d;
+    if (Math.abs(n - Math.round(n)) < FRACTION_EPSILON && Math.round(n) > 0 && Math.round(n) < d) {
+      return `${Math.round(n)}/${d}`;
+    }
+  }
+  return formatShare(fraction);
+}
+
+/**
+ * Schedule E **column D** — *"Fractional/percentage of residuary Estate and/or specific asset"*.
+ *
+ * The State asks each beneficiary's interest to be described, not just valued: *"List each type
+ * of asset, devise, or bequest due to each beneficiary… Examples: '50% Residue,' '1/3 of
+ * Estate,' '$5,000 cash bequest,' 'grandfather clock'."* Column E is the dollar amount; column D
+ * is what the will actually said, and until this model existed there was nothing to build it
+ * from — a nested bequest had no notion of "a third of the residue".
+ *
+ * Returns '' for a matter in the legacy nested model, where the column stays blank exactly as it
+ * did before, and for a beneficiary who takes nothing.
+ */
+export function describeBeneficiaryInterest(
+  beneficiaryId: string,
+  matter: Pick<Matter, 'assets' | 'residuary'>,
+): string {
+  if (matter.assets === undefined) return '';
+  const parts: string[] = [];
+
+  for (const asset of matter.assets) {
+    for (const a of asset.allocations ?? []) {
+      if (a.beneficiaryId !== beneficiaryId) continue;
+      const what = asset.description.trim() || asset.type.replace(/_/g, ' ');
+      parts.push(Math.abs(a.fraction - 1) <= FRACTION_EPSILON
+        ? what
+        : `${shareNotation(a.fraction)} of ${what}`);
+    }
+  }
+
+  const share = (matter.residuary ?? []).find((s) => s.beneficiaryId === beneficiaryId);
+  if (share !== undefined) parts.push(`${shareNotation(share.fraction)} Residue`);
+
+  return parts.join('; ');
+}
+
 /** One beneficiary's claim on one asset, before it is priced. */
 interface AssetPart {
   beneficiaryId: string;
