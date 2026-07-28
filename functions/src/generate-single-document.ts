@@ -14,6 +14,7 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 
 import { generateDocument, generateDocumentWithPropertyExpansion } from './unified-generator';
+import { fillDocxForEntry, loadDocxTemplateMap, planHighFidelityEntry } from './docx-package-fill';
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -29,7 +30,7 @@ const GenerateSingleRequestSchema = z.object({
   customInstructions: z.string().max(10000).optional(),
   trustTypes: z.array(z.string()).optional(),
   /** Generation mode: template, ai, or hybrid */
-  generationMode: z.enum(['template', 'ai', 'hybrid']).optional(),
+  generationMode: z.enum(['template', 'ai', 'hybrid', 'high-fidelity']).optional(),
   /** Specific template variant ID to use */
   templateId: z.string().optional(),
   /** Preferred software source for template selection */
@@ -111,11 +112,51 @@ export const generateSingleDocument = onCall(
     // 2. Generate via unified generator
     // ------------------------------------------------------------------
     try {
+      // High-fidelity: fill the firm's mapped .docx (same plan/fallback logic
+      // as the batch entry point) so subset regenerations behave identically
+      // to full-package runs. Unmapped/per-property docTypes fall back to
+      // template mode with the reason attached as a document warning.
+      let hfFallbackReason: string | undefined;
+      const effectiveMode: 'template' | 'ai' | 'hybrid' = generationMode === 'high-fidelity' ? 'template' : generationMode;
+      if (generationMode === 'high-fidelity') {
+        const docxMap = await loadDocxTemplateMap(firmId);
+        const plan = planHighFidelityEntry(docType, docxMap);
+        if (plan.action === 'fill') {
+          const result = await fillDocxForEntry({
+            firmId,
+            clientId,
+            docType,
+            spouseRole,
+            mapping: docxMap.get(docType)!,
+            createdBy: auth.uid,
+          });
+          try {
+            await admin.firestore().doc(`firms/${firmId}/clients/${clientId}`).update({
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedBy: auth.uid,
+            });
+          } catch (updateErr) {
+            console.error('[generateSingleDocument] Non-fatal: client updatedAt write failed:', updateErr);
+          }
+          console.log(`[generateSingleDocument] Saved ${result.docId} (high-fidelity fill)`);
+          return {
+            success: result.status !== 'error',
+            docId: result.docId,
+            docType: result.docType,
+            title: result.title,
+            status: result.status,
+            version: result.currentVersion,
+          };
+        }
+        hfFallbackReason = plan.fallbackReason;
+      }
+
       const genParams = {
         firmId,
         clientId,
         docType,
-        generationMode,
+        generationMode: effectiveMode,
+        extraWarnings: hfFallbackReason ? [hfFallbackReason] : undefined,
         customInstructions,
         softwareSource,
         formattingPreset,

@@ -54,6 +54,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import DocxTemplateMapCard from '@/components/settings/DocxTemplateMapCard';
 
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -212,7 +213,7 @@ interface FirmSettings {
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-type TabId = 'firm' | 'team' | 'branding' | 'integrations' | 'security' | 'templates';
+type TabId = 'firm' | 'team' | 'branding' | 'integrations' | 'security' | 'templates' | 'docx';
 
 interface TabDef {
   id: TabId;
@@ -227,6 +228,7 @@ const TABS: TabDef[] = [
   { id: 'integrations', label: 'Integrations', icon: <Zap className="h-4 w-4" /> },
   { id: 'security', label: 'Security', icon: <Shield className="h-4 w-4" /> },
   { id: 'templates', label: 'Email Templates', icon: <Mail className="h-4 w-4" /> },
+  { id: 'docx', label: 'Document Templates', icon: <FileSignature className="h-4 w-4" /> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -2420,6 +2422,11 @@ export default function SettingsPage() {
             {/* ════════════════════════════════════════════════════════════
                 TAB 5 — EMAIL TEMPLATES
             ════════════════════════════════════════════════════════════ */}
+            {/* ════════════════════════════════════════════════════════════
+                TAB — FIRM .DOCX TEMPLATE MAPPING (high-fidelity generation)
+            ════════════════════════════════════════════════════════════ */}
+            {activeTab === 'docx' && <DocxTemplateMapCard firmId={firmId} />}
+
             {activeTab === 'templates' && (
               <div className="space-y-5">
                 <div className="flex justify-end">
