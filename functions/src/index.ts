@@ -20,6 +20,7 @@ export { generateFlexDocument } from './generate-flex-document';
 export { exportDocumentPdf } from './export-pdf';
 export { exportDocumentDocx } from './export-docx';
 export { exportBatchDocuments } from './export-batch';
+export { generateHighFidelityDocx } from './docx-fidelity';
 export { transcribeAudio, summarizeTranscription } from './transcribe-audio';
 export { createPaymentRequest, lawpayWebhook, processDirectCharge } from './lawpay-integration';
 export { pushEventToGoogleCalendar, pullGoogleCalendarEvents, syncGoogleCalendar, triggerFirmCalendarSync } from './calendar-sync';
