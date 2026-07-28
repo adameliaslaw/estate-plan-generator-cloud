@@ -15,7 +15,14 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { shareAmount, shareLabel } from '@/lib/inheritance-tax-allocations';
+import {
+  SHARE_MODES,
+  formatShare,
+  parseShare,
+  shareAmount,
+  shareLabel,
+} from '@/lib/inheritance-tax-allocations';
+import type { ShareMode } from '@/lib/inheritance-tax-allocations';
 import type { ITRBeneficiary, ITRResiduaryShare } from '@/types/inheritance-tax';
 
 interface Props {
@@ -23,6 +30,17 @@ interface Props {
   pool: number;
   shares: ITRResiduaryShare[];
   beneficiaries: ITRBeneficiary[];
+  /**
+   * How the shares are being expressed. Presentation only — the store is a fraction.
+   *
+   * The page defaults this to `fraction`, and that default is load-bearing: an estate divided
+   * equally between three people is a THIRD each, and a third has no exact decimal. Typed as
+   * "33.33" it is short by $167 on a $500,000 residue, and typed as "33.3333" it is still short
+   * — and the shares no longer come out equal, which is what the attorney actually meant. "1/3"
+   * is exact, and the engine apportions the remaining cents.
+   */
+  mode: ShareMode;
+  onModeChange: (mode: ShareMode) => void;
   onChange: (mutate: (shares: ITRResiduaryShare[]) => void) => void;
 }
 
@@ -34,7 +52,9 @@ const money = (n: number): string =>
 const nameOf = (b: ITRBeneficiary): string =>
   `${b.firstName} ${b.lastName}`.trim() || '(unnamed beneficiary)';
 
-export function ResiduarySharesFields({ pool, shares, beneficiaries, onChange }: Props) {
+export function ResiduarySharesFields({
+  pool, shares, beneficiaries, mode, onModeChange, onChange,
+}: Props) {
   const total = shares.reduce((sum, s) => sum + (Number(s.fraction) || 0), 0);
   const balanced = Math.abs(total - 1) <= 1e-9;
 
@@ -47,7 +67,22 @@ export function ResiduarySharesFields({ pool, shares, beneficiaries, onChange }:
             everything not specifically given away — computed, not entered
           </span>
         </div>
-        <span className="text-lg tabular-nums">{money(pool)}</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground text-xs">Enter shares as</span>
+            <select
+              aria-label="Residuary share format"
+              className="border-input h-7 rounded-md border bg-transparent px-2 text-xs"
+              value={mode}
+              onChange={(e) => onModeChange(e.target.value as ShareMode)}
+            >
+              {SHARE_MODES.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <span className="text-lg tabular-nums">{money(pool)}</span>
+        </div>
       </div>
 
       {pool <= 0 ? (
@@ -73,15 +108,17 @@ export function ResiduarySharesFields({ pool, shares, beneficiaries, onChange }:
                 </select>
               </div>
               <div>
-                <Label className="text-xs">Percentage of residue</Label>
+                <Label className="text-xs">Share of residue</Label>
                 <Input
                   aria-label={`Residuary share ${si + 1}`}
-                  type="number" min={0} max={100} step="any"
-                  value={parseFloat((s.fraction * 100).toFixed(4))}
+                  defaultValue={formatShare(s.fraction, mode, pool)}
+                  key={`res-${si}-${mode}-${pool}`}
+                  placeholder={SHARE_MODES.find((m) => m.value === mode)?.hint}
                   onChange={(e) => {
-                    const pct = Number(e.target.value);
-                    if (!isFinite(pct) || pct < 0) return;
-                    onChange((d) => { d[si]!.fraction = pct / 100; });
+                    const fraction = parseShare(e.target.value, mode, pool);
+                    // A half-typed "1/" is not a share yet — leave the stored fraction alone.
+                    if (fraction === null) return;
+                    onChange((d) => { d[si]!.fraction = fraction; });
                   }}
                 />
               </div>
