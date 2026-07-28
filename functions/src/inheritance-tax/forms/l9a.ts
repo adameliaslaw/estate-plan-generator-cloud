@@ -111,11 +111,22 @@ export function buildL9AFormData(
   const realProperties: L9ARealProperty[] = matter.beneficiaries.flatMap((b) =>
     b.bequests
       .filter((q) => q.type === 'nj_real_property')
-      .map((q) => ({
-        description: q.description,
-        fairMarketValue: q.fairMarketValue,
-        beneficiaryName: `${b.firstName} ${b.lastName}`.trim(),
-      })),
+      .map((q) => {
+        // Schedule A's columns, where intake captured them. Spread conditionally so a matter
+        // without the detail block carries no empty keys into the frozen form data.
+        const d = q.realPropertyDetails;
+        return {
+          description: q.description,
+          fairMarketValue: q.fairMarketValue,
+          beneficiaryName: `${b.firstName} ${b.lastName}`.trim(),
+          ...(d?.county !== undefined ? { county: d.county } : {}),
+          ...(d?.streetAddress !== undefined ? { streetAddress: d.streetAddress } : {}),
+          ...(d?.lots !== undefined ? { lots: d.lots } : {}),
+          ...(d?.block !== undefined ? { block: d.block } : {}),
+          ...(d?.municipality !== undefined ? { municipality: d.municipality } : {}),
+          ...(d?.ownersAndTitle !== undefined ? { ownersAndTitle: d.ownersAndTitle } : {}),
+        };
+      }),
   );
   if (realProperties.length === 0) {
     throw new FormPreconditionError(

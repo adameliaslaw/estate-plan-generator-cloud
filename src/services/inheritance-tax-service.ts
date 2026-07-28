@@ -102,9 +102,14 @@ export const inheritanceTaxService = {
     firmId: string,
     matterId: string,
     form: CompanionForm,
+    opts: { pdf?: boolean } = {},
   ): Promise<CompanionFormResult> {
-    const fn = call<{ firmId: string; matterId: string; form: CompanionForm }, CompanionFormResult>('getInheritanceCompanionForm');
-    const res = await fn({ firmId, matterId, form });
+    const { pdf = false } = opts;
+    const fn = call<
+      { firmId: string; matterId: string; form: CompanionForm; pdf: boolean },
+      CompanionFormResult
+    >('getInheritanceCompanionForm');
+    const res = await fn({ firmId, matterId, form, pdf });
     return res.data;
   },
 

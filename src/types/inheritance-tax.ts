@@ -359,18 +359,27 @@ export interface CheckpointResult {
  */
 export type CompanionForm = 'it-ext' | 'it-estate' | 'l9';
 
-export const COMPANION_FORMS: ReadonlyArray<{ value: CompanionForm; label: string; hint: string }> = [
+export const COMPANION_FORMS: ReadonlyArray<{
+  value: CompanionForm;
+  label: string;
+  hint: string;
+  /** Whether the State's own blank is mapped, so a filled PDF can be offered. */
+  hasPdf: boolean;
+}> = [
   {
     value: 'it-ext', label: 'IT-EXT (extension)',
     hint: 'Needs a filing extension recorded on the matter before compute.',
+    hasPdf: true,
   },
   {
     value: 'l9', label: 'L-9 / L-9(A) (real property waiver)',
-    hint: 'Only for an all-Class-A estate with NJ real property and no tax due.',
+    hint: 'Only for an all-Class-A estate with NJ real property and no tax due. The official PDF is the L-9; a death before 2018-01-01 takes the L-9(A), which is hand-filled from the workpaper.',
+    hasPdf: true,
   },
   {
     value: 'it-estate', label: 'IT-Estate (estate tax)',
-    hint: 'Only for a death before 2018-01-01 — the NJ Estate Tax was repealed from that date.',
+    hint: 'Only for a death before 2018-01-01 — the NJ Estate Tax was repealed from that date. Workpaper only; hand-fill the State\'s form.',
+    hasPdf: false,
   },
 ];
 
@@ -378,6 +387,13 @@ export interface CompanionFormResult {
   form: CompanionForm;
   formData: unknown;
   html: string;
+  /**
+   * The State's own blank for this form, filled and base64-encoded. Present only when the caller
+   * asks for it AND the form has a mapping: today IT-EXT and the L-9 do, the L-9(A) and the two
+   * IT-Estate returns do not (each is a separate pre-2018 State form). Absent means "hand-fill
+   * from the workpaper", not "failed".
+   */
+  pdfBase64?: string;
   workpaper: true;
 }
 

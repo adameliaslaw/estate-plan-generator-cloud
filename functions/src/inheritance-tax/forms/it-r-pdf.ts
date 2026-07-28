@@ -22,9 +22,12 @@
  * module collects every such failure and throws with the full list rather than quietly
  * producing a return with empty boxes.
  */
-import { PDFDocument, PDFForm } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
+import {
+  FieldWriter, formatMoneyInline, resolveAddress, splitDate, splitPhone, splitSSN,
+} from './pdf-fields';
 import type {
-  AddressParts, DeductionType, ITRFormData, ScheduleDeductionItem, ScheduleEBeneficiaryRow,
+  DeductionType, ITRFormData, ScheduleDeductionItem, ScheduleEBeneficiaryRow,
   ScheduleItem, TaxClassLine, TransferPart,
 } from '../types';
 
@@ -612,136 +615,12 @@ const SCHEDULE_HEADER = {
 } as const;
 
 /** Collects mapping failures so one bad constant reports itself instead of vanishing. */
-class FieldWriter {
-  private readonly missing: string[] = [];
-
-  constructor(private readonly form: PDFForm) {}
-
-  text(name: string, value: string): void {
-    try {
-      this.form.getTextField(name).setText(value);
-    } catch {
-      this.missing.push(`text field ${JSON.stringify(name)}`);
-    }
-  }
-
-  /** Money boxes are split: dollars in the wide box, cents in the narrow one beside it. */
-  money(dollarsField: string, centsField: string, amount: number): void {
-    const cents = Math.round(Math.abs(amount) * 100);
-    const whole = Math.trunc(cents / 100) * Math.sign(amount || 1);
-    this.text(dollarsField, whole.toLocaleString('en-US', { maximumFractionDigits: 0 }));
-    this.text(centsField, String(cents % 100).padStart(2, '0'));
-  }
-
-  radio(name: string, option: string): void {
-    try {
-      this.form.getRadioGroup(name).select(option);
-    } catch {
-      this.missing.push(`radio ${JSON.stringify(name)} option ${JSON.stringify(option)}`);
-    }
-  }
-
-  dropdown(name: string, option: string): void {
-    try {
-      this.form.getDropdown(name).select(option);
-    } catch {
-      this.missing.push(`dropdown ${JSON.stringify(name)} option ${JSON.stringify(option)}`);
-    }
-  }
-
-  check(name: string): void {
-    try {
-      this.form.getCheckBox(name).check();
-    } catch {
-      this.missing.push(`checkbox ${JSON.stringify(name)}`);
-    }
-  }
-
-  /** Throws once, listing everything that failed, so a broken mapping is impossible to miss. */
-  assertComplete(): void {
-    if (this.missing.length > 0) {
-      throw new Error(
-        `IT-R PDF mapping is out of step with the blank form — ${this.missing.length} field(s) not found: ` +
-        this.missing.join('; '),
-      );
-    }
-  }
-}
-
-/** "2023-09-18" → ["09", "18", "2023"], matching the form's three date boxes. */
-function splitDate(iso: string): [string, string, string] {
-  const [year, month, day] = iso.split('-');
-  return [month ?? '', day ?? '', year ?? ''];
-}
-
-/** "999-00-1234" → ["999", "00", "1234"]. Digits only; the form has three boxes. */
-function splitSSN(ssn: string): [string, string, string] {
-  const digits = ssn.replace(/\D/g, '');
-  return [digits.slice(0, 3), digits.slice(3, 5), digits.slice(5, 9)];
-}
-
-/** "609-555-0000" → ["609", "555-0000"]. The area code has its own box. */
-function splitPhone(phone: string): [string, string] {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 10) return ['', phone];
-  return [digits.slice(0, 3), `${digits.slice(3, 6)}-${digits.slice(6, 10)}`];
-}
-
-/**
- * Resolve an address to the form's separate boxes.
- *
- * Intake captures the parts directly (Google Places returns them pre-split), and when they are
- * present they are used verbatim — no parsing involved. Matters predating that carry only a
- * free-text string; for those, only the unambiguous "street, city, ST 08600" shape is split, and
- * anything else goes into Street 1 whole rather than being guessed at, because a wrong state box
- * on a filed return is worse than an inelegant one.
- */
-function resolveAddress(
-  address: string,
-  parts: AddressParts | undefined,
-): { street1: string; street2: string; city: string; state: string; zip: string } {
-  if (parts) {
-    return {
-      street1: parts.street1,
-      street2: parts.street2 ?? '',
-      city: parts.city,
-      state: parts.state,
-      zip: parts.zip,
-    };
-  }
-  return splitAddress(address);
-}
-
-/** Legacy path: the best that can be made of a single free-text address string. */
-function splitAddress(address: string): { street1: string; street2: string; city: string; state: string; zip: string } {
-  const empty = { street1: address, street2: '', city: '', state: '', zip: '' };
-  const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length < 3) return empty;
-
-  const tail = parts[parts.length - 1] ?? '';
-  const m = /^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/.exec(tail);
-  if (!m) return empty;
-
-  return {
-    street1: parts[0] ?? '',
-    street2: parts.length > 3 ? parts.slice(1, -2).join(', ') : '',
-    city: parts[parts.length - 2] ?? '',
-    state: m[1] ?? '',
-    zip: m[2] ?? '',
-  };
-}
-
 function fillTaxClassRow(w: FieldWriter, row: (typeof TAX_CLASS_ROWS)[number], line: TaxClassLine): void {
   w.text(row.count, String(line.totalBeneficiaries));
   w.text(row.distribution, formatMoneyInline(line.totalDistribution));
   w.text(row.exemption, formatMoneyInline(line.totalExemption));
   if (row.taxable) w.text(row.taxable, formatMoneyInline(line.totalTaxableAmount));
   if (row.tax) w.money(row.tax.dollars, row.tax.cents, line.taxDue);
-}
-
-/** The tax-class columns are single boxes with a printed "$" and ".", so cents go inline. */
-function formatMoneyInline(n: number): string {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -1230,7 +1109,7 @@ function fillScheduleB4(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): voi
 export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(blank);
   const form = pdf.getForm();
-  const w = new FieldWriter(form);
+  const w = new FieldWriter(form, 'IT-R');
 
   const fullName = [data.decedentLastName, data.decedentFirstName, data.decedentMiddleName]
     .filter(Boolean)

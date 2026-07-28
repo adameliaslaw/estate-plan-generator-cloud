@@ -1,19 +1,25 @@
 /**
- * Inventory the AcroForm fields in the State's IT-R booklet.
+ * Inventory the AcroForm fields in one of the State's blank forms.
  *
- * The field NAMES in NJ's PDF are auto-generated and meaningless — "undefined_13",
+ * The field NAMES in NJ's PDFs are auto-generated and meaningless — "undefined_13",
  * "0_2t4gsdxv0_22aa2aau65t", and at least one with the State's own typo ("Deceaaaas1dent"). The
  * only reliable way to know which box is which line of the return is its POSITION on the page and
  * the printed text beside it. This script produces that mapping so the constants in
- * `functions/src/inheritance-tax/forms/it-r-pdf.ts` can be generated rather than transcribed.
+ * `functions/src/inheritance-tax/forms/*-pdf.ts` can be generated rather than transcribed.
  *
- *   node scripts/itr-field-inventory.mjs                    # summary per page
+ *   node scripts/itr-field-inventory.mjs                    # summary per page (IT-R)
  *   node scripts/itr-field-inventory.mjs --page 13          # every widget on one page, by row
  *   node scripts/itr-field-inventory.mjs --json out.json    # full inventory
+ *   node scripts/itr-field-inventory.mjs --form itext       # a companion form instead
+ *   node scripts/itr-field-inventory.mjs --file path.pdf    # any blank, by path
  *
- * Reads the blank booklet committed at functions/assets/itr-blank.pdf, so it works offline and
- * against the exact form the filler targets. If NJ reissues the form, re-run this before touching
- * any mapping — and expect tests/unit/inheritance-tax-pdf-fill.test.ts to fail loudly first.
+ * Only the blanks with a filler are committed. To inventory one that is not yet mapped — the
+ * L-9(A), or either IT-Estate return — download it from the URL recorded in
+ * docs/IT-R-FORMS-BUILD-PLAN.md §3 and pass it with --file.
+ *
+ * Reads a blank committed under functions/assets/, so it works offline and against the exact form
+ * the filler targets. If NJ reissues a form, re-run this before touching any mapping — and expect
+ * the corresponding fill test to fail loudly first.
  */
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { readFileSync, writeFileSync } from 'fs';
@@ -21,11 +27,30 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const BLANK = resolve(here, '../functions/assets/itr-blank.pdf');
+const assets = resolve(here, '../functions/assets');
 
 const args = process.argv.slice(2);
 const pageArg = args.includes('--page') ? Number(args[args.indexOf('--page') + 1]) : null;
 const jsonArg = args.includes('--json') ? args[args.indexOf('--json') + 1] : null;
+const formArg = args.includes('--form') ? args[args.indexOf('--form') + 1] : null;
+const fileArg = args.includes('--file') ? args[args.indexOf('--file') + 1] : null;
+
+// Named blanks, so the common cases need no path. Each is the State's own published file,
+// downloaded from nj.gov — see docs/IT-R-FORMS-BUILD-PLAN.md §3 for where each one lives.
+const BLANKS = {
+  'it-r': 'itr-blank.pdf',
+  itext: 'itext.pdf',
+  l9: 'itl9.pdf',
+};
+
+const BLANK = fileArg
+  ? resolve(fileArg)
+  : resolve(assets, BLANKS[formArg ?? 'it-r'] ?? BLANKS['it-r']);
+
+if (formArg && !BLANKS[formArg]) {
+  console.error(`Unknown --form ${JSON.stringify(formArg)}. Known: ${Object.keys(BLANKS).join(', ')}`);
+  process.exit(1);
+}
 
 const pdf = await getDocument({ data: new Uint8Array(readFileSync(BLANK)) }).promise;
 

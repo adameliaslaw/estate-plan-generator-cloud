@@ -133,6 +133,23 @@ function missingRequired(m: ITRMatterInput): string[] {
   return missing;
 }
 
+/** "Gold-2023-09-18" — names a downloaded form by the estate it belongs to. */
+function formFileStem(m: ITRMatterInput): string {
+  const who = (m.decedent.lastName || 'decedent').replace(/[^\w-]+/g, '-');
+  return `${who}-${m.decedent.dateOfDeath || 'undated'}`;
+}
+
+/** base64 → a file the browser saves. Shared by the IT-R and the companion forms. */
+function downloadPdf(base64: string, filename: string): void {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Server errors arrive as Firebase callable errors; surface the real message, not "internal". */
 function errorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
@@ -255,6 +272,31 @@ export default function InheritanceTaxPage() {
   });
 
   /**
+   * Download the State's own blank for a companion form, filled from the same approved snapshot.
+   *
+   * Only some are mapped. The server answers without a `pdfBase64` for the rest, and the two
+   * reasons are different in kind: IT-Estate has no mapping at all, while the L-9 filler
+   * refuses a pre-2018 death because that estate takes the L-9(A) — a materially different
+   * State form. The refusal arrives as `failed-precondition` with its own reason, so it needs
+   * no special-casing here; only the silent "no mapping" case does.
+   */
+  const onDownloadCompanion = (companionForm: CompanionForm) =>
+    run(`companion-pdf:${companionForm}`, async () => {
+      if (!matter) return;
+      const res = await inheritanceTaxService.getCompanionForm(firmId, matter.matterId, companionForm, { pdf: true });
+      setCompanion(res);
+      if (!res.pdfBase64) {
+        throw new Error(
+          'No official PDF for this form yet — the workpaper above carries the same figures for ' +
+          "hand-filling the State's form.",
+        );
+      }
+      const label = COMPANION_FORMS.find((f) => f.value === companionForm)?.value ?? companionForm;
+      downloadPdf(res.pdfBase64, `${label.toUpperCase()}-${formFileStem(matter)}.pdf`);
+      toast.success('Downloaded. Review every figure before signing.');
+    });
+
+  /**
    * Download the State's own IT-R, filled from the approved snapshot. The form fields are left
    * interactive, so it opens in any PDF reader as a return the attorney can correct and sign.
    */
@@ -270,14 +312,7 @@ export default function InheritanceTaxPage() {
       );
     }
 
-    const bytes = Uint8Array.from(atob(res.pdfBase64), (c) => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-    const a = document.createElement('a');
-    a.href = url;
-    const who = `${matter.decedent.lastName || 'decedent'}`.replace(/[^\w-]+/g, '-');
-    a.download = `IT-R-${who}-${matter.decedent.dateOfDeath || 'undated'}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadPdf(res.pdfBase64, `IT-R-${formFileStem(matter)}.pdf`);
     toast.success('IT-R downloaded. Review every figure before signing.');
   });
 
@@ -671,10 +706,23 @@ export default function InheritanceTaxPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground text-sm">Companion forms:</span>
               {COMPANION_FORMS.map((f) => (
-                <Button key={f.value} variant="outline" size="sm" title={f.hint}
-                  onClick={() => onLoadCompanion(f.value)} disabled={!approved || busy !== null}>
-                  {busy === `companion:${f.value}` ? 'Loading…' : f.label}
-                </Button>
+                <span key={f.value} className="inline-flex items-center gap-1">
+                  <Button variant="outline" size="sm" title={f.hint}
+                    onClick={() => onLoadCompanion(f.value)} disabled={!approved || busy !== null}>
+                    {busy === `companion:${f.value}` ? 'Loading…' : f.label}
+                  </Button>
+                  {/* The official blank, where the State's form is mapped. Absent for the two
+                      pre-2018 returns, which are hand-filled from the workpaper. */}
+                  {f.hasPdf && (
+                    <Button variant="ghost" size="sm" title={`Download the State's own ${f.label} filled in`}
+                      aria-label={`Download official ${f.label}`}
+                      onClick={() => onDownloadCompanion(f.value)} disabled={!approved || busy !== null}>
+                      {busy === `companion-pdf:${f.value}`
+                        ? '…'
+                        : <Download className="h-4 w-4" />}
+                    </Button>
+                  )}
+                </span>
               ))}
             </div>
             {!approved && (
