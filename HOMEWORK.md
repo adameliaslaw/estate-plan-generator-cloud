@@ -92,6 +92,53 @@ it would have been written six times, each with its own notion of asset identity
 *Done when:* the split house produces **one** Schedule A row at $500,000, the split account **one**
 B-1 row, and the PDF assertions read those values back out of the produced file.
 
+**The question this PR looked like it would have to answer is already answered — by the State.**
+Checked 2026-07-28 against `it-rinst.pdf` and the blank form's own field layer, because "who is
+named on a row that now has several takers" reads like a blocker and is not one.
+
+**There is no beneficiary column on any asset schedule.** Schedule A is Column A – Description
+(county · fractional or percentage interest · street · lot and block · municipality · owner(s)
+name(s)/property title · mortgage lien), B – Tax Assessed Value, C – Full Market Value, D – Value
+of Decedent's Interest. The only names it asks for are **owners of record**: *"Include all owners'
+names listed on the property. If a previously deceased person's name(s) is still on the deed,
+include the name(s), write 'Predeceased'."* Schedule B-1 is the same — Column A is *"Name of
+Institution, Last Four Digits of Account Number, and Registered Owners"*, and its "registered
+beneficiary(s)" is the account's own POD designation, not the will's taker.
+
+So **one asset = one row, and the row has no beneficiary to name.** `fillScheduleA` already writes
+only the State's columns and never touches `beneficiaryName`; the official L-9 filler likewise
+names no beneficiary per property (the L-9's beneficiary list is its own separate schedule).
+`ScheduleItem.beneficiaryName` survives in exactly two places, both ours: the HTML workpaper column
+(`render.ts:71`) and the HTML L-9 "Passing to" line (`render-l9a.ts:37`). What that column shows is
+a **review-aid decision with no legal constraint** — suggested: the specific takers, plus
+"Residuary estate" for the rest, borrowing the State's own vocabulary.
+
+**New work this uncovered — Schedule E Column D is literally the allocation model.** Printed
+heading: **"(D) Fractional/percentage of residuary Estate and/or specific asset"**, and the
+instructions spell it out:
+
+> *"Beneficiary's Share. If the beneficiary is to receive a percentage of the residual Estate or a
+> fractional share … list that share, even if they are receiving other assets. Examples: '50%
+> Residue,' '1/3 of Estate,' '100% Residue.' — Specific Bequest Assets … Examples: '$5,000 cash
+> bequest,' 'grandfather clock'"*
+
+That is `residuary[].fraction` and `allocations[]` in the State's own words. **Before PR 1 this
+column was unfillable in principle** — the nested model had no notion of "50% Residue" because it
+had no residue. Today `ScheduleEBeneficiaryRow` carries columns A/B/C/E only, and `fillScheduleE`
+writes name, address, relationship, tax class and dollar amount, leaving D and F blank.
+
+⚠️ **The constraint, checked rather than assumed:** the blank IT-R's AcroForm has **808 fields and
+none for Column D or Column F**. Those columns are printed but not fillable, so filling D means
+drawing text onto the page, not writing a field. Scope it accordingly — it is not a one-liner.
+
+Two smaller confirmations from the same pass, worth not rediscovering:
+- Schedule A Column D says *"Show this as a dollar amount (not a fraction or percentage)"* —
+  which is store-the-fraction, print-the-derived-amount, exactly as decided.
+- Schedule A's *"Fractional or percentage interest"* is the **decedent's ownership** share
+  (tenants in common) — a different number from a beneficiary's allocation fraction. The model
+  keeps them in separate fields (`realPropertyDetails.fractionalInterest` vs `Allocation.fraction`)
+  and PR 2 must not merge them.
+
 ### 3 · THEN — intake, inventory-then-allocate (PR 3)
 
 Assets entered once, then allocated; a share picker that does the arithmetic (fraction, percent or
