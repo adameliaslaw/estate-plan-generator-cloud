@@ -103,9 +103,26 @@ export type BequestType =
   | 'nj_real_property' | 'closely_held_business' | 'bank_account' | 'securities'
   | 'bonds' | 'retirement_account' | 'virtual_currency' | 'other_personal_property' | 'transfer';
 
-/** Labels name the IT-R schedule, because that is what the attorney is reconciling against. */
-export const BEQUEST_TYPES: ReadonlyArray<{ value: BequestType; label: string }> = [
-  { value: 'nj_real_property', label: 'NJ real property (Schedule A)' },
+/**
+ * Labels name the IT-R schedule, because that is what the attorney is reconciling against.
+ *
+ * `note` carries a reporting rule from the State's own IT-R instructions (`it-rinst.pdf`) where
+ * getting it wrong changes the tax. These are quoted, not paraphrased into advice — the engine
+ * taxes whatever is entered, so a wrongly-entered asset produces a confidently wrong return and
+ * nothing errors.
+ */
+export const BEQUEST_TYPES: ReadonlyArray<{
+  value: BequestType;
+  label: string;
+  note?: string;
+}> = [
+  {
+    value: 'nj_real_property', label: 'NJ real property (Schedule A)',
+    // Schedule A instructions, "Exemptions (nonreporting)".
+    note: 'New Jersey only. The instructions say "Do not report real property located outside '
+      + 'New Jersey" — entering it here would tax property the State does not tax. Also do not '
+      + 'report property held as tenants by the entirety with a surviving spouse or civil union partner.',
+  },
   { value: 'closely_held_business', label: 'Closely held business (Schedule B)' },
   { value: 'bank_account', label: 'Bank / credit union account (Schedule B-1)' },
   { value: 'retirement_account', label: 'IRA / qualified plan (Schedule B-1)' },
@@ -113,7 +130,38 @@ export const BEQUEST_TYPES: ReadonlyArray<{ value: BequestType; label: string }>
   { value: 'bonds', label: 'Municipal / corporate bonds (Schedule B-3)' },
   { value: 'virtual_currency', label: 'Virtual currency (Schedule B-4)' },
   { value: 'other_personal_property', label: 'Other personal property (Schedule B-4)' },
-  { value: 'transfer', label: 'Transfer within 3 years / POD (Schedule C)' },
+  {
+    value: 'transfer', label: 'Transfer within 3 years / POD (Schedule C)',
+    // Schedule C Part III, and the "Life Insurance" note in the instructions.
+    note: 'Where life insurance goes. Proceeds payable to a NAMED BENEFICIARY are exempt and '
+      + '"not required to be reported" — leave them out entirely. Proceeds payable to the ESTATE '
+      + 'are taxable: enter them here and set "Reported in" to Part III B.',
+  },
+];
+
+/**
+ * What the IT-R does NOT report, quoted from the State's instructions.
+ *
+ * These belong on screen rather than in a comment because they are errors of COMMISSION: the
+ * engine taxes whatever it is given, so entering one of these produces a higher, confidently
+ * wrong figure on a filed return and nothing anywhere errors. A note attached to a dropdown
+ * option is no use here — the attorney has to know before choosing.
+ */
+export const NOT_REPORTED_ON_ITR: ReadonlyArray<{ what: string; why: string }> = [
+  {
+    what: 'Real property outside New Jersey',
+    why: '"Do not report real property located outside New Jersey" (Schedule A instructions). '
+      + 'A debt secured by it is not deductible either.',
+  },
+  {
+    what: 'Life insurance payable to a named beneficiary',
+    why: 'Exempt, and "not required to be reported" (Schedule C Part III). Insurance payable to '
+      + 'the ESTATE is taxable — enter that as a Transfer, Part III B.',
+  },
+  {
+    what: 'Property held as tenants by the entirety with a surviving spouse or civil union partner',
+    why: 'Listed under "Exemptions (nonreporting)" in the Schedule A instructions.',
+  },
 ];
 
 /**
@@ -126,12 +174,22 @@ export type DeductionType =
   | 'mortgage' | 'executor_commission' | 'attorney_fee' | 'accounting_fee'
   | 'accrued_property_taxes' | 'transfer_taxes_other_states' | 'other';
 
-export const DEDUCTION_TYPES: ReadonlyArray<{ value: DeductionType; label: string }> = [
+export const DEDUCTION_TYPES: ReadonlyArray<{
+  value: DeductionType;
+  label: string;
+  note?: string;
+}> = [
   { value: 'funeral_expenses', label: 'Funeral expenses' },
   { value: 'last_illness_expenses', label: 'Last illness expenses' },
   { value: 'administration_expenses', label: 'Administration expenses' },
   { value: 'debt_of_decedent', label: 'Debt of decedent' },
-  { value: 'mortgage', label: 'Mortgage' },
+  {
+    value: 'mortgage', label: 'Mortgage',
+    // Schedule D instructions, the "Do not deduct" list.
+    note: 'Not deductible if the debt is secured by real or tangible property located outside '
+      + 'New Jersey — the instructions list those among the debts you "Do not deduct". That '
+      + 'property is also excluded from the estate, so its mortgage cannot reduce the tax.',
+  },
   { value: 'executor_commission', label: 'Executor commission' },
   { value: 'attorney_fee', label: 'Attorney fee' },
   { value: 'accounting_fee', label: 'Accounting fee' },

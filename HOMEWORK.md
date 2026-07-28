@@ -4,6 +4,61 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-28 PM #3 (scope closed on Adam's answers · three reporting guards shipped after primary-source research)
+
+**TL;DR — Adam answered the two open scope questions: no nonresident decedents, and no pre-2018
+filings in practice. That closes Track 3 and takes the L-9(A) and both IT-Estate returns off the
+list. He then raised two things his clients actually have — out-of-state real estate and life
+insurance — and asked for the IT-R treatment to be verified by research rather than assumed. Doing
+that turned up a live foot-gun neither of us knew about.**
+
+**Researched against the State's own IT-R instructions (`it-rinst.pdf`, 41 pages), not from
+memory.** Three findings, each quoted in the code:
+
+- **Out-of-state real property is excluded.** Schedule A: *"Do not report real property located
+  outside New Jersey."* It never enters the gross estate.
+- **Intangibles are included wherever they sit** — stock *"regardless of where the company is
+  incorporated"*, a co-op *"no matter where the co-op is located"*. So the Florida brokerage
+  account is taxed; the Florida condo is not.
+- **The asymmetry, and the thing I did not know before researching:** Schedule D's "Do not deduct"
+  list includes *"Debts secured by real or tangible property located outside of New Jersey."* The
+  out-of-state property is excluded from the estate **and** its mortgage is not deductible. It
+  cuts one way only, and nothing in the UI stopped an attorney claiming it — which would
+  **understate** the tax on a filed return.
+
+**On life insurance, Adam's instinct was right but the fix was not a new field.** The instructions:
+proceeds to a *named beneficiary* are *"exempt"* and *"not required to be reported"*; proceeds
+*payable to the Estate* *"are required to be reported"* (Schedule C Part III B). The taxable half
+is **already representable** as a `transfer` with `part: 'pod_to_estate'`, and the filler's "Type
+of Policy" column takes the description — verified in the code, not assumed. Adding a
+life-insurance asset type would have invited entry of the *exempt* policies and over-taxed the
+estate, so it was deliberately not added.
+
+**Why this had to go on the screen rather than into the engine:** the engine taxes whatever it is
+given. All three are errors of *commission* — enter the condo and the return comes back higher,
+claim its mortgage and it comes back lower, both entirely self-consistent with nothing erroring
+anywhere. The spec names that "the single worst failure mode for this tool".
+
+**Shipped:** `NOT_REPORTED_ON_ITR` — a standing "do not enter" panel on the beneficiaries card
+(the load-bearing part, since a note on a dropdown option is no use to someone who never selects
+it) — plus per-option `note`s on the asset picker (NJ realty, transfers/life insurance) and the
+deduction picker (mortgage). Every line quotes the State's instruction text. Frontend-only, no
+data-model change, nothing on the Never-Break list.
+
+**Green:** 890/890 (up from 884 — 6 new), root + functions tsc, lint 0 errors, build. Two negative
+controls run and reverted (dropping the mortgage note, and adding the `life_insurance` type the
+research says must not exist) — each failed exactly the assertion it should. The new test asserts
+**both** the copy and the engine arithmetic that makes the copy necessary, so if the engine is ever
+taught to exclude these itself the test fails and the note gets rewritten rather than left
+contradicting the code.
+
+**▶ NEXT — the form work is done and the scope is closed.** What remains needs Adam at a desk, not
+a session: the live card test on #185, a real payment through the payment page, and the browser
+pass on the Inheritance Tax page — now including a look at the new guidance panel, and downloading
+an IT-EXT and an L-9 to open in a reader.
+
+---
+
 ## 🔵 SESSION — 2026-07-28 PM #2 (IT-EXT and the L-9 are now filled on the State's own paper)
 
 **TL;DR — Took the ▶ NEXT that needed no decision from Adam: official filled PDFs for the
