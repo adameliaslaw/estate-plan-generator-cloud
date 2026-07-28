@@ -4,6 +4,52 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## ▶ NEXT SESSION — the asset/allocation model (decided, scoped, not started)
+
+**Full scope: [docs/ASSET-ALLOCATION-MODEL.md](./docs/ASSET-ALLOCATION-MODEL.md).** Kept in its own
+file rather than inline because this file is re-read every session and was archived once for
+exactly that reason — the decisive facts are below so nobody has to open the doc to know it is
+settled.
+
+**Adam's decision, 2026-07-28:** the model changes from *bequests nested under beneficiaries* to
+*assets held by the estate, allocated to beneficiaries*. I initially argued this was not justified
+and was wrong; the argument that settled it is below.
+
+**Why, in three facts — all reproduced against the real engine, not reasoned about:**
+
+1. **Every asset schedule prints a shared asset twice.** A $500,000 house split two ways gives a
+   correct gross estate of $500,000 and **two Schedule A rows** — same address, same lot, same
+   block, each showing the decedent's interest as $250,000. A bank account does the same on B-1
+   (account …4821 printed twice at $40,000). It affects **A, B, B-1, B-2, B-3 and C**, so the
+   cheap "group the rows" patch would have to be written six times. That is the signal it is the
+   wrong layer.
+2. **It contradicts the State's instructions on the schedule that generates the tax waiver.**
+   Schedule A column D is *"the value of the decedent's interest only"* and *"goes directly onto
+   the tax waiver"*. Two rows at $250,000 assert the decedent held two half-interests in one house.
+3. **Nothing checks that the shares sum to the asset's real value** — there is no asset, so there
+   is nothing to check against. $250,000 + $250,000 against a house actually worth $600,000 files
+   a return that is quietly $100,000 light. Structural, and the allocation model makes it
+   impossible.
+
+**The hard constraint, which matters more than anything else here: do not change the engine.**
+`computeEstate` keeps the shape it takes today; per-beneficiary amounts are **derived** from
+allocations at the boundary. The 25 gold cases are the only proof the figures are right — they
+must be untouched and green at every step. If a gold case needs editing, the derivation is wrong,
+not the case.
+
+**Three PRs, not one:** (1) model + derivation + back-compat, engine untouched; (2) schedules render
+from assets — where the six duplication bugs actually die; (3) intake, inventory-then-allocate with
+the share arithmetic done for you. Each independently shippable and revertible.
+
+**Two questions for Adam before PR 3** (in §7 of the doc): allocate by fraction or by amount, and
+whether to model residue ("everything else, split equally"), which is how most wills read and which
+has no representation today.
+
+**Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. It would be
+throwaway work covering one sixth of the problem.
+
+---
+
 ## 🔵 SESSION — 2026-07-28 PM #4 (Adam's browser pass — saved matters were unreachable; now they open)
 
 **TL;DR — Adam tested the Inheritance Tax page end to end. Overall verdict good, with two things:
