@@ -455,6 +455,23 @@ export interface CompanionFormResult {
   workpaper: true;
 }
 
+/**
+ * A matter reopened from the server.
+ *
+ * `matter` is typed as the input shape, but at runtime it is the FULL stored record — it can
+ * carry fields this editor does not model (`itExtension`, `priorPayments`, `disclaimers`, …).
+ * That is deliberate and load-bearing: the page keeps the object whole, edits only the keys it
+ * knows, and sends it back intact, so reopening and re-saving a matter cannot silently drop a
+ * field the server's strict schema accepted. Do not rebuild this object field by field.
+ */
+export interface LoadedMatter {
+  matter: ITRMatterInput;
+  computation?: EstateComputationResult;
+  checkpoint?: CheckpointResult;
+  /** True when the matter was edited after its last computation, so the figures were withheld. */
+  computationStale: boolean;
+}
+
 export interface ITRFormResult {
   formData: Record<string, unknown>;
   html?: string;

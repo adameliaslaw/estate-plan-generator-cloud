@@ -4,6 +4,51 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-28 PM #4 (Adam's browser pass — saved matters were unreachable; now they open)
+
+**TL;DR — Adam tested the Inheritance Tax page end to end. Overall verdict good, with two things:
+he could not retrieve an existing matter, and he wanted to know why assets can only be added under
+a beneficiary. The first was a real bug and a bad one. The second is correct behaviour that the
+screen never explained.**
+
+**The bug: a saved matter was a dead end.** The page could LIST matters — and that was all. There
+was no `getInheritanceMatter` callable at all: `getMatter` existed in the store and was never
+exposed, the Firestore collection is closed to the client SDK by design, and the list rows were
+not clickable. So you could save a matter, see it in the list forever, and never open, edit,
+compute or file it. Fixed: new callable, service method, and an **Open** button per row that
+restores the matter, its computation and its checkpoint.
+
+**Two correctness traps handled while wiring it, neither obvious:**
+- **A stale computation is withheld.** Editing a matter does not delete its old computation, so a
+  matter saved after its last compute has figures on file that no longer describe it. Returning
+  those would put an out-of-date total on screen looking exactly like a current one. The callable
+  withholds them and returns `computationStale`, and the page says "recompute before requesting
+  review".
+- **An approved checkpoint is still returned**, because its figures are frozen and stay valid for
+  rendering a form even after a later edit (FND-IMMUT). Withholding it would break the download of
+  a form already signed off. `getLatestCheckpoint` also returns a *pending* checkpoint so a review
+  in progress can be resumed — `getApprovedCheckpoint` remains the authority for forms.
+- **The loaded matter is kept WHOLE.** It is typed as `ITRMatterInput` but at runtime carries
+  fields the editor does not model (`itExtension`, `priorPayments`, `disclaimers`). The page edits
+  only known keys and sends the object back intact, so reopening and re-saving cannot silently
+  drop an elected extension or a recorded payment. There is a test for exactly that.
+
+**The question, answered on screen rather than in a reply:** assets sit under a beneficiary because
+this is a tax on the *inheritance*, not on the estate. The same $100,000 is taxed 0% to a child,
+11–16% to a sibling, 15–16% to a friend (N.J.S.A. 54:34-2) — so an asset with no named recipient
+has no rate and cannot be computed. That is now explained in the beneficiaries card, including how
+to enter an asset split between people.
+
+**Green:** 913/913, root + functions tsc, lint 0 errors, build. Two negative controls run and
+reverted (latest-checkpoint sort reversed, `updatedAt` dropped). Note: the suite count jumped from
+890 because a stale `functions/node_modules` after a worker restart had been preventing three
+unrelated test files from running — reinstalling restored them, and they pass.
+
+**▶ NEXT — still Adam's:** the live card test on #185 and a real payment through the payment page.
+On the inheritance page, worth re-testing the Open button against a matter saved earlier.
+
+---
+
 ## 🔵 SESSION — 2026-07-28 PM #3 (scope closed on Adam's answers · three reporting guards shipped after primary-source research)
 
 **TL;DR — Adam answered the two open scope questions: no nonresident decedents, and no pre-2018
