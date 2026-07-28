@@ -124,7 +124,14 @@ HOMEWORK.md).
 **one** B-1 row, and `tests/unit/inheritance-tax-schedules-from-assets.test.ts` reads those values
 back out of the produced PDF, with the second property block empty.
 
-**PR 3 — intake. ✅ BUILT 2026-07-28, not yet browser-verified.** Assets are their own section,
+**PR 3 — intake. ✅ SHIPPED 2026-07-28 (#212), and exercised by Adam the same day** — he entered a
+$1,750,000 estate and produced a filled IT-R off it.
+
+Follow-ups shipped in **#213**: the residue block takes fractions and opens on them (an equal
+three-way split could not be entered equally through a percent-only box — see HOMEWORK.md PM #6),
+Schedule E **column D** is drawn onto the page, and a sole owner's interest prints "100%".
+
+*Original PR 3 note:* Assets are their own section,
 entered once and allocated; `AssetAllocationFields` takes a share as a percentage, a dollar amount
 or a plain fraction and shows the derived dollars; `ResiduarySharesFields` shows the computed pool
 and carries the per-stirpes notice. A legacy matter is normalised when the page opens it.
