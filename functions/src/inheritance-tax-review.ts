@@ -36,7 +36,14 @@ import {
   getRuleSet,
   validateMatter,
   buildITRFormData,
+  buildITEXTFormData,
+  buildITEstateFormData,
+  buildL9AFormData,
   renderITRHtml,
+  renderITEXTHtml,
+  renderITEstateHtml,
+  renderL9AHtml,
+  FormPreconditionError,
   UnsupportedMatterError,
   type EstateComputation,
   type ReviewCheckpoint,
@@ -291,6 +298,65 @@ export const getInheritanceForm = onCall(CALL_OPTS, async (request: CallableRequ
     };
   } catch (e) {
     if (e instanceof UnsupportedMatterError) throw new HttpsError('failed-precondition', e.message);
+    throw e;
+  }
+});
+
+// ─── The companion forms: IT-EXT, IT-Estate, L-9 ─────────────────────────────
+
+/**
+ * The three forms that travel with an IT-R, each rendered from the same approved snapshot the
+ * IT-R renders from — never from the live matter (FND-IMMUT).
+ *
+ * Each carries its own precondition, and the builder is the authority on it: an IT-EXT needs a
+ * recorded filing extension; an L-9 needs an all-Class-A estate with NJ real property and no tax
+ * due; an IT-Estate needs a death before 2018-01-01, when the NJ Estate Tax still existed
+ * (repealed by P.L. 2016, c. 57 — "There is no New Jersey Estate Tax imposed on the estates of
+ * resident decedents dying on or after Jan. 1, 2018", NJ Form O-10-C). A matter that fails one
+ * comes back as `failed-precondition` with the reason, not as a form with empty figures.
+ */
+const COMPANION_FORMS = ['it-ext', 'it-estate', 'l9'] as const;
+type CompanionForm = (typeof COMPANION_FORMS)[number];
+
+function isCompanionForm(value: unknown): value is CompanionForm {
+  return typeof value === 'string' && (COMPANION_FORMS as readonly string[]).includes(value);
+}
+
+export const getInheritanceCompanionForm = onCall(CALL_OPTS, async (request: CallableRequest<unknown>) => {
+  const { firmId, body } = requireFirmId(request.data);
+  assertFirmStaff(request, firmId);
+  const db = admin.firestore();
+  const matterId = requireString(body, 'matterId');
+  const form = body['form'];
+  if (!isCompanionForm(form)) {
+    throw new HttpsError('invalid-argument', `form must be one of: ${COMPANION_FORMS.join(', ')}.`);
+  }
+
+  const matter = await getMatter(db, firmId, matterId);
+  if (!matter) throw new HttpsError('not-found', `Matter ${matterId} not found.`);
+  const approved = await getApprovedCheckpoint(db, firmId, matterId);
+  if (!approved) {
+    throw new HttpsError(
+      'failed-precondition',
+      'No approved checkpoint: these forms render only from a reviewed, frozen snapshot.',
+    );
+  }
+
+  try {
+    if (form === 'it-ext') {
+      const formData = buildITEXTFormData(matter, approved);
+      return { form, formData, html: renderITEXTHtml(formData), workpaper: true as const };
+    }
+    if (form === 'it-estate') {
+      const formData = buildITEstateFormData(matter, approved);
+      return { form, formData, html: renderITEstateHtml(formData), workpaper: true as const };
+    }
+    const formData = buildL9AFormData(matter, approved);
+    return { form, formData, html: renderL9AHtml(formData), workpaper: true as const };
+  } catch (e) {
+    if (e instanceof UnsupportedMatterError || e instanceof FormPreconditionError) {
+      throw new HttpsError('failed-precondition', e.message);
+    }
     throw e;
   }
 });

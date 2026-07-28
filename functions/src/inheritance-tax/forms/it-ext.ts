@@ -1,5 +1,6 @@
 import type { ITEXTFormData, Matter, ReviewCheckpoint } from '../types';
 import { DISCLAIMER } from './disclaimer';
+import { FormPreconditionError } from './errors';
 
 /**
  * Builds the data model for Form IT-EXT (Application for Extension of Time to File a
@@ -19,7 +20,7 @@ export function buildITEXTFormData(
   approvedCheckpoint: ReviewCheckpoint,
 ): ITEXTFormData {
   if (approvedCheckpoint.status !== 'approved') {
-    throw new Error('Cannot generate IT-EXT form data without an approved review checkpoint.');
+    throw new FormPreconditionError('Cannot generate IT-EXT form data without an approved review checkpoint.');
   }
 
   if (approvedCheckpoint.matterId !== matter.matterId) {
@@ -33,14 +34,14 @@ export function buildITEXTFormData(
   const snap = approvedCheckpoint.computationSnapshot;
   const ext = snap.matterInputs.itExtension;
   if (ext === null || !ext.firstExtension) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate IT-EXT: no filing extension is recorded in the approved computation. ' +
       'Set matter.itExtension.firstExtension and re-run compute/review before generating an IT-EXT.',
     );
   }
 
   if (snap.extendedFilingDeadline === null) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate IT-EXT: the approved computation has no extended filing deadline. ' +
       'Re-run compute and review after setting matter.itExtension.',
     );

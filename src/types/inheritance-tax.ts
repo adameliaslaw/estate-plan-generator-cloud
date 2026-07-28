@@ -142,11 +142,94 @@ export const DEDUCTION_TYPES: ReadonlyArray<{ value: DeductionType; label: strin
 
 export type PersonalRepresentativeTitle = 'Executor' | 'Administrator' | 'Heir-at-law';
 
+/** Schedule A column (A) — the block the State heads "(All fields required)". */
+export interface ITRRealPropertyDetails {
+  county: string;
+  fractionalInterest?: string;
+  streetAddress?: string;
+  lots?: string;
+  block?: string;
+  municipality?: string;
+  ownersAndTitle?: string;
+  hasMortgageLien?: boolean;
+  taxAssessedValue?: number;
+  fullMarketValue?: number;
+}
+
+/** Schedule B column (A) — "Business Information". */
+export interface ITRBusinessDetails {
+  businessName: string;
+  federalEIN?: string;
+  businessType?: string;
+  isFamilyLimitedPartnership?: boolean;
+  ownershipPercentage?: string;
+  numberOfShares?: number;
+  entireBusinessValue?: number;
+}
+
+/** Schedule B-1 column (A) — "Name of Institution, Last Four Digits of Account Number". */
+export interface ITRAccountDetails {
+  institutionName: string;
+  accountNumberLast4?: string;
+  registeredOwners?: string;
+}
+
+/** Schedule B-2 — the stock columns, or the co-op block when `isCoOp`. */
+export interface ITRSecurityDetails {
+  corporationName: string;
+  tickerSymbol?: string;
+  isNJCorporation?: boolean;
+  numberOfShares?: number;
+  perShareValue?: number;
+  isCoOp?: boolean;
+  registeredOwners?: string;
+}
+
+/** Schedule B-3 column (A) — "Name of Bond and Registered Owner". */
+export interface ITRBondDetails {
+  issuerAndTerms: string;
+  registeredOwners?: string;
+}
+
+/** Which part of Schedule C reports the transfer. Mirrors the server's `TransferPart`. */
+export type TransferPart =
+  | 'lifetime_within_3_years'
+  | 'incomplete'
+  | 'pod_to_beneficiary'
+  | 'pod_to_estate';
+
+export const TRANSFER_PARTS: ReadonlyArray<{ value: TransferPart; label: string }> = [
+  { value: 'lifetime_within_3_years', label: 'Part I — transfer within 3 years of death' },
+  { value: 'incomplete', label: 'Part II — incomplete transfer (use or income retained)' },
+  { value: 'pod_to_beneficiary', label: 'Part III A — payable on death to a beneficiary' },
+  { value: 'pod_to_estate', label: 'Part III B — payable on death to the estate' },
+];
+
+/** Schedule C columns (A), (C) and (D), plus Part III's issuing company. */
+export interface ITRTransferDetails {
+  part?: TransferPart;
+  dateOfTransfer?: string;
+  transfereeName: string;
+  issuerName?: string;
+  transfereeRelationship?: string;
+}
+
 export interface ITRBequest {
   id: string;
   type: BequestType;
   description: string;
   fairMarketValue: number;
+  /**
+   * Columns the official schedule asks for that a description cannot answer. Each belongs to one
+   * schedule and is omitted entirely when its leading field is blank — the server's schemas are
+   * strict, and an object present but empty would fail validation.
+   */
+  realPropertyDetails?: ITRRealPropertyDetails;  // Schedule A
+  businessDetails?: ITRBusinessDetails;          // Schedule B
+  accountDetails?: ITRAccountDetails;      // Schedule B-1
+  securityDetails?: ITRSecurityDetails;    // Schedule B-2
+  bondDetails?: ITRBondDetails;            // Schedule B-3
+  transferDetails?: ITRTransferDetails;    // Schedule C
 }
 
 /**
@@ -238,6 +321,36 @@ export interface CheckpointResult {
   checkpointId: string;
   status: string;
   finalizationKind?: 'two-attorney' | 'solo';
+}
+
+/**
+ * The forms that travel with an IT-R. Each has its own precondition, enforced server-side:
+ * an IT-EXT needs a recorded filing extension; an L-9 an all-Class-A estate with NJ real
+ * property and no tax due; an IT-Estate a death before 2018, when the NJ Estate Tax still
+ * existed. A matter that fails one comes back as a `failed-precondition` with the reason.
+ */
+export type CompanionForm = 'it-ext' | 'it-estate' | 'l9';
+
+export const COMPANION_FORMS: ReadonlyArray<{ value: CompanionForm; label: string; hint: string }> = [
+  {
+    value: 'it-ext', label: 'IT-EXT (extension)',
+    hint: 'Needs a filing extension recorded on the matter before compute.',
+  },
+  {
+    value: 'l9', label: 'L-9 / L-9(A) (real property waiver)',
+    hint: 'Only for an all-Class-A estate with NJ real property and no tax due.',
+  },
+  {
+    value: 'it-estate', label: 'IT-Estate (estate tax)',
+    hint: 'Only for a death before 2018-01-01 — the NJ Estate Tax was repealed from that date.',
+  },
+];
+
+export interface CompanionFormResult {
+  form: CompanionForm;
+  formData: unknown;
+  html: string;
+  workpaper: true;
 }
 
 export interface ITRFormResult {

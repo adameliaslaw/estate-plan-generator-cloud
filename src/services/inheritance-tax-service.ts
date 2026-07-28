@@ -19,6 +19,8 @@ import type {
   EstateComputationResult,
   InheritanceMatterSummary,
   ITRFormResult,
+  CompanionForm,
+  CompanionFormResult,
   AuditTrailResult,
   CheckpointResult,
 } from '@/types/inheritance-tax';
@@ -89,6 +91,20 @@ export const inheritanceTaxService = {
     const { html = true, pdf = false } = opts;
     const fn = call<{ firmId: string; matterId: string; html: boolean; pdf: boolean }, ITRFormResult>('getInheritanceForm');
     const res = await fn({ firmId, matterId, html, pdf });
+    return res.data;
+  },
+
+  /**
+   * One of the forms that travel with the IT-R. Rendered from the same approved snapshot; a
+   * matter that does not meet the form's own precondition is refused with the reason.
+   */
+  async getCompanionForm(
+    firmId: string,
+    matterId: string,
+    form: CompanionForm,
+  ): Promise<CompanionFormResult> {
+    const fn = call<{ firmId: string; matterId: string; form: CompanionForm }, CompanionFormResult>('getInheritanceCompanionForm');
+    const res = await fn({ firmId, matterId, form });
     return res.data;
   },
 

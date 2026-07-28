@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import { classifyBeneficiary } from '../engine';
 import { DISCLAIMER } from './disclaimer';
-import { UnsupportedMatterError } from './errors';
+import { UnsupportedMatterError, FormPreconditionError } from './errors';
 
 const MAILING_ADDRESS =
   'NJ Division of Taxation, Transfer Inheritance Tax, PO Box 249, Trenton, NJ 08695-0249';
@@ -62,7 +62,7 @@ export function buildL9AFormData(
   approvedCheckpoint: ReviewCheckpoint,
 ): L9AFormData {
   if (approvedCheckpoint.status !== 'approved') {
-    throw new Error('Cannot generate L-9 form data without an approved review checkpoint.');
+    throw new FormPreconditionError('Cannot generate L-9 form data without an approved review checkpoint.');
   }
 
   if (approvedCheckpoint.matterId !== matter.matterId) {
@@ -89,7 +89,7 @@ export function buildL9AFormData(
   // will. (For L-9 the trust restriction is conditional, so it is surfaced as a caveat
   // rather than a hard block.)
   if (matter.trustExists && formDesignation === 'L-9(A)') {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate L-9(A): a trust agreement exists or is created by the will. The ' +
       'L-9(A) affidavit cannot be used for trust estates — file a full return.',
     );
@@ -101,7 +101,7 @@ export function buildL9AFormData(
     (b) => b.relationship === 'mutually_acknowledged_child',
   );
   if (mutuallyAcknowledged !== undefined) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate L-9: a mutually acknowledged child relationship is claimed, which ' +
       'the L-9 / L-9(A) affidavit prohibits. File a full return.',
     );
@@ -118,7 +118,7 @@ export function buildL9AFormData(
       })),
   );
   if (realProperties.length === 0) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate L-9: the estate has no NJ real property (Schedule A is empty). ' +
       'The real property tax waiver applies only to NJ real estate.',
     );
@@ -136,7 +136,7 @@ export function buildL9AFormData(
   });
   const disqualifying = beneficiaries.find((b) => b.taxClass !== 'A' && b.interestValue >= 500);
   if (disqualifying !== undefined) {
-    throw new Error(
+    throw new FormPreconditionError(
       `Cannot generate L-9: beneficiary '${disqualifying.fullName}' is Class ` +
       `${disqualifying.taxClass} and receives $500 or more. The L-9 affidavit requires all ` +
       'beneficiaries (receiving $500+) to be Class A; this estate must file a full return.',
@@ -148,14 +148,14 @@ export function buildL9AFormData(
   const mi = snap.matterInputs;
   const inheritanceTax = snap.totalTaxDue + mi.compromiseTax + mi.contingentTax;
   if (inheritanceTax > 0) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate L-9: NJ Inheritance Tax is due. The L-9 affidavit is only for estates ' +
       'with no Inheritance or Estate Tax; file the IT-R return instead.',
     );
   }
   const est = snap.njEstateTax;
   if (est !== null && (est.filingRequired || (est.taxDue ?? 0) > 0)) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate L-9: a NJ Estate Tax return is required (or estate tax is due). ' +
       'File Form IT-Estate instead; the Division issues waivers through that process.',
     );
