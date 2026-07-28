@@ -54,6 +54,23 @@ export interface GenerateSingleDocumentResponse {
   version: number;
 }
 
+export interface GenerateHighFidelityDocxRequest {
+  firmId: string;
+  clientId: string;
+  /** Storage path of the firm's .docx template — must be under firms/{firmId}/ */
+  templateStoragePath: string;
+  docType?: string;
+  displayName?: string;
+}
+
+export interface GenerateHighFidelityDocxResponse {
+  documentId: string;
+  currentVersion: number;
+  storagePath: string | null;
+  /** Placeholder tags that had no value and rendered blank */
+  missingTags: string[];
+}
+
 export interface ReviewDocumentRequest {
   firmId: string;
   clientId: string;
@@ -193,6 +210,22 @@ export const documentService = {
       functions,
       'generateSingleDocument',
       { timeout: 540000 }, // 9 min — matches server-side timeout
+    );
+    const result = await fn(params);
+    return result.data;
+  },
+
+  /**
+   * Fill a firm-uploaded .docx template in place (high-fidelity mode) and
+   * save the result to the client's vault. Preserves the template's exact
+   * formatting; unresolved placeholders render blank and come back in
+   * missingTags.
+   */
+  async generateHighFidelityDocx(params: GenerateHighFidelityDocxRequest): Promise<GenerateHighFidelityDocxResponse> {
+    const fn = httpsCallable<GenerateHighFidelityDocxRequest, GenerateHighFidelityDocxResponse>(
+      functions,
+      'generateHighFidelityDocx',
+      { timeout: 300000 }, // 5 min — matches server-side timeout
     );
     const result = await fn(params);
     return result.data;

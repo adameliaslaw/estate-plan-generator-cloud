@@ -180,7 +180,9 @@ export const generateDocuments = onCall(
         `Invalid request: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
       );
     }
-    const { firmId, clientId, packageType, trustTypes, generationMode = 'hybrid', modelOverride, softwareSource, formattingPreset } = parsed.data;
+    // Default 'template' — matches generateSingleDocument and the frontend
+    // selectors, so an omitted mode behaves the same on every entry point.
+    const { firmId, clientId, packageType, trustTypes, generationMode = 'template', modelOverride, softwareSource, formattingPreset } = parsed.data;
 
     // Verify caller belongs to this firm
     const callerFirmId = auth.token.firmId as string | undefined;
