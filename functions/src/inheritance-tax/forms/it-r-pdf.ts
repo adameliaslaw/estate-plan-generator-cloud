@@ -263,6 +263,56 @@ const SCHEDULE_B4_ROWS: ReadonlyArray<{ description: string; value: string; equi
 ];
 
 /**
+ * Schedule A — "New Jersey Real Property". Three property blocks to a page, each a stack of
+ * printed lines (county · fractional interest · street · lot and block · municipality · owners
+ * and title · a mortgage-lien checkbox) against three money columns: (B) tax assessed value for
+ * the year of death, (C) full market value at date of death for the entire property, and
+ * (D) the value of the decedent's interest, not including mortgage balances.
+ *
+ * The State heads the block "(All fields required)". The filler writes what intake captured and
+ * leaves the rest blank rather than inventing it — the delivered PDF keeps its fields live, and
+ * an empty box the attorney can see is the honest way to say "this one is yours to complete".
+ */
+const SCHEDULE_A_BLOCKS: ReadonlyArray<{
+  county: string; fractionalInterest: string; streetAddress: string; lots: string; block: string;
+  municipality: string; ownersAndTitle: string; mortgageLien: string;
+  taxAssessed: string; fullMarketValue: string; decedentsInterest: string;
+}> = [
+  { county: 'New Jersey County', fractionalInterest: 'Fractional or percent interest', streetAddress: 'Street address with number unit', lots: 'Lots', block: 'Block', municipality: 'Municipality', ownersAndTitle: 'Owners namesProperty Title', mortgageLien: 'Check if there is a mortgage lien against this', taxAssessed: 'B Tax Assessed Value for year of death for entire property1 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', fullMarketValue: 'C Full Market Value at Date of Death1 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', decedentsInterest: 'D Value of Decedents Interest Not including mortgage balances1 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D' },
+  { county: 'New Jersey County_2', fractionalInterest: 'Fractional or percent interest_2', streetAddress: 'Street address with number unit_2', lots: 'Lots_2', block: 'Block_2', municipality: 'Municipality_2', ownersAndTitle: 'Owners namesProperty Title_2', mortgageLien: 'Check if there is a mortgage lien against this_2', taxAssessed: 'B Tax Assessed Value for year of death for entire property2 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', fullMarketValue: 'C Full Market Value at Date of Death2 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', decedentsInterest: 'D Value of Decedents Interest Not including mortgage balances2 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D' },
+  { county: 'New Jersey County_3', fractionalInterest: 'Fractional or percent interest_3', streetAddress: 'Street address with number unit_3', lots: 'Lots_3', block: 'Block_3', municipality: 'Municipality_3', ownersAndTitle: 'Owners namesProperty Title_3', mortgageLien: 'Check if there is a mortgage lien against this_3', taxAssessed: 'B Tax Assessed Value for year of death for entire property3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', fullMarketValue: 'C Full Market Value at Date of Death3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', decedentsInterest: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D' },
+];
+
+/**
+ * Schedule B — "Closely Held Businesses". Three blocks, each asking for the business name, its
+ * federal EIN, its type, whether it is a Family Limited Partnership, the decedent's percentage of
+ * ownership and share count, against (B) the market value of the entire business and (C) the
+ * decedent's share.
+ *
+ * The "check box(es) indicating which documents are attached" boxes — partnership agreement, K-1s,
+ * Form 1120, appraisal — are left alone: what the attorney encloses with the return is not
+ * something the estate record knows.
+ */
+const SCHEDULE_B_BLOCKS: ReadonlyArray<{
+  businessName: string; federalEIN: string; businessType: string; flp: string;
+  ownershipPercentage: string; numberOfShares: string; entireValue: string; decedentsShare: string;
+}> = [
+  { businessName: 'Business name', federalEIN: 'Federal EIN', businessType: 'Type of Business', flp: '4222qdIf Yes submit a copy of the stamped disclaimer that was filed with the Surrogates Court or as approved by', ownershipPercentage: 'Decedents percentage of ownership', numberOfShares: 'Number of shares held if applicable', entireValue: 'B Tax Assessed Value for 223year of death for entire property3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D', decedentsShare: 'C Full Market Value at Date of Death3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this pr3322operty reported on Schedule D' },
+  { businessName: 'Business name_2', federalEIN: 'Federal EIN_2', businessType: 'Type of Business_2', flp: '4222qdIf Yes submit a copy of the stamped disclaimer that was filed with2 the Surrogates Court or as approved by', ownershipPercentage: 'Decedents percentage of ownership_2', numberOfShares: 'Number of shares held if applicable_2', entireValue: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this propertffffy reported o776565n Schedule D', decedentsShare: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported o776565n Schedule D' },
+  { businessName: 'Business name_3', federalEIN: 'Federal EIN_3', businessType: 'Type of Business_3', flp: '4222qdIf Yes submit a copy of the stamped disclaimer that was filed with2 the Surrogates Court or as approveeed by', ownershipPercentage: 'Decedents percentage of ownership_3', numberOfShares: 'Number of shares held if applicable_3', entireValue: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this prope34534rtffffy reported o776565n Schedule D', decedentsShare: 'D Value of Decedents Interest Not including mortgage balances3 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property rff354eported o776565n Schedule D' },
+];
+
+const SCHEDULE_A_TOTALS = {
+  additionalSchedules: 'D Value of Decedents Interest Not including mortgage balancesTotal of all additional schedules if none enter zero',
+  all: 'D Value of Decedents Interest Not including mortgage balancesTotal of all New Jersey real property Enter here and on Form ITR Summary Page line 1',
+} as const;
+
+const SCHEDULE_B_TOTALS = {
+  additionalSchedules: 'undefined_48',
+  all: 'Total of all closely held businesses Enter here and on Form ITR Summary Page line 2',
+} as const;
+
+/**
  * Schedule B-1 — "Financial Institution Accounts". Six accounts to a page, each printed over two
  * lines: "Institution/Account Number" then "Name(s) on account", against one date-of-death value
  * and one decedent's-equity column.
@@ -538,6 +588,8 @@ const SCHEDULE_D_TOTALS = {
  * silently reports fewer assets or beneficiaries than the estate contains.
  */
 const ADDITIONAL_COPIES = {
+  scheduleA: 'Check if additional copies of the schedule are attached',
+  scheduleB: 'Check if additional copies of the schedule are attached_2',
   scheduleB1: 'Check if additional copies of the schedule are attached_3',
   scheduleB2: 'Check if additional copies of the schedule are attached_4',
   scheduleB3: 'Check if additional copies of the schedule are attached_5',
@@ -891,6 +943,79 @@ function sumScheduleItems(items: ReadonlyArray<ScheduleItem>): number {
 }
 
 /**
+ * The Family Limited Partnership radios on Schedule B. The State gave the three blocks
+ * inconsistent option values — the first block's No is `Choice234`, the other two use `2` — so
+ * they are recorded per block rather than derived. A wrong value throws rather than filling the
+ * wrong box, because `FieldWriter.radio` collects the failure.
+ */
+const SCHEDULE_B_FLP_OPTIONS: ReadonlyArray<{ yes: string; no: string }> = [
+  { yes: 'Choice2', no: 'Choice234' },
+  { yes: 'Choice2', no: '2' },
+  { yes: 'Choice2', no: '2' },
+];
+
+/**
+ * Schedule A — New Jersey real property.
+ *
+ * Column (D), the decedent's interest, is the bequest's own value: that is the figure Line 1 is
+ * built from. (B) and (C) describe the whole property and are written only when intake captured
+ * them, since a property half-owned by the decedent has a full market value this record does not
+ * otherwise know.
+ */
+function fillScheduleA(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  items.slice(0, SCHEDULE_A_BLOCKS.length).forEach((item, i) => {
+    const b = SCHEDULE_A_BLOCKS[i];
+    if (!b) return;
+    const d = item.realPropertyDetails;
+    w.text(b.county, d?.county ?? '');
+    w.text(b.fractionalInterest, d?.fractionalInterest ?? '');
+    // Without structured parts the description is all there is, and the street line is where a
+    // reader looks for it.
+    w.text(b.streetAddress, d?.streetAddress ?? item.description);
+    w.text(b.lots, d?.lots ?? '');
+    w.text(b.block, d?.block ?? '');
+    w.text(b.municipality, d?.municipality ?? '');
+    w.text(b.ownersAndTitle, d?.ownersAndTitle ?? '');
+    if (d?.hasMortgageLien) w.check(b.mortgageLien);
+    w.text(b.taxAssessed, d?.taxAssessedValue === undefined ? '' : formatMoneyInline(d.taxAssessedValue));
+    w.text(b.fullMarketValue, d?.fullMarketValue === undefined ? '' : formatMoneyInline(d.fullMarketValue));
+    w.text(b.decedentsInterest, formatMoneyInline(item.fairMarketValue));
+  });
+
+  const overflow = items.slice(SCHEDULE_A_BLOCKS.length);
+  w.text(SCHEDULE_A_TOTALS.additionalSchedules, formatMoneyInline(sumScheduleItems(overflow)));
+  w.text(SCHEDULE_A_TOTALS.all, formatMoneyInline(sumScheduleItems(items)));
+  if (overflow.length > 0) w.check(ADDITIONAL_COPIES.scheduleA);
+}
+
+/** Schedule B — closely held businesses. Column (C) is the decedent's share, which is the value. */
+function fillScheduleB(w: FieldWriter, items: ReadonlyArray<ScheduleItem>): void {
+  items.slice(0, SCHEDULE_B_BLOCKS.length).forEach((item, i) => {
+    const b = SCHEDULE_B_BLOCKS[i];
+    const flp = SCHEDULE_B_FLP_OPTIONS[i];
+    if (!b || !flp) return;
+    const d = item.businessDetails;
+    w.text(b.businessName, d?.businessName ?? item.description);
+    w.text(b.federalEIN, d?.federalEIN ?? '');
+    w.text(b.businessType, d?.businessType ?? '');
+    // The question is only answered when the record answers it; an unticked pair says "not
+    // stated", where a No would assert something intake never asked.
+    if (d?.isFamilyLimitedPartnership !== undefined) {
+      w.radio(b.flp, d.isFamilyLimitedPartnership ? flp.yes : flp.no);
+    }
+    w.text(b.ownershipPercentage, d?.ownershipPercentage ?? '');
+    w.text(b.numberOfShares, d?.numberOfShares === undefined ? '' : String(d.numberOfShares));
+    w.text(b.entireValue, d?.entireBusinessValue === undefined ? '' : formatMoneyInline(d.entireBusinessValue));
+    w.text(b.decedentsShare, formatMoneyInline(item.fairMarketValue));
+  });
+
+  const overflow = items.slice(SCHEDULE_B_BLOCKS.length);
+  w.text(SCHEDULE_B_TOTALS.additionalSchedules, formatMoneyInline(sumScheduleItems(overflow)));
+  w.text(SCHEDULE_B_TOTALS.all, formatMoneyInline(sumScheduleItems(items)));
+  if (overflow.length > 0) w.check(ADDITIONAL_COPIES.scheduleB);
+}
+
+/**
  * Schedule B-1 — financial institution accounts.
  *
  * Column (A) wants three things in one box: institution, last four digits of the account number,
@@ -1183,6 +1308,8 @@ export async function fillITRPdf(data: ITRFormData, blank: Uint8Array): Promise<
   fillPaymentVoucher(w, data, { fullName, ssn: [ssn3, ssn2, ssn4], dod: [dodMonth, dodDay, dodYear] });
 
   fillRecap(w, data);
+  fillScheduleA(w, data.scheduleA);
+  fillScheduleB(w, data.scheduleB);
   fillScheduleB1(w, data.scheduleB1);
   fillScheduleB2(w, data.scheduleB2);
   fillScheduleB3(w, data.scheduleB3);

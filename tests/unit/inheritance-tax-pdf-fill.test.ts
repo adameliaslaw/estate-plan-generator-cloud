@@ -272,6 +272,138 @@ describe('Schedules B1–B4 Recap', () => {
   });
 });
 
+describe('Schedules A and B — real property and closely held businesses', () => {
+  const PROPERTY: Matter = {
+    ...MATTER,
+    beneficiaries: [{
+      ...MATTER.beneficiaries[0]!,
+      bequests: [
+        {
+          id: 'q1', type: 'nj_real_property', description: 'The house', fairMarketValue: 300_000,
+          realPropertyDetails: {
+            county: 'Mercer', fractionalInterest: '50%', streetAddress: '12 Oak St, Unit 2',
+            lots: '14', block: '3.02', municipality: 'Hamilton',
+            ownersAndTitle: 'Ada Gold and Fran Friend, joint tenants',
+            hasMortgageLien: true, taxAssessedValue: 480_000, fullMarketValue: 600_000,
+          },
+        },
+        {
+          id: 'q2', type: 'closely_held_business', description: 'The shop', fairMarketValue: 120_000,
+          businessDetails: {
+            businessName: 'Gold Hardware LLC', federalEIN: '22-3456789',
+            businessType: 'Retail hardware', isFamilyLimitedPartnership: false,
+            ownershipPercentage: '40%', numberOfShares: 400, entireBusinessValue: 300_000,
+          },
+        },
+      ],
+    }],
+  };
+
+  async function fillProperty() {
+    const computation = computeEstate(PROPERTY, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(PROPERTY, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    return (await PDFDocument.load(filled)).getForm();
+  }
+
+  test('every line of the Schedule A block is filled, lot and block included', async () => {
+    const form = await fillProperty();
+    const read = (n: string) => form.getTextField(n).getText();
+    expect(read('New Jersey County')).toBe('Mercer');
+    expect(read('Street address with number unit')).toBe('12 Oak St, Unit 2');
+    expect(read('Lots')).toBe('14');
+    expect(read('Block')).toBe('3.02');
+    expect(read('Municipality')).toBe('Hamilton');
+    expect(read('Fractional or percent interest')).toBe('50%');
+    expect(read('Owners namesProperty Title')).toBe('Ada Gold and Fran Friend, joint tenants');
+    expect(form.getCheckBox('Check if there is a mortgage lien against this').isChecked()).toBe(true);
+  });
+
+  test("column (D) is the decedent's interest and feeds Summary Page line 1", async () => {
+    const form = await fillProperty();
+    const read = (n: string) => form.getTextField(n).getText();
+    // (B) and (C) describe the whole property; (D) is what the estate reported.
+    expect(read('B Tax Assessed Value for year of death for entire property1 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D')).toBe('480,000.00');
+    expect(read('D Value of Decedents Interest Not including mortgage balances1 New Jersey County Fractional or percent interest Street address with number unit Lots Block Municipality Owners namesProperty Title Check if there is a mortgage lien against this property reported on Schedule D')).toBe('300,000.00');
+    // Summary Page line 1 — its dollars box is named '2aa', not '1' (that is a row count).
+    expect(read('2aa')).toBe('300,000');
+  });
+
+  test('Schedule B carries the business block and answers the FLP question', async () => {
+    const form = await fillProperty();
+    expect(form.getTextField('Business name').getText()).toBe('Gold Hardware LLC');
+    expect(form.getTextField('Federal EIN').getText()).toBe('22-3456789');
+    expect(form.getTextField('Decedents percentage of ownership').getText()).toBe('40%');
+    expect(form.getTextField('Number of shares held if applicable').getText()).toBe('400');
+    expect(form.getTextField(
+      'Total of all closely held businesses Enter here and on Form ITR Summary Page line 2',
+    ).getText()).toBe('120,000.00');
+    // The first block's No option is the State's own `Choice234`, not `2`.
+    expect(form.getRadioGroup(
+      '4222qdIf Yes submit a copy of the stamped disclaimer that was filed with the Surrogates Court or as approved by',
+    ).getSelected()).toBe('Choice234');
+  });
+
+  test('an unanswered FLP question leaves both boxes alone', async () => {
+    const unstated: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        bequests: [{
+          id: 'q1', type: 'closely_held_business', description: 'The shop', fairMarketValue: 1_000,
+          businessDetails: { businessName: 'Gold Hardware LLC' },
+        }],
+      }],
+    };
+    const computation = computeEstate(unstated, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(unstated, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getRadioGroup(
+      '4222qdIf Yes submit a copy of the stamped disclaimer that was filed with the Surrogates Court or as approved by',
+    ).getSelected()).toBeUndefined();
+  });
+
+  test('a property with no captured detail still prints its description and its value', async () => {
+    const legacy: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        bequests: [{ id: 'q1', type: 'nj_real_property', description: '12 Oak St', fairMarketValue: 250_000 }],
+      }],
+    };
+    const computation = computeEstate(legacy, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(legacy, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('Street address with number unit').getText()).toBe('12 Oak St');
+    expect(form.getTextField('New Jersey County').getText()).toBeFalsy();
+    expect(form.getTextField('2aa').getText()).toBe('250,000');
+  });
+
+  test('a fourth property overflows to the additional-schedules total, never dropped', async () => {
+    const many: Matter = {
+      ...MATTER,
+      beneficiaries: [{
+        ...MATTER.beneficiaries[0]!,
+        bequests: Array.from({ length: 4 }, (_, i) => ({
+          id: `p${i}`, type: 'nj_real_property' as const,
+          description: `Property ${i}`, fairMarketValue: 100_000,
+        })),
+      }],
+    };
+    const computation = computeEstate(many, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(many, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField(
+      'D Value of Decedents Interest Not including mortgage balancesTotal of all additional schedules if none enter zero',
+    ).getText()).toBe('100,000.00');
+    expect(form.getCheckBox('Check if additional copies of the schedule are attached').isChecked()).toBe(true);
+    expect(form.getTextField('2aa').getText()).toBe('400,000');
+  });
+});
+
 describe('Schedules B-1, B-2, B-3 and C — the itemisation behind lines 3 and 4', () => {
   const DETAILED: Matter = {
     ...MATTER,

@@ -103,6 +103,29 @@ const DecedentSchema = z.object({
 // schedule falls back to its description. The one required field in each is the column the
 // schedule leads with — an object present but empty would be worse than none at all.
 
+const RealPropertyDetailsSchema = z.object({
+  county: NonBlankString,
+  fractionalInterest: z.string().min(1).optional(),
+  streetAddress: z.string().min(1).optional(),
+  lots: z.string().min(1).optional(),
+  block: z.string().min(1).optional(),
+  municipality: z.string().min(1).optional(),
+  ownersAndTitle: z.string().min(1).optional(),
+  hasMortgageLien: z.boolean().optional(),
+  taxAssessedValue: z.number().finite().nonnegative().optional(),
+  fullMarketValue: z.number().finite().nonnegative().optional(),
+}).strict();
+
+const BusinessDetailsSchema = z.object({
+  businessName: NonBlankString,
+  federalEIN: z.string().min(1).optional(),
+  businessType: z.string().min(1).optional(),
+  isFamilyLimitedPartnership: z.boolean().optional(),
+  ownershipPercentage: z.string().min(1).optional(),
+  numberOfShares: z.number().finite().positive().optional(),
+  entireBusinessValue: z.number().finite().nonnegative().optional(),
+}).strict();
+
 const AccountDetailsSchema = z.object({
   institutionName: NonBlankString,
   // The schedule asks for four digits and the record keeps no more than it asks for.
@@ -138,6 +161,8 @@ const BequestSchema = z.object({
   type: BequestTypeSchema,
   description: z.string().min(1),
   fairMarketValue: z.number().finite().nonnegative('Fair market value must be ≥ 0'),
+  realPropertyDetails: RealPropertyDetailsSchema.optional(),
+  businessDetails: BusinessDetailsSchema.optional(),
   accountDetails: AccountDetailsSchema.optional(),
   securityDetails: SecurityDetailsSchema.optional(),
   bondDetails: BondDetailsSchema.optional(),

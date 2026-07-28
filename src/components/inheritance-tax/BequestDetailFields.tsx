@@ -11,10 +11,10 @@
  */
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TRANSFER_PARTS } from '@/types/inheritance-tax';
+import { NJ_COUNTIES, TRANSFER_PARTS } from '@/types/inheritance-tax';
 import type {
-  ITRAccountDetails, ITRBequest, ITRBondDetails, ITRSecurityDetails, ITRTransferDetails,
-  TransferPart,
+  ITRAccountDetails, ITRBequest, ITRBondDetails, ITRBusinessDetails, ITRRealPropertyDetails,
+  ITRSecurityDetails, ITRTransferDetails, TransferPart,
 } from '@/types/inheritance-tax';
 
 interface Props {
@@ -72,6 +72,119 @@ export function BequestDetailFields({ bequest, onChange }: Props) {
       if (draft.transfereeName.trim()) b.transferDetails = prune(draft);
       else delete b.transferDetails;
     });
+
+  if (bequest.type === 'nj_real_property') {
+    const updateProperty = (mutate: (draft: ITRRealPropertyDetails) => void) =>
+      onChange((b) => {
+        const draft: ITRRealPropertyDetails = { county: '', ...b.realPropertyDetails };
+        mutate(draft);
+        if (draft.county.trim()) b.realPropertyDetails = prune(draft);
+        else delete b.realPropertyDetails;
+      });
+    const property = bequest.realPropertyDetails;
+    return (
+      <Row hint="Schedule A marks every one of these required. What is left blank here is left blank on the return for the attorney to complete.">
+        <Field label="NJ county">
+          <select className={selectClass} value={property?.county ?? ''}
+            onChange={(e) => updateProperty((d) => { d.county = e.target.value; })}>
+            <option value="">—</option>
+            {NJ_COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Street address, unit" wide>
+          <Input value={property?.streetAddress ?? ''}
+            onChange={(e) => updateProperty((d) => { d.streetAddress = e.target.value; })} />
+        </Field>
+        <Field label="Municipality">
+          <Input value={property?.municipality ?? ''}
+            onChange={(e) => updateProperty((d) => { d.municipality = e.target.value; })} />
+        </Field>
+        <Field label="Lot(s)">
+          <Input value={property?.lots ?? ''}
+            onChange={(e) => updateProperty((d) => { d.lots = e.target.value; })} />
+        </Field>
+        <Field label="Block">
+          <Input value={property?.block ?? ''}
+            onChange={(e) => updateProperty((d) => { d.block = e.target.value; })} />
+        </Field>
+        <Field label="Fractional / percent interest">
+          <Input value={property?.fractionalInterest ?? ''} placeholder="1/2 or 50%"
+            onChange={(e) => updateProperty((d) => { d.fractionalInterest = e.target.value; })} />
+        </Field>
+        <Field label="Owner(s) / property title">
+          <Input value={property?.ownersAndTitle ?? ''}
+            onChange={(e) => updateProperty((d) => { d.ownersAndTitle = e.target.value; })} />
+        </Field>
+        <Field label="Tax assessed value">
+          <Input type="number" min={0} value={property?.taxAssessedValue ?? ''}
+            onChange={(e) => updateProperty((d) => { d.taxAssessedValue = Number(e.target.value); })} />
+        </Field>
+        <Field label="Full market value (whole property)">
+          <Input type="number" min={0} value={property?.fullMarketValue ?? ''}
+            onChange={(e) => updateProperty((d) => { d.fullMarketValue = Number(e.target.value); })} />
+        </Field>
+        <Field label="Mortgage lien">
+          <label className="flex h-9 items-center gap-2 text-sm">
+            <input type="checkbox" checked={property?.hasMortgageLien ?? false}
+              onChange={(e) => updateProperty((d) => { d.hasMortgageLien = e.target.checked; })} />
+            On Schedule D
+          </label>
+        </Field>
+      </Row>
+    );
+  }
+
+  if (bequest.type === 'closely_held_business') {
+    const updateBusiness = (mutate: (draft: ITRBusinessDetails) => void) =>
+      onChange((b) => {
+        const draft: ITRBusinessDetails = { businessName: '', ...b.businessDetails };
+        mutate(draft);
+        if (draft.businessName.trim()) b.businessDetails = prune(draft);
+        else delete b.businessDetails;
+      });
+    const business = bequest.businessDetails;
+    return (
+      <Row hint="Schedule B. The decedent's share is the value above; column (B) is the whole business.">
+        <Field label="Business name">
+          <Input value={business?.businessName ?? ''}
+            onChange={(e) => updateBusiness((d) => { d.businessName = e.target.value; })} />
+        </Field>
+        <Field label="Federal EIN">
+          <Input value={business?.federalEIN ?? ''}
+            onChange={(e) => updateBusiness((d) => { d.federalEIN = e.target.value; })} />
+        </Field>
+        <Field label="Type of business">
+          <Input value={business?.businessType ?? ''}
+            onChange={(e) => updateBusiness((d) => { d.businessType = e.target.value; })} />
+        </Field>
+        <Field label="Decedent's ownership">
+          <Input value={business?.ownershipPercentage ?? ''} placeholder="40%"
+            onChange={(e) => updateBusiness((d) => { d.ownershipPercentage = e.target.value; })} />
+        </Field>
+        <Field label="Shares held">
+          <Input type="number" min={0} value={business?.numberOfShares ?? ''}
+            onChange={(e) => updateBusiness((d) => { d.numberOfShares = Number(e.target.value); })} />
+        </Field>
+        <Field label="Value of entire business">
+          <Input type="number" min={0} value={business?.entireBusinessValue ?? ''}
+            onChange={(e) => updateBusiness((d) => { d.entireBusinessValue = Number(e.target.value); })} />
+        </Field>
+        <Field label="Family limited partnership">
+          <select className={selectClass}
+            value={business?.isFamilyLimitedPartnership === undefined ? '' : String(business.isFamilyLimitedPartnership)}
+            onChange={(e) => updateBusiness((d) => {
+              // Left unanswered the pair stays unticked on the form, which is not the same as No.
+              if (e.target.value === '') delete d.isFamilyLimitedPartnership;
+              else d.isFamilyLimitedPartnership = e.target.value === 'true';
+            })}>
+            <option value="">Not stated</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </Field>
+      </Row>
+    );
+  }
 
   if (bequest.type === 'bank_account' || bequest.type === 'retirement_account') {
     return (

@@ -302,6 +302,8 @@ function collectScheduleItems(
           fairMarketValue: bequest.fairMarketValue,
           // Conditional so a bequest without a given detail block stores no key at all —
           // Firestore rejects an explicit undefined.
+          ...(bequest.realPropertyDetails !== undefined ? { realPropertyDetails: bequest.realPropertyDetails } : {}),
+          ...(bequest.businessDetails !== undefined ? { businessDetails: bequest.businessDetails } : {}),
           ...(bequest.accountDetails !== undefined ? { accountDetails: bequest.accountDetails } : {}),
           ...(bequest.securityDetails !== undefined ? { securityDetails: bequest.securityDetails } : {}),
           ...(bequest.bondDetails !== undefined ? { bondDetails: bequest.bondDetails } : {}),

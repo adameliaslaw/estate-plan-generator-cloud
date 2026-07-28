@@ -142,6 +142,31 @@ export const DEDUCTION_TYPES: ReadonlyArray<{ value: DeductionType; label: strin
 
 export type PersonalRepresentativeTitle = 'Executor' | 'Administrator' | 'Heir-at-law';
 
+/** Schedule A column (A) — the block the State heads "(All fields required)". */
+export interface ITRRealPropertyDetails {
+  county: string;
+  fractionalInterest?: string;
+  streetAddress?: string;
+  lots?: string;
+  block?: string;
+  municipality?: string;
+  ownersAndTitle?: string;
+  hasMortgageLien?: boolean;
+  taxAssessedValue?: number;
+  fullMarketValue?: number;
+}
+
+/** Schedule B column (A) — "Business Information". */
+export interface ITRBusinessDetails {
+  businessName: string;
+  federalEIN?: string;
+  businessType?: string;
+  isFamilyLimitedPartnership?: boolean;
+  ownershipPercentage?: string;
+  numberOfShares?: number;
+  entireBusinessValue?: number;
+}
+
 /** Schedule B-1 column (A) — "Name of Institution, Last Four Digits of Account Number". */
 export interface ITRAccountDetails {
   institutionName: string;
@@ -199,6 +224,8 @@ export interface ITRBequest {
    * schedule and is omitted entirely when its leading field is blank — the server's schemas are
    * strict, and an object present but empty would fail validation.
    */
+  realPropertyDetails?: ITRRealPropertyDetails;  // Schedule A
+  businessDetails?: ITRBusinessDetails;          // Schedule B
   accountDetails?: ITRAccountDetails;      // Schedule B-1
   securityDetails?: ITRSecurityDetails;    // Schedule B-2
   bondDetails?: ITRBondDetails;            // Schedule B-3
