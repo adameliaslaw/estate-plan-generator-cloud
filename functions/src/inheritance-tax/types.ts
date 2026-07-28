@@ -733,6 +733,12 @@ export interface ScheduleEBeneficiaryRow {
   /** Column (C), which the form offers as a dropdown of exactly A / C / D / E. */
   taxClass: TaxClass;
   /**
+   * Column (D) — "Fractional/percentage of residuary Estate and/or specific asset", e.g.
+   * "1/3 Residue" or "12 Oak Ave; 1/2 Residue". Absent on a legacy nested matter, where the
+   * column prints blank as it always has.
+   */
+  interestDescription?: string;
+  /**
    * Column (E) "Dollar Amount". This is `scaledBequeathed`, the same figure that feeds the
    * Summary Page's Total Distribution columns (lines 10–14) — so the schedule reconciles to the
    * summary rather than contradicting it by a deduction's worth.
@@ -869,6 +875,12 @@ export interface ITRFormSnapshot {
     addressParts?: AddressParts;
     relationship: Relationship;
     isSpouseOrCU: boolean;
+    /**
+     * Schedule E column D — "Fractional/percentage of residuary Estate and/or specific asset".
+     * Frozen with the rest (FND-IMMUT) so an approved form keeps describing the interests the
+     * attorney approved. Absent on matters in the legacy nested model, which cannot express it.
+     */
+    interestDescription?: string;
   }>;
   scheduleA: ScheduleItem[];
   scheduleB: ScheduleItem[];

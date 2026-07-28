@@ -18,7 +18,7 @@ import { classifyBeneficiary } from './classify';
 import { computeFilingDeadline } from './deadline';
 import { computeNJEstateTax } from './estate-tax';
 import { fromCents, roundCents, toCents } from '../money';
-import { describeAssetTakers } from '../allocations';
+import { describeAssetTakers, describeBeneficiaryInterest } from '../allocations';
 // Imported from the specific file (not the forms barrel) to avoid an engine→forms cycle.
 import { UnsupportedMatterError } from '../forms/errors';
 
@@ -419,6 +419,10 @@ export function buildFormSnapshot(matter: Matter): ITRFormSnapshot {
       ...(b.addressParts !== undefined ? { addressParts: b.addressParts } : {}),
       relationship: b.relationship,
       isSpouseOrCU: b.relationship === 'spouse' || b.relationship === 'civil_union_partner',
+      // Schedule E column D. Conditional so a legacy matter stores no key at all.
+      ...(matter.assets !== undefined
+        ? { interestDescription: describeBeneficiaryInterest(b.id, matter) }
+        : {}),
     })),
     scheduleA: collectScheduleItems(matter, SCHEDULE_TYPES.A),
     scheduleB: collectScheduleItems(matter, SCHEDULE_TYPES.B),

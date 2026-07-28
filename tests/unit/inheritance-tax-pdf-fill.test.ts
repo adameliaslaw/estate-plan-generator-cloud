@@ -319,6 +319,52 @@ describe('Schedules A and B — real property and closely held businesses', () =
     expect(form.getCheckBox('Check if there is a mortgage lien against this').isChecked()).toBe(true);
   });
 
+  test('a sole owner prints "100%", not a bare 100 — the instruction is about the notation', async () => {
+    // "If decedent was sole owner, enter 100%" (IT-R Instructions, Schedule A column A). A bare
+    // number on the schedule that generates the tax waiver leaves the reader to supply the unit.
+    const sole: Matter = {
+      ...PROPERTY,
+      beneficiaries: [{
+        ...PROPERTY.beneficiaries[0]!,
+        bequests: [{
+          ...PROPERTY.beneficiaries[0]!.bequests[0]!,
+          realPropertyDetails: {
+            ...PROPERTY.beneficiaries[0]!.bequests[0]!.realPropertyDetails!,
+            fractionalInterest: '100',
+          },
+        }],
+      }],
+    };
+    const computation = computeEstate(sole, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(sole, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('Fractional or percent interest').getText()).toBe('100%');
+  });
+
+  test("a fraction the attorney wrote is passed through untouched", async () => {
+    // The instruction offers "one-half, one-third" and "50%, 33%" as equally correct. Only a
+    // bare number is ambiguous, so only a bare number is changed.
+    const half: Matter = {
+      ...PROPERTY,
+      beneficiaries: [{
+        ...PROPERTY.beneficiaries[0]!,
+        bequests: [{
+          ...PROPERTY.beneficiaries[0]!.bequests[0]!,
+          realPropertyDetails: {
+            ...PROPERTY.beneficiaries[0]!.bequests[0]!.realPropertyDetails!,
+            fractionalInterest: '1/2',
+          },
+        }],
+      }],
+    };
+    const computation = computeEstate(half, getRuleSet('2023-09-18'));
+    const formData = buildITRFormData(half, approved(computation));
+    const filled = await fillITRPdf(formData, new Uint8Array(BLANK));
+    const form = (await PDFDocument.load(filled)).getForm();
+    expect(form.getTextField('Fractional or percent interest').getText()).toBe('1/2');
+  });
+
   test("column (D) is the decedent's interest and feeds Summary Page line 1", async () => {
     const form = await fillProperty();
     const read = (n: string) => form.getTextField(n).getText();

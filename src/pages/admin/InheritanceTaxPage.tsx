@@ -245,6 +245,14 @@ export default function InheritanceTaxPage() {
    */
   const [shareModes, setShareModes] = useState<Record<string, ShareMode>>({});
 
+  /**
+   * The residue block defaults to FRACTION, deliberately. An estate left equally to three people
+   * is a third each, and a third has no exact decimal — typed as a percentage the shares come out
+   * unequal by a few hundredths of a percent, which on a seven-figure residue is dollars apart on
+   * a filed return. "1/3" is exact.
+   */
+  const [residueMode, setResidueMode] = useState<ShareMode>('fraction');
+
   // ── Mutations on the working matter ──────────────────────────────────────
   const patch = (fn: (draft: ITRMatterInput) => void) => {
     setMatter((prev) => {
@@ -701,6 +709,8 @@ export default function InheritanceTaxPage() {
               pool={pool}
               shares={matter.residuary ?? []}
               beneficiaries={matter.beneficiaries}
+              mode={residueMode}
+              onModeChange={setResidueMode}
               onChange={(mutate) => patch((d) => {
                 d.residuary = d.residuary ?? [];
                 mutate(d.residuary);

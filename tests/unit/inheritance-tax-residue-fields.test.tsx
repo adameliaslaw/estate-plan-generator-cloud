@@ -28,15 +28,19 @@ const BENEFICIARIES: ITRBeneficiary[] = [
 ];
 
 function ResidueHarness(
-  { initial, pool, onShares }:
-  { initial: ITRResiduaryShare[]; pool: number; onShares: (s: ITRResiduaryShare[]) => void },
+  { initial, pool, onShares, startMode = 'fraction' }:
+  { initial: ITRResiduaryShare[]; pool: number; onShares: (s: ITRResiduaryShare[]) => void;
+    startMode?: ShareMode },
 ) {
   const [shares, setShares] = useState(initial);
+  const [mode, setMode] = useState<ShareMode>(startMode);
   return (
     <ResiduarySharesFields
       pool={pool}
       shares={shares}
       beneficiaries={BENEFICIARIES}
+      mode={mode}
+      onModeChange={setMode}
       onChange={(mutate) => setShares((prev) => {
         const next = structuredClone(prev);
         mutate(next);
@@ -94,6 +98,7 @@ describe('the residue block', () => {
       <ResidueHarness
         initial={[{ beneficiaryId: 'ben-1', fraction: 0 }]}
         pool={100_000}
+        startMode="percent"
         onShares={(s) => { latest = s; }} />,
     );
     const input = screen.getByLabelText('Residuary share 1');
@@ -101,6 +106,31 @@ describe('the residue block', () => {
     await user.type(input, '60');
     expect(latest[0]?.fraction).toBeCloseTo(0.6, 10);
     expect(screen.getByText('$60,000.00')).toBeInTheDocument();
+  });
+
+  it('defaults to fraction, so an equal three-way split is typed exactly', async () => {
+    // Why this default exists. A third has no exact decimal: typed as a percentage the shares
+    // come out unequal and short, which on a real return put two beneficiaries 45c apart when
+    // the will gave them equal shares. "1/3" is exact.
+    const user = userEvent.setup();
+    let latest: ITRResiduaryShare[] = [];
+    render(
+      <ResidueHarness
+        initial={[{ beneficiaryId: 'ben-1', fraction: 0 }]}
+        pool={1_675_000}
+        onShares={(s) => { latest = s; }} />,
+    );
+    // The picker opens on fractions without the attorney choosing anything.
+    expect((screen.getByLabelText('Residuary share format') as HTMLSelectElement).value)
+      .toBe('fraction');
+    const input = screen.getByLabelText('Residuary share 1');
+    await user.clear(input);
+    await user.type(input, '1/3');
+    expect(latest[0]?.fraction).toBe(1 / 3);
+
+    // Three of those total exactly 1; three of "33.3333%" do not.
+    expect(3 * (1 / 3)).toBe(1);
+    expect(3 * 0.333333).not.toBe(1);
   });
 
   it('says so when the shares do not total 100%', async () => {
