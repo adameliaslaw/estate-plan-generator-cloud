@@ -30,8 +30,17 @@ export interface RuleSet {
   /**
    * NJ Estate Tax unified credit exemption (gross estate threshold below which no
    * estate tax is due). Only present when njEstateTaxApplies is true.
-   * VERIFY: rate tables and phase-out schedule not yet confirmed from primary source —
-   * attorney must compute NJ Estate Tax separately using Form IT-Estate.
+   *
+   * VERIFIED against NJ Form O-10-C, "General Information — Inheritance and Estate Tax"
+   * (nj.gov/treasury/taxation/pdf/other_forms/inheritance/o10c.pdf, retrieved 2026-07-28):
+   * $675,000 for deaths after Dec. 31, 2001 but before Jan. 1, 2017; $2,000,000 for deaths on or
+   * after Jan. 1, 2017 but before Jan. 1, 2018; and none thereafter — "There is no New Jersey
+   * Estate Tax imposed on the estates of resident decedents dying on or after Jan. 1, 2018."
+   *
+   * The rate schedule itself lives in `engine/estate-tax.ts`, whose Simplified Method (Column A)
+   * table is verified against the State's own Form IT-Estate. For 2017 deaths the computation is
+   * circular (IRC §2058) and the engine returns no figure, directing the attorney to the State's
+   * official calculator rather than fabricating a rate.
    */
   njEstateTaxExemption?: number;
 }

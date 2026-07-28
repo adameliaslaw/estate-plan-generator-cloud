@@ -111,7 +111,48 @@ Three tracks, independent of each other.
 ### Track 1 — finish the IT-R booklet
 Mapping work, plus intake fields for the schedules whose columns the model cannot answer.
 
-### Track 2 — the three orphaned forms
+### Track 2 — the three orphaned forms ✅ WIRED
+
+> **Done.** `getInheritanceCompanionForm` serves all three from the same approved snapshot the
+> IT-R renders from, and the page has a "Companion forms" row beside the IT-R buttons. Each form's
+> precondition is enforced by its builder and surfaced as `failed-precondition` with the reason —
+> the builders' deliberate refusals now throw `FormPreconditionError` rather than a plain `Error`,
+> so a refusal an attorney can act on never reaches the client as `internal`.
+>
+> **The estate-tax research this section demanded, done first — and it did not go the way the
+> section expected.** The engine *does* compute NJ Estate Tax: `computeNJEstateTax` has a
+> Simplified-Method (Column A) table carrying a primary-source citation to the State's own Form
+> IT-Estate. The `VERIFY: rate tables not confirmed from primary source` marker is a **stale
+> comment on the `njEstateTaxExemption` field in `rules/ruleSet.ts`**, not a gap in the
+> computation.
+>
+> Checked against the State's own General Information sheet
+> ([NJ Form O-10-C](https://www.nj.gov/treasury/taxation/pdf/other_forms/inheritance/o10c.pdf))
+> and the Division's Inheritance and Estate Tax page, both retrieved 2026-07-28:
+>
+> - **"There is no New Jersey Estate Tax imposed on the estates of resident decedents dying on or
+>   after Jan. 1, 2018."** (P.L. 2016, c. 57.) The 2018 rule set's `njEstateTaxApplies: false` is
+>   correct, and IT-Estate is refused for any death from that date — which is every ordinary
+>   matter this tool will see.
+> - **2017 deaths**: $2,000,000 exclusion, tax computed on the taxable estate under the current
+>   IRC at 0–16%, with a credit equal to the tax on the exclusion amount ($99,600). Circular, and
+>   the State supplies its own calculator — which is why the engine returns a null tax and points
+>   the attorney there instead of inventing a rate. Rule set matches.
+> - **Deaths after Dec. 31, 2001 but before Jan. 1, 2017**: the $675,000 threshold, with either
+>   the 2001 Form 706 method or the Simplified Method "based upon the net estate as determined for
+>   the New Jersey Inheritance Tax". Rule set matches; the Simplified Method is what the engine
+>   implements.
+> - **Estate tax is resident-only** — "There is no Estate Tax assessed against nonresident
+>   decedent's estates" — which the engine already enforces.
+> - **L-9 / L-9 NR** are "a request for a real property tax waiver … for use by Class A
+>   beneficiaries … if the entire estate is untaxable for Inheritance Tax purposes", and may not be
+>   used if any NJ Estate Tax is payable. Exactly the preconditions `buildL9AFormData` enforces.
+>
+> So no rate table needed rewriting. What was missing was wiring, and that is now in place.
+> **Left for a follow-up**: an official filled PDF for each of the three (each is a separate State
+> form with its own blank and its own inventory) — today they render as HTML workpapers only.
+
+### Track 2 — the three orphaned forms (original scoping, kept for the record)
 `buildITEXTFormData`, `buildITEstateFormData`, `buildL9AFormData` and their HTML renderers are
 exported from `functions/src/inheritance-tax/forms/index.ts` **and called by nothing** — no
 callable, no UI. They came across in the port and have been inert since. Each needs a callable, a

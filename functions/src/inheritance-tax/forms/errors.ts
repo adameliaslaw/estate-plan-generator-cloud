@@ -20,3 +20,20 @@ export class UnsupportedMatterError extends Error {
     Object.setPrototypeOf(this, UnsupportedMatterError.prototype);
   }
 }
+
+/**
+ * Raised when the matter is in scope but the form cannot be produced from it yet — no filing
+ * extension is recorded for an IT-EXT, the estate is taxable so an L-9(A) is not the right
+ * filing, the death is after the estate tax was repealed.
+ *
+ * Distinct from {@link UnsupportedMatterError}: nothing is wrong with the matter, and the
+ * attorney can usually act on the message. The API maps it to `failed-precondition` so the
+ * caller sees the reason rather than an opaque `internal`.
+ */
+export class FormPreconditionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FormPreconditionError';
+    Object.setPrototypeOf(this, FormPreconditionError.prototype);
+  }
+}

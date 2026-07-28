@@ -32,6 +32,7 @@ export {
   approveInheritanceReview,
   finalizeInheritanceReview,
   getInheritanceForm,
+  getInheritanceCompanionForm,
   listInheritanceMatters,
   getInheritanceAuditTrail,
 } from './inheritance-tax-review';

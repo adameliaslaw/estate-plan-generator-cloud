@@ -28,5 +28,5 @@ export * from './engine';
 export * from './rules';
 export * from './validation';
 export * from './forms';
-export { UnsupportedMatterError } from './forms/errors';
+export { UnsupportedMatterError, FormPreconditionError } from './forms/errors';
 export { toCents, fromCents, roundCents } from './money';

@@ -1,5 +1,6 @@
 import type { ITEstateFormData, Matter, ReviewCheckpoint } from '../types';
 import { DISCLAIMER } from './disclaimer';
+import { FormPreconditionError } from './errors';
 
 /**
  * Builds the data model for Form IT-Estate (NJ Resident Decedent Estate Tax Return),
@@ -22,7 +23,7 @@ export function buildITEstateFormData(
   approvedCheckpoint: ReviewCheckpoint,
 ): ITEstateFormData {
   if (approvedCheckpoint.status !== 'approved') {
-    throw new Error('Cannot generate IT-Estate form data without an approved review checkpoint.');
+    throw new FormPreconditionError('Cannot generate IT-Estate form data without an approved review checkpoint.');
   }
 
   if (approvedCheckpoint.matterId !== matter.matterId) {
@@ -36,7 +37,7 @@ export function buildITEstateFormData(
   const snap = approvedCheckpoint.computationSnapshot;
   const est = snap.njEstateTax;
   if (est === null) {
-    throw new Error(
+    throw new FormPreconditionError(
       'Cannot generate IT-Estate: no NJ Estate Tax applies to this date of death ' +
       '(the estate tax was repealed for deaths on or after 2018-01-01).',
     );

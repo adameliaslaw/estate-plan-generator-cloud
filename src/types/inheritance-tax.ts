@@ -323,6 +323,36 @@ export interface CheckpointResult {
   finalizationKind?: 'two-attorney' | 'solo';
 }
 
+/**
+ * The forms that travel with an IT-R. Each has its own precondition, enforced server-side:
+ * an IT-EXT needs a recorded filing extension; an L-9 an all-Class-A estate with NJ real
+ * property and no tax due; an IT-Estate a death before 2018, when the NJ Estate Tax still
+ * existed. A matter that fails one comes back as a `failed-precondition` with the reason.
+ */
+export type CompanionForm = 'it-ext' | 'it-estate' | 'l9';
+
+export const COMPANION_FORMS: ReadonlyArray<{ value: CompanionForm; label: string; hint: string }> = [
+  {
+    value: 'it-ext', label: 'IT-EXT (extension)',
+    hint: 'Needs a filing extension recorded on the matter before compute.',
+  },
+  {
+    value: 'l9', label: 'L-9 / L-9(A) (real property waiver)',
+    hint: 'Only for an all-Class-A estate with NJ real property and no tax due.',
+  },
+  {
+    value: 'it-estate', label: 'IT-Estate (estate tax)',
+    hint: 'Only for a death before 2018-01-01 — the NJ Estate Tax was repealed from that date.',
+  },
+];
+
+export interface CompanionFormResult {
+  form: CompanionForm;
+  formData: unknown;
+  html: string;
+  workpaper: true;
+}
+
 export interface ITRFormResult {
   formData: Record<string, unknown>;
   html?: string;

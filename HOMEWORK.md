@@ -4,6 +4,58 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-28 (every IT-R schedule is filled, and the three orphaned forms are reachable)
+
+**TL;DR — Continued straight through the build plan on Adam's instruction. #189 merged (Recap,
+IT-PMT, Schedule D) and deployed green. PR #190 carries the rest: §4.4 (Schedules B-1, B-2, B-3
+and C), §4.5 (Schedules A and B), and Track 2 (IT-EXT, L-9/L-9(A) and IT-Estate wired to a
+callable and the page). **Every schedule in the booklet is now filled**, and the three forms that
+had been exported-but-called-by-nothing since the port are reachable.**
+
+**The estate-tax research Track 2 demanded went differently than the plan expected.** The plan
+said the engine does not compute NJ Estate Tax. It does: `computeNJEstateTax` carries a
+Simplified-Method table cited to the State's own Form IT-Estate. The `VERIFY: rate tables not
+confirmed` marker was a **stale comment on a rule-set field**, not a gap — now corrected in place.
+Checked against [NJ Form O-10-C](https://www.nj.gov/treasury/taxation/pdf/other_forms/inheritance/o10c.pdf)
+and the Division's own page (2026-07-28): no NJ Estate Tax for deaths on/after 2018-01-01
+(P.L. 2016, c. 57); $2M exclusion for 2017 with a circular §2058 computation the State supplies a
+calculator for; $675,000 before 2017 with the Simplified Method "based upon the net estate as
+determined for the New Jersey Inheritance Tax". **Every figure in the rule sets matched.** No rate
+table needed rewriting — what was missing was wiring.
+
+**Judgement calls worth knowing about, all in the same direction — never assert what the record
+does not say:**
+- Schedule C's three "(required)" questions are ticked **Yes** when the estate reports such a
+  transfer and left **unmarked** when it does not. "The attorney entered no such transfer" is not
+  "the decedent made no such transfer", and only the second is what No asserts.
+- Schedule B's "Is this a Family Limited Partnership?" is answered only when intake answers it.
+- Schedule A's block is marked "(All fields required)" by the State. The filler writes what intake
+  captured and leaves the rest blank for the attorney — the delivered PDF keeps its fields live.
+
+**Green:** 847/847 (up from 812), functions + root tsc, lint 0 errors, build. Two negative controls
+run and reverted. Every PDF assertion reads its value back out of the produced file.
+
+**▶ NEXT — Track 3 (IT-NR, nonresident decedents) is the only untouched track**, and it is the one
+that changes how tax is computed (NJ-situs property only, N.J.A.C. 18:26-2.15, with its own gold
+cases). Today a nonresident matter is refused cleanly at compute, which is defensible. Smaller
+follow-ups: an official filled **PDF** for IT-EXT / L-9 / IT-Estate (each is a separate State form
+needing its own blank and inventory — they render as HTML workpapers today), and the attestation
+gap below.
+
+**Still open — the attestation gap.** Two deduction types demand an attorney attestation the
+server enforces and no screen collects: `transfer_taxes_other_states` needs
+`transferTaxEligibility` (N.J.A.C. 18:26-7.16) and `executor_commission` needs
+`executorCommissionEligibility` for a death on/after 2025-12-15 (R.2025 d.152). Adam's steer was
+that no dual attestation is needed or practicable in a solo firm — worth confirming that this is
+the same thing he meant, since these are single-attorney factual attestations the *server* rejects
+the save without, not a two-person review. Until they are collected, those two deduction types
+cannot be saved from the UI.
+
+**Still needs Adam (unchanged):** the live card test on #185; a real payment through the payment
+page; and a browser pass on the Inheritance Tax page.
+
+---
+
 ## 🔵 SESSION — 2026-07-27 PM #2 (Track 1's cheap wins are all shipped — the IT-R now files every figure it computes)
 
 **TL;DR — Took the previous session's ▶ NEXT (`docs/IT-R-FORMS-BUILD-PLAN.md`) and closed §4.1,

@@ -49,6 +49,9 @@ import {
   type NJCounty,
   type Relationship,
   type BequestType,
+  COMPANION_FORMS,
+  type CompanionForm,
+  type CompanionFormResult,
   type DeductionType,
   type PersonalRepresentativeTitle,
 } from '@/types/inheritance-tax';
@@ -142,6 +145,7 @@ export default function InheritanceTaxPage() {
   const [computation, setComputation] = useState<EstateComputationResult | null>(null);
   const [checkpoint, setCheckpoint] = useState<CheckpointResult | null>(null);
   const [form, setForm] = useState<ITRFormResult | null>(null);
+  const [companion, setCompanion] = useState<CompanionFormResult | null>(null);
   const [audit, setAudit] = useState<AuditTrailResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -232,6 +236,17 @@ export default function InheritanceTaxPage() {
   const onLoadForm = () => run('form', async () => {
     if (!matter) return;
     setForm(await inheritanceTaxService.getForm(firmId, matter.matterId, { html: true }));
+  });
+
+  /**
+   * The companion forms. Each is refused server-side when the estate does not meet its own
+   * precondition, and that refusal is the useful answer — it names the reason (no extension
+   * recorded, tax is due, the death is after the estate tax was repealed), so it is shown
+   * rather than swallowed.
+   */
+  const onLoadCompanion = (form: CompanionForm) => run(`companion:${form}`, async () => {
+    if (!matter) return;
+    setCompanion(await inheritanceTaxService.getCompanionForm(firmId, matter.matterId, form));
   });
 
   /**
@@ -643,6 +658,16 @@ export default function InheritanceTaxPage() {
                 <RefreshCw className="mr-2 h-4 w-4" /> Audit trail
               </Button>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground text-sm">Companion forms:</span>
+              {COMPANION_FORMS.map((f) => (
+                <Button key={f.value} variant="outline" size="sm" title={f.hint}
+                  onClick={() => onLoadCompanion(f.value)} disabled={!approved || busy !== null}>
+                  {busy === `companion:${f.value}` ? 'Loading…' : f.label}
+                </Button>
+              ))}
+            </div>
             {!approved && (
               <p className="text-muted-foreground text-xs">
                 The IT-R unlocks only after review — it renders from the frozen snapshot, not from
@@ -657,6 +682,20 @@ export default function InheritanceTaxPage() {
               {/* Server-rendered from the frozen snapshot. */}
               <div className="max-h-[70vh] overflow-auto rounded border p-2"
                 dangerouslySetInnerHTML={{ __html: form.html }} />
+            </Card>
+          )}
+
+          {companion && (
+            <Card className="p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="font-medium">
+                  {COMPANION_FORMS.find((f) => f.value === companion.form)?.label} — WORKPAPER, not for filing
+                </h2>
+                <Button variant="ghost" size="sm" onClick={() => setCompanion(null)}>Close</Button>
+              </div>
+              {/* Server-rendered from the same frozen snapshot the IT-R renders from. */}
+              <div className="max-h-[70vh] overflow-auto rounded border p-2"
+                dangerouslySetInnerHTML={{ __html: companion.html }} />
             </Card>
           )}
 
