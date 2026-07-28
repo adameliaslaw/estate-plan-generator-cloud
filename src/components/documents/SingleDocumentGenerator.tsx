@@ -41,7 +41,12 @@ import { SOFTWARE_SOURCES } from '@/config/software-sources';
 import { FORMATTING_PRESET_OPTIONS } from '@/config/formatting-presets';
 import type { Client } from '@/types';
 
-type GenerationMode = 'template' | 'ai' | 'hybrid';
+type GenerationMode = 'template' | 'ai' | 'hybrid' | 'high-fidelity';
+
+interface FirmDocxTemplate {
+  name: string;
+  fullPath: string;
+}
 
 function getGenerationStage(elapsed: number): string {
   if (elapsed < 15) return 'Building context…';
@@ -90,6 +95,11 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   // is the only mode that pulls Knowledge Base context into the prompt
   // (template-only skips KB; ai-only skips templates).
   const [generationMode, setGenerationMode] = useState<GenerationMode>('template');
+  // Firm-uploaded .docx templates (Storage: firms/{firmId}/templates/). When at
+  // least one exists, high-fidelity becomes the default mode — it fills the
+  // firm's real template in place, so it's the best-fidelity option available.
+  const [docxTemplates, setDocxTemplates] = useState<FirmDocxTemplate[]>([]);
+  const [selectedTemplatePath, setSelectedTemplatePath] = useState('');
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generating, setGenerating] = useState(false);
@@ -100,6 +110,34 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   // Guards the success path against double-fire from both the httpsCallable
   // promise resolution and the Firestore listener (whichever wins first).
   const succeededRef = useRef(false);
+
+  // On open, list the firm's uploaded .docx templates. If any exist, default
+  // the mode to high-fidelity (only when the user hasn't already changed it —
+  // the dialog opens on 'template' and resets to it on close).
+  useEffect(() => {
+    if (!open || !firmId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { ref: storageRef, listAll } = await import('firebase/storage');
+        const { storage } = await import('@/config/firebase');
+        const listing = await listAll(storageRef(storage, `firms/${firmId}/templates`));
+        const docx = listing.items
+          .filter((item) => item.name.toLowerCase().endsWith('.docx'))
+          .map((item) => ({ name: item.name, fullPath: item.fullPath }));
+        if (cancelled) return;
+        setDocxTemplates(docx);
+        if (docx.length > 0) {
+          setGenerationMode((prev) => (prev === 'template' ? 'high-fidelity' : prev));
+          setSelectedTemplatePath((prev) => prev || docx[0].fullPath);
+        }
+      } catch (err) {
+        // Listing failure just means no high-fidelity option — never block the dialog.
+        console.warn('[SingleDocumentGenerator] template listing failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, firmId]);
 
   useEffect(() => {
     if (!generating) {
@@ -187,7 +225,11 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
   // Per-spouse docs only make sense for personal docs (will/POA/HC/trust);
   // skip for joint/property docs that don't have a per-testator variant.
   const docTypeSupportsSpouseRole = ['will', 'pourOverWill', 'poa', 'livingWill', 'trust'].includes(selectedDocType);
-  const showSpouseRole = isMarried && docTypeSupportsSpouseRole && !!spouseFullName;
+  // High-fidelity fills the template from the primary client's data only — no
+  // spouse-swap support in v1, so hide the selector to avoid implying it.
+  const showSpouseRole = isMarried && docTypeSupportsSpouseRole && !!spouseFullName
+    && generationMode !== 'high-fidelity';
+  const isHighFidelity = generationMode === 'high-fidelity';
 
   const handleGenerate = async () => {
     if (!selectedDocType) return;
@@ -195,6 +237,36 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     setGenerating(true);
     setError('');
     setSuccessMessage('');
+
+    if (generationMode === 'high-fidelity') {
+      if (!selectedTemplatePath) {
+        markFailure('Select a .docx template to fill.');
+        return;
+      }
+      try {
+        const selectedTemplate = docxTemplates.find((t) => t.fullPath === selectedTemplatePath);
+        const result = await documentService.generateHighFidelityDocx({
+          firmId,
+          clientId,
+          templateStoragePath: selectedTemplatePath,
+          docType: selectedDocType,
+          displayName: selectedDoc && clientFullName
+            ? `${selectedDoc.label} — ${clientFullName}`
+            : undefined,
+        });
+        const title = selectedDoc?.label ?? selectedTemplate?.name ?? 'Document';
+        markSuccess(
+          result.missingTags.length > 0
+            ? `${title} (${result.missingTags.length} unfilled placeholder${result.missingTags.length === 1 ? '' : 's'} — see document warnings)`
+            : title,
+        );
+      } catch (err) {
+        if (succeededRef.current) return;
+        setError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
+        setGenerating(false);
+      }
+      return;
+    }
 
     try {
       const result = await documentService.generateSingleDocument({
@@ -230,6 +302,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
     setCustomInstructions('');
     setSpouseRole('client');
     setGenerationMode('template');
+    setSelectedTemplatePath('');
     setSoftwareSource('interactivelegal');
     setFormattingPreset('interactivelegal');
     setError('');
@@ -326,8 +399,13 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
                   <SelectValue placeholder="Select mode" />
                 </SelectTrigger>
                 <SelectContent>
+                  {docxTemplates.length > 0 && (
+                    <SelectItem value="high-fidelity" className="text-xs text-[#1a365d] font-medium">
+                      High-Fidelity: Fill Firm .docx — Recommended
+                    </SelectItem>
+                  )}
                   <SelectItem value="template" className="text-xs text-[#1a365d] font-medium">
-                    Template: Exact Fidelity — Recommended
+                    Template: Exact Fidelity{docxTemplates.length === 0 ? ' — Recommended' : ''}
                   </SelectItem>
                   <SelectItem value="hybrid" className="text-xs">
                     Template: Enhanced (Hybrid)
@@ -335,9 +413,34 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-gray-500">
-                Hybrid uses Knowledge Base context; Template skips it.
+                {isHighFidelity
+                  ? 'Fills your uploaded .docx in place — original formatting is preserved exactly.'
+                  : 'Hybrid uses Knowledge Base context; Template skips it.'}
               </p>
             </div>
+            {isHighFidelity && (
+              <div className="col-span-2 space-y-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Firm .docx Template
+                </label>
+                <Select value={selectedTemplatePath} onValueChange={setSelectedTemplatePath}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select a template…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {docxTemplates.map((t) => (
+                      <SelectItem key={t.fullPath} value={t.fullPath} className="text-xs">
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-gray-500">
+                  Unfilled {'{{placeholders}}'} render blank and are listed as warnings on the saved document.
+                </p>
+              </div>
+            )}
+            {!isHighFidelity && (<>
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                 Template Source
@@ -372,9 +475,12 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
                 </SelectContent>
               </Select>
             </div>
+            </>)}
           </div>
 
-          {/* Custom instructions (optional) */}
+          {/* Custom instructions (optional) — deterministic high-fidelity fill
+              has no AI prompt to append them to, so hide in that mode. */}
+          {!isHighFidelity && (
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-gray-700">
               Custom Instructions{' '}
@@ -391,6 +497,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
               These instructions are treated as attorney directives and appended to the AI prompt.
             </p>
           </div>
+          )}
 
           {generating && (
             <div className="flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2.5">
@@ -425,7 +532,7 @@ export default function SingleDocumentGenerator({ firmId, clientId, open, onClos
           </Button>
           <Button
             onClick={handleGenerate}
-            disabled={!selectedDocType || generating}
+            disabled={!selectedDocType || generating || (isHighFidelity && !selectedTemplatePath)}
             className="gap-2 bg-[#2b6cb0] text-white hover:bg-[#2c5282]"
           >
             {generating ? (
