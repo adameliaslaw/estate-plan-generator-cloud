@@ -85,7 +85,9 @@ Matter
 ```
 
 - **One asset, one schedule row.** The six duplication bugs die here, not in six patches.
-- **Allocations must sum to the asset's value**, enforced in the Zod schema. That is check (c).
+- **Allocations must not EXCEED the asset's value**, enforced in the Zod schema; the remainder
+  falls into residue. An earlier draft said "must sum to" — that is wrong and would reject every
+  ordinary will. See the residue scope in HOMEWORK.md.
 - `fairMarketValue` on the asset is the **decedent's interest** — the figure that feeds Line 1 and
   Schedule A column D. `realPropertyDetails.fullMarketValue` remains the whole property (column C).
   Keep those distinct; conflating them is how column C and D end up equal on a fractional interest.
@@ -155,16 +157,10 @@ job. Two things to get right:
 **Fraction or amount — ANSWERED 2026-07-28: store the fraction, derive the amount.** A re-appraised
 house keeps its 1/3 : 2/3 split; the schedules print the derived figure. Show both in the UI.
 
-**🛑 Residue must be scoped before PR 1 starts.** Adam's instruction, and it is the right call —
-this is not a PR 3 concern, it is a constraint on the shape of `Allocation` itself:
+**Residue — SCOPED 2026-07-28. The scope lives in HOMEWORK.md under "▶ NEXT SESSION", deliberately
+not duplicated here** so the two cannot drift. Build to that section, not to this paragraph.
 
-- A specific gift is a fraction *of a named asset*. A residuary share is a fraction *of whatever is
-  left after the specific gifts and the deductions* — a different denominator, resolved late.
-- "Everything else, split equally between my three children" is how most wills read. A model that
-  can only express per-asset fractions cannot represent it, and would have to be reopened
-  immediately after being built.
-- It interacts with the sum-check in §3: an asset allocated 100% to residue is fully allocated even
-  though no beneficiary is named against it directly, so "allocations must sum to the asset value"
-  needs a residuary case or it will reject valid estates.
-
-Scope residue first, get it signed off, then start PR 1.
+The three things it settles, so you know whether you need to open it: the residuary pool is
+computed (Σ assets − Σ specific allocations), never entered; the §3 sum-check above is a `≤` and
+not an `=`; and `perStirpes` is **not** resolved by the engine, because a substitute taker can be a
+different tax class and the attorney must enter the actual takers.
