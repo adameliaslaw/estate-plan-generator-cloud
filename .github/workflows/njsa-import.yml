@@ -1,0 +1,53 @@
+name: NJSA statute import
+
+# Manual-dispatch only (Actions → "NJSA statute import" → Run workflow).
+# Downloads the official NJ Legislature bulk statute file
+# (https://pub.njleg.gov/statutes/STATUTES-TEXT.zip) and loads ~55k sections
+# into the production `njsaStatutes` Firestore collection via
+# scripts/import-njsa.ts. Safe to re-run — each run replaces the prior import
+# and prunes repealed/renumbered sections; the parser refuses to write if the
+# source format looks wrong (<10k sections parsed).
+#
+# Uses the SAME service-account secret as the deploy workflows
+# (FIREBASE_SERVICE_ACCOUNT_EPG); firebase-admin picks up the credentials
+# from GOOGLE_APPLICATION_CREDENTIALS set by google-github-actions/auth.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: njsa-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      # The import script resolves firebase-admin and jszip from functions/
+      # via createRequire — root deps are not needed.
+      - name: Install functions dependencies (frozen lockfile)
+        working-directory: functions
+        run: npm ci
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPG }}
+
+      - name: Import NJSA statutes into production Firestore
+        env:
+          GCLOUD_PROJECT: estate-plan-generator
+        run: npx --yes tsx@4 scripts/import-njsa.ts
