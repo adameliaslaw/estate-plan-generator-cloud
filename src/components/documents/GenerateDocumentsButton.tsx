@@ -16,6 +16,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { collection, getDocs, getFirestore } from 'firebase/firestore';
 import {
   Dialog,
   DialogContent,
@@ -165,6 +166,31 @@ export default function GenerateDocumentsButton({
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generationMode, setGenerationMode] = useState('template');
+  // Firm .docx template mappings (Settings → Document Templates). When at
+  // least one exists, High-Fidelity becomes an option and the default mode.
+  const [mappedDocTypes, setMappedDocTypes] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (phase !== 'confirming' || !firmId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(getFirestore(), `firms/${firmId}/docxTemplateMap`));
+        if (cancelled) return;
+        const mapped = new Set(snap.docs.map((d) => d.id));
+        setMappedDocTypes(mapped);
+        if (mapped.size > 0) {
+          setGenerationMode((prev) => (prev === 'template' ? 'high-fidelity' : prev));
+        }
+      } catch (err) {
+        console.warn('[GenerateDocumentsButton] docxTemplateMap load failed:', err);
+        setMappedDocTypes(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [phase, firmId]);
+  // Per-property docTypes never fill from a flat .docx (mirror of backend
+  // HF_EXCLUDED_DOC_TYPES) — shown as fallback in the coverage summary.
+  const HF_UNFILLABLE = new Set(['deed', 'affidavitOfConsideration', 'gitRep3']);
   // Package is chosen in the dialog (not fixed per client). Seeded from the
   // passed-in default, freely changeable before generating.
   const [chosenPackage, setChosenPackage] = useState<'foundation' | 'guardian' | 'fortress'>(packageType);
@@ -246,7 +272,7 @@ export default function GenerateDocumentsButton({
           clientId,
           packageType: chosenPackage,
           trustTypes,
-          generationMode: generationMode as 'template' | 'ai' | 'hybrid',
+          generationMode: generationMode as 'template' | 'ai' | 'hybrid' | 'high-fidelity',
           softwareSource: softwareSource === 'none' ? '' : softwareSource,
           formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
         });
@@ -267,7 +293,7 @@ export default function GenerateDocumentsButton({
               docType: sel.docType,
               spouseRole: sel.spouseRole,
               trustTypes,
-              generationMode: generationMode as 'template' | 'ai' | 'hybrid',
+              generationMode: generationMode as 'template' | 'ai' | 'hybrid' | 'high-fidelity',
               softwareSource: softwareSource === 'none' ? '' : softwareSource,
               formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
             });
@@ -537,13 +563,29 @@ export default function GenerateDocumentsButton({
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="template" className="text-xs text-[#1a365d] font-medium">Template: Exact Fidelity — Recommended</SelectItem>
+                    {(mappedDocTypes?.size ?? 0) > 0 && (
+                      <SelectItem value="high-fidelity" className="text-xs text-[#1a365d] font-medium">High-Fidelity: Fill Firm .docx — Recommended</SelectItem>
+                    )}
+                    <SelectItem value="template" className={'text-xs text-[#1a365d]' + ((mappedDocTypes?.size ?? 0) > 0 ? '' : ' font-medium')}>Template: Exact Fidelity{(mappedDocTypes?.size ?? 0) > 0 ? '' : ' — Recommended'}</SelectItem>
                     <SelectItem value="hybrid" className="text-xs">Template: Enhanced (Hybrid)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[10px] text-gray-400">
-                  Template uses your saved template exactly. Hybrid additionally runs AI over unresolved fields using Knowledge Base context.
+                  {generationMode === 'high-fidelity'
+                    ? 'Mapped documents are filled directly in your firm .docx templates — formatting preserved exactly. Unmapped ones fall back to HTML-template generation.'
+                    : 'Template uses your saved template exactly. Hybrid additionally runs AI over unresolved fields using Knowledge Base context.'}
                 </p>
+                {generationMode === 'high-fidelity' && mappedDocTypes && (() => {
+                  const chosen = selectableDocs.filter((d) => selectedKeys.has(d.key));
+                  const filled = [...new Set(chosen.filter((d) => mappedDocTypes.has(d.docType) && !HF_UNFILLABLE.has(d.docType)).map((d) => d.label))];
+                  const fallback = [...new Set(chosen.filter((d) => !mappedDocTypes.has(d.docType) || HF_UNFILLABLE.has(d.docType)).map((d) => d.label))];
+                  return (
+                    <p className="mt-1 text-[10px] text-gray-500">
+                      {filled.length > 0 && <>✅ Firm template: {filled.join(', ')}. </>}
+                      {fallback.length > 0 && <span className="text-amber-700">⚠️ HTML fallback (no mapping): {fallback.join(', ')}.</span>}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
 

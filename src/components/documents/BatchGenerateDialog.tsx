@@ -15,6 +15,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
+import { collection, getDocs, getFirestore } from 'firebase/firestore';
 import {
   Dialog,
   DialogContent,
@@ -123,6 +124,27 @@ export default function BatchGenerateDialog({
   const [softwareSource, setSoftwareSource] = useState('interactivelegal');
   const [formattingPreset, setFormattingPreset] = useState('interactivelegal');
   const [generationMode, setGenerationMode] = useState('template');
+  // Firm .docx template mappings — when at least one exists, High-Fidelity
+  // becomes an option and the default mode for the whole batch.
+  const [hfMappingCount, setHfMappingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open || !firmId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(getFirestore(), `firms/${firmId}/docxTemplateMap`));
+        if (cancelled) return;
+        setHfMappingCount(snap.size);
+        if (snap.size > 0) {
+          setGenerationMode((prev) => (prev === 'template' ? 'high-fidelity' : prev));
+        }
+      } catch (err) {
+        console.warn('[BatchGenerateDialog] docxTemplateMap load failed:', err);
+        setHfMappingCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, firmId]);
   const [phase, setPhase] = useState<Phase>('configuring');
   const [statusById, setStatusById] = useState<Record<string, ClientStatus>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -197,7 +219,7 @@ export default function BatchGenerateDialog({
           clientId: client.id,
           packageType: pkg,
           trustTypes,
-          generationMode: generationMode as 'template' | 'ai' | 'hybrid',
+          generationMode: generationMode as 'template' | 'ai' | 'hybrid' | 'high-fidelity',
           softwareSource: softwareSource === 'none' ? '' : softwareSource,
           formattingPreset: formattingPreset === 'none' ? '' : formattingPreset,
         });
@@ -395,11 +417,19 @@ export default function BatchGenerateDialog({
                       <SelectValue placeholder="Select mode" />
                     </SelectTrigger>
                     <SelectContent>
+                      {(hfMappingCount ?? 0) > 0 && (
+                        <SelectItem
+                          value="high-fidelity"
+                          className="text-xs text-[#1a365d] font-medium"
+                        >
+                          High-Fidelity: Fill Firm .docx — Recommended
+                        </SelectItem>
+                      )}
                       <SelectItem
                         value="template"
                         className="text-xs text-[#1a365d] font-medium"
                       >
-                        Template: Exact Fidelity — Recommended
+                        Template: Exact Fidelity{(hfMappingCount ?? 0) > 0 ? '' : ' — Recommended'}
                       </SelectItem>
                       <SelectItem value="hybrid" className="text-xs">
                         Template: Enhanced (Hybrid)
