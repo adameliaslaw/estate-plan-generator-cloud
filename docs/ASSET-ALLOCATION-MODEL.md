@@ -79,9 +79,10 @@ Matter
   assets: Asset[]                      // the estate's property, entered once
     id, type (BequestType), description, fairMarketValue
     realPropertyDetails? / businessDetails? / accountDetails? / …   (unchanged, moved here)
-    allocations: Allocation[]
-      beneficiaryId, plus EITHER share (fraction/percent) OR amount
-  beneficiaries: Beneficiary[]         // identity only — no bequests
+    allocations: Allocation[]          // SPECIFIC gifts only; may be absent
+      beneficiaryId + fraction         // the fraction is stored, the amount derived (§7)
+  residuary: ResiduaryShare[]          // beneficiaryId + fraction, summing to 1
+  beneficiaries: Beneficiary[]         // identity only — bequests empty
 ```
 
 - **One asset, one schedule row.** The six duplication bugs die here, not in six patches.
@@ -106,12 +107,14 @@ Matter
 
 ## 4. The three PRs, in order
 
-**PR 1 — model and derivation.** Add `assets` + `allocations` to the matter; declare them in the
-Zod schema with the sum-check; write `deriveBeneficiaryBequests(matter)` producing exactly the
-shape the engine takes today. Read-compat both ways (see §5). Engine untouched, gold cases
-untouched and green.
-*Done when:* a matter in either shape computes to identical figures, proven by a test that runs the
-same estate through both shapes and asserts equality.
+**PR 1 — model and derivation. ✅ BUILT 2026-07-28.** `assets` + `allocations` + `residuary` on the
+matter, declared in the Zod schema with the `≤` sum-check and residue's rules;
+`functions/src/inheritance-tax/allocations.ts` holds `deriveEngineMatter` (allocation shape → the
+shape the engine takes today) and `normalizeMatterToAssets` (legacy nested → allocation shape),
+called at the two engine boundaries. Engine untouched, gold cases untouched and green.
+*Done when — met:* `tests/unit/inheritance-tax-allocations.test.ts` runs the same estate through
+both shapes and asserts every figure matches, and round-trips a legacy matter asserting the whole
+computation — frozen snapshot included — is identical.
 
 **PR 2 — schedules render from assets.** `collectScheduleItems` emits one row per asset with its
 allocations. This is where the six duplication bugs die.
@@ -152,15 +155,16 @@ job. Two things to get right:
 
 ---
 
-## 7. Answers, and the gate before PR 1
+## 7. Answers, both closed
 
 **Fraction or amount — ANSWERED 2026-07-28: store the fraction, derive the amount.** A re-appraised
 house keeps its 1/3 : 2/3 split; the schedules print the derived figure. Show both in the UI.
 
-**Residue — SCOPED 2026-07-28. The scope lives in HOMEWORK.md under "▶ NEXT SESSION", deliberately
-not duplicated here** so the two cannot drift. Build to that section, not to this paragraph.
+**Residue — SCOPED 2026-07-28, BUILT the same day in PR 1. The scope and what it became live in
+HOMEWORK.md under "▶ THE ASSET/ALLOCATION MODEL", deliberately not duplicated here** so the two
+cannot drift. Build to that section, not to this paragraph.
 
 The three things it settles, so you know whether you need to open it: the residuary pool is
 computed (Σ assets − Σ specific allocations), never entered; the §3 sum-check above is a `≤` and
 not an `=`; and `perStirpes` is **not** resolved by the engine, because a substitute taker can be a
-different tax class and the attorney must enter the actual takers.
+different tax class — the schema rejects the field outright rather than accepting and ignoring it.

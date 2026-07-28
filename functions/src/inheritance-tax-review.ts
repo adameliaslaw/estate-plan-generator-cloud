@@ -35,6 +35,7 @@ import { fillITEXTPdf } from './inheritance-tax/forms/it-ext-pdf';
 import { fillL9Pdf } from './inheritance-tax/forms/l9-pdf';
 import {
   computeEstate,
+  deriveEngineMatter,
   getRuleSet,
   validateMatter,
   buildITRFormData,
@@ -147,7 +148,10 @@ export const computeAndStoreInheritanceTax = onCall(CALL_OPTS, async (request: C
   let computation: EstateComputation;
   try {
     const ruleSet = getRuleSet(matter.decedent.dateOfDeath);
-    computation = { ...computeEstate(matter, ruleSet), computedAt: new Date().toISOString() } as EstateComputation;
+    // Per-beneficiary amounts are derived from the matter's allocations here, at the boundary —
+    // the engine keeps the shape it takes today (see deriveEngineMatter). A matter in the legacy
+    // nested model passes through unchanged.
+    computation = { ...computeEstate(deriveEngineMatter(matter), ruleSet), computedAt: new Date().toISOString() } as EstateComputation;
   } catch (e) {
     if (e instanceof UnsupportedMatterError) throw new HttpsError('failed-precondition', e.message);
     throw e;

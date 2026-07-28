@@ -248,6 +248,58 @@ export interface Bequest {
   transferDetails?: TransferDetails;          // Schedule C
 }
 
+// ─── Assets and allocations ───────────────────────────────────────────────────
+
+/**
+ * One beneficiary's SPECIFIC share of a single asset.
+ *
+ * The share is stored as a FRACTION of the asset, never as a dollar amount (decision
+ * 2026-07-28): a re-appraisal then keeps the split intact and the schedules print the derived
+ * figure. An asset with no allocations at all passes wholly into residue — that is the ordinary
+ * will, not an error.
+ */
+export interface Allocation {
+  beneficiaryId: string;
+  /** 0 < fraction ≤ 1. An asset's allocations must sum to ≤ 1; the remainder is residue. */
+  fraction: number;
+}
+
+/**
+ * An item of estate property, entered ONCE at the decedent's interest and allocated out of.
+ *
+ * Deliberately the same shape as {@link Bequest} plus `allocations`: an asset IS what a bequest
+ * described, minus the assumption that exactly one beneficiary takes all of it. Extending keeps
+ * the per-schedule detail blocks (Schedule A/B/B-1/B-2/B-3/C columns) from drifting into two
+ * definitions, and makes the legacy normalisation a one-liner — a nested `Bequest` is one asset
+ * wholly allocated to one beneficiary.
+ *
+ * `fairMarketValue` is the DECEDENT'S INTEREST (Schedule A column D), not the whole property;
+ * `realPropertyDetails.fullMarketValue` remains the entire property (column C).
+ */
+export interface Asset extends Bequest {
+  /** SPECIFIC gifts only. Absent or empty = the asset passes wholly into residue. */
+  allocations?: Allocation[];
+}
+
+/**
+ * One taker's share of the residuary pool.
+ *
+ * The pool is COMPUTED, never entered: Σ(asset.fairMarketValue) − Σ(all specific allocations).
+ * Shares must sum to 1 whenever the pool is greater than zero.
+ *
+ * ⚠️ There is deliberately no `perStirpes` field. Per stirpes decides who takes when a residuary
+ * beneficiary predeceases, and the substitute can be a DIFFERENT TAX CLASS — a deceased child's
+ * share passing to grandchildren stays Class A, a deceased sibling's share passing to nieces and
+ * nephews moves Class C → Class D. Resolving that here would produce a confidently wrong return.
+ * The attorney enters the ACTUAL takers. `.strict()` on the schema rejects the field outright so
+ * the omission cannot be mistaken for an oversight.
+ */
+export interface ResiduaryShare {
+  beneficiaryId: string;
+  /** 0 < fraction ≤ 1. Shares sum to 1 when the residuary pool is greater than zero. */
+  fraction: number;
+}
+
 // ─── Addresses ────────────────────────────────────────────────────────────────
 
 /**
@@ -289,6 +341,14 @@ export interface Beneficiary {
     overriddenBy: string; // attorney bar ID
     overriddenAt: ISODateTime;
   };
+  /**
+   * The NESTED model: what this beneficiary takes, entered under them.
+   *
+   * Empty on a matter that uses {@link Matter.assets} — there the beneficiary carries identity
+   * only and this array is populated by `deriveEngineMatter` at the boundary, so the engine keeps
+   * taking the shape it takes today. The two models are mutually exclusive; validation rejects a
+   * matter that carries both.
+   */
   bequests: Bequest[];
 }
 
@@ -444,6 +504,26 @@ export interface Matter {
     email?: string;
   };
   beneficiaries: Beneficiary[];
+  /**
+   * The ALLOCATION model: the estate's property, entered once and allocated to beneficiaries.
+   *
+   * Present = this matter uses the allocation model, and every `beneficiaries[].bequests` must be
+   * empty. Absent = the legacy nested model, unchanged. Mixing the two is a validation error, so
+   * "which model is this matter in" is answered by one field and never inferred.
+   *
+   * The engine never sees this shape: `deriveEngineMatter` turns assets + allocations + residuary
+   * into the per-beneficiary bequests `computeEstate` already takes.
+   */
+  assets?: Asset[];
+  /**
+   * Who takes the residuary pool, and in what fractions. Only meaningful with {@link assets}.
+   *
+   * The pool itself is computed, never entered:
+   *   pool = Σ(asset.fairMarketValue) − Σ(all specific allocations)
+   * Shares must sum to 1 when the pool is greater than zero, and must be absent or empty when it
+   * is zero (every asset specifically allocated in full).
+   */
+  residuary?: ResiduaryShare[];
   deductions: Deduction[];
   /**
    * Structured disclaimer records. When present and non-empty, disclaimersExist must also

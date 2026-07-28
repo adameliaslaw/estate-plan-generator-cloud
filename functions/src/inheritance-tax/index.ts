@@ -24,6 +24,7 @@
  * Functions here).
  */
 export * from './types';
+export * from './allocations';
 export * from './engine';
 export * from './rules';
 export * from './validation';

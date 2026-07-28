@@ -4,25 +4,160 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## ▶ NEXT SESSION — the asset/allocation model (decided, scoped, not started)
+## ▶ THE ASSET/ALLOCATION MODEL — residue is built (PR 1); schedules and intake follow, in that order
 
-**Full scope: [docs/ASSET-ALLOCATION-MODEL.md](./docs/ASSET-ALLOCATION-MODEL.md).** Kept in its own
-file rather than inline because this file is re-read every session and was archived once for
-exactly that reason — the decisive facts are below so nobody has to open the doc to know it is
-settled.
+Read this section top to bottom: it is the work in the order it has to happen. Residue is the
+foundation the other two PRs stand on, so it went first and it is done. **Full scope:
+[docs/ASSET-ALLOCATION-MODEL.md](./docs/ASSET-ALLOCATION-MODEL.md)** — kept in its own file
+because this one is re-read every session, and was archived once for exactly that reason.
 
-**Adam's decision, 2026-07-28:** the model changes from *bequests nested under beneficiaries* to
-*assets held by the estate, allocated to beneficiaries*. I initially argued this was not justified
-and was wrong; the argument that settled it is below.
+### 1 · Residue and the allocation model — ✅ BUILT 2026-07-28, awaiting Adam's sign-off to merge
 
-**Why, in three facts — all reproduced against the real engine, not reasoned about:**
+**What shipped (PR 1 — model, derivation, back-compat; engine untouched, 961/961 green):**
+
+```
+Matter
+  assets: Asset[]                    // the estate's property, entered ONCE
+    fairMarketValue                  // the decedent's interest (Schedule A column D)
+    allocations: Allocation[]        // SPECIFIC gifts only; may be absent
+      beneficiaryId + fraction       // the FRACTION is stored; the amount is derived
+  residuary: ResiduaryShare[]        // beneficiaryId + fraction, summing to 1
+  beneficiaries[].bequests           // empty in this model — identity only
+```
+
+`functions/src/inheritance-tax/allocations.ts` holds the two directions, and nothing else knows
+both shapes: `deriveEngineMatter` (allocation shape → what `computeEstate` already takes) and
+`normalizeMatterToAssets` (legacy nested shape → allocation shape). They are called at the two
+engine boundaries (`inheritance-tax-compute.ts`, `inheritance-tax-review.ts`). **The engine was
+not touched and no gold case was edited.**
+
+**The residuary pool is computed, never entered** — there is nowhere to type a wrong one:
+
+```
+pool = Σ(asset.fairMarketValue) − Σ(all specific allocations)
+each residuary taker receives  share.fraction × pool
+```
+
+**The sum-check is a `≤`, not an `=`** — this was the correction that made the whole thing work,
+because an equality check rejects every ordinary will:
+
+- Σ(an asset's specific allocations) **≤** its value — the remainder falls into residue.
+- Pool > 0 ⇒ residuary shares are required, and must sum to 1.
+- Pool = 0 ⇒ residuary shares must be absent or empty.
+- An asset with **no allocations at all is wholly residuary** — the common case, not an error.
+  It is *fully allocated with no beneficiary named against it*, which is precisely what a naive
+  equality check cannot express.
+
+**All three required cases are expressible, each with a test:** (1) whole asset to one person;
+(2) whole asset into residue with no allocation entry; (3) part specific, part residue — $50,000
+of a $120,000 Chase account to the niece, $70,000 into the pool.
+
+**⚠️ Per stirpes is not computed, and the model refuses the instruction rather than ignoring it.**
+`ResiduaryShare` has no `perStirpes` field and `.strict()` rejects one. The substitute taker can be
+a **different tax class** — a deceased child's share to grandchildren stays Class A, a deceased
+sibling's share to nieces and nephews moves **Class C → Class D**. Accepting the flag and quietly
+not acting on it is the dangerous outcome: it reads as handled. **The screen must still say this**
+— that part belongs to PR 3, below.
+
+**The two smaller interactions are handled, not deferred:**
+- **A charity can take residue.** A residuary share accepts an entity beneficiary (Class E,
+  exempt); tested.
+- **Disclaimers are refused by name, never silently.** A disclaimer can name only an asset given
+  **whole** to the disclaimant — that asset derives to a bequest carrying its own id, which is the
+  only id an attorney can see. A fractional share and a residuary share have no such id, and each
+  gets its own error explaining why, the residuary one naming the Class C → Class D hazard.
+
+**Proof it is right:** `tests/unit/inheritance-tax-allocations.test.ts` (31 tests) runs the same
+estate — a $500,000 house split two ways plus a $40,000 account, with deductions so the Line-9
+scale is live — through **both shapes** and asserts every figure matches; and round-trips a legacy
+matter through `normalize → derive`, asserting the **whole computation** including the frozen form
+snapshot is identical. Shares apportion in integer cents by largest remainder, so a 1/3 : 2/3 split
+sums to the asset exactly. That last one is negative-controlled: swapping in naive per-part
+rounding fails the three-way residue test.
+
+**Sign-off needed before merge** — this is a data-model change to the tax engine, which the
+Never-Break List puts outside auto-merge.
+
+### 2 · NEXT — schedules render from assets (PR 2)
+
+This is where the six duplication bugs actually die, and PR 1 deliberately did **not** touch them:
+the split house still prints **two Schedule A rows** today, from either shape (there is a test
+asserting exactly that, so the next session inherits a fact and not a guess).
+
+`collectScheduleItems` (`engine/compute.ts`, called by `buildFormSnapshot`) emits one row per
+*bequest*; it must emit one row per **asset**, with its allocations. One change, six schedules —
+**A, B, B-1, B-2, B-3 and C** — which is why the per-schedule "group the rows" patch was rejected:
+it would have been written six times, each with its own notion of asset identity.
+
+*Done when:* the split house produces **one** Schedule A row at $500,000, the split account **one**
+B-1 row, and the PDF assertions read those values back out of the produced file.
+
+**The question this PR looked like it would have to answer is already answered — by the State.**
+Checked 2026-07-28 against `it-rinst.pdf` and the blank form's own field layer, because "who is
+named on a row that now has several takers" reads like a blocker and is not one.
+
+**There is no beneficiary column on any asset schedule.** Schedule A is Column A – Description
+(county · fractional or percentage interest · street · lot and block · municipality · owner(s)
+name(s)/property title · mortgage lien), B – Tax Assessed Value, C – Full Market Value, D – Value
+of Decedent's Interest. The only names it asks for are **owners of record**: *"Include all owners'
+names listed on the property. If a previously deceased person's name(s) is still on the deed,
+include the name(s), write 'Predeceased'."* Schedule B-1 is the same — Column A is *"Name of
+Institution, Last Four Digits of Account Number, and Registered Owners"*, and its "registered
+beneficiary(s)" is the account's own POD designation, not the will's taker.
+
+So **one asset = one row, and the row has no beneficiary to name.** `fillScheduleA` already writes
+only the State's columns and never touches `beneficiaryName`; the official L-9 filler likewise
+names no beneficiary per property (the L-9's beneficiary list is its own separate schedule).
+`ScheduleItem.beneficiaryName` survives in exactly two places, both ours: the HTML workpaper column
+(`render.ts:71`) and the HTML L-9 "Passing to" line (`render-l9a.ts:37`). What that column shows is
+a **review-aid decision with no legal constraint** — suggested: the specific takers, plus
+"Residuary estate" for the rest, borrowing the State's own vocabulary.
+
+**New work this uncovered — Schedule E Column D is literally the allocation model.** Printed
+heading: **"(D) Fractional/percentage of residuary Estate and/or specific asset"**, and the
+instructions spell it out:
+
+> *"Beneficiary's Share. If the beneficiary is to receive a percentage of the residual Estate or a
+> fractional share … list that share, even if they are receiving other assets. Examples: '50%
+> Residue,' '1/3 of Estate,' '100% Residue.' — Specific Bequest Assets … Examples: '$5,000 cash
+> bequest,' 'grandfather clock'"*
+
+That is `residuary[].fraction` and `allocations[]` in the State's own words. **Before PR 1 this
+column was unfillable in principle** — the nested model had no notion of "50% Residue" because it
+had no residue. Today `ScheduleEBeneficiaryRow` carries columns A/B/C/E only, and `fillScheduleE`
+writes name, address, relationship, tax class and dollar amount, leaving D and F blank.
+
+⚠️ **The constraint, checked rather than assumed:** the blank IT-R's AcroForm has **808 fields and
+none for Column D or Column F**. Those columns are printed but not fillable, so filling D means
+drawing text onto the page, not writing a field. Scope it accordingly — it is not a one-liner.
+
+Two smaller confirmations from the same pass, worth not rediscovering:
+- Schedule A Column D says *"Show this as a dollar amount (not a fraction or percentage)"* —
+  which is store-the-fraction, print-the-derived-amount, exactly as decided.
+- Schedule A's *"Fractional or percentage interest"* is the **decedent's ownership** share
+  (tenants in common) — a different number from a beneficiary's allocation fraction. The model
+  keeps them in separate fields (`realPropertyDetails.fractionalInterest` vs `Allocation.fraction`)
+  and PR 2 must not merge them.
+
+### 3 · THEN — intake, inventory-then-allocate (PR 3)
+
+Assets entered once, then allocated; a share picker that does the arithmetic (fraction, percent or
+amount) and shows the unallocated remainder as it falls into the pool. **The per-stirpes notice
+from §1 goes on this screen** — the attorney enters the actual takers, and the UI says why.
+
+*Done when:* a 1/3 : 2/3 split is enterable without the attorney computing anything, and an
+over-allocated asset cannot be saved.
+
+### Why this model at all — the three facts, kept because they are the justification
+
+All reproduced against the real engine, not reasoned about. Adam's decision, 2026-07-28; I argued
+against it first and was wrong.
 
 1. **Every asset schedule prints a shared asset twice.** A $500,000 house split two ways gives a
    correct gross estate of $500,000 and **two Schedule A rows** — same address, same lot, same
    block, each showing the decedent's interest as $250,000. A bank account does the same on B-1
-   (account …4821 printed twice at $40,000). It affects **A, B, B-1, B-2, B-3 and C**, so the
-   cheap "group the rows" patch would have to be written six times. That is the signal it is the
-   wrong layer.
+   (account …4821 printed twice at $40,000). It affects six schedules. That is the signal it is
+   the wrong layer.
 2. **It contradicts the State's instructions on the schedule that generates the tax waiver.**
    Schedule A column D is *"the value of the decedent's interest only"* and *"goes directly onto
    the tax waiver"*. Two rows at $250,000 assert the decedent held two half-interests in one house.
@@ -31,82 +166,18 @@ and was wrong; the argument that settled it is below.
    a return that is quietly $100,000 light. Structural, and the allocation model makes it
    impossible.
 
-**The hard constraint, which matters more than anything else here: do not change the engine.**
-`computeEstate` keeps the shape it takes today; per-beneficiary amounts are **derived** from
-allocations at the boundary. The 25 gold cases are the only proof the figures are right — they
-must be untouched and green at every step. If a gold case needs editing, the derivation is wrong,
-not the case.
+**The hard constraint, at every step: do not change the engine.** `computeEstate` keeps the shape
+it takes today; per-beneficiary amounts are **derived** at the boundary. The 25 gold cases are the
+only proof the figures are right. If a gold case needs editing, the derivation is wrong, not the
+case.
 
-**Three PRs, not one:** (1) model + derivation + back-compat, engine untouched; (2) schedules render
-from assets — where the six duplication bugs actually die; (3) intake, inventory-then-allocate with
-the share arithmetic done for you. Each independently shippable and revertible.
+**Answered questions, both closed 2026-07-28:** store the **fraction**, derive the amount (a
+re-appraisal keeps the split intact); and residue follows the firm's own will model —
+`ResidualDistribution` percentages summing to 100 — so **specific gifts off the top, residue split
+by percentage**, not a general-purpose bequest algebra.
 
-**Question 1 — ANSWERED 2026-07-28: store the fraction, derive the amount.** A re-appraisal then
-keeps the split intact; the schedules print the derived amount.
-
-**Question 2 — RESIDUE: SCOPED 2026-07-28, below. PR 1 may start once Adam signs this off.**
-
-### Residue — the scope PR 1 must build to
-
-**No interview was needed: the firm's own will model already says how its wills read.**
-`src/types/index.ts` carries `SpecificBequest`, `ResidualDistribution { recipient, percentage
-0–100 summing to 100, perStirpes, alternateRecipient }` and `CharitableBequest { amount?,
-percentage? }`. So: **specific gifts off the top, residue split by percentage.** That is the
-pattern to support — not a general-purpose bequest algebra.
-
-**The shape:**
-
-```
-Matter
-  assets: Asset[]
-    fairMarketValue                  // decedent's interest
-    allocations: Allocation[]        // SPECIFIC gifts only; may be empty
-      beneficiaryId + fraction       // fraction, per the decision above
-  residuary: ResiduaryShare[]        // beneficiaryId + fraction, summing to 1
-```
-
-**The residuary pool is a computed figure, never entered:**
-
-```
-pool = Σ(asset.fairMarketValue) − Σ(all specific allocations)
-each residuary taker receives  share.fraction × pool
-```
-
-**The sum-check from §3 of the doc is WRONG as written and must be corrected.** It says
-allocations must *equal* the asset value. That would reject every ordinary will. The rule is:
-
-- Σ(an asset's specific allocations) **≤** its value — the remainder falls into residue.
-- If the pool is > 0 there must be residuary shares, and they must sum to 1.
-- If the pool is 0, residuary shares must be absent or empty.
-- An asset with no allocations at all is wholly residuary — that is the common case, not an error.
-
-This is the single most important correction in this section: an asset passing wholly into residue
-is *fully allocated* with **no beneficiary named against it**, so a naive equality check rejects
-valid estates.
-
-**Three cases that must all be expressible**, and are the acceptance criteria:
-1. Whole asset to one person (today's only case).
-2. Whole asset into residue, no allocation entry.
-3. Part specific, part residue — "$50,000 from my Chase account to my niece, the rest falls into
-   residue." Allocation of $50,000, remainder to the pool.
-
-**⚠️ Per stirpes is deliberately NOT computed, and this must be stated on screen.** `perStirpes`
-decides who takes when a residuary beneficiary predeceases — and the substitute can be a
-**different tax class**, which changes the tax. A deceased child's share to grandchildren stays
-Class A; a deceased sibling's share to nieces and nephews moves **Class C → Class D**. The engine
-must not resolve that. The attorney enters the **actual** takers, and the UI says so. Resolving it
-silently would produce a confidently wrong return — the failure mode this whole tool is built
-against.
-
-**Two smaller interactions to handle, not to discover later:**
-- **Charities take residue by percentage too** (`CharitableBequest.percentage`). A residuary share
-  must accept an entity beneficiary — Class E, exempt. Do not assume residuary takers are people.
-- **Disclaimers reference `bequestIds` today** (`applyDisclaimers`). A disclaimed *residuary* share
-  has no bequest id, so the disclaimer model needs a way to name a residuary share, or residuary
-  disclaimers must be explicitly refused rather than silently ignored.
-
-**Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. It would be
-throwaway work covering one sixth of the problem.
+**Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. Throwaway work
+covering one sixth of the problem.
 
 ---
 
