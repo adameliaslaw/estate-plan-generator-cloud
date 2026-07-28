@@ -216,6 +216,22 @@ export async function getMatter(
   return decode<Matter>(snap.data());
 }
 
+/**
+ * The matter plus the index fields stored beside it. `updatedAt` is what tells a reopened matter
+ * whether its stored computation still describes it, so it has to come back with the record —
+ * `getMatter` decodes only the matter itself.
+ */
+export async function getMatterWithMeta(
+  db: Firestore,
+  firmId: string,
+  matterId: string,
+): Promise<{ matter: Matter; updatedAt: string } | undefined> {
+  const snap = await matterDoc(db, firmId, matterId).get();
+  const matter = decode<Matter>(snap.data());
+  if (!matter) return undefined;
+  return { matter, updatedAt: (snap.data()?.['updatedAt'] as string) ?? '' };
+}
+
 export async function listMatters(
   db: Firestore,
   firmId: string,
@@ -279,6 +295,24 @@ export async function getCheckpoint(
 ): Promise<ReviewCheckpoint | undefined> {
   const snap = await subCollection(db, firmId, matterId, 'checkpoints').doc(checkpointId).get();
   return decode<ReviewCheckpoint>(snap.data());
+}
+
+/**
+ * The most recent checkpoint whatever its status, so reopening a matter can resume a *pending*
+ * review as well as an approved one. `getApprovedCheckpoint` stays the authority for rendering
+ * forms — a form must never render from a pending checkpoint (FND-IMMUT).
+ */
+export async function getLatestCheckpoint(
+  db: Firestore,
+  firmId: string,
+  matterId: string,
+): Promise<ReviewCheckpoint | undefined> {
+  const snap = await subCollection(db, firmId, matterId, 'checkpoints').get();
+  const all = snap.docs
+    .map((d) => decode<ReviewCheckpoint>(d.data()))
+    .filter((c): c is ReviewCheckpoint => !!c)
+    .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+  return all[all.length - 1];
 }
 
 export async function getApprovedCheckpoint(

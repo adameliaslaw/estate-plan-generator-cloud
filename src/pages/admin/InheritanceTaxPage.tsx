@@ -183,6 +183,30 @@ export default function InheritanceTaxPage() {
 
   useEffect(() => { void refreshList(); }, [refreshList]);
 
+  /**
+   * Reopen a saved matter. Until this existed the list was a dead end — you could see a matter
+   * and never get back into it.
+   *
+   * The loaded object is kept WHOLE and only its known keys are edited, so fields this editor
+   * does not model (itExtension, priorPayments, disclaimers) survive the round trip instead of
+   * being dropped on the next save. See `LoadedMatter`.
+   */
+  const onOpenMatter = (matterId: string) => run(`open:${matterId}`, async () => {
+    const loaded = await inheritanceTaxService.get(firmId, matterId);
+    setMatter(loaded.matter);
+    setSaved(true);
+    setComputation(loaded.computation ?? null);
+    setCheckpoint(loaded.checkpoint ?? null);
+    setForm(null);
+    setCompanion(null);
+    setAudit(null);
+    toast.success(
+      loaded.computationStale
+        ? 'Opened. It was edited after its last computation, so recompute before requesting review.'
+        : 'Opened.',
+    );
+  });
+
   const grossEntered = useMemo(
     () => (matter?.beneficiaries ?? []).reduce(
       (sum, b) => sum + b.bequests.reduce((s, q) => s + (Number(q.fairMarketValue) || 0), 0), 0),
@@ -350,12 +374,18 @@ export default function InheritanceTaxPage() {
         ) : (
           <ul className="divide-y">
             {matters.map((m) => (
-              <li key={m.matterId} className="flex items-center justify-between py-2 text-sm">
+              <li key={m.matterId} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span>
                   <span className="font-medium">{m.decedentName || m.matterId}</span>
                   <span className="text-muted-foreground ml-2">d. {m.dateOfDeath || '—'}</span>
                 </span>
-                <span className="text-muted-foreground text-xs">{m.matterId}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-muted-foreground text-xs">{m.matterId}</span>
+                  <Button variant="outline" size="sm" disabled={busy !== null}
+                    onClick={() => onOpenMatter(m.matterId)}>
+                    {busy === `open:${m.matterId}` ? 'Opening…' : 'Open'}
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
@@ -485,6 +515,16 @@ export default function InheritanceTaxPage() {
             <p className="text-muted-foreground text-sm">
               <strong>Relationship drives the tax class</strong> (N.J.S.A. 54:34-2) — it is the field
               to double-check. The picker is grouped by the class it produces.
+            </p>
+            {/* The most-asked question about this screen. It is not a UI restriction; it is what
+                the tax is. */}
+            <p className="text-muted-foreground text-sm">
+              <strong>Assets are entered under the person who receives them</strong> because this is
+              a tax on the <em>inheritance</em>, not on the estate. The same $100,000 is taxed at 0%
+              to a child, 11–16% to a sibling and 15–16% to a friend, so an asset with no named
+              recipient has no rate and cannot be computed. Add the beneficiary first, then their
+              share. An asset split between people is entered once under each, at each person's
+              share of its value.
             </p>
             {/* Errors of commission: the engine taxes whatever it is given, so entering one of
                 these raises the tax on a filed return and nothing errors. */}

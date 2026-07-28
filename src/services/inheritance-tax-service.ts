@@ -23,6 +23,7 @@ import type {
   CompanionFormResult,
   AuditTrailResult,
   CheckpointResult,
+  LoadedMatter,
 } from '@/types/inheritance-tax';
 
 const call = <Req, Res>(name: string) => httpsCallable<Req, Res>(functions, name);
@@ -33,6 +34,20 @@ export const inheritanceTaxService = {
     const fn = call<{ firmId: string }, { matters: InheritanceMatterSummary[] }>('listInheritanceMatters');
     const res = await fn({ firmId });
     return res.data.matters;
+  },
+
+  /**
+   * Reopen a saved matter.
+   *
+   * Returns the WHOLE stored record, unlike `list`, which is projected and never carries an SSN.
+   * A stored computation comes back only when it still describes the matter — see the callable —
+   * so `computationStale` is how the page knows to say "recompute" rather than showing figures
+   * that predate the last edit.
+   */
+  async get(firmId: string, matterId: string): Promise<LoadedMatter> {
+    const fn = call<{ firmId: string; matterId: string }, LoadedMatter>('getInheritanceMatter');
+    const res = await fn({ firmId, matterId });
+    return res.data;
   },
 
   /**

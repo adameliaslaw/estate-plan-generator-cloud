@@ -54,8 +54,10 @@ import {
   appendAudit,
   getApprovedCheckpoint,
   getCheckpoint,
+  getLatestCheckpoint,
   getLatestComputation,
   getMatter,
+  getMatterWithMeta,
   listMatters,
   readAuditChain,
   saveCheckpoint,
@@ -383,6 +385,52 @@ export const getInheritanceCompanionForm = onCall(CALL_OPTS, async (request: Cal
     }
     throw e;
   }
+});
+
+/**
+ * Reopen a saved matter for editing.
+ *
+ * Until this existed the page could LIST matters and nothing more — a saved matter was
+ * unreachable once you left the screen. `listInheritanceMatters` is deliberately projected and
+ * never carries an SSN; this one returns the whole record, because that is what editing needs.
+ * Same firm-scoped staff gate as every other callable here.
+ *
+ * **A stored computation is only returned when it still describes the matter.** Editing a matter
+ * does not delete its old computation, so a matter saved after its last compute has figures on
+ * file that no longer match it. Returning those would put a stale total on screen looking
+ * exactly like a current one — the silent-wrong-number failure this engine exists to avoid — so
+ * they are withheld and `computationStale` says why.
+ *
+ * The checkpoint is returned regardless, including a pending one so a review can be resumed, and
+ * including an approved one whose figures are frozen: an approved checkpoint stays valid for
+ * rendering forms even after a later edit, which is the whole point of freezing it (FND-IMMUT).
+ */
+export const getInheritanceMatter = onCall(CALL_OPTS, async (request: CallableRequest<unknown>) => {
+  const { firmId, body } = requireFirmId(request.data);
+  assertFirmStaff(request, firmId);
+  const db = admin.firestore();
+  const matterId = requireString(body, 'matterId');
+
+  const record = await getMatterWithMeta(db, firmId, matterId);
+  if (!record) throw new HttpsError('not-found', `Matter ${matterId} not found.`);
+
+  const [computation, checkpoint] = await Promise.all([
+    getLatestComputation(db, firmId, matterId),
+    getLatestCheckpoint(db, firmId, matterId),
+  ]);
+
+  const computedAt = (computation as { computedAt?: string } | undefined)?.computedAt ?? '';
+  const computationStale = computation !== undefined
+    && record.updatedAt !== ''
+    && computedAt !== ''
+    && record.updatedAt > computedAt;
+
+  return {
+    matter: record.matter,
+    ...(computation && !computationStale ? { computation } : {}),
+    ...(checkpoint ? { checkpoint } : {}),
+    computationStale,
+  };
 });
 
 // ─── Read-side helpers ───────────────────────────────────────────────────────

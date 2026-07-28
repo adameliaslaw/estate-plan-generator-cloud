@@ -33,6 +33,7 @@ export {
   approveInheritanceReview,
   finalizeInheritanceReview,
   getInheritanceForm,
+  getInheritanceMatter,
   getInheritanceCompanionForm,
   listInheritanceMatters,
   getInheritanceAuditTrail,
