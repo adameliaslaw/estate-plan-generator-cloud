@@ -1,7 +1,15 @@
 import { z } from 'zod';
 import type { ISODate, Matter, Relationship } from '../types';
+import { toCents } from '../money';
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
+
+/**
+ * Fractional shares arrive as decimals ("1/3" becomes 0.3333333333333333), so "do these total
+ * the whole asset" cannot be an exact comparison. This tolerance is orders of magnitude below a
+ * cent on any estate; the money itself is apportioned in integer cents (see allocations.ts).
+ */
+const FRACTION_EPSILON = 1e-9;
 
 const ISODateSchema = z
   .string()
@@ -169,6 +177,43 @@ const BequestSchema = z.object({
   transferDetails: TransferDetailsSchema.optional(),
 }).strict();
 
+/**
+ * A fraction of an asset. Strictly positive — a zero share is not a share, it is an entry that
+ * should not have been made — and never more than the whole.
+ */
+const FractionSchema = z
+  .number()
+  .finite()
+  .positive('A share must be greater than 0')
+  .max(1, 'A share cannot exceed the whole (1)');
+
+const AllocationSchema = z.object({
+  beneficiaryId: z.string().min(1),
+  fraction: FractionSchema,
+}).strict();
+
+/**
+ * An asset is a bequest plus its allocations — see the Asset type for why the shapes are shared.
+ * `.extend()` keeps `.strict()`, so a misspelled column is still rejected at the boundary.
+ */
+const AssetSchema = BequestSchema.extend({
+  allocations: z.array(AllocationSchema).optional(),
+}).strict();
+
+/**
+ * A residuary taker's share of the pool.
+ *
+ * `.strict()` is doing legal work here: it rejects `perStirpes`. Per stirpes decides who takes
+ * when a residuary beneficiary predeceases, and the substitute can be a different tax class
+ * (a deceased sibling's share moves Class C → Class D). The engine must not resolve that — the
+ * attorney enters the actual takers. Accepting the field and ignoring it would be the worst of
+ * both: it would read as handled.
+ */
+const ResiduaryShareSchema = z.object({
+  beneficiaryId: z.string().min(1),
+  fraction: FractionSchema,
+}).strict();
+
 const TaxClassOverrideSchema = z.object({
   taxClass: TaxClassSchema,
   // NonBlankString rejects whitespace-only values that would bypass audit requirements
@@ -211,7 +256,11 @@ const BeneficiarySchema = z.object({
   addressParts: AddressPartsSchema.optional(),
   relationship: RelationshipSchema,
   taxClassOverride: TaxClassOverrideSchema.optional(),
-  bequests: z.array(BequestSchema).min(1, 'A beneficiary must have at least one bequest'),
+  // Required in the NESTED model (enforced in the superRefine, which knows which model this
+  // matter is in) and empty in the ALLOCATION model, where the beneficiary carries identity only
+  // and the bequests are derived from allocations at the boundary. Defaulted rather than
+  // optional so `Beneficiary.bequests` stays a plain array for the engine.
+  bequests: z.array(BequestSchema).default([]),
 }).strict();
 
 const ExecutorCommissionEligibilitySchema = z.object({
@@ -303,6 +352,10 @@ export const MatterSchema = z.object({
   disclaimersExist: z.boolean(),
   personalRepresentative: PersonalRepresentativeSchema,
   beneficiaries: z.array(BeneficiarySchema),
+  // The allocation model. Present = this matter is in it; absent = the legacy nested model.
+  // The two are mutually exclusive (superRefine) so the model in use is never inferred.
+  assets: z.array(AssetSchema).optional(),
+  residuary: z.array(ResiduaryShareSchema).optional(),
   deductions: z.array(DeductionSchema),
   disclaimers: z.array(DisclaimerSchema).optional(),
   contingentAmounts: z.number().finite().nonnegative('Contingent amounts must be ≥ 0').optional(),
@@ -359,6 +412,150 @@ export const MatterSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate disclaimer id '${d.id}'`, path: ['disclaimers', i, 'id'] });
     }
     seenDisclaimerIds.add(d.id);
+  }
+
+  // ── The allocation model: assets, specific allocations, and residue ──────────────────
+  // docs/ASSET-ALLOCATION-MODEL.md §3, as corrected by the residue scope. The rule that matters
+  // most here is that an asset's specific allocations sum to **≤** its value, not to it: an
+  // asset with no allocations at all passes wholly into residue, which is the ordinary will.
+  // An equality check would reject every estate that has a residuary clause.
+  const usesAssets = m.assets !== undefined;
+  const beneficiaryIds = new Set(m.beneficiaries.map((b) => b.id));
+
+  if (!usesAssets) {
+    if (m.residuary !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'residuary shares require assets — there is no pool to divide without them',
+        path: ['residuary'],
+      });
+    }
+    // The nested model's original rule, unchanged: everyone entered must take something.
+    for (const [i, b] of m.beneficiaries.entries()) {
+      if (b.bequests.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'A beneficiary must have at least one bequest',
+          path: ['beneficiaries', i, 'bequests'],
+        });
+      }
+    }
+  } else {
+    for (const [i, b] of m.beneficiaries.entries()) {
+      if (b.bequests.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'A matter that carries assets must not also nest bequests under a beneficiary — the ' +
+            'per-beneficiary amounts are derived from allocations. Move this beneficiary\'s ' +
+            'bequests into matter.assets.',
+          path: ['beneficiaries', i, 'bequests'],
+        });
+      }
+    }
+
+    const assets = m.assets ?? [];
+    const seenAssetIds = new Set<string>();
+    let poolCents = 0;
+    for (const [i, asset] of assets.entries()) {
+      if (seenAssetIds.has(asset.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate asset id '${asset.id}' (asset ids must be unique across the matter)`,
+          path: ['assets', i, 'id'],
+        });
+      }
+      seenAssetIds.add(asset.id);
+
+      const allocations = asset.allocations ?? [];
+      const seenTakers = new Set<string>();
+      let allocated = 0;
+      for (const [j, a] of allocations.entries()) {
+        if (!beneficiaryIds.has(a.beneficiaryId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `beneficiaryId '${a.beneficiaryId}' does not reference a beneficiary in this matter`,
+            path: ['assets', i, 'allocations', j, 'beneficiaryId'],
+          });
+        }
+        if (seenTakers.has(a.beneficiaryId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message:
+              `Beneficiary '${a.beneficiaryId}' is allocated this asset twice — combine the two ` +
+              'shares into one allocation',
+            path: ['assets', i, 'allocations', j, 'beneficiaryId'],
+          });
+        }
+        seenTakers.add(a.beneficiaryId);
+        allocated += a.fraction;
+      }
+      if (allocated > 1 + FRACTION_EPSILON) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            `Specific allocations of asset '${asset.id}' total ${(allocated * 100).toFixed(4)}% of ` +
+            'it. An asset cannot be given away more than once; allocations must total 100% or ' +
+            'less, and whatever is left falls into residue.',
+          path: ['assets', i, 'allocations'],
+        });
+      }
+      const remainder = Math.max(0, 1 - allocated);
+      if (remainder > FRACTION_EPSILON) {
+        poolCents += Math.round(toCents(asset.fairMarketValue) * remainder);
+      }
+    }
+
+    const residuary = m.residuary ?? [];
+    const seenResiduaryTakers = new Set<string>();
+    let residuaryTotal = 0;
+    for (const [i, share] of residuary.entries()) {
+      if (!beneficiaryIds.has(share.beneficiaryId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `beneficiaryId '${share.beneficiaryId}' does not reference a beneficiary in this matter`,
+          path: ['residuary', i, 'beneficiaryId'],
+        });
+      }
+      if (seenResiduaryTakers.has(share.beneficiaryId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Beneficiary '${share.beneficiaryId}' takes residue twice — combine the shares`,
+          path: ['residuary', i, 'beneficiaryId'],
+        });
+      }
+      seenResiduaryTakers.add(share.beneficiaryId);
+      residuaryTotal += share.fraction;
+    }
+
+    if (poolCents > 0) {
+      if (residuary.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            `$${(poolCents / 100).toLocaleString('en-US')} of this estate is not specifically given ` +
+            'away, so it passes under the will\'s residuary clause — but no residuary shares are ' +
+            'entered. Enter who takes the residue (the actual takers, not a per stirpes rule).',
+          path: ['residuary'],
+        });
+      } else if (Math.abs(residuaryTotal - 1) > FRACTION_EPSILON) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            `Residuary shares total ${(residuaryTotal * 100).toFixed(4)}%. They must total exactly ` +
+            '100% of the residue.',
+          path: ['residuary'],
+        });
+      }
+    } else if (residuary.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Every asset is specifically allocated in full, so there is no residue to divide. ' +
+          'Remove the residuary shares, or reduce a specific allocation.',
+        path: ['residuary'],
+      });
+    }
   }
 
   // Civil-union / domestic-partner relationships are invalid for a death before the
@@ -495,6 +692,20 @@ export const MatterSchema = z.object({
     for (const b of m.beneficiaries) {
       beneficiaryBequestIds.set(b.id, new Set(b.bequests.map((beq) => beq.id)));
     }
+    // In the allocation model a disclaimer can only name an asset given WHOLLY to one
+    // beneficiary: that derives to a bequest carrying the asset's own id, which is the only id an
+    // attorney can see and the only one applyDisclaimers can move intact. A fractional share and
+    // a residuary share have no such id, and are refused by name below rather than silently
+    // failing to match.
+    const residuaryTakers = new Set((m.residuary ?? []).map((s) => s.beneficiaryId));
+    const assetIds = new Set((m.assets ?? []).map((a) => a.id));
+    for (const asset of m.assets ?? []) {
+      const allocations = asset.allocations ?? [];
+      const sole = allocations.length === 1 ? allocations[0] : undefined;
+      if (sole !== undefined && Math.abs(sole.fraction - 1) <= FRACTION_EPSILON) {
+        beneficiaryBequestIds.get(sole.beneficiaryId)?.add(asset.id);
+      }
+    }
     for (const [i, d] of m.disclaimers.entries()) {
       if (!beneficiaryBequestIds.has(d.disclaimantBeneficiaryId)) {
         ctx.addIssue({
@@ -520,13 +731,25 @@ export const MatterSchema = z.object({
       }
       const bequestSet = beneficiaryBequestIds.get(d.disclaimantBeneficiaryId) ?? new Set<string>();
       for (const [j, bId] of d.bequestIds.entries()) {
-        if (!bequestSet.has(bId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `bequestId '${bId}' does not reference a bequest on beneficiary '${d.disclaimantBeneficiaryId}'`,
-            path: ['disclaimers', i, 'bequestIds', j],
-          });
+        if (bequestSet.has(bId)) continue;
+        // Refuse by name, never silently. A disclaimer that matches nothing would otherwise be
+        // accepted, computed around, and leave the attorney believing the property was redirected.
+        let message: string;
+        if (usesAssets && assetIds.has(bId)) {
+          message =
+            `Asset '${bId}' is not given whole to beneficiary '${d.disclaimantBeneficiaryId}', so ` +
+            'this disclaimer cannot name it. A fractional share has no bequest of its own — ' +
+            'reduce the allocation and allocate the disclaimed share to the taker directly.';
+        } else if (usesAssets && residuaryTakers.has(d.disclaimantBeneficiaryId)) {
+          message =
+            `'${bId}' does not name an asset given whole to '${d.disclaimantBeneficiaryId}'. A ` +
+            'RESIDUARY share has no bequest id and cannot be disclaimed: who takes it instead can ' +
+            'be a different tax class (a sibling\'s share moves Class C → Class D), which the ' +
+            'engine will not decide. Re-enter matter.residuary with the actual takers.';
+        } else {
+          message = `bequestId '${bId}' does not reference a bequest on beneficiary '${d.disclaimantBeneficiaryId}'`;
         }
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ['disclaimers', i, 'bequestIds', j] });
       }
       if (d.dateDisclaimed < m.decedent.dateOfDeath) {
         ctx.addIssue({

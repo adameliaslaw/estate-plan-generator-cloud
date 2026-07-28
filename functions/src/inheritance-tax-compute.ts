@@ -25,6 +25,7 @@ import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/
 import { assertFirmStaff } from './auth-guards';
 import {
   computeEstate,
+  deriveEngineMatter,
   getRuleSet,
   validateMatter,
   UnsupportedMatterError,
@@ -95,7 +96,11 @@ export function computeInheritanceTaxHandler(
     // computation carries its own `filingDeadline` — 8 months, shifted off weekends and NJ
     // legal holidays (N.J.A.C. 18:2-4.12).
     const ruleSet = getRuleSet(matter.decedent.dateOfDeath);
-    const computation = computeEstate(matter, ruleSet);
+    // A matter in the allocation model carries assets, not per-beneficiary bequests. The
+    // per-beneficiary amounts the engine needs are DERIVED here, at the boundary — the engine
+    // keeps the shape it has always taken, and the gold cases keep proving the figures.
+    // A matter in the nested model passes through untouched.
+    const computation = computeEstate(deriveEngineMatter(matter), ruleSet);
     return { ruleSetId: ruleSet.id, computation, workpaper: true };
   } catch (e) {
     if (e instanceof UnsupportedMatterError) {
