@@ -34,7 +34,7 @@ export interface SaveDocumentParams {
   /** Generation pipeline mode: how the AI/template was invoked. Persisted
    *  for audit trail so future fidelity reports can answer "why does this
    *  doc not match the template?" without re-running. */
-  generationMode?: 'template' | 'hybrid' | 'ai' | 'flex';
+  generationMode?: 'template' | 'hybrid' | 'ai' | 'flex' | 'high-fidelity';
   /** Where the call originated from (UI surface): batch, single, chat-draft,
    *  flex, etc. Distinct from generationMode — a single-doc batch may still
    *  be generated in 'hybrid' mode. */

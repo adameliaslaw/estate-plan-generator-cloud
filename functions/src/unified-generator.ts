@@ -103,6 +103,12 @@ export interface UnifiedGenerateParams {
    */
   spouseRole?: 'client' | 'spouse';
   /**
+   * Caller-supplied warnings attached to the saved document ahead of the
+   * pipeline's own findings — e.g. the high-fidelity batch fallback note
+   * ("no firm .docx mapped for X — generated from the HTML template").
+   */
+  extraWarnings?: string[];
+  /**
    * Package tier for this generation run. The batch entry point writes the
    * requested packageType to the client record only AFTER generation, so on a
    * first run the stored client doc still holds the intake default. Pass it
@@ -418,7 +424,7 @@ function cloneTimestampAware<T>(value: T, seen: WeakMap<object, unknown> = new W
   return out as unknown as T;
 }
 
-function cloneClientContext(ctx: ClientContext): ClientContext {
+export function cloneClientContext(ctx: ClientContext): ClientContext {
   return cloneTimestampAware(ctx);
 }
 
@@ -935,8 +941,8 @@ export async function generateDocument(
       changeNotes,
       tags,
       warnings:
-        completenessWarnings.length > 0 || dataConsistencyWarnings.length > 0
-          ? [...dataConsistencyWarnings, ...completenessWarnings]
+        completenessWarnings.length > 0 || dataConsistencyWarnings.length > 0 || (params.extraWarnings?.length ?? 0) > 0
+          ? [...(params.extraWarnings ?? []), ...dataConsistencyWarnings, ...completenessWarnings]
           : undefined,
       validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
       promptVersion: generatedDoc.promptVersion,

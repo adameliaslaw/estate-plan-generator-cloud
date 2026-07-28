@@ -18,11 +18,17 @@ export const EMULATOR_PROJECT_ID = 'demo-eplan';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099';
+process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= '127.0.0.1:9199';
 // A demo-* project id keeps the admin SDK from ever reaching real GCP.
 process.env.GCLOUD_PROJECT ??= EMULATOR_PROJECT_ID;
 
 if (!admin.apps.length) {
-  admin.initializeApp({ projectId: EMULATOR_PROJECT_ID });
+  // storageBucket makes admin.storage().bucket() resolvable against the
+  // Storage emulator (tests that never touch Storage are unaffected).
+  admin.initializeApp({
+    projectId: EMULATOR_PROJECT_ID,
+    storageBucket: `${EMULATOR_PROJECT_ID}.appspot.com`,
+  });
 }
 
 export { admin };

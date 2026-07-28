@@ -30,7 +30,7 @@ import mammoth from 'mammoth';
 import { assertFirmStaff } from './auth-guards';
 import { aggregateClientContext, ClientContext } from './client-context-aggregator';
 import { formatFullName } from './client-data-serializer';
-import { estimateTotalAssets } from './client-facts';
+import { checkClientFactConsistency, estimateTotalAssets } from './client-facts';
 import { saveDocumentToVault } from './document-save-helper';
 
 // ---------------------------------------------------------------------------
@@ -196,9 +196,14 @@ export const generateHighFidelityDocx = onCall(
       console.warn('[generateHighFidelityDocx] mammoth preview failed:', convErr);
     }
 
-    const warnings = filled.missingTags.map(
-      (tag) => `[warning] unresolved-placeholder: {{${tag}}} rendered blank.`,
+    // Same pre-generation consistency check the unified pipeline runs —
+    // contradictory client facts surface on the saved document, not silently.
+    const warnings = checkClientFactConsistency(ctx.client).map(
+      (f) => `[${f.severity}] ${f.code}: ${f.message}`,
     );
+    warnings.push(...filled.missingTags.map(
+      (tag) => `[warning] unresolved-placeholder: {{${tag}}} rendered blank.`,
+    ));
 
     const resolvedDocType = docType ?? 'custom';
     const saveResult = await saveDocumentToVault({
@@ -214,6 +219,7 @@ export const generateHighFidelityDocx = onCall(
       binaryBuffer: filled.buffer,
       status: 'draft',
       createdBy: caller.uid,
+      generationMode: 'high-fidelity',
       triggerSource: 'single',
       warnings: warnings.length > 0 ? warnings : undefined,
       changeNotes: `High-fidelity fill from ${templateStoragePath}`,

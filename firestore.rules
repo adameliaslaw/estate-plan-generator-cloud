@@ -606,6 +606,19 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /firms/{firmId}/docxTemplateMap/{docType}
+    // Maps each docType to the firm's uploaded .docx template for
+    // high-fidelity package generation (doc id = docType, so one
+    // mapping per docType by construction). Same staff access as
+    // documentTemplates; no client access.
+    // ==========================================================
+    match /firms/{firmId}/docxTemplateMap/{docType} {
+      allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId));
+      allow create, update: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId));
+      allow delete: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal') || canManageDocuments()) && belongsToFirm(firmId));
+    }
+
+    // ==========================================================
     // COLLECTION GROUP QUERY — documents
     // Needed so staff can query all documents across clients in a
     // single firm-scoped call (e.g. dashboard "Awaiting Review" queue).

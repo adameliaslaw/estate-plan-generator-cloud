@@ -17,6 +17,12 @@ import {
   UnifiedGenerateResult,
 } from './unified-generator';
 import { aggregateClientContext } from './client-context-aggregator';
+import {
+  DocxTemplateMapping,
+  fillDocxForEntry,
+  loadDocxTemplateMap,
+  planHighFidelityEntry,
+} from './docx-package-fill';
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -27,7 +33,7 @@ const GenerateRequestSchema = z.object({
   clientId: z.string().min(1),
   packageType: z.enum(['foundation', 'guardian', 'fortress']),
   trustTypes: z.array(z.string()).optional(),
-  generationMode: z.enum(['template', 'ai', 'hybrid']).optional(),
+  generationMode: z.enum(['template', 'ai', 'hybrid', 'high-fidelity']).optional(),
   /** Optional model override (e.g. 'gpt-5.4', 'claude-sonnet-4-6') */
   modelOverride: z.string().optional(),
   /** Optional software source filter for template selection */
@@ -239,6 +245,28 @@ export const generateDocuments = onCall(
     }
 
     // ------------------------------------------------------------------
+    // 3b. High-fidelity mode: load the firm's docType → .docx mapping once.
+    //     Mapped, non-property entries fill the firm's real template;
+    //     everything else falls back to 'template' mode with a warning on
+    //     the generated document (per-doc generationMode keeps the mixed
+    //     run honest). A missing/empty map degrades the WHOLE run to
+    //     template-mode fallbacks rather than failing the package.
+    // ------------------------------------------------------------------
+    let docxMap: Map<string, DocxTemplateMapping> | null = null;
+    // Mode the normal pipeline runs in: unchanged for template/ai/hybrid;
+    // 'template' for high-fidelity fallback entries.
+    const pipelineMode = generationMode === 'high-fidelity' ? 'template' : generationMode;
+    if (generationMode === 'high-fidelity') {
+      try {
+        docxMap = await loadDocxTemplateMap(firmId);
+      } catch (mapErr) {
+        console.warn('[generateDocuments] docxTemplateMap load failed — all entries fall back to template mode:', mapErr);
+        docxMap = new Map();
+      }
+      console.log(`[generateDocuments] high-fidelity mode: ${docxMap.size} docType mapping(s) configured`);
+    }
+
+    // ------------------------------------------------------------------
     // 4. Generate documents with bounded concurrency
     // ------------------------------------------------------------------
     // Cap simultaneous AI calls. Fortress packages with spouse expansion +
@@ -258,22 +286,40 @@ export const generateDocuments = onCall(
         if (i >= documentsToGenerate.length) return;
         const entry = documentsToGenerate[i];
         try {
-          const result = await generateDocumentWithPropertyExpansion({
-            firmId,
-            clientId,
-            docType: entry.docType,
-            generationMode,
-            softwareSource,
-            formattingPreset,
-            trustTypes,
-            createdBy: auth.uid,
-            triggerSource: 'batch',
-            modelOverride,
-            preloadedContext,
-            spouseRole: entry.spouseRole,
-            packageType,
-          });
-          settled[i] = { status: 'fulfilled', value: result };
+          // High-fidelity branch: fill the mapped .docx; unmapped/per-property
+          // entries run the normal pipeline in 'template' mode with the
+          // fallback reason attached as a document warning.
+          const hfPlan = docxMap ? planHighFidelityEntry(entry.docType, docxMap) : null;
+          if (docxMap && hfPlan?.action === 'fill') {
+            const result = await fillDocxForEntry({
+              firmId,
+              clientId,
+              docType: entry.docType,
+              spouseRole: entry.spouseRole,
+              mapping: docxMap.get(entry.docType)!,
+              createdBy: auth.uid,
+              preloadedContext,
+            });
+            settled[i] = { status: 'fulfilled', value: [result] };
+          } else {
+            const result = await generateDocumentWithPropertyExpansion({
+              firmId,
+              clientId,
+              docType: entry.docType,
+              generationMode: pipelineMode,
+              softwareSource,
+              formattingPreset,
+              trustTypes,
+              createdBy: auth.uid,
+              triggerSource: 'batch',
+              modelOverride,
+              preloadedContext,
+              spouseRole: entry.spouseRole,
+              packageType,
+              extraWarnings: hfPlan?.fallbackReason ? [hfPlan.fallbackReason] : undefined,
+            });
+            settled[i] = { status: 'fulfilled', value: result };
+          }
         } catch (err) {
           settled[i] = { status: 'rejected', reason: err };
         }
