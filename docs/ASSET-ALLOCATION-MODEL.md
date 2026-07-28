@@ -124,10 +124,12 @@ HOMEWORK.md).
 **one** B-1 row, and `tests/unit/inheritance-tax-schedules-from-assets.test.ts` reads those values
 back out of the produced PDF, with the second property block empty.
 
-**PR 3 — intake.** Assets entered once, then allocated; a share picker that does the arithmetic
-(fraction, percent or amount) and shows the unallocated remainder.
-*Done when:* a 1/3 : 2/3 split is enterable without the attorney computing anything, and an
-under-allocated asset cannot be saved.
+**PR 3 — intake. ✅ BUILT 2026-07-28, not yet browser-verified.** Assets are their own section,
+entered once and allocated; `AssetAllocationFields` takes a share as a percentage, a dollar amount
+or a plain fraction and shows the derived dollars; `ResiduarySharesFields` shows the computed pool
+and carries the per-stirpes notice. A legacy matter is normalised when the page opens it.
+*Done when — met:* a 1/3 : 2/3 split is enterable without the attorney computing anything, and an
+over-allocated asset cannot be saved. See HOMEWORK.md for what still needs a human at a browser.
 
 Not one PR. Each is independently shippable and independently revertible.
 

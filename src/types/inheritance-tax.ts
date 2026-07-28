@@ -314,7 +314,42 @@ export interface ITRBeneficiary {
   address: string;
   addressParts?: ITRAddressParts;
   relationship: Relationship;
+  /**
+   * Empty on a matter that carries {@link ITRMatterInput.assets} — there the beneficiary is
+   * identity only, and what they take is derived from the allocations. The server rejects a
+   * matter that carries both.
+   */
   bequests: ITRBequest[];
+}
+
+/** One beneficiary's SPECIFIC share of an asset, stored as a fraction of it. */
+export interface ITRAllocation {
+  beneficiaryId: string;
+  /** 0 < fraction ≤ 1. The fraction is stored so a re-appraisal keeps the split intact. */
+  fraction: number;
+}
+
+/**
+ * An item of estate property, entered ONCE at the decedent's interest and allocated out of.
+ * Same shape as {@link ITRBequest} plus its allocations — an asset is what a bequest described,
+ * minus the assumption that one person takes all of it.
+ */
+export interface ITRAsset extends ITRBequest {
+  /** SPECIFIC gifts only. Absent or empty = the asset passes wholly into residue. */
+  allocations?: ITRAllocation[];
+}
+
+/**
+ * One taker's share of the residuary pool. The pool itself is computed, never entered.
+ *
+ * There is deliberately no `perStirpes` field, and the server's schema rejects one: the
+ * substitute taker when a residuary beneficiary predeceases can be a different tax class, so the
+ * attorney enters the actual takers. The screen says so.
+ */
+export interface ITRResiduaryShare {
+  beneficiaryId: string;
+  /** 0 < fraction ≤ 1. Shares sum to 1 whenever the pool is greater than zero. */
+  fraction: number;
 }
 
 /**
@@ -380,6 +415,15 @@ export interface ITRMatterInput {
     email?: string;
   };
   beneficiaries: ITRBeneficiary[];
+  /**
+   * The estate's property, entered once and allocated to beneficiaries. Present = this matter is
+   * in the allocation model and every `beneficiaries[].bequests` must be empty; absent = the
+   * legacy nested model. The page normalises a legacy matter into this shape when it opens one,
+   * so there is only ever one screen to maintain.
+   */
+  assets?: ITRAsset[];
+  /** Who takes the residuary pool, and in what fractions. Only meaningful with `assets`. */
+  residuary?: ITRResiduaryShare[];
   deductions: ITRDeduction[];
   notes?: string;
 }

@@ -4,7 +4,7 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## ▶ THE ASSET/ALLOCATION MODEL — residue (PR 1) and the schedules (PR 2) are done; intake is left
+## ▶ THE ASSET/ALLOCATION MODEL — all three PRs are built; #212 needs a browser pass
 
 Read this section top to bottom: it is the work in the order it has to happen. Residue is the
 foundation the other two PRs stand on, so it went first, and the schedules followed it. **Full scope:
@@ -78,7 +78,7 @@ rounding fails the three-way residue test.
 **Sign-off needed before merge** — this is a data-model change to the tax engine, which the
 Never-Break List puts outside auto-merge.
 
-### 2 · Schedules render from assets — ✅ BUILT 2026-07-28, awaiting sign-off
+### 2 · Schedules render from assets — ✅ SHIPPED 2026-07-28 (#211, merged and deployed)
 
 **The duplication is dead at its source.** `collectScheduleItems` (`engine/compute.ts`, called by
 `buildFormSnapshot`) emitted one row per *bequest*; it now emits one row per **asset**, at the
@@ -159,14 +159,37 @@ Two smaller confirmations from the same pass, worth not rediscovering:
   keeps them in separate fields (`realPropertyDetails.fractionalInterest` vs `Allocation.fraction`)
   and PR 2 must not merge them.
 
-### 3 · THEN — intake, inventory-then-allocate (PR 3)
+### 3 · Intake, inventory-then-allocate — ✅ BUILT 2026-07-28 (#212), ⚠️ NEEDS ADAM AT A BROWSER
 
-Assets entered once, then allocated; a share picker that does the arithmetic (fraction, percent or
-amount) and shows the unallocated remainder as it falls into the pool. **The per-stirpes notice
-from §1 goes on this screen** — the attorney enters the actual takers, and the UI says why.
+**The screen changed shape.** Assets are their own section now, entered once at the decedent's
+interest; beneficiaries are identity only; and a Residue section shows the computed pool with the
+takers entered as percentages. The old "add a bequest under each person" flow is gone.
 
-*Done when:* a 1/3 : 2/3 split is enterable without the attorney computing anything, and an
-over-allocated asset cannot be saved.
+*Both acceptance criteria met, each with a test:* a **1/3 : 2/3 split** is entered by typing
+`1/3` and `2/3` — the share picker takes a percentage, a dollar amount or a plain fraction, stores
+the fraction, and shows the dollars beside it — and an **over-allocated asset cannot be saved**.
+
+**The per-stirpes notice is on screen**, and a test asserts the words are there rather than just
+the component. It tells the attorney to enter the actual takers and says why: a deceased child's
+share to grandchildren stays Class A, a deceased sibling's share to nieces and nephews moves
+Class C to Class D.
+
+**Opening an old matter normalises it** — one asset per bequest, wholly allocated to whoever it was
+entered under — so there is one screen rather than two. A test computes the same estate before and
+after and asserts identical figures.
+
+**Client rules are checked against the server's own validator.** Every allocation rule asserts both
+what the page reports as still needed and what `validateMatter` does with the matter the page would
+send, so a client rule that drifts from the server fails on the server assertion. Same pattern as
+the deduction attestations.
+
+⚠️ **What I could NOT do: the browser pass.** This environment has no `.env.local`, so the Vite dev
+server cannot initialise Firebase and the page cannot be reached logged in. The components are
+covered by rendering tests that type into the real inputs, but **nothing has exercised the whole
+screen against a live matter.** This is the change most likely to have a defect only a human sees —
+it is the section an attorney uses most, and its shape changed. Worth opening a saved matter,
+confirming it still reads correctly after normalisation, and entering one split asset end to end
+before this is trusted.
 
 ### Why this model at all — the three facts, kept because they are the justification
 

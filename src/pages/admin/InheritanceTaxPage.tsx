@@ -22,9 +22,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calculator, Plus, Trash2, FileText, ShieldCheck, RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddressPartsInput } from '@/components/inheritance-tax/AddressPartsInput';
+import { AssetAllocationFields } from '@/components/inheritance-tax/AssetAllocationFields';
 import { BequestDetailFields } from '@/components/inheritance-tax/BequestDetailFields';
 import { DeductionAttestationFields } from '@/components/inheritance-tax/DeductionAttestationFields';
+import { ResiduarySharesFields } from '@/components/inheritance-tax/ResiduarySharesFields';
 import { attestationProblems, withApplicableAttestations } from '@/lib/inheritance-tax-attestations';
+import {
+  allocationProblems,
+  emptyAsset,
+  grossFromAssets,
+  normalizeMatterToAssets,
+  residuaryPool,
+  withAllocationsForSave,
+} from '@/lib/inheritance-tax-allocations';
+import type { ShareMode } from '@/lib/inheritance-tax-allocations';
 import { useAuth } from '@/hooks/useAuth';
 import { inheritanceTaxService } from '@/services/inheritance-tax-service';
 import { Button } from '@/components/ui/button';
@@ -43,6 +54,7 @@ import {
   NOT_REPORTED_ON_ITR,
   type ITRMatterInput,
   type ITRBeneficiary,
+  type ITRAsset,
   type ITRDeduction,
   type EstateComputationResult,
   type InheritanceMatterSummary,
@@ -81,15 +93,19 @@ function emptyMatter(): ITRMatterInput {
     disclaimersExist: false,
     personalRepresentative: { name: '', title: 'Executor', address: '', phone: '' },
     beneficiaries: [],
+    // A new matter is in the allocation model: property is inventoried once and allocated out of.
+    assets: [],
+    residuary: [],
     deductions: [],
   };
 }
 
 function emptyBeneficiary(): ITRBeneficiary {
+  // Identity only. What this person takes is entered against the asset, not here.
   return {
     id: uid('ben'), lastName: '', firstName: '', address: '',
     relationship: 'child',
-    bequests: [{ id: uid('beq'), type: 'bank_account', description: '', fairMarketValue: 0 }],
+    bequests: [],
   };
 }
 
@@ -124,6 +140,7 @@ function missingRequired(m: ITRMatterInput): string[] {
   if (!m.personalRepresentative.address.trim()) missing.push('Personal representative address');
   if (!m.personalRepresentative.phone.trim()) missing.push('Personal representative phone');
   if (m.beneficiaries.length === 0) missing.push('At least one beneficiary');
+  if ((m.assets ?? []).length === 0) missing.push('At least one asset');
   m.beneficiaries.forEach((b, i) => {
     if (!b.lastName.trim()) missing.push(`Beneficiary ${i + 1}: name`);
     if (!b.address.trim()) missing.push(`Beneficiary ${i + 1}: address`);
@@ -131,6 +148,9 @@ function missingRequired(m: ITRMatterInput): string[] {
   // The two deduction attestations the server requires. Same reason as the rest of this function:
   // unanswered, they come back as a Zod path rather than as the question they are.
   missing.push(...attestationProblems(m));
+  // The allocation rules the server enforces, asked here as the questions they are rather than
+  // returned later as a Zod path.
+  missing.push(...allocationProblems(m));
   return missing;
 }
 
@@ -193,7 +213,11 @@ export default function InheritanceTaxPage() {
    */
   const onOpenMatter = (matterId: string) => run(`open:${matterId}`, async () => {
     const loaded = await inheritanceTaxService.get(firmId, matterId);
-    setMatter(loaded.matter);
+    // A matter saved before the allocation model comes back nested. Normalising it here — one
+    // asset per bequest, wholly allocated to whoever it was entered under — means there is one
+    // screen to maintain rather than two, and the server proves the round trip computes to
+    // identical figures.
+    setMatter(normalizeMatterToAssets(loaded.matter));
     setSaved(true);
     setComputation(loaded.computation ?? null);
     setCheckpoint(loaded.checkpoint ?? null);
@@ -208,10 +232,18 @@ export default function InheritanceTaxPage() {
   });
 
   const grossEntered = useMemo(
-    () => (matter?.beneficiaries ?? []).reduce(
-      (sum, b) => sum + b.bequests.reduce((s, q) => s + (Number(q.fairMarketValue) || 0), 0), 0),
+    () => (matter ? grossFromAssets(matter) : 0),
     [matter],
   );
+
+  /** Computed, never entered: Σ(asset values) − Σ(specific gifts). */
+  const pool = useMemo(() => (matter ? residuaryPool(matter) : 0), [matter]);
+
+  /**
+   * How each asset's shares are being expressed on screen. Presentation only — what is stored is
+   * always a fraction — so it lives outside the matter and is never sent.
+   */
+  const [shareModes, setShareModes] = useState<Record<string, ShareMode>>({});
 
   // ── Mutations on the working matter ──────────────────────────────────────
   const patch = (fn: (draft: ITRMatterInput) => void) => {
@@ -246,7 +278,10 @@ export default function InheritanceTaxPage() {
       toast.error(`Still needed: ${missing.join(', ')}`);
       return;
     }
-    const res = await inheritanceTaxService.save(firmId, withApplicableAttestations(matter));
+    const res = await inheritanceTaxService.save(
+      firmId,
+      withAllocationsForSave(withApplicableAttestations(matter)),
+    );
     setSaved(true);
     toast.success(res.created ? 'Matter created.' : 'Matter saved.');
     await refreshList();
@@ -506,7 +541,7 @@ export default function InheritanceTaxPage() {
           {/* ── Beneficiaries ────────────────────────────────────────── */}
           <Card className="space-y-4 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-medium">Beneficiaries and bequests</h2>
+              <h2 className="font-medium">Beneficiaries</h2>
               <Button variant="outline" size="sm"
                 onClick={() => patch((d) => { d.beneficiaries.push(emptyBeneficiary()); })}>
                 <Plus className="mr-2 h-4 w-4" /> Add beneficiary
@@ -514,28 +549,9 @@ export default function InheritanceTaxPage() {
             </div>
             <p className="text-muted-foreground text-sm">
               <strong>Relationship drives the tax class</strong> (N.J.S.A. 54:34-2) — it is the field
-              to double-check. The picker is grouped by the class it produces.
+              to double-check. The picker is grouped by the class it produces. A beneficiary is
+              entered here as a person; what they take is entered against the asset, below.
             </p>
-            {/* The most-asked question about this screen. It is not a UI restriction; it is what
-                the tax is. */}
-            <p className="text-muted-foreground text-sm">
-              <strong>Assets are entered under the person who receives them</strong> because this is
-              a tax on the <em>inheritance</em>, not on the estate. The same $100,000 is taxed at 0%
-              to a child, 11–16% to a sibling and 15–16% to a friend, so an asset with no named
-              recipient has no rate and cannot be computed. Add the beneficiary first, then their
-              share. An asset split between people is entered once under each, at each person's
-              share of its value.
-            </p>
-            {/* Errors of commission: the engine taxes whatever it is given, so entering one of
-                these raises the tax on a filed return and nothing errors. */}
-            <div className="bg-muted/30 space-y-1.5 rounded-md border p-3">
-              <p className="text-xs font-medium">Not reported on the IT-R — do not enter</p>
-              <ul className="text-muted-foreground space-y-1 text-xs">
-                {NOT_REPORTED_ON_ITR.map((x) => (
-                  <li key={x.what}><strong>{x.what}.</strong> {x.why}</li>
-                ))}
-              </ul>
-            </div>
             {matter.beneficiaries.map((b, bi) => (
               <div key={b.id} className="space-y-3 rounded-md border p-3">
                 <div className="grid gap-3 md:grid-cols-4">
@@ -575,57 +591,120 @@ export default function InheritanceTaxPage() {
                   </div>
                 </div>
 
-                {b.bequests.map((q, qi) => (
-                  <div key={q.id} className="space-y-2">
-                  <div className="grid items-end gap-3 md:grid-cols-4">
-                    <div>
-                      <Label>Asset type</Label>
-                      <select className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                        value={q.type}
-                        onChange={(e) => patch((d) => { d.beneficiaries[bi]!.bequests[qi]!.type = e.target.value as BequestType; })}>
-                        {BEQUEST_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                      {BEQUEST_TYPES.find((t) => t.value === q.type)?.note && (
-                        <p className="text-muted-foreground mt-1 text-xs">
-                          {BEQUEST_TYPES.find((t) => t.value === q.type)?.note}
-                        </p>
-                      )}
-                    </div>
-                    <div className="md:col-span-2">
-                      <Label>Description</Label>
-                      <Input value={q.description}
-                        onChange={(e) => patch((d) => { d.beneficiaries[bi]!.bequests[qi]!.description = e.target.value; })} />
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <div className="flex-1">
-                        <Label>FMV at date of death</Label>
-                        <Input type="number" min={0} value={q.fairMarketValue}
-                          onChange={(e) => patch((d) => { d.beneficiaries[bi]!.bequests[qi]!.fairMarketValue = Number(e.target.value); })} />
-                      </div>
-                      <Button variant="ghost" size="icon" aria-label="Remove bequest"
-                        onClick={() => patch((d) => { d.beneficiaries[bi]!.bequests.splice(qi, 1); })}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <BequestDetailFields
-                    bequest={q}
-                    onChange={(mutate) => patch((d) => { mutate(d.beneficiaries[bi]!.bequests[qi]!); })} />
-                  </div>
-                ))}
-
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm"
-                    onClick={() => patch((d) => { d.beneficiaries[bi]!.bequests.push({ id: uid('beq'), type: 'bank_account', description: '', fairMarketValue: 0 }); })}>
-                    Add bequest
-                  </Button>
                   <Button variant="ghost" size="sm"
-                    onClick={() => patch((d) => { d.beneficiaries.splice(bi, 1); })}>
+                    onClick={() => patch((d) => {
+                      const removed = d.beneficiaries[bi]!.id;
+                      d.beneficiaries.splice(bi, 1);
+                      // Leaving a share pointed at a deleted person would fail on save with an id
+                      // nobody recognises. Drop those shares with them.
+                      (d.assets ?? []).forEach((a) => {
+                        a.allocations = (a.allocations ?? []).filter((x) => x.beneficiaryId !== removed);
+                      });
+                      d.residuary = (d.residuary ?? []).filter((x) => x.beneficiaryId !== removed);
+                    })}>
                     Remove beneficiary
                   </Button>
                 </div>
               </div>
             ))}
+          </Card>
+
+          {/* ── Assets ───────────────────────────────────────────────── */}
+          <Card className="space-y-4 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium">Assets</h2>
+              <Button variant="outline" size="sm"
+                onClick={() => patch((d) => { d.assets = [...(d.assets ?? []), emptyAsset(uid('ast'))]; })}>
+                <Plus className="mr-2 h-4 w-4" /> Add asset
+              </Button>
+            </div>
+            {/* The answer to the most-asked question about this screen, now that it has changed. */}
+            <p className="text-muted-foreground text-sm">
+              <strong>Each asset is entered once, at the decedent's interest in it</strong>, and
+              then allocated. That is the figure Schedule A column D asks for and the one that goes
+              onto the tax waiver — so a house owned outright is entered once at its full value
+              however many people share it, not once per person at each person's half.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              The tax is still per beneficiary — the same $100,000 is 0% to a child, 11–16% to a
+              sibling, 15–16% to a friend — so every dollar has to reach someone. Give away what the
+              will gives away specifically; whatever is left falls into the residuary pool below.
+              <strong> An asset with no specific gifts is wholly residuary</strong>, which is the
+              ordinary will and not something to correct.
+            </p>
+            {/* Errors of commission: the engine taxes whatever it is given, so entering one of
+                these raises the tax on a filed return and nothing errors. */}
+            <div className="bg-muted/30 space-y-1.5 rounded-md border p-3">
+              <p className="text-xs font-medium">Not reported on the IT-R — do not enter</p>
+              <ul className="text-muted-foreground space-y-1 text-xs">
+                {NOT_REPORTED_ON_ITR.map((x) => (
+                  <li key={x.what}><strong>{x.what}.</strong> {x.why}</li>
+                ))}
+              </ul>
+            </div>
+            {(matter.assets ?? []).length === 0 && (
+              <p className="text-muted-foreground text-sm">No assets yet.</p>
+            )}
+            {(matter.assets ?? []).map((a, ai) => (
+              <div key={a.id} className="space-y-3 rounded-md border p-3">
+                <div className="grid items-end gap-3 md:grid-cols-4">
+                  <div>
+                    <Label>Asset type</Label>
+                    <select className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+                      aria-label={`Asset ${ai + 1} type`}
+                      value={a.type}
+                      onChange={(e) => patch((d) => { d.assets![ai]!.type = e.target.value as BequestType; })}>
+                      {BEQUEST_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    {BEQUEST_TYPES.find((t) => t.value === a.type)?.note && (
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {BEQUEST_TYPES.find((t) => t.value === a.type)?.note}
+                      </p>
+                    )}
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Description</Label>
+                    <Input aria-label={`Asset ${ai + 1} description`} value={a.description}
+                      onChange={(e) => patch((d) => { d.assets![ai]!.description = e.target.value; })} />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Label>Decedent's interest at date of death</Label>
+                      <Input type="number" min={0} aria-label={`Asset ${ai + 1} value`}
+                        value={a.fairMarketValue}
+                        onChange={(e) => patch((d) => { d.assets![ai]!.fairMarketValue = Number(e.target.value); })} />
+                    </div>
+                    <Button variant="ghost" size="icon" aria-label={`Remove asset ${ai + 1}`}
+                      onClick={() => patch((d) => { d.assets!.splice(ai, 1); })}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <BequestDetailFields
+                  bequest={a}
+                  onChange={(mutate) => patch((d) => { mutate(d.assets![ai]!); })} />
+                <AssetAllocationFields
+                  asset={a}
+                  beneficiaries={matter.beneficiaries}
+                  mode={shareModes[a.id] ?? 'percent'}
+                  onModeChange={(mode) => setShareModes((prev) => ({ ...prev, [a.id]: mode }))}
+                  onChange={(mutate) => patch((d) => { mutate(d.assets![ai]! as ITRAsset); })} />
+              </div>
+            ))}
+          </Card>
+
+          {/* ── Residue ──────────────────────────────────────────────── */}
+          <Card className="space-y-4 p-4">
+            <h2 className="font-medium">Residue</h2>
+            <ResiduarySharesFields
+              pool={pool}
+              shares={matter.residuary ?? []}
+              beneficiaries={matter.beneficiaries}
+              onChange={(mutate) => patch((d) => {
+                d.residuary = d.residuary ?? [];
+                mutate(d.residuary);
+              })} />
           </Card>
 
           {/* ── Deductions ───────────────────────────────────────────── */}
