@@ -178,6 +178,42 @@ node scripts/itr-field-inventory.mjs --form itext --page 1   # a committed blank
 node scripts/itr-field-inventory.mjs --file /tmp/itl9a.pdf --page 1
 ```
 
+### 3.0 Decisions taken 2026-07-28 — do not re-open without new information
+
+| Question | Answer | Consequence |
+|---|---|---|
+| Nonresident decedents? | **No** | Track 3 closed. Refused at compute; that is the final behaviour. |
+| Pre-2018 deaths? | **Not in practice** | L-9(A) and both IT-Estate returns are not being built. |
+| Add a life-insurance asset type? | **No** — and it would be harmful | See below. |
+
+**Why no life-insurance bequest type**, researched against the State's IT-R instructions
+(`it-rinst.pdf`) rather than assumed:
+
+> *Life insurance proceeds payable to named beneficiaries, or beneficiaries of an insurance trust
+> established by the decedent, are **exempt** for New Jersey Inheritance Tax purposes.*
+> *Note: Insurance policy proceeds **payable to the Estate**, instead of a named beneficiary, are
+> includible in the Estate and are subject to tax.*
+
+Schedule C Part III splits on exactly that line — Section A (named beneficiary) records that life
+insurance there "is not required to be reported"; Section B records that policies "payable to the
+decedent's Estate **are required** to be reported". The taxable half is therefore already
+representable as a `transfer` with `part: 'pod_to_estate'`, and the filler's "Type of Policy"
+column takes the item description. A first-class life-insurance type would add nothing and would
+invite attorneys to enter the *exempt* policies, over-taxing the estate.
+
+**Out-of-state property — the answer, and the asymmetry.** Schedule A: *"Do not report real
+property located outside New Jersey."* It never enters the gross estate. But intangibles are
+included wherever they sit — stock is reported *"regardless of where the company is incorporated"*,
+a co-op *"no matter where the co-op is located"*. And Schedule D's "Do not deduct" list includes
+*"Debts secured by real or tangible property located outside of New Jersey"* — so the out-of-state
+property is excluded from the estate **and** its mortgage is not deductible. It cuts one way only.
+
+Because the engine taxes whatever it is given, all three of these are errors of commission that no
+code path can catch. They are surfaced on the intake screen instead — `NOT_REPORTED_ON_ITR` plus
+per-option `note`s on the asset and deduction pickers, each quoting the instruction text, with
+`tests/unit/inheritance-tax-reporting-guidance.test.ts` asserting both the copy and the engine
+behaviour that makes it necessary.
+
 ### 3.1 What is filled, and what is left
 
 | Form | Blank | State |
@@ -230,7 +266,12 @@ Tax — `ITRFormData` says so outright, and the rule sets carry `VERIFY: rate ta
 from primary source`. Wiring the form up without doing that research would produce a form with no
 verified figures behind it. Treat the research as the first task, not the code.
 
-### Track 3 — IT-NR (nonresident)
+### Track 3 — IT-NR (nonresident) — ❌ NOT BUILDING
+> **Decided 2026-07-28: Adam does not take nonresident decedents.** A nonresident matter is
+> refused cleanly at `computeEstate` (#187) and that is where it stays. The scoping below is kept
+> only so the decision is not re-litigated from scratch.
+
+### Track 3 — original scoping (kept for the record)
 Not modelled at all. As of #187 a nonresident matter is refused at `computeEstate` rather than
 quietly returning a resident-basis figure. Building it means modelling NJ-situs property
 (N.J.A.C. 18:26-2.15 — NJ real and tangible personal property only), which is an engine change

@@ -40,6 +40,7 @@ import {
   ENTITY_RELATIONSHIPS,
   BEQUEST_TYPES,
   DEDUCTION_TYPES,
+  NOT_REPORTED_ON_ITR,
   type ITRMatterInput,
   type ITRBeneficiary,
   type ITRDeduction,
@@ -485,6 +486,16 @@ export default function InheritanceTaxPage() {
               <strong>Relationship drives the tax class</strong> (N.J.S.A. 54:34-2) — it is the field
               to double-check. The picker is grouped by the class it produces.
             </p>
+            {/* Errors of commission: the engine taxes whatever it is given, so entering one of
+                these raises the tax on a filed return and nothing errors. */}
+            <div className="bg-muted/30 space-y-1.5 rounded-md border p-3">
+              <p className="text-xs font-medium">Not reported on the IT-R — do not enter</p>
+              <ul className="text-muted-foreground space-y-1 text-xs">
+                {NOT_REPORTED_ON_ITR.map((x) => (
+                  <li key={x.what}><strong>{x.what}.</strong> {x.why}</li>
+                ))}
+              </ul>
+            </div>
             {matter.beneficiaries.map((b, bi) => (
               <div key={b.id} className="space-y-3 rounded-md border p-3">
                 <div className="grid gap-3 md:grid-cols-4">
@@ -534,6 +545,11 @@ export default function InheritanceTaxPage() {
                         onChange={(e) => patch((d) => { d.beneficiaries[bi]!.bequests[qi]!.type = e.target.value as BequestType; })}>
                         {BEQUEST_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
+                      {BEQUEST_TYPES.find((t) => t.value === q.type)?.note && (
+                        <p className="text-muted-foreground mt-1 text-xs">
+                          {BEQUEST_TYPES.find((t) => t.value === q.type)?.note}
+                        </p>
+                      )}
                     </div>
                     <div className="md:col-span-2">
                       <Label>Description</Label>
@@ -595,6 +611,11 @@ export default function InheritanceTaxPage() {
                     onChange={(e) => patch((d) => { d.deductions[di]!.type = e.target.value as DeductionType; })}>
                     {DEDUCTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
+                  {DEDUCTION_TYPES.find((t) => t.value === d0.type)?.note && (
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {DEDUCTION_TYPES.find((t) => t.value === d0.type)?.note}
+                    </p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <Label>Description</Label>
