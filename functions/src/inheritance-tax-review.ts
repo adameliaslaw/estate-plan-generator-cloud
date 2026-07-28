@@ -284,8 +284,13 @@ export const getInheritanceForm = onCall(CALL_OPTS, async (request: CallableRequ
   const db = admin.firestore();
   const matterId = requireString(body, 'matterId');
 
-  const matter = await getMatter(db, firmId, matterId);
-  if (!matter) throw new HttpsError('not-found', `Matter ${matterId} not found.`);
+  const stored = await getMatter(db, firmId, matterId);
+  if (!stored) throw new HttpsError('not-found', `Matter ${matterId} not found.`);
+  // Form builders read per-beneficiary bequests for anything the frozen snapshot does not carry,
+  // so they get the derived matter for the same reason the engine does. An allocation-model
+  // matter has no nested bequests; handing one over underived would silently produce a $0
+  // interest for every beneficiary rather than failing.
+  const matter = deriveEngineMatter(stored);
   const approved = await getApprovedCheckpoint(db, firmId, matterId);
   if (!approved) {
     throw new HttpsError('failed-precondition', 'No approved checkpoint: the IT-R renders only from a reviewed, frozen snapshot.');
@@ -342,8 +347,11 @@ export const getInheritanceCompanionForm = onCall(CALL_OPTS, async (request: Cal
     throw new HttpsError('invalid-argument', `form must be one of: ${COMPANION_FORMS.join(', ')}.`);
   }
 
-  const matter = await getMatter(db, firmId, matterId);
-  if (!matter) throw new HttpsError('not-found', `Matter ${matterId} not found.`);
+  const stored = await getMatter(db, firmId, matterId);
+  if (!stored) throw new HttpsError('not-found', `Matter ${matterId} not found.`);
+  // Derived for the same reason as the IT-R path above — the L-9 in particular sums each
+  // beneficiary's bequests to state their interest in the estate.
+  const matter = deriveEngineMatter(stored);
   const approved = await getApprovedCheckpoint(db, firmId, matterId);
   if (!approved) {
     throw new HttpsError(

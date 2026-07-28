@@ -80,6 +80,49 @@ function apportionCents(totalCents: number, fractions: number[]): number[] {
   return parts;
 }
 
+/**
+ * A share as the attorney reads it: "50%", "33.3333%", "100%". At most four decimals, trailing
+ * zeros trimmed, so a half is "50%" and a third is not thirteen digits of noise.
+ */
+function formatShare(fraction: number): string {
+  return `${parseFloat((fraction * 100).toFixed(4))}%`;
+}
+
+/**
+ * Who takes this asset, for the beneficiary column on a schedule row.
+ *
+ * **That column is ours, not the State's.** Verified against the IT-R instructions
+ * (it-rinst.pdf, 2026-07-28): no asset schedule asks who receives the property. Schedule A's
+ * Column A asks for the county, the decedent's fractional interest, address, lot and block,
+ * municipality and the **owners of record** — *"Include all owners' names listed on the
+ * property"* — and Schedule B-1's asks for the institution, last four digits and registered
+ * owners. Beneficiaries are Schedule E's subject. So this string reaches only our own HTML
+ * workpaper and the HTML L-9; the official PDF fillers never write it.
+ *
+ * Being a review aid, it is written for the reviewer: where one row now prints in place of two,
+ * the split must not vanish with them. Each taker is named with their share, and whatever falls
+ * into residue is "Residuary estate" — the State's own Schedule E vocabulary ("50% Residue").
+ * A whole asset to one person stays a plain name, which is what keeps a normalised legacy matter
+ * rendering exactly as it did.
+ */
+export function describeAssetTakers(asset: Asset, matter: Pick<Matter, 'beneficiaries'>): string {
+  const nameById = new Map(matter.beneficiaries.map((b) => [b.id, `${b.firstName} ${b.lastName}`.trim()]));
+  const name = (id: string): string => nameById.get(id) ?? id;
+  const allocations = asset.allocations ?? [];
+  const remainder = 1 - allocatedFraction(asset);
+
+  const sole = allocations.length === 1 ? allocations[0] : undefined;
+  if (sole !== undefined && remainder <= FRACTION_EPSILON) return name(sole.beneficiaryId);
+
+  const parts = allocations.map((a) => `${name(a.beneficiaryId)} (${formatShare(a.fraction)})`);
+  if (remainder > FRACTION_EPSILON) {
+    parts.push(
+      allocations.length === 0 ? 'Residuary estate' : `Residuary estate (${formatShare(remainder)})`,
+    );
+  }
+  return parts.join(', ');
+}
+
 /** One beneficiary's claim on one asset, before it is priced. */
 interface AssetPart {
   beneficiaryId: string;

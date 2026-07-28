@@ -18,6 +18,7 @@ import { classifyBeneficiary } from './classify';
 import { computeFilingDeadline } from './deadline';
 import { computeNJEstateTax } from './estate-tax';
 import { fromCents, roundCents, toCents } from '../money';
+import { describeAssetTakers } from '../allocations';
 // Imported from the specific file (not the forms barrel) to avoid an engine→forms cycle.
 import { UnsupportedMatterError } from '../forms/errors';
 
@@ -285,12 +286,48 @@ const SCHEDULE_TYPES = {
   C: ['transfer'],
 } as const satisfies Record<string, ReadonlyArray<BequestType>>;
 
+/**
+ * The schedules' rows.
+ *
+ * **One asset, one row.** In the allocation model an asset is the thing the schedule describes,
+ * so it prints once at the decedent's whole interest however many people take it — which is what
+ * Schedule A's Column D asks for (*"the value of the decedent's interest only"*, the figure that
+ * *"goes directly onto the tax waiver"*). Splitting it across takers printed the same house
+ * twice, once per half, on six different schedules; this is the single place that was born, and
+ * the single place it dies.
+ *
+ * A matter in the legacy nested model takes the second path, unchanged: one row per bequest.
+ */
 function collectScheduleItems(
   matter: Matter,
   types: ReadonlyArray<BequestType>,
 ): ScheduleItem[] {
   const typeSet = new Set<string>(types);
   const items: ScheduleItem[] = [];
+
+  if (matter.assets !== undefined) {
+    for (const asset of matter.assets) {
+      if (!typeSet.has(asset.type)) continue;
+      items.push({
+        id: asset.id,
+        beneficiaryName: describeAssetTakers(asset, matter),
+        description: asset.description,
+        // The decedent's whole interest — never a taker's share. Line 1–4 totals are the sum of
+        // these, which is why one row per asset leaves every figure exactly where it was.
+        fairMarketValue: asset.fairMarketValue,
+        // Conditional so an asset without a given detail block stores no key at all —
+        // Firestore rejects an explicit undefined.
+        ...(asset.realPropertyDetails !== undefined ? { realPropertyDetails: asset.realPropertyDetails } : {}),
+        ...(asset.businessDetails !== undefined ? { businessDetails: asset.businessDetails } : {}),
+        ...(asset.accountDetails !== undefined ? { accountDetails: asset.accountDetails } : {}),
+        ...(asset.securityDetails !== undefined ? { securityDetails: asset.securityDetails } : {}),
+        ...(asset.bondDetails !== undefined ? { bondDetails: asset.bondDetails } : {}),
+        ...(asset.transferDetails !== undefined ? { transferDetails: asset.transferDetails } : {}),
+      });
+    }
+    return items;
+  }
+
   for (const b of matter.beneficiaries) {
     const name = `${b.firstName} ${b.lastName}`;
     for (const bequest of b.bequests) {

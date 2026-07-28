@@ -7,6 +7,7 @@ import type {
   TaxClass,
 } from '../types';
 import { classifyBeneficiary } from '../engine';
+import { describeAssetTakers } from '../allocations';
 import { DISCLAIMER } from './disclaimer';
 import { UnsupportedMatterError, FormPreconditionError } from './errors';
 
@@ -108,17 +109,20 @@ export function buildL9AFormData(
   }
 
   // Real property whose lien the waiver releases (Schedule A — NJ real property).
-  const realProperties: L9ARealProperty[] = matter.beneficiaries.flatMap((b) =>
-    b.bequests
-      .filter((q) => q.type === 'nj_real_property')
-      .map((q) => {
-        // Schedule A's columns, where intake captured them. Spread conditionally so a matter
-        // without the detail block carries no empty keys into the frozen form data.
-        const d = q.realPropertyDetails;
+  //
+  // ONE PARCEL, ONE ROW. This affidavit releases a lien against a specific piece of land, so a
+  // house entered once and split between two takers must appear once — listing it twice would
+  // assert two half-parcels and ask the County Clerk to release a lien on each. Same defect as
+  // the duplicated Schedule A row, same fix: read the assets when the matter has them.
+  const realProperties: L9ARealProperty[] = matter.assets !== undefined
+    ? matter.assets
+      .filter((a) => a.type === 'nj_real_property')
+      .map((a) => {
+        const d = a.realPropertyDetails;
         return {
-          description: q.description,
-          fairMarketValue: q.fairMarketValue,
-          beneficiaryName: `${b.firstName} ${b.lastName}`.trim(),
+          description: a.description,
+          fairMarketValue: a.fairMarketValue,
+          beneficiaryName: describeAssetTakers(a, matter),
           ...(d?.county !== undefined ? { county: d.county } : {}),
           ...(d?.streetAddress !== undefined ? { streetAddress: d.streetAddress } : {}),
           ...(d?.lots !== undefined ? { lots: d.lots } : {}),
@@ -126,8 +130,27 @@ export function buildL9AFormData(
           ...(d?.municipality !== undefined ? { municipality: d.municipality } : {}),
           ...(d?.ownersAndTitle !== undefined ? { ownersAndTitle: d.ownersAndTitle } : {}),
         };
-      }),
-  );
+      })
+    : matter.beneficiaries.flatMap((b) =>
+      b.bequests
+        .filter((q) => q.type === 'nj_real_property')
+        .map((q) => {
+          // Schedule A's columns, where intake captured them. Spread conditionally so a matter
+          // without the detail block carries no empty keys into the frozen form data.
+          const d = q.realPropertyDetails;
+          return {
+            description: q.description,
+            fairMarketValue: q.fairMarketValue,
+            beneficiaryName: `${b.firstName} ${b.lastName}`.trim(),
+            ...(d?.county !== undefined ? { county: d.county } : {}),
+            ...(d?.streetAddress !== undefined ? { streetAddress: d.streetAddress } : {}),
+            ...(d?.lots !== undefined ? { lots: d.lots } : {}),
+            ...(d?.block !== undefined ? { block: d.block } : {}),
+            ...(d?.municipality !== undefined ? { municipality: d.municipality } : {}),
+            ...(d?.ownersAndTitle !== undefined ? { ownersAndTitle: d.ownersAndTitle } : {}),
+          };
+        }),
+    );
   if (realProperties.length === 0) {
     throw new FormPreconditionError(
       'Cannot generate L-9: the estate has no NJ real property (Schedule A is empty). ' +

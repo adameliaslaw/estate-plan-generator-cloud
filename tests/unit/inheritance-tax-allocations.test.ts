@@ -158,10 +158,11 @@ describe('the same estate in both shapes computes to identical figures', () => {
     expect(compute(ALLOCATED).totalTaxDue).toBeGreaterThan(0);
   });
 
-  test('PR 1 does NOT fix the duplicate schedule row — that is PR 2', () => {
-    // Stated so the next session knows the derivation deliberately stops short of the
-    // schedules: the split house still prints twice, from either shape.
-    expect(compute(ALLOCATED).formSnapshot?.scheduleA).toHaveLength(2);
+  test('the split house prints ONCE from assets and still twice from the nested shape', () => {
+    // PR 2 killed the duplication at its source, and only the allocation model can express the
+    // asset that fixes it. A legacy nested matter has no asset to print once, so it keeps its
+    // two rows — which is exactly why the model had to change rather than the renderer.
+    expect(compute(ALLOCATED).formSnapshot?.scheduleA).toHaveLength(1);
     expect(compute(NESTED).formSnapshot?.scheduleA).toHaveLength(2);
   });
 });

@@ -4,14 +4,14 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## ▶ THE ASSET/ALLOCATION MODEL — residue is built (PR 1); schedules and intake follow, in that order
+## ▶ THE ASSET/ALLOCATION MODEL — residue (PR 1) and the schedules (PR 2) are done; intake is left
 
 Read this section top to bottom: it is the work in the order it has to happen. Residue is the
-foundation the other two PRs stand on, so it went first and it is done. **Full scope:
+foundation the other two PRs stand on, so it went first, and the schedules followed it. **Full scope:
 [docs/ASSET-ALLOCATION-MODEL.md](./docs/ASSET-ALLOCATION-MODEL.md)** — kept in its own file
 because this one is re-read every session, and was archived once for exactly that reason.
 
-### 1 · Residue and the allocation model — ✅ BUILT 2026-07-28, awaiting Adam's sign-off to merge
+### 1 · Residue and the allocation model — ✅ SHIPPED 2026-07-28 (#210, merged and deployed)
 
 **What shipped (PR 1 — model, derivation, back-compat; engine untouched, 961/961 green):**
 
@@ -78,21 +78,38 @@ rounding fails the three-way residue test.
 **Sign-off needed before merge** — this is a data-model change to the tax engine, which the
 Never-Break List puts outside auto-merge.
 
-### 2 · NEXT — schedules render from assets (PR 2)
+### 2 · Schedules render from assets — ✅ BUILT 2026-07-28, awaiting sign-off
 
-This is where the six duplication bugs actually die, and PR 1 deliberately did **not** touch them:
-the split house still prints **two Schedule A rows** today, from either shape (there is a test
-asserting exactly that, so the next session inherits a fact and not a guess).
+**The duplication is dead at its source.** `collectScheduleItems` (`engine/compute.ts`, called by
+`buildFormSnapshot`) emitted one row per *bequest*; it now emits one row per **asset**, at the
+decedent's whole interest, however many people take it. One change, six schedules — **A, B, B-1,
+B-2, B-3 and C** — which is why the per-schedule "group the rows" patch was rejected: it would
+have been written six times, each with its own notion of asset identity.
 
-`collectScheduleItems` (`engine/compute.ts`, called by `buildFormSnapshot`) emits one row per
-*bequest*; it must emit one row per **asset**, with its allocations. One change, six schedules —
-**A, B, B-1, B-2, B-3 and C** — which is why the per-schedule "group the rows" patch was rejected:
-it would have been written six times, each with its own notion of asset identity.
+*Done, and asserted:* the $500,000 house split two ways is **one** Schedule A row at $500,000, the
+split account **one** B-1 row at $40,000, and the filled IT-R reads back `500,000.00` in column D
+of the first property block with the second block **empty** — that empty block is where the
+duplicate row used to be. Line 1 = $500,000, Line 5 = $540,000, and each child still takes
+$270,000: the row count changed, no figure did.
 
-*Done when:* the split house produces **one** Schedule A row at $500,000, the split account **one**
-B-1 row, and the PDF assertions read those values back out of the produced file.
+**Two things beyond the stated scope, both belonging here:**
+- **The L-9 listed the same parcel twice** for the same reason, and a lien release is not a place
+  for two half-parcels. It reads assets now. Its per-beneficiary "interest in the estate" also
+  summed nested bequests, which an allocation-model matter does not have — it would have stated
+  **$0 for every beneficiary** and passed the Class A eligibility check vacuously. Both fixed;
+  both tested.
+- **The form handlers now derive**, like the engine handlers already did (`deriveEngineMatter`
+  before `buildITRFormData` / `buildL9AFormData`). PR 1 wired the two compute boundaries and left
+  the two form boundaries, which was a real gap: an allocation-model matter reaching a form
+  builder underived produces zeros, not an error.
 
-**The question this PR looked like it would have to answer is already answered — by the State.**
+*Verified:* 16 new tests, negative-controlled — 7 of them fail against PR 1's code, including both
+row counts and the PDF read-back. 977/977 green, gold cases untouched.
+
+**Still not done here — Schedule E Column D.** See below; it is real work with a real constraint,
+not a loose end to tack on.
+
+**The question this PR looked like it would have to answer was already answered — by the State.**
 Checked 2026-07-28 against `it-rinst.pdf` and the blank form's own field layer, because "who is
 named on a row that now has several takers" reads like a blocker and is not one.
 
@@ -129,7 +146,10 @@ writes name, address, relationship, tax class and dollar amount, leaving D and F
 
 ⚠️ **The constraint, checked rather than assumed:** the blank IT-R's AcroForm has **808 fields and
 none for Column D or Column F**. Those columns are printed but not fillable, so filling D means
-drawing text onto the page, not writing a field. Scope it accordingly — it is not a one-liner.
+drawing text onto the page, not writing a field. Scope it accordingly — it is not a one-liner, and
+that is why PR 2 did not absorb it. `describeAssetTakers` in `allocations.ts` already composes the
+string the column wants ("Nina Niece (33.3333%), Residuary estate (66.6667%)"); what is missing is
+placing text on the page, not knowing what to say.
 
 Two smaller confirmations from the same pass, worth not rediscovering:
 - Schedule A Column D says *"Show this as a dollar amount (not a fraction or percentage)"* —

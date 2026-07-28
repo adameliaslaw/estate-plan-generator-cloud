@@ -116,10 +116,13 @@ called at the two engine boundaries. Engine untouched, gold cases untouched and 
 both shapes and asserts every figure matches, and round-trips a legacy matter asserting the whole
 computation — frozen snapshot included — is identical.
 
-**PR 2 — schedules render from assets.** `collectScheduleItems` emits one row per asset with its
-allocations. This is where the six duplication bugs die.
-*Done when:* the split house produces **one** Schedule A row at $500,000, the split account **one**
-B-1 row, and the PDF assertions read those values back out of the produced file.
+**PR 2 — schedules render from assets. ✅ BUILT 2026-07-28.** `collectScheduleItems` emits one row
+per asset, at the decedent's whole interest however many people take it. This is where the six
+duplication bugs died. The L-9's parcel list and the form handlers' derivation came with it (see
+HOMEWORK.md).
+*Done when — met:* the split house produces **one** Schedule A row at $500,000, the split account
+**one** B-1 row, and `tests/unit/inheritance-tax-schedules-from-assets.test.ts` reads those values
+back out of the produced PDF, with the second property block empty.
 
 **PR 3 — intake.** Assets entered once, then allocated; a share picker that does the arithmetic
 (fraction, percent or amount) and shows the unallocated remainder.
