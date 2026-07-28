@@ -1133,6 +1133,12 @@ export interface ITEXTFormData {
   dateOfDeath: ISODate;
   countyOfResidence: NJCounty;
   isNJResident: boolean;
+  /**
+   * The official IT-EXT asks the estate to mark itself Testate or Intestate, which is the
+   * same fact as `Matter.willExists`. Carried here so the PDF filler need not reach past the
+   * form data to the matter.
+   */
+  willExists: boolean;
 
   /** Estate representative — signature block. */
   representative: Matter['personalRepresentative'];
@@ -1220,6 +1226,21 @@ export interface L9ARealProperty {
   description: string;
   fairMarketValue: number;
   beneficiaryName: string;
+  /**
+   * The parcel as the official L-9 asks for it — County, Street and Number, Lot, Block,
+   * Municipality, Owner(s) of Record. These are the same columns Schedule A of the IT-R asks
+   * for, so they are carried straight from the bequest's `realPropertyDetails`.
+   *
+   * Every one is optional: a matter entered before those fields existed has only a description,
+   * and the affidavit prints the box blank for the attorney rather than guessing a lot and
+   * block. A wrong block on a lien release is worse than an empty one.
+   */
+  county?: string;
+  streetAddress?: string;
+  lots?: string;
+  block?: string;
+  municipality?: string;
+  ownersAndTitle?: string;
 }
 
 /**

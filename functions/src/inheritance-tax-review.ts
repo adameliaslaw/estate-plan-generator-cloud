@@ -31,6 +31,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { assertFirmStaff } from './auth-guards';
 import { fillITRPdf } from './inheritance-tax/forms/it-r-pdf';
+import { fillITEXTPdf } from './inheritance-tax/forms/it-ext-pdf';
+import { fillL9Pdf } from './inheritance-tax/forms/l9-pdf';
 import {
   computeEstate,
   getRuleSet,
@@ -73,16 +75,18 @@ const CALL_OPTS = {
 };
 
 /**
- * The State's blank Form IT-R booklet, held on the instance after the first read. It ships in
+ * The State's blank forms, held on the instance after the first read. They ship in
  * `functions/assets/` — one directory up from both `src/` and the compiled `lib/`, so the same
  * path resolves in tests and in production.
  */
-let blankITR: Uint8Array | null = null;
-function loadBlankITR(): Uint8Array {
-  if (!blankITR) {
-    blankITR = new Uint8Array(readFileSync(join(__dirname, '..', 'assets', 'itr-blank.pdf')));
+const blanks = new Map<string, Uint8Array>();
+function loadBlank(file: string): Uint8Array {
+  let bytes = blanks.get(file);
+  if (!bytes) {
+    bytes = new Uint8Array(readFileSync(join(__dirname, '..', 'assets', file)));
+    blanks.set(file, bytes);
   }
-  return blankITR;
+  return bytes;
 }
 
 function requireFirmId(data: unknown): { firmId: string; body: Record<string, unknown> } {
@@ -287,7 +291,7 @@ export const getInheritanceForm = onCall(CALL_OPTS, async (request: CallableRequ
     // The filled official form is opt-in: it costs ~700KB on the wire, and most callers
     // (the audit view, the on-screen workpaper) only want the figures.
     const pdfBase64 = body['pdf'] === true
-      ? Buffer.from(await fillITRPdf(formData, loadBlankITR())).toString('base64')
+      ? Buffer.from(await fillITRPdf(formData, loadBlank('itr-blank.pdf'))).toString('base64')
       : undefined;
     return {
       formData,
@@ -342,17 +346,37 @@ export const getInheritanceCompanionForm = onCall(CALL_OPTS, async (request: Cal
     );
   }
 
+  // The filled official form is opt-in, as it is for the IT-R: it costs a few hundred KB on the
+  // wire and the on-screen workpaper does not need it.
+  const wantPdf = body['pdf'] === true;
+
   try {
     if (form === 'it-ext') {
       const formData = buildITEXTFormData(matter, approved);
-      return { form, formData, html: renderITEXTHtml(formData), workpaper: true as const };
+      const pdfBase64 = wantPdf
+        ? Buffer.from(await fillITEXTPdf(formData, loadBlank('itext.pdf'))).toString('base64')
+        : undefined;
+      return {
+        form, formData, html: renderITEXTHtml(formData),
+        ...(pdfBase64 ? { pdfBase64 } : {}), workpaper: true as const,
+      };
     }
     if (form === 'it-estate') {
       const formData = buildITEstateFormData(matter, approved);
+      // No filled PDF yet: the State prints a different Estate Tax return either side of
+      // 2017-01-01, and neither is mapped. The workpaper carries the figures meanwhile.
       return { form, formData, html: renderITEstateHtml(formData), workpaper: true as const };
     }
     const formData = buildL9AFormData(matter, approved);
-    return { form, formData, html: renderL9AHtml(formData), workpaper: true as const };
+    // `fillL9Pdf` refuses an L-9(A) — the pre-2018 affidavit is a materially different form and
+    // is not mapped. That refusal surfaces as `failed-precondition` with its reason, below.
+    const pdfBase64 = wantPdf
+      ? Buffer.from(await fillL9Pdf(formData, loadBlank('itl9.pdf'))).toString('base64')
+      : undefined;
+    return {
+      form, formData, html: renderL9AHtml(formData),
+      ...(pdfBase64 ? { pdfBase64 } : {}), workpaper: true as const,
+    };
   } catch (e) {
     if (e instanceof UnsupportedMatterError || e instanceof FormPreconditionError) {
       throw new HttpsError('failed-precondition', e.message);

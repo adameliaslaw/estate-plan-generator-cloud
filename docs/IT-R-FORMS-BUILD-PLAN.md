@@ -149,8 +149,10 @@ Mapping work, plus intake fields for the schedules whose columns the model canno
 >   used if any NJ Estate Tax is payable. Exactly the preconditions `buildL9AFormData` enforces.
 >
 > So no rate table needed rewriting. What was missing was wiring, and that is now in place.
-> **Left for a follow-up**: an official filled PDF for each of the three (each is a separate State
-> form with its own blank and its own inventory) — today they render as HTML workpapers only.
+> **~~Left for a follow-up~~: the official filled PDFs — half done.** IT-EXT and the L-9 are
+> filled from the approved snapshot and downloadable beside their workpaper button. The L-9(A)
+> and both IT-Estate returns are not, for reasons that turned out to be substantive rather than
+> clerical — see §3.1.
 
 **Where the blanks live** (checked 2026-07-28 — none is at the filename you would guess, and the
 State's own index page is the only reliable way to find one). Index:
@@ -167,6 +169,54 @@ State's own index page is the only reliable way to find one). Index:
 **The trap:** one builder does not mean one blank. Two of the three span a date boundary the State
 answers with a different printed form, so the PDF filler must pick the blank from the date of
 death — the way `getRuleSet` already picks a rule set — not from the builder's name.
+
+Only the blanks with a filler are committed to `functions/assets/`. To inventory one that is not
+mapped, download it from the URL above and pass `--file`:
+
+```bash
+node scripts/itr-field-inventory.mjs --form itext --page 1   # a committed blank
+node scripts/itr-field-inventory.mjs --file /tmp/itl9a.pdf --page 1
+```
+
+### 3.1 What is filled, and what is left
+
+| Form | Blank | State |
+|---|---|---|
+| IT-EXT | `itext.pdf` | ✅ filled — 1 page, 21 fields |
+| L-9 (deaths on/after 2018-01-01) | `itl9.pdf` | ✅ filled — 3 pages, 78 widgets |
+| L-9(A) (deaths before 2018-01-01) | `itl9a.pdf` | ⬜ not mapped — see below |
+| IT-Estate (pre-2017) | `itestate.pdf` | ⬜ not mapped — 342 widgets, 14 pages |
+| IT-Estate (2017 only) | `it-estate2017.pdf` | ⬜ not mapped |
+
+`fillL9Pdf` **refuses** an L-9(A) rather than filing those figures on the L-9's paper, and the
+refusal reaches the attorney as `failed-precondition` with its reason. The estate-tax returns have
+no filler at all, so the callable simply returns no `pdfBase64` and the page says to hand-fill from
+the workpaper. Neither case is silent.
+
+**Why the L-9(A) is not just "the L-9 with an earlier date".** Three things, each of which has to
+be solved before it can be filled:
+
+1. **It asks for figures the model does not carry.** A federal-706-style estate-composition block —
+   real estate, stocks and bonds, bank accounts, IRAs, pensions, life insurance, transfers, other
+   assets, gross estate, adjusted taxable gifts, total. `L9AFormData` has none of these, and they
+   are not the IT-R's schedule totals rearranged; mapping bequest types onto 706 categories is a
+   decision, not a transcription.
+2. **`undefined_16` is one field carrying two widgets** — page 1's line M (Total) and page 2's
+   phone box. Writing either writes both.
+3. **`Lot Block` is one field carrying the Lot widget AND the Block widget.** On that form, lot and
+   block cannot be written independently at all. It needs per-widget writes, the same technique
+   `FieldWriter.radioByIndex` uses for IT-EXT's radio pair, extended to text fields.
+
+The L-9 blank has no shared names at all, which is why it went first.
+
+**Two boxes on the IT-EXT are deliberately blank**, and it is worth not "fixing" them: the
+representative's SSN (the model holds none for a personal representative) and the whole "Mailing
+Address to send all correspondence" block. The second is a *choice* about where the Division should
+write — usually the preparing attorney's office — not a fact the estate record contains, and
+defaulting it to the executor would silently redirect the State's notices. The L-9's equivalent
+block IS filled, because that form's own affidavit text makes it the representative: "Deponent
+authorizes the party listed above to act as the estate's representative and to receive the
+waiver(s) requested herein."
 
 ### Track 2 — the three orphaned forms (original scoping, kept for the record)
 `buildITEXTFormData`, `buildITEstateFormData`, `buildL9AFormData` and their HTML renderers are

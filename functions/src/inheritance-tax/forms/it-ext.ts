@@ -59,6 +59,9 @@ export function buildITEXTFormData(
     dateOfDeath: matter.decedent.dateOfDeath,
     countyOfResidence: matter.decedent.countyOfResidence,
     isNJResident: matter.decedent.isNJResident ?? true,
+    // Testate / Intestate on the official form. Sourced from the live matter, as the other
+    // identity fields in this builder are — it is not a computed figure.
+    willExists: matter.willExists,
 
     representative: matter.personalRepresentative,
 

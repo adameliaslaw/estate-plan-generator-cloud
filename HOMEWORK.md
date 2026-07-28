@@ -4,6 +4,70 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+## 🔵 SESSION — 2026-07-28 PM #2 (IT-EXT and the L-9 are now filled on the State's own paper)
+
+**TL;DR — Took the ▶ NEXT that needed no decision from Adam: official filled PDFs for the
+companion forms. IT-EXT and the L-9 are done — filled from the same approved snapshot the IT-R
+renders from, with a download button beside each workpaper button. The L-9(A) and both IT-Estate
+returns are not, and the reason turned out to be substantive rather than "not got to it yet".**
+
+**The scoping assumption from last session was right, and the reason is worse than expected.** The
+L-9(A) is not the L-9 with an earlier date. It asks for a federal-706-style estate-composition
+block (real estate / stocks / bank accounts / IRAs / pensions / insurance / transfers / other,
+then gross estate and adjusted taxable gifts) that `L9AFormData` carries no figures for — mapping
+bequest types onto 706 categories is a decision, not a transcription. And its AcroForm has two
+defects: `undefined_16` is **one field carrying two widgets** (page 1's line M *and* page 2's phone
+box), and `Lot Block` is **one field carrying both the Lot and the Block widget** — on that form
+lot and block cannot be written independently at all. The L-9 blank has no shared names, which is
+why it went first.
+
+**A trap found and handled, worth knowing:** IT-EXT's Testate/Intestate pair is a radio group whose
+two widgets **both export the value "Yes"** (an `/Opt` array of `["Yes","Yes"]`), so pdf-lib's
+`select()` can only ever reach the first — there is no value that names the second. Under `/Opt` the
+appearance state of widget *n* is the string `"n"`, so the fix is to set the field to that name.
+Verified empirically by writing each index and reading `/V` and both `/AS` back out of the saved
+file, not by reasoning about the spec. That is `FieldWriter.radioByIndex`, and it is the same
+technique the L-9(A) will need for its shared text fields.
+
+**Judgement calls, all the same direction as before — don't assert what the record doesn't say:**
+- **IT-EXT's "Mailing Address to send all correspondence" block is left blank.** Where the Division
+  should write is a *choice* — usually the preparing attorney's office — not a fact the estate
+  record contains, and defaulting it to the executor would silently redirect the State's notices.
+  The L-9's equivalent block *is* filled, because that form's own affidavit text makes it the
+  representative ("Deponent authorizes the party listed above to act as the estate's
+  representative and to receive the waiver(s) requested herein").
+- **An Heir-at-law ticks none of the L-9's "Affidavit of: Executor / Administrator / Joint Tenant"**
+  boxes. An unticked box says nothing; a wrong tick swears something untrue.
+- **A fourth parcel is refused, not dropped.** The L-9 prints three blocks; filing three and
+  silently discarding the rest would understate the land the waiver covers.
+- **The notarial block, the predeceased-beneficiary schedule, the signature lines and the
+  representative's SSN stay blank** — the model holds none of them.
+
+**Also shipped:** `FieldWriter` and the identity splitters extracted from `it-r-pdf.ts` into
+`forms/pdf-fields.ts` (four fillers now share them — the IT-R's 43 fill assertions prove the
+extraction was clean); `L9ARealProperty` extended to carry Schedule A's county/street/lot/block/
+municipality/owners, which #190's intake work already captures; `scripts/itr-field-inventory.mjs`
+generalised to any blank via `--form` / `--file`. Only the two mapped blanks are committed — the
+unmapped ones would be dead weight in the deploy bundle, and their URLs are in the build plan.
+
+**Green:** 882/882 (up from 864 — 7 IT-EXT, 11 L-9), root + functions tsc, lint 0 errors, build.
+Four negative controls run and reverted (L-9 lot/block swapped, L-9 two-digit year, IT-EXT
+testate/intestate widgets swapped, IT-EXT correspondence block filled) — each failed exactly the
+assertions it should. Every assertion reads its value back **out of the produced PDF**.
+
+**▶ NEXT — Track 3 (IT-NR) is still the only untouched track and still needs Adam's decision**: it
+changes how tax is computed (NJ-situs property only, N.J.A.C. 18:26-2.15, its own gold cases).
+Today a nonresident matter is refused cleanly at compute. The remaining form work is the L-9(A) and
+the two IT-Estate returns, all three pre-2018 — scoped in
+[docs/IT-R-FORMS-BUILD-PLAN.md](./docs/IT-R-FORMS-BUILD-PLAN.md) §3.1.
+
+**Still needs Adam (unchanged):** the live card test on #185; a real payment through the payment
+page; and a browser pass on the Inheritance Tax page — now also worth downloading an IT-EXT and an
+L-9 and opening them in a PDF reader, since nothing but a human eye proves a value landed in the
+box a human would read it from.
+
+---
+
 ## 🔵 SESSION — 2026-07-28 PM (the attestation gap is closed — both deduction types can now be entered)
 
 **TL;DR — Took the one unblocked item off the previous session's list. Two deduction types could
