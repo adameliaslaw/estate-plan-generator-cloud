@@ -146,9 +146,17 @@ component swallows it as an SDK init error.
 
 **Green:** 930/930, tsc, lint 0 errors, build.
 
-**▶ STILL NEEDS ADAM:** the live test, same script as below. This is a reasoned fix with a
-reproducing test rather than a guess, but nothing substitutes for a card typed into a real
-browser.
+**✅ VERIFIED LIVE BY ADAM, 2026-07-28 — the card charge works for the first time.** A real card
+authorized $1.00: *"Payment Authorized — $1.00 was authorized on Karen K. Elias & Adam J. Elias's
+account. Funds are captured on AffiniPay's next daily batch."* The diagnosis held. This bug had
+been open since 2026-07-06 and survived #156 and #185.
+
+**What this leaves.** The charge **authorizes**; AffiniPay captures on its next daily batch. So the
+one remaining payments item — proving the LawPay webhook end to end (#186 replaced a signature
+check 8am never sends with an Event-URL token plus a gateway re-read) — **should exercise itself
+when that batch runs.** Worth checking the next day that the payment moved from Authorized to
+Paid in the app without anyone touching it. If it did, the webhook is proven and that item closes
+too. If it did not, the webhook is the thing to look at, not the charge.
 
 ---
 
@@ -156,7 +164,8 @@ browser.
 
 These have been repeated verbatim for weeks without saying what they mean. Written out once here.
 
-**1. "The live card test on #185" — nothing to do with inheritance tax.** It is the
+**1. ~~"The live card test on #185"~~ — ✅ DONE 2026-07-28, fixed by #207 and verified live. Kept
+for the diagnosis. Nothing to do with inheritance tax.** It is the
 **Charge Payment** dialog under a client's Payments tab (`ChargePaymentDialog.tsx`), which takes a
 credit card through AffiniPay/LawPay Hosted Fields. It has never successfully captured a card.
 Two fixes shipped blind because browser automation cannot type into a cross-origin iframe — #156
