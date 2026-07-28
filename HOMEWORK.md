@@ -110,6 +110,48 @@ throwaway work covering one sixth of the problem.
 
 ---
 
+## 🔵 SESSION — 2026-07-28 PM #5 (the card charge — root cause found in our own code, with the first reproducing test)
+
+**TL;DR — Adam tested again and got `Cannot read properties of null (reading 'postMessage')`. The
+cause is not the AffiniPay SDK and never was. It is an early `return` in our own component. Third
+fix, but the first one derived from reading the code rather than hypothesising about the SDK, and
+the first with a test that fails against the old code.**
+
+**The sequence, which happens on the normal path every single time:**
+1. The SDK mounts its iframes into `#af-card-number` etc., inside the main `DialogContent`.
+2. Clicking **Review** sets `showConfirm`.
+3. `if (showConfirm) return <Dialog>…</Dialog>` is an **early return into a different tree**, so
+   React unmounts the form. The iframes leave the document, and a detached iframe has a **null
+   `contentWindow`**.
+4. Clicking **Confirm** called `getPaymentToken()`, which posts a message to each field iframe →
+   `Cannot read properties of null (reading 'postMessage')`.
+
+**Why #156 and #185 missed it.** #156 fixed the CSS selectors (real, necessary). #185 fixed a stale
+singleton on *reopen* (also real). Neither touched the confirm-step unmount, which is the path the
+attorney actually takes. Both shipped with no test.
+
+**The fix: tokenize while the fields are still on screen.** `tokenizeCurrentFields()` is called
+from Review, before `setShowConfirm(true)`; the one-time token is carried in state and the confirm
+step never touches the SDK at all. The token is dropped on Back and on close, since it is
+single-use and describes the card as it was.
+
+**The test is the part that matters.** `tests/unit/charge-payment-token-ordering.test.tsx` asserts
+the ordering invariant — tokenized at Review, never from confirm — and it **fails against the
+pre-fix component**: 0 calls at Review, 1 call after confirming. Standing it up needed a faithful
+mock, worth knowing: the component calls `resetHostedFieldsSdk()` on every open, which does
+`delete window.AffiniPay` and re-adds the `<script>` tag, so the test spies on
+`document.head.appendChild` and re-installs the global plus fires `onload` — the browser's own
+sequence. A non-configurable global does NOT work: in an ES module `delete` then *throws*, and the
+component swallows it as an SDK init error.
+
+**Green:** 930/930, tsc, lint 0 errors, build.
+
+**▶ STILL NEEDS ADAM:** the live test, same script as below. This is a reasoned fix with a
+reproducing test rather than a guess, but nothing substitutes for a card typed into a real
+browser.
+
+---
+
 ## 🔴 CARRIED-FORWARD ITEMS — what they actually are
 
 These have been repeated verbatim for weeks without saying what they mean. Written out once here.

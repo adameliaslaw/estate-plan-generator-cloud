@@ -249,6 +249,17 @@ export function ChargePaymentDialog({
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  /**
+   * The one-time payment token, obtained BEFORE the confirm screen replaces the form.
+   *
+   * `if (showConfirm) return <Dialog>…</Dialog>` below is an early return into a different tree,
+   * so showing the confirm screen UNMOUNTS the hosted-field containers. The SDK goes on holding
+   * those iframes, and a detached iframe has a null `contentWindow` — so calling
+   * `getPaymentToken()` from the confirm step posts to nothing and throws
+   * "Cannot read properties of null (reading 'postMessage')". Tokenize while the fields are
+   * still on screen and carry the string across; the confirm step never touches the SDK.
+   */
+  const [paymentToken, setPaymentToken] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   // Whether the gateway reported the funds as captured/settled vs merely
   // authorized. AffiniPay charges are typically AUTHORIZED and auto-captured on
@@ -400,6 +411,7 @@ export function ChargePaymentDialog({
     setSelectedClientId(fixedClientId ?? '');
     setShowConfirm(false);
     setShowSuccess(false);
+    setPaymentToken(null);
     setCaptured(false);
     setSdkReady(false);
     setSdkError(null);
@@ -415,7 +427,60 @@ export function ChargePaymentDialog({
 
   // ── Review handler — validates and shows confirmation screen ─────────
 
-  const handleReview = useCallback(() => {
+  /**
+   * Ask the SDK for a one-time token using the fields as they stand RIGHT NOW.
+   *
+   * Must be called while the hosted-field iframes are still mounted — that is the whole point.
+   * Returns null and reports the reason on failure, so callers can simply bail.
+   */
+  const tokenizeCurrentFields = useCallback(async (): Promise<string | null> => {
+    if (!hostedFieldsRef.current) {
+      toast.error('Payment form not ready yet. Please wait.');
+      return null;
+    }
+
+    const formData: Record<string, string> = { name: effectiveClientName || 'Client' };
+
+    if (paymentType === 'card') {
+      // AffiniPay wants exp_month as 2 digits (01-12) and exp_year as 4 (e.g. 2028); the inputs
+      // accept "8"/"26", so normalise before tokenizing or it throws "field validation errors".
+      formData.exp_month = expMonth.padStart(2, '0');
+      formData.exp_year = expYear.length === 2 ? `20${expYear}` : expYear;
+      formData.postal_code = billingZip.trim();
+    } else {
+      formData.account_type = accountType;
+      formData.account_holder_type = accountHolderType;
+      if (accountHolderType === 'business') {
+        formData.name = accountHolderName || effectiveClientName || 'Client';
+      } else {
+        const nameParts = (effectiveClientName || 'Client').split(' ');
+        formData.given_name = nameParts[0] || '';
+        formData.surname = nameParts.slice(1).join(' ') || nameParts[0] || '';
+      }
+    }
+
+    try {
+      const tokenResult = await hostedFieldsRef.current.getPaymentToken(formData);
+      if (!tokenResult?.id) {
+        toast.error('Could not read the payment details. Please re-enter the card and try again.');
+        return null;
+      }
+      return tokenResult.id;
+    } catch (err) {
+      console.error('[ChargePaymentDialog] Tokenization error:', err);
+      toast.error(
+        err instanceof Error && err.message
+          ? `Could not read the payment details — ${err.message}`
+          : 'Could not read the payment details. Please check the card and try again.',
+      );
+      return null;
+    }
+  }, [
+    hostedFieldsRef, paymentType, expMonth, expYear, billingZip,
+    accountType, accountHolderType, accountHolderName, effectiveClientName,
+  ]);
+
+  const handleReview = useCallback(async () => {
     if (!hostedFieldsRef.current) {
       toast.error('Payment form not ready yet. Please wait.');
       return;
@@ -468,14 +533,29 @@ export function ChargePaymentDialog({
     } catch {
       /* getState is best-effort */
     }
-    setShowConfirm(true);
-  }, [hostedFieldsRef, effectiveClientId, description, amountStr, paymentType, expMonth, expYear, billingZip]);
+
+    // Tokenize NOW, while the hosted-field iframes are still mounted. See `paymentToken`.
+    setProcessing(true);
+    try {
+      const token = await tokenizeCurrentFields();
+      if (!token) return;              // tokenizeCurrentFields has already reported why
+      setPaymentToken(token);
+      setShowConfirm(true);
+    } finally {
+      setProcessing(false);
+    }
+  }, [
+    hostedFieldsRef, effectiveClientId, description, amountStr, paymentType,
+    expMonth, expYear, billingZip, tokenizeCurrentFields,
+  ]);
 
   // ── Confirm handler — actually processes the charge ───────────────────
 
   const handleSubmit = useCallback(async () => {
-    if (!hostedFieldsRef.current) {
-      toast.error('Payment form not ready yet. Please wait.');
+    // Deliberately does NOT touch the SDK. By the time this runs the confirm screen has replaced
+    // the form and the hosted-field iframes are detached — see `paymentToken`.
+    if (!paymentToken) {
+      toast.error('Payment details were not captured. Go back and re-enter the card.');
       return;
     }
 
@@ -488,53 +568,8 @@ export function ChargePaymentDialog({
     setProcessing(true);
 
     try {
-      // Step 1: Build form data required by the SDK
-      const formData: Record<string, string> = {
-        name: effectiveClientName || 'Client',
-      };
-
-      if (paymentType === 'card') {
-        if (!expMonth || !expYear) {
-          toast.error('Please enter the card expiration date.');
-          setProcessing(false);
-          return;
-        }
-        if (!billingZip.trim()) {
-          toast.error('Please enter the billing ZIP code for the card.');
-          setProcessing(false);
-          return;
-        }
-        // AffiniPay requires exp_month as 2 digits (01-12) and exp_year as 4
-        // digits (e.g. 2028). The inputs accept "8"/"26", so normalize before
-        // tokenizing — otherwise getPaymentToken throws "field validation errors".
-        formData.exp_month = expMonth.padStart(2, '0');
-        formData.exp_year = expYear.length === 2 ? `20${expYear}` : expYear;
-        formData.postal_code = billingZip.trim();
-      } else {
-        // eCheck requires account_type and account_holder_type
-        formData.account_type = accountType;
-        formData.account_holder_type = accountHolderType;
-        if (accountHolderType === 'business') {
-          formData.name = accountHolderName || effectiveClientName || 'Client';
-        } else {
-          // Individual requires given_name and surname
-          const nameParts = (effectiveClientName || 'Client').split(' ');
-          formData.given_name = nameParts[0] || '';
-          formData.surname = nameParts.slice(1).join(' ') || nameParts[0] || '';
-        }
-      }
-
-      // Step 2: Get the one-time payment token from Hosted Fields
-      const tokenResult = await hostedFieldsRef.current.getPaymentToken(formData);
-
-      if (!tokenResult?.id) {
-        throw new Error(
-          'Could not generate payment token. Please check the card/bank details.',
-        );
-      }
-
       console.log(
-        '[ChargePaymentDialog] Got payment token, calling processDirectCharge…',
+        '[ChargePaymentDialog] Using token captured at review, calling processDirectCharge…',
       );
 
       // Step 2: Call the Cloud Function to process the charge
@@ -543,7 +578,7 @@ export function ChargePaymentDialog({
         clientId: effectiveClientId,
         amount: amountCents,
         description: sanitizeInput(description.trim()),
-        paymentToken: tokenResult.id,
+        paymentToken,
         paymentType,
         clientEmail: effectiveClientEmail,
         clientName: effectiveClientName,
@@ -592,6 +627,7 @@ export function ChargePaymentDialog({
       setProcessing(false);
     }
   }, [
+    paymentToken,
     effectiveClientId,
     effectiveClientEmail,
     effectiveClientName,
@@ -599,12 +635,6 @@ export function ChargePaymentDialog({
     amountStr,
     firmId,
     paymentType,
-    expMonth,
-    expYear,
-    accountType,
-    accountHolderType,
-    accountHolderName,
-    billingZip,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -673,7 +703,11 @@ export function ChargePaymentDialog({
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowConfirm(false)} disabled={processing}>
+            <Button variant="outline"
+              // Drop the captured token on the way back: it describes the card as it was, and
+              // Review re-tokenizes anyway. Never leave a stale one-time token lying around.
+              onClick={() => { setPaymentToken(null); setShowConfirm(false); }}
+              disabled={processing}>
               Back
             </Button>
             <Button
