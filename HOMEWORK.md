@@ -4,7 +4,7 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
-## ▶ THE ASSET/ALLOCATION MODEL — all three PRs are built; #212 needs a browser pass
+## ✅ THE ASSET/ALLOCATION MODEL — all three PRs shipped and deployed, plus the follow-ups (#213)
 
 Read this section top to bottom: it is the work in the order it has to happen. Residue is the
 foundation the other two PRs stand on, so it went first, and the schedules followed it. **Full scope:
@@ -141,15 +141,22 @@ instructions spell it out:
 
 That is `residuary[].fraction` and `allocations[]` in the State's own words. **Before PR 1 this
 column was unfillable in principle** — the nested model had no notion of "50% Residue" because it
-had no residue. Today `ScheduleEBeneficiaryRow` carries columns A/B/C/E only, and `fillScheduleE`
-writes name, address, relationship, tax class and dollar amount, leaving D and F blank.
+had no residue.
 
-⚠️ **The constraint, checked rather than assumed:** the blank IT-R's AcroForm has **808 fields and
-none for Column D or Column F**. Those columns are printed but not fillable, so filling D means
-drawing text onto the page, not writing a field. Scope it accordingly — it is not a one-liner, and
-that is why PR 2 did not absorb it. `describeAssetTakers` in `allocations.ts` already composes the
-string the column wants ("Nina Niece (33.3333%), Residuary estate (66.6667%)"); what is missing is
-placing text on the page, not knowing what to say.
+**✅ SHIPPED 2026-07-28 (#213).** `describeBeneficiaryInterest` composes it, `buildFormSnapshot`
+freezes it per beneficiary (FND-IMMUT), and `drawScheduleEColumnD` paints it. It prints the way the
+State's examples print it — `1/3 Residue`, `1/4 of Chase Account; 1/3 Residue`, or a bare asset
+name for a whole gift. A legacy nested matter still yields `''` and the column still prints blank
+for it, which is correct: that shape cannot express a residuary fraction.
+
+⚠️ **The constraint that made it real work, kept because it still governs Column F:** the blank
+IT-R's AcroForm has **808 fields and none for Column D or Column F**. Those columns are printed but
+not fillable, so filling one means DRAWING text onto the page, not writing a field. Column D's
+position is derived from the form's own geometry — the gap between the tax-class dropdown and the
+dollar-amount box on the same row — so it follows the fields if NJ reissues the booklet, and
+`assertComplete` fails loudly first if they rename anything. Drawing runs after every field write,
+so a mapping failure surfaces before a mark is made. **Column F (Age) is still blank** and is the
+same class of problem; it is only required for life estates and contingent interests.
 
 Two smaller confirmations from the same pass, worth not rediscovering:
 - Schedule A Column D says *"Show this as a dollar amount (not a fraction or percentage)"* —
@@ -159,11 +166,11 @@ Two smaller confirmations from the same pass, worth not rediscovering:
   keeps them in separate fields (`realPropertyDetails.fractionalInterest` vs `Allocation.fraction`)
   and PR 2 must not merge them.
 
-### 3 · Intake, inventory-then-allocate — ✅ BUILT 2026-07-28 (#212), ⚠️ NEEDS ADAM AT A BROWSER
+### 3 · Intake, inventory-then-allocate — ✅ SHIPPED 2026-07-28 (#212, merged and deployed)
 
 **The screen changed shape.** Assets are their own section now, entered once at the decedent's
 interest; beneficiaries are identity only; and a Residue section shows the computed pool with the
-takers entered as percentages. The old "add a bequest under each person" flow is gone.
+takers entered as shares. The old "add a bequest under each person" flow is gone.
 
 *Both acceptance criteria met, each with a test:* a **1/3 : 2/3 split** is entered by typing
 `1/3` and `2/3` — the share picker takes a percentage, a dollar amount or a plain fraction, stores
@@ -183,13 +190,19 @@ what the page reports as still needed and what `validateMatter` does with the ma
 send, so a client rule that drifts from the server fails on the server assertion. Same pattern as
 the deduction attestations.
 
-⚠️ **What I could NOT do: the browser pass.** This environment has no `.env.local`, so the Vite dev
-server cannot initialise Firebase and the page cannot be reached logged in. The components are
-covered by rendering tests that type into the real inputs, but **nothing has exercised the whole
-screen against a live matter.** This is the change most likely to have a defect only a human sees —
-it is the section an attorney uses most, and its shape changed. Worth opening a saved matter,
-confirming it still reads correctly after normalisation, and entering one split asset end to end
-before this is trusted.
+**✅ Adam exercised it the same day** — he entered a $1,750,000 estate (a house, three accounts,
+three beneficiaries, a specific gift and a split residue) and produced a filled IT-R off it. So the
+NEW-matter path is proven by a human, not just by tests.
+
+⚠️ **One path a human still has not walked: opening a matter saved BEFORE the model changed.** It
+is normalised on open — one asset per bequest, wholly allocated to whoever it was entered under —
+and a test asserts the computation is identical before and after, but no human has confirmed the
+screen reads correctly afterwards. That is the remaining risk on this section, and it is small.
+
+**Why the browser pass could not be done in-session, kept because it will recur:** the environment
+has no `.env.local`, so the Vite dev server cannot initialise Firebase and the page cannot be
+reached logged in. Component tests type into the real inputs with `userEvent`, which is not the
+same as the assembled screen. Any future UI change here lands with the same gap.
 
 ### Why this model at all — the three facts, kept because they are the justification
 
@@ -221,6 +234,68 @@ by percentage**, not a general-purpose bequest algebra.
 
 **Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. Throwaway work
 covering one sixth of the problem.
+
+---
+
+## 🔵 SESSION — 2026-07-28 PM #6 (Adam's IT-R review · Schedule E column D filled · the deploy-blanks-the-site bug root-caused)
+
+**TL;DR — Adam produced a real IT-R off the new intake and asked for an accuracy review. Every
+figure reconciled. One 45c discrepancy was real and traced to the intake, not the engine. Column D
+and the cache-header bug both got taken off the carried list.**
+
+**The return checked out.** Gross $1,750,000; deductions $200,000; Line 9 $1,550,000 equal to the
+sum of the three class distributions **to the cent**; classes right (child A, sibling C, cousin D);
+Class C $469,523.66 at 11% = $51,647.60; Class D $560,952.23 at 15% = $84,142.83; total
+**$135,790.43** as filed, re-derived independently rather than read off the form. The mortgage was
+deducted on Schedule D rather than netted against Schedule A column D, which is what the
+instructions require. The 8-month deadline correctly shifted off New Year's Day to 2027-01-04.
+
+**The 45c that was not rounding.** Two beneficiaries who take equal shares came out $494,524.11 and
+$494,523.66. Running the same estate through the engine with EXACT thirds gives a 3c spread — plain
+cent apportionment across four assets — so 45c meant the entered shares were not equal. Cause: the
+residue box only took percentages, and a third has no exact decimal. `33.33` is $167 short on a
+$500,000 residue and `33.3333` is still short; something has to absorb it. **The residue block now
+carries the same share-format picker the asset allocations have and opens on FRACTION**, so `1/3`
+three times is exact. Adam asked for the toggle; the default is the part that fixes the figures.
+
+**Schedule E column D — filled, and there was never a good reason not to.** The filler leaves boxes
+empty where the estate record has no fact (the L-9 skips an unknown lot and block: a wrong block on
+a lien release is worse than an empty one). Column D is not that case — the answer IS the
+allocations. Blank was an omission, not caution. See §2 above for how it is drawn.
+
+**"Fractional or percent interest" printed `100`, not `100%`.** The instruction is about the
+notation, not just the number, and a bare figure on the schedule that generates the tax waiver
+leaves the reader to supply the unit. `formatInterestNotation` restores the sign on a bare number
+and passes fractions and already-signed values through untouched — it adds a symbol the State
+requires, it never rewords the attorney's entry.
+
+**🔴 THE DEPLOY WAS BLANKING THE SITE, AND HAD BEEN FOR A WHILE.** Adam reported a blank page after
+a deploy. Root cause, measured rather than guessed: **Firebase matches header rules against the
+REQUEST path, not the rewrite destination.** Every route rewrites to `/index.html`, so
+`"source": "index.html"` only ever fired for a literal `/index.html`, which nobody visits.
+Production served `/` and `/admin/inheritance-tax` at Firebase's default `max-age=3600`. A
+returning browser replayed hour-old HTML naming content-hashed chunks the new release had deleted,
+the dynamic import failed, `ErrorBoundary` caught it, blank page.
+
+Proven both directions before touching anything: all 26 chunks the live site referenced returned
+200 (so production was internally consistent for a cold client), serving the complete current
+bundle to a real browser rendered the sign-in page, and removing one chunk reproduced the symptom
+exactly — `Failed to fetch dynamically imported module`. **This was never a bug in any of the
+inheritance-tax work; it would have blanked the site after any deploy.**
+
+The new rule's glob excludes every extension the immutable rule claims, so the two can never both
+match one path and precedence never decides anything. **Verified in production after deploy:** `/`,
+`/admin/inheritance-tax`, `/login` and a deep route all `no-cache`; hashed `.js` and `.css` still
+`public, max-age=31536000, immutable`.
+
+⚠️ **If hosting headers are ever edited again:** they can only be verified by deploying and
+re-measuring. `curl -sSI` the root AND a hashed asset. The failure worth reverting for is an asset
+losing `immutable` — nothing breaks visibly, the app just quietly re-downloads ~2 MB per page load.
+
+**Green:** 1014/1014, root + functions tsc, lint 0 errors, build. The column-D test reads the drawn
+text back out of the produced PDF with a real reader and fails when the drawing pass is removed.
+
+**▶ NEXT — see the carried-forward list below.** Nothing in the allocation model is outstanding.
 
 ---
 
@@ -277,6 +352,32 @@ too. If it did not, the webhook is the thing to look at, not the charge.
 ## 🔴 CARRIED-FORWARD ITEMS — what they actually are
 
 These have been repeated verbatim for weeks without saying what they mean. Written out once here.
+
+**As of 2026-07-28 PM #6, what is actually left is four things:**
+
+| # | Item | Blocked on |
+|---|------|-----------|
+| 1 | **Track 3 — IT-NR, nonresident decedents** | **Adam's decision.** Not a coding task. |
+| 2 | **Official filled PDFs for IT-EXT / L-9 / IT-Estate** | Nobody — real work, no decisions |
+| 3 | **A real payment through the payment page** | Adam, live |
+| 4 | **Open a PRE-allocation-model matter in the browser** | Adam, live — small |
+
+**1. Track 3 (IT-NR).** The only untouched track, and the standing `▶ NEXT` for five sessions. It
+changes how the tax is COMPUTED — NJ-situs property only (N.J.A.C. 18:26-2.15), with its own gold
+cases — so it is a product decision before it is code. Today a nonresident matter is refused
+cleanly at compute, which is defensible and is why this has been deferrable. Scoped in
+[docs/IT-R-FORMS-BUILD-PLAN.md](./docs/IT-R-FORMS-BUILD-PLAN.md) §3.1.
+
+**2. Official filled PDFs for the companion forms.** IT-EXT, L-9 and the two IT-Estate returns
+render as HTML workpapers today. Each needs its own blank form and field inventory — the same work
+the IT-R already had done to it. No decision required; just not started.
+
+**3. A real payment through the payment page.** See item 2 below — unchanged.
+
+**4. Opening a matter saved before the allocation model.** See §3 above. Normalisation is tested;
+the screen reading correctly afterwards is not.
+
+---
 
 **1. ~~"The live card test on #185"~~ — ✅ DONE 2026-07-28, fixed by #207 and verified live. Kept
 for the diagnosis. Nothing to do with inheritance tax.** It is the
@@ -343,6 +444,7 @@ unrelated test files from running — reinstalling restored them, and they pass.
 
 **▶ NEXT — still Adam's:** the live card test on #185 and a real payment through the payment page.
 On the inheritance page, worth re-testing the Open button against a matter saved earlier.
+*(Superseded — the card test closed 2026-07-28 via #207. See the carried-forward table above.)*
 
 ---
 
