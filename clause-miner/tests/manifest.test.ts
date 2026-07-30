@@ -8,16 +8,9 @@ import {
 } from '../src/stages/manifest.js';
 import { fileDocPath, filesCollection, runLedgerPath } from '../src/paths.js';
 import type { Env } from '../src/env.js';
-import { FakeDocStore, FakeDrive, file, folder } from './helpers/fakes.js';
+import { FakeDocStore, FakeDrive, file, folder, makeEnv } from './helpers/fakes.js';
 
-const env: Env = {
-  firmId: 'firm1',
-  runId: 'run1',
-  rootFolderId: 'root',
-  gcsBucket: 'bucket',
-  anthropicApiKey: undefined,
-  sampleLimit: undefined,
-};
+const env: Env = makeEnv();
 
 function tree() {
   return folder('root', 'Wills and Trusts', [

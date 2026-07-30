@@ -31,10 +31,15 @@ import { runIdentity } from './stages/identity.js';
 import { runCanonicalize } from './stages/canonicalize.js';
 import { runStats } from './stages/stats.js';
 import { runCatalog, assembleUnionTemplate } from './stages/catalog.js';
+import { runSeed } from './stages/seed.js';
+import { runCalibrate } from './stages/calibrate.js';
+import { runGates } from './stages/gates.js';
 import type { BatchClient, DocStore } from './clients/interfaces.js';
 
 const STAGES = [
   'manifest', // Stage 0 — Drive BFS + sniff-everything filter (§3 Stage 0)
+  'seed', // Stage S — curated clause-library ingestion (§11 P1a)
+  'calibrate', // Stage C — labeling packet / threshold tuning (§11 P1b)
   'convert', // Stage 1 — LibreOffice headless convert + GCS cache (§8)
   'triage', // Stage 2 — haiku triage classify via Batches API (§3 Stage 2)
   'extract', // Stage 3 — facts + gazetteer (§3 Stage 3)
@@ -43,6 +48,7 @@ const STAGES = [
   'canonicalize', // Stage 7 — canonicalize + label + fill contract + PII gates (§6)
   'stats', // Stage 8 — contingency tables + trigger cards (§7)
   'catalog', // Stage 9 — catalog write (§9); union template is checkpoint-2
+  'gates', // Stage V — §11 P3 validation gates; gates Adam's review
   'template', // Stage 9b — union template assembly (checkpoint-2 stub)
 ] as const;
 
@@ -89,6 +95,25 @@ async function main(): Promise<void> {
     case 'manifest': {
       const summary = await runManifest({ drive: new GoogleDriveClient(), store }, env);
       console.log('manifest:', JSON.stringify(summary));
+      break;
+    }
+    case 'seed': {
+      const summary = await runSeed(
+        {
+          drive: new GoogleDriveClient(),
+          store,
+          blobs,
+          shell: new ChildProcessShellRunner(),
+          batches: makeBatchClient(env, store),
+        },
+        env,
+      );
+      console.log('seed:', JSON.stringify(summary));
+      break;
+    }
+    case 'calibrate': {
+      const summary = await runCalibrate({ store, blobs }, env);
+      console.log('calibrate:', JSON.stringify(summary));
       break;
     }
     case 'convert': {
@@ -149,6 +174,14 @@ async function main(): Promise<void> {
         env,
       );
       console.log('catalog:', JSON.stringify(summary));
+      break;
+    }
+    case 'gates': {
+      const report = await runGates({ store, blobs }, env);
+      console.log('gates:', JSON.stringify(report, null, 2));
+      // A failed or incomplete gate run must not read as success to whatever
+      // orchestrates the stages (§11 P3: all gates pass before Adam reviews).
+      if (!report.passed) process.exitCode = 3;
       break;
     }
     case 'template': {

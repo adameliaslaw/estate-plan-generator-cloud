@@ -13,25 +13,9 @@ import {
 } from '../src/paths.js';
 import type { Env } from '../src/env.js';
 import type { ShellResult } from '../src/clients/interfaces.js';
-import {
-  FakeBlobStore,
-  FakeDocStore,
-  FakeDrive,
-  FakeShell,
-  file,
-  folder,
-  shellFail,
-  shellOk,
-} from './helpers/fakes.js';
+import { FakeBlobStore, FakeDocStore, FakeDrive, FakeShell, file, folder, makeEnv, shellFail, shellOk } from './helpers/fakes.js';
 
-const env: Env = {
-  firmId: 'firm1',
-  runId: 'run1',
-  rootFolderId: 'root',
-  gcsBucket: 'bucket',
-  anthropicApiKey: undefined,
-  sampleLimit: undefined,
-};
+const env: Env = makeEnv();
 
 function docxBytes(text: string): Buffer {
   const xml = `<?xml version="1.0"?><w:document xmlns:w="ns"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`;

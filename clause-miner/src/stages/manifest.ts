@@ -18,7 +18,13 @@
  */
 
 import { isDebris } from '../core/sniff.js';
-import { fileDocPath, filesCollection, runLedgerPath } from '../paths.js';
+import {
+  fileDocPath,
+  filesCollection,
+  runLedgerPath,
+  seedFileDocPath,
+  seedFilesCollection,
+} from '../paths.js';
 import type { Env } from '../env.js';
 import type { DocData, DocStore, DriveClient, DriveFileMeta } from '../clients/interfaces.js';
 
@@ -68,6 +74,14 @@ export interface ManifestRow {
   attorneyFolder: AttorneyFolder;
   externalOwner: boolean;
   status: 'manifested' | 'share-required';
+  /**
+   * Set on rows under a curated-seed folder (§11 P1). These rows go to the
+   * SEED collection and never to the corpus one, which is what makes Gate 4's
+   * canary a structural exclusion rather than a filter someone can forget.
+   */
+  seedFolderId?: string;
+  /** Held-out Gate 4 canary (Trust Agreements) — a seed row, extra-tagged. */
+  canary?: boolean;
 }
 
 export interface ManifestSummary {
@@ -79,6 +93,10 @@ export interface ManifestSummary {
   foldersVisited: number;
   folderErrors: number;
   wordFileYield: number;
+  /** Rows routed to the seed collection instead of the corpus (§11 P1). */
+  seedManifested: number;
+  /** Of those, held out as the Gate 4 canary. */
+  canaryManifested: number;
 }
 
 export interface ManifestDeps {
@@ -127,23 +145,39 @@ export async function runManifest(deps: ManifestDeps, env: Env): Promise<Manifes
     foldersVisited: 0,
     folderErrors: 0,
     wordFileYield: 0,
+    seedManifested: 0,
+    canaryManifested: 0,
   };
 
   // Resume: skip files already manifested for this runId.
   const existing = new Set(await store.listIds(filesCollection(env.firmId, env.runId)));
+  const existingSeed = new Set(await store.listIds(seedFilesCollection(env.firmId, env.runId)));
 
   interface QueueItem {
     folderId: string;
     path: string;
     topLevelName: string | null;
+    /** Non-null once BFS has entered a curated-seed folder (inherited). */
+    seedFolderId: string | null;
+    canary: boolean;
   }
-  const queue: QueueItem[] = [{ folderId: env.rootFolderId, path: '', topLevelName: null }];
+  const queue: QueueItem[] = [
+    {
+      folderId: env.rootFolderId,
+      path: '',
+      topLevelName: null,
+      // The root itself may be configured as a seed folder in a seed-only run.
+      seedFolderId: env.seedFolderIds.includes(env.rootFolderId) ? env.rootFolderId : null,
+      canary: env.canaryFolderIds.includes(env.rootFolderId),
+    },
+  ];
   const rows: ManifestRow[] = [];
+  const seedRows: ManifestRow[] = [];
   const extensionCounts: Record<string, number> = {};
   const unreadableFolders: string[] = [];
 
   while (queue.length > 0) {
-    const { folderId, path, topLevelName } = queue.shift() as QueueItem;
+    const { folderId, path, topLevelName, seedFolderId, canary } = queue.shift() as QueueItem;
     summary.foldersVisited++;
     let children;
     try {
@@ -160,6 +194,9 @@ export async function runManifest(deps: ManifestDeps, env: Env): Promise<Manifes
           folderId: file.id,
           path: path.length > 0 ? `${path}/${file.name}` : file.name,
           topLevelName: topLevelName ?? file.name,
+          // Seed membership is inherited: everything beneath a seed folder is seed.
+          seedFolderId: seedFolderId ?? (env.seedFolderIds.includes(file.id) ? file.id : null),
+          canary: canary || env.canaryFolderIds.includes(file.id),
         });
         continue;
       }
@@ -174,8 +211,7 @@ export async function runManifest(deps: ManifestDeps, env: Env): Promise<Manifes
       }
       const ext = fileExtension(file.name);
       extensionCounts[ext] = (extensionCounts[ext] ?? 0) + 1;
-      if (WORDISH_EXTENSIONS.has(ext)) summary.wordFileYield++;
-      rows.push({
+      const row: ManifestRow = {
         driveFileId: file.id,
         drivePath: path,
         fileName: file.name,
@@ -185,11 +221,31 @@ export async function runManifest(deps: ManifestDeps, env: Env): Promise<Manifes
         attorneyFolder: classifyAttorneyFolder(topLevelName),
         externalOwner: !file.ownedByMe,
         status: file.canDownload ? 'manifested' : 'share-required',
-      });
+      };
+      if (seedFolderId !== null) {
+        // §11 P1 / Gate 4: seed rows never enter the corpus collection, and
+        // never count toward the corpus word-file yield.
+        seedRows.push({ ...row, seedFolderId, canary });
+        continue;
+      }
+      if (WORDISH_EXTENSIONS.has(ext)) summary.wordFileYield++;
+      rows.push(row);
     }
   }
 
   const selected = env.sampleLimit !== undefined ? stratifiedSample(rows, env.sampleLimit) : rows;
+
+  // Seed rows are NEVER sampled — they are the gold set the gates measure
+  // against, and a partial gold set silently weakens every gate.
+  for (const row of seedRows) {
+    summary.seedManifested++;
+    if (row.canary === true) summary.canaryManifested++;
+    if (existingSeed.has(row.driveFileId)) continue;
+    await store.set(
+      seedFileDocPath(env.firmId, env.runId, row.driveFileId),
+      row as unknown as DocData,
+    );
+  }
 
   for (const row of selected) {
     if (row.status === 'share-required') summary.shareRequired++;
@@ -213,6 +269,8 @@ export async function runManifest(deps: ManifestDeps, env: Env): Promise<Manifes
       expectedWordFileRange: '8000-18000 (±50% until this stage reports)',
       shareRequestList,
       unreadableFolders,
+      seedFolderIds: env.seedFolderIds,
+      canaryFolderIds: env.canaryFolderIds,
     },
     updatedAt: new Date().toISOString(),
   });
