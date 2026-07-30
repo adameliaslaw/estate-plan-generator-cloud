@@ -22,6 +22,7 @@ import chromium from '@sparticuz/chromium';
 import { Packer } from 'docx';
 import { buildLegalDocumentHtml, sanitizeFileName, blockExternalRequests } from './export-pdf';
 import { buildDocxDocument } from './export-docx';
+import { resolveExportHtml, resolveDocxExport, DocxExportPlan } from './export-content';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ interface DocumentRecord {
   displayName: string;
   status: string;
   htmlContent: string;
+  docxPlan: DocxExportPlan;
 }
 
 // ── PDF generation (reused from export-pdf logic) ─────────────────────────────
@@ -213,8 +215,9 @@ export const exportBatchDocuments = functions
       id: d.id,
       displayName: d.data().displayName ?? 'Document',
       status: d.data().status ?? 'draft',
-      htmlContent:
-        d.data().htmlContent ?? d.data().content ?? '<p>No content available.</p>',
+      // Attorney edits (editorContent) take precedence — see export-content.ts.
+      htmlContent: resolveExportHtml(d.data()),
+      docxPlan: resolveDocxExport(d.data()),
     }));
 
     console.log(
@@ -280,7 +283,22 @@ export const exportBatchDocuments = functions
             // ── DOCX ─────────────────────────────────────────────────────────
             if (format === 'docx' || format === 'both') {
               try {
-                const docxBuf = await generateDocxBuffer(
+                // Unedited high-fidelity documents ship their preserved .docx
+                // binary; everything else is rebuilt from HTML. A missing
+                // Storage object degrades to the rebuild, never an error.
+                let docxBuf: Buffer | null = null;
+                if (doc.docxPlan.kind === 'binary') {
+                  const binFile = admin.storage().bucket().file(doc.docxPlan.storagePath);
+                  const [binExists] = await binFile.exists();
+                  if (binExists) {
+                    [docxBuf] = await binFile.download();
+                  } else {
+                    console.warn(
+                      `[exportBatchDocuments] hasBinary set but object missing at ${doc.docxPlan.storagePath} — rebuilding "${doc.displayName}" from HTML.`,
+                    );
+                  }
+                }
+                docxBuf ??= await generateDocxBuffer(
                   doc.displayName,
                   doc.htmlContent,
                   doc.status,

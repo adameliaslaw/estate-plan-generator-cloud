@@ -18,6 +18,7 @@ import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { resolveExportHtml } from './export-content';
 
 // ── Helper: sanitize a display name for use in a file name ───────────────────
 
@@ -396,9 +397,9 @@ export const exportDocumentPdf = functions
     }
 
     const docData = docSnap.data()!;
-    // Support both field names used across the codebase
-    const htmlContent: string =
-      docData.htmlContent ?? docData.content ?? '<p>No content available.</p>';
+    // editorContent (attorney edits) takes precedence over the generated
+    // htmlContent/content — see export-content.ts.
+    const htmlContent: string = resolveExportHtml(docData);
     const displayName: string = docData.displayName ?? 'Document';
     const status: string = docData.status ?? 'draft';
 
