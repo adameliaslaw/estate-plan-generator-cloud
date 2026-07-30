@@ -47,6 +47,7 @@ import {
   UnderlineType,
 } from 'docx';
 import { sanitizeFileName } from './export-pdf';
+import { resolveDocxExport, resolveExportHtml } from './export-content';
 
 // ── TR_ Style Map (InteractiveLegal / template-referenced formatting) ────────
 //
@@ -1180,14 +1181,41 @@ export const exportDocumentDocx = functions
     }
 
     const docData = docSnap.data()!;
-    const htmlContent: string =
-      docData.htmlContent ?? docData.content ?? '<p>No content available.</p>';
     const displayName: string = docData.displayName ?? 'Document';
     const status: string = docData.status ?? 'draft';
 
+    // ── 3a. Preserved-binary short-circuit ───────────────────────────────────
+    // High-fidelity documents keep the exact filled .docx in Storage. When the
+    // document is unedited, that file IS the export — rebuilding from the HTML
+    // preview would replace the firm template's real styles, numbering, and
+    // headers/footers with a reconstruction. Edited documents fall through to
+    // the rebuild below so attorney edits are never discarded.
+    let plan = resolveDocxExport(docData);
+    if (plan.kind === 'binary') {
+      const binaryFile = admin.storage().bucket().file(plan.storagePath);
+      const [binaryExists] = await binaryFile.exists();
+      if (binaryExists) {
+        const [url] = await binaryFile.getSignedUrl({
+          action: 'read',
+          expires: Date.now() + 60 * 60 * 1000,
+        });
+        return {
+          success: true,
+          downloadUrl: url,
+          fileName: `${sanitizeFileName(displayName)}.docx`,
+          storagePath: plan.storagePath,
+          source: 'preserved-binary',
+        };
+      }
+      console.warn(
+        `[exportDocumentDocx] hasBinary set but object missing at ${plan.storagePath} — rebuilding from HTML.`,
+      );
+      plan = { kind: 'rebuild', html: resolveExportHtml(docData) };
+    }
+
     // ── 4. Build DOCX ────────────────────────────────────────────────────────
     try {
-      const docxDoc = buildDocxDocument(displayName, htmlContent, status);
+      const docxDoc = buildDocxDocument(displayName, plan.html, status);
       const buffer = await Packer.toBuffer(docxDoc);
 
       // ── 5. Upload to Cloud Storage ─────────────────────────────────────────
