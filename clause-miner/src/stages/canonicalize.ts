@@ -30,7 +30,25 @@ import {
   sweepText,
   type PiiScanStatus,
 } from '../pii-gates.js';
-import { canonicalPath, runLedgerPath } from '../paths.js';
+import {
+  adjudicationPath,
+  canonicalPath,
+  runLedgerPath,
+  seedMatchPath,
+  seedPiecesPath,
+} from '../paths.js';
+import {
+  planSeedMatches,
+  seedPairId,
+  type MatchableUnique,
+  type SeedMatch,
+} from '../seed-match.js';
+import {
+  buildAdjudicationRequest,
+  parseAdjudication,
+} from '../adjudication.js';
+import { classifyDiff } from '../core/diff.js';
+import type { SeedPiece } from './seed.js';
 import {
   buildOccurrenceIndex,
   clientFolderName,
@@ -221,7 +239,11 @@ export interface CanonicalFamily {
   countingUnitCount: number;
   piiScanStatus: PiiScanStatus;
   piiFindings: string[];
+  /** §6.2 / Gate 3 — a review flag, never an auto-promotion. */
   seedDivergent: boolean;
+  /** §9 validation block: which curated file matched, and how closely. */
+  seedSourceFileId?: string;
+  seedEditRatio?: number;
   labelError: string | null;
   executionBlock: boolean;
   relatedTo: string[];
@@ -235,12 +257,156 @@ export interface CanonicalizeDeps {
   batches: BatchClient;
 }
 
+/* ------------------------------------------------------------------ */
+/* Curated-seed matching (§11 Gates 1–3, §6.2)                        */
+/* ------------------------------------------------------------------ */
+
+export interface SeedMatchResult {
+  pieces: SeedPiece[];
+  matches: SeedMatch[];
+  /** familyId → the seed pieces that landed in it. */
+  byFamily: Map<string, SeedMatch[]>;
+}
+
+/**
+ * Run the curated seed through the SAME rings the corpus used, adjudicating
+ * every content diff. Absent a seed artifact this is a no-op — a run without
+ * the curated library still produces a catalog, it just cannot be gated.
+ */
+export async function matchSeed(
+  deps: CanonicalizeDeps,
+  env: Env,
+  families: readonly Family[],
+  hashInfo: ReadonlyMap<string, { normText: string; sigText: string }>,
+): Promise<SeedMatchResult> {
+  const empty: SeedMatchResult = { pieces: [], matches: [], byFamily: new Map() };
+  let pieces: SeedPiece[];
+  try {
+    const raw = await deps.blobs.read(seedPiecesPath(env.firmId, env.runId));
+    pieces = JSON.parse(raw.toString('utf8')) as SeedPiece[];
+  } catch {
+    return empty; // no seed stage ran for this run
+  }
+  if (pieces.length === 0) return empty;
+
+  const familyByHash = new Map<string, string>();
+  for (const family of families) {
+    for (const hash of family.memberHashes) familyByHash.set(hash, family.familyId);
+  }
+  const uniques: MatchableUnique[] = [...hashInfo.entries()].map(([ring0Hash, info]) => ({
+    ring0Hash,
+    sigText: info.sigText,
+    normText: info.normText,
+  }));
+
+  const plan = planSeedMatches(pieces, uniques, familyByHash);
+
+  // Content diffs are adjudicated with the same merge-averse rubric — a seed
+  // clause that is legally distinct from its nearest mined family did NOT
+  // land there, and Gate 1 must count it as a miss.
+  if (plan.adjudicationCandidates.length > 0) {
+    const requests = plan.adjudicationCandidates.map((c) => {
+      const diff = classifyDiff(c.piece.sigText, c.unique.sigText);
+      return buildAdjudicationRequest({
+        pairId: seedPairId(c.piece.pieceId, c.unique.ring0Hash),
+        textA: c.piece.normText,
+        textB: c.unique.normText,
+        diffSummary: `A-only: ${diff.changedA.join(' ') || '(none)'}\nB-only: ${diff.changedB.join(' ') || '(none)'}`,
+      });
+    });
+    const batchId = await deps.batches.submitBatch('seed-match-adjudication', requests);
+    const results = await deps.batches.pollBatch(batchId);
+    const byId = new Map(results.map((r) => [r.customId.replace(/^adj:/, ''), r]));
+
+    for (const c of plan.adjudicationCandidates) {
+      const id = seedPairId(c.piece.pieceId, c.unique.ring0Hash);
+      const result = byId.get(id);
+      const parsed = parseAdjudication(result?.ok === true ? result.toolInput : undefined);
+      const transcriptPath = adjudicationPath(env.firmId, env.runId, id);
+      await deps.blobs.write(
+        transcriptPath,
+        JSON.stringify({
+          pairId: id,
+          kind: 'seed-match',
+          seedPieceId: c.piece.pieceId,
+          seedFileId: c.piece.seedFileId,
+          familyId: c.familyId,
+          a: { pieceId: c.piece.pieceId, normText: c.piece.normText },
+          b: { ring0Hash: c.unique.ring0Hash, normText: c.unique.normText },
+          scores: c.scores,
+          verdict: parsed.verdict,
+          rationale: parsed.rationale,
+          error: result?.error ?? null,
+        }),
+      );
+      if (parsed.verdict !== 'MERGE') continue;
+      plan.matches.push({
+        pieceId: c.piece.pieceId,
+        seedFileId: c.piece.seedFileId,
+        familyId: c.familyId,
+        matchedHash: c.unique.ring0Hash,
+        ring: 1,
+        kind: 'adjudicated',
+        scores: c.scores,
+        adjudicationRef: transcriptPath,
+      });
+    }
+  }
+
+  const byFamily = new Map<string, SeedMatch[]>();
+  for (const match of plan.matches) {
+    const list = byFamily.get(match.familyId);
+    if (list === undefined) byFamily.set(match.familyId, [match]);
+    else list.push(match);
+  }
+  await deps.blobs.write(
+    seedMatchPath(env.firmId, env.runId),
+    JSON.stringify({ pieces, matches: plan.matches }),
+  );
+  return { pieces, matches: plan.matches, byFamily };
+}
+
 export interface CanonicalizeSummary {
   families: number;
   belowSupport: number;
   labeled: number;
   fillContractFailures: number;
   piiBlocked: number;
+  seedMatched: number;
+  seedDivergent: number;
+}
+
+/**
+ * §6.2 / Gate 3 divergence diagnostic for one family. Compares the
+ * data-chosen canonical against the CLOSEST matched seed text (a family can
+ * attract more than one seed piece; the nearest is the fair comparison —
+ * flagging against the worst match would report divergence that isn't there).
+ */
+export function seedDivergenceFor(
+  seed: SeedMatchResult,
+  familyId: string,
+  canonicalText: string,
+): { seedDivergent: boolean; seedSourceFileId?: string; seedEditRatio?: number } {
+  const matches = seed.byFamily.get(familyId);
+  if (matches === undefined || matches.length === 0) return { seedDivergent: false };
+  const byPieceId = new Map(seed.pieces.map((p) => [p.pieceId, p]));
+  let bestRatio = -1;
+  let bestFileId = '';
+  for (const match of matches) {
+    const piece = byPieceId.get(match.pieceId);
+    if (piece === undefined) continue;
+    const ratio = tokenLevenshteinRatio(piece.normText, canonicalText);
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      bestFileId = piece.seedFileId;
+    }
+  }
+  if (bestRatio < 0) return { seedDivergent: false };
+  return {
+    seedDivergent: bestRatio < config.canonical.seedDivergenceLevenshtein,
+    seedSourceFileId: bestFileId,
+    seedEditRatio: bestRatio,
+  };
 }
 
 function median(values: number[]): number {
@@ -262,15 +428,25 @@ export async function runCanonicalize(
   const familiesRaw = await deps.blobs.read(familiesPath(env.firmId, env.runId));
   const families = JSON.parse(familiesRaw.toString('utf8')) as Family[];
 
-  // normText/parameters per hash (from artifacts).
-  const hashInfo = new Map<string, { normText: string; parameters: Record<string, string[]> }>();
+  // normText/sigText/parameters per hash (from artifacts).
+  const hashInfo = new Map<
+    string,
+    { normText: string; sigText: string; parameters: Record<string, string[]> }
+  >();
   for (const artifact of artifacts.values()) {
     for (const seg of artifact.segments) {
       if (!hashInfo.has(seg.ring0Hash)) {
-        hashInfo.set(seg.ring0Hash, { normText: seg.normText, parameters: seg.parameters });
+        hashInfo.set(seg.ring0Hash, {
+          normText: seg.normText,
+          sigText: seg.sigText,
+          parameters: seg.parameters,
+        });
       }
     }
   }
+
+  // §11 Gates 1–3 / §6.2: which curated-seed pieces landed in which family.
+  const seed = await matchSeed(deps, env, families, hashInfo);
 
   const summary: CanonicalizeSummary = {
     families: 0,
@@ -278,6 +454,8 @@ export async function runCanonicalize(
     labeled: 0,
     fillContractFailures: 0,
     piiBlocked: 0,
+    seedMatched: seed.matches.length,
+    seedDivergent: 0,
   };
 
   // ---- Assemble variant data + min-support filter ----------------------
@@ -446,15 +624,18 @@ export async function runCanonicalize(
       countingUnitCount: p.countingUnitCount,
       piiScanStatus: pii,
       piiFindings,
-      // Seed matching is wired when the curated seed manifest is provided
-      // (§6.2 / Gate 3) — absent seeds, nothing is flagged (data decides).
-      seedDivergent: false,
+      // §6.2 as amended: the seed NEVER promotes itself over the data-chosen
+      // canonical. A material divergence is a FLAG that puts the two texts
+      // side by side with usage counts, so Adam evaluates his predecessors'
+      // phrasing against the evidence — the first time anyone has.
+      ...seedDivergenceFor(seed, p.family.familyId, p.canonical.normText),
       labelError: contractError ?? labelError,
       executionBlock: p.family.executionBlock,
       relatedTo: p.family.relatedTo,
       positionMedian: p.positionMedian,
     });
     if (labelError === null && contractError === null) summary.labeled++;
+    if (out[out.length - 1].seedDivergent) summary.seedDivergent++;
   }
   summary.families = out.length;
 

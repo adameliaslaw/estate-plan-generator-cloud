@@ -17,7 +17,9 @@ runs with in-memory fakes and zero network.
 | `CLAUSE_MINER_ROOT_FOLDER_ID` | yes | Drive root of the "Wills and Trusts" tree. **Must match the wills-backfill root** pinned at `functions/src/wills-backfill.ts:23` (`DRIVE_ROOT_FOLDER_ID`) so both pipelines walk the same corpus with the same `drive.readonly` Viewer grant (P0.1: confirm the grant is still active). |
 | `GCS_BUCKET` | yes | Bucket for converted/text/segment artifacts (`firms/{firmId}/clause-mining/**` — storage.rules path ships in the Never-Break sign-off PR, §9). |
 | `ANTHROPIC_API_KEY` | LLM stages | Mounted as a **Cloud Run secret** (Secret Manager → env var). Never baked into the image. Required for `triage`, `extract`, `segment`, `identity`, `canonicalize`, `stats`. |
-| `SAMPLE_LIMIT` | no | **Calibration-sample mode** (§4.4): limits the manifest to N files, stratified round-robin across attorney folders (adams/george/jerome/elizabeth/legacy-root). Set it on the `manifest` stage of a calibration run; downstream stages then only ever see those files. |
+| `SAMPLE_LIMIT` | no | **Calibration-sample mode** (§4.4): limits the manifest to N files, stratified round-robin across attorney folders (adams/george/jerome/elizabeth/legacy-root). Set it on the `manifest` stage of a calibration run; downstream stages then only ever see those files. Seed files are **never** sampled — a partial gold set silently weakens every gate. |
+| `CLAUSE_MINER_SEED_FOLDER_IDS` | seed/gate stages | Comma-separated Drive folder ids of the curated clause library (AAA WILL PIECES, Trust Agreements). Everything beneath them is manifested to the **seed** collection and **excluded from the corpus** — the §11 P1 gold set, and the structural precondition for Gate 4. |
+| `CLAUSE_MINER_CANARY_FOLDER_IDS` | Gate 4 | Subset of the seed folders held out as the independent-recovery canary (the Trust Agreements boilerplate). Validated at startup to be a subset — a canary folder that is not a seed folder would be walked into the corpus while the gate believed it was held out. |
 
 Auth for Drive/Firestore/GCS/Vertex is Application Default Credentials — the
 Job runs pinned to the functions' default compute service account (§2), so the
@@ -30,7 +32,26 @@ Each Job execution runs ONE stage (`STAGE=<name>`), in this order:
 1. `manifest` — Stage 0: Drive BFS, sniff-everything filter (no extension
    whitelist; PDFs by mime AND extension + debris excluded), attorney-folder
    classification, share-request list for unreadable files (all-included
-   decision, §15 #6), word-file yield to the run ledger.
+   decision, §15 #6), word-file yield to the run ledger. Curated-seed trees
+   are routed to the **seed** collection and never enter the corpus.
+1b. `seed` — Stage S (§11 P1a): converts the curated library with the SAME
+   ladder, segments it with the **clause-library** segmenter (blank gaps,
+   rule lines, option labels — the instrument grammar would pollute the gold
+   set), classifies drafting commentary out with haiku, and normalizes each
+   piece through the same normalize → sigText → ring0Hash path the corpus
+   uses. An unclassified piece fails SAFE: it stays a trust-relevant clause,
+   so a model failure counts against Gate 1 rather than shrinking its
+   denominator.
+1c. `calibrate` — Stage C (§11 P1b): with no labels on file, writes the
+   packet for Adam's bounded 1-hour session (seed pieces for boundary
+   confirmation, ~30 pairs sampled from the pilot's OWN candidate band, and
+   era-spread trusts for hand-marked boundaries) to
+   `…/calibration/packet.json`. Once the review UI writes labels to
+   `clauseMining/{runId}/calibration/labels`, re-running tunes the LSH band
+   split against those labels **plus** the free negatives implied by Adam's
+   own filing, and writes `thresholds` to the run ledger. Tuning can FAIL
+   deliberately: if no split avoids auto-merging a pair he called different,
+   nothing is selected and the configured defaults stay in force.
 2. `convert` — Stage 1: byte-sniff (first 8 bytes) → batched LibreOffice
    (25 files/invocation, per-invocation profile, 60 s kill timer, profile
    wipe on crash) with explicit `--infilter`; fallback ladder antiword /
@@ -60,6 +81,15 @@ Each Job execution runs ONE stage (`STAGE=<name>`), in this order:
 9. `catalog` — Stage 9: `firms/{firmId}/clauseCatalog` write per the §9
    schema (variants + occurrences subcollections, Vertex embedding).
    Everything lands `status: 'mined'` — nothing publishes without Adam.
+9b. `gates` — Stage V (§11 P3), the deliverable that gates Adam's review
+   time. Gate 1 recall ≥90% of trust-relevant seed clauses; Gate 2 purity
+   (two separately-filed pieces in one family with no adjudication
+   transcript is a HARD FAIL); Gate 3 seed-divergence diagnostic (a review
+   flag, never an auto-promotion — Adam's decision #2); Gate 4 the
+   independent-recovery canary; Gate 5 template round-trip reported
+   **skipped**, never passed, because §6.4 assembly is checkpoint-2. Exits
+   non-zero unless every gate passes. Refuses to run without a seed-match
+   artifact rather than reporting vacuous passes.
 10. `template` — Stage 9b: **checkpoint-2 stub** — throws
     `checkpoint-2 scope: implemented after catalog review begins` (§6.4 gates
     union-template assembly behind approved clauses existing).
@@ -118,7 +148,10 @@ deploy`); no manual local deploys.
 - Never-Break sign-off surface (firestore.rules/storage.rules additions,
   `clauseCatalog.embedding` vectorConfig index, workflow trigger paths) —
   ships as its own explicit sign-off PR per §9.
-- Union master template assembly + round-trip QA (§6.4) — checkpoint-2.
+- Union master template assembly + round-trip QA (§6.4) — checkpoint-2, and
+  the reason Gate 5 reports `skipped`.
 - Weekly incremental `changes.list` Cloud Function (§12) — lives in
   `functions/` when built; this package is the batch Job only.
-- Seed-calibration tooling (§11 P1) and the validation gates report (§11 P3).
+- The review UI that shows Adam the calibration packet and collects his
+  labels (it writes `clauseMining/{runId}/calibration/labels`; this package
+  defines and consumes that contract but does not render it).

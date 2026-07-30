@@ -306,10 +306,46 @@ filters, preview, insert with client-context placeholder resolution; manual "My 
 a staff-authed callable (catalog client-writes stay false per #222). Ships with the review UI
 (shared backend/components) — folded into the gaps slice (task #6).
 
-**▶ NEXT (agent work, no Adam action needed): implement the pipeline stages** (Drive manifest,
-LibreOffice conversion, Batches-API triage/extraction/adjudication, canonicalize + PII gates,
-stats, catalog write). Adam's next touchpoint is the ~1-hour calibration session once the 60-file
-sample converts. Then: pilot run → §11 gates → ultracode checkpoint #2 → review queue.
+**UPDATE (2026-07-30, later): the calibration path and the validation gates are BUILT (#229).**
+All nine pipeline stages had landed in #226; what was still missing was everything that makes the
+pilot *checkable* — the curated seed, Adam's calibration session, and the §11 gates. That is now in:
+`STAGE=seed`, `STAGE=calibrate`, `STAGE=gates`, plus seed-divergence wiring in canonicalize.
+363 tests (up from 274), five negative controls run and reverted.
+
+Three decisions inside it that are worth not re-deriving:
+
+- **The curated seed leaves the corpus by construction, not by a filter.** Seed folders manifest to
+  their own collection that the corpus stages never walk. Gate 4's whole value is that the canary
+  was genuinely held out; a filter someone forgets to apply would make it prove nothing. The
+  canary-folder list is validated at startup to be a subset of the seed folders, because a canary
+  folder that is not a seed folder gets walked into the corpus *while the gate believes it is held
+  out* — a silently vacuous gate.
+- **Adam's own filing supplies the negative labels for free.** Two distinct pieces in his library
+  are two clauses he already decided to keep apart. Every near-duplicate pair among them is a
+  labeled negative at zero cost to his hour — so all 30 hand labels go to the band where the answer
+  is genuinely in doubt.
+- **Threshold tuning can FAIL, on purpose.** It maximizes F1 *subject to zero false auto-merges*.
+  Over-merge is the catastrophic error the whole checkpoint exists for; a tuner that traded one bad
+  merge for a point of F1 would contradict the design it is calibrating. When no split qualifies it
+  selects nothing, records why, and leaves the configured defaults in force.
+
+**The gates refuse to report vacuous passes**, which is the property to keep: an empty gold set
+FAILS Gate 1 (0/0 is not 100%); a canary that was not actually held out FAILS Gate 4 whatever its
+recovery rate; Gate 5 (template round-trip) reports **skipped**, never passed, because §6.4 assembly
+is checkpoint-2 work; and `STAGE=gates` refuses to run at all without a seed-match artifact. Each of
+those four is negative-controlled — flipping it green makes a test fail.
+
+**⚠️ ▶ NEXT NEEDS ADAM — one thing, and it is small.** P0.1 is now the *only* build-blocker left:
+**confirm the `drive.readonly` service-account still has Viewer on the Drive root folder**, and give
+the folder IDs for **AAA WILL PIECES** and **Trust Agreements** (the latter is the held-out canary).
+Nothing can convert until then. After that the sequence is: 60-file calibration sample converts →
+`STAGE=seed` + `STAGE=calibrate` produce his packet → **his ~1-hour session** → pilot run → §11
+gates → ultracode checkpoint #2 → review queue.
+
+**Agent work still available with no Adam action:** the review UI (calibration packet + label
+capture + the Zipf-triaged catalog queue + the Clause Picker, task #6 above), and the §12 weekly
+incremental Cloud Function. Checkpoint-2 work (union-template assembly, Gate 5) stays deferred until
+the catalog review begins, per §6.4.
 
 ### Working-with-Adam notes (carry into every session — distilled 2026-07-30)
 

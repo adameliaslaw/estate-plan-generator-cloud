@@ -20,6 +20,20 @@ export interface Env {
   gcsBucket: string;
   anthropicApiKey: string | undefined;
   sampleLimit: number | undefined;
+  /**
+   * Drive folder ids of the curated clause library (AAA WILL PIECES, Trust
+   * Agreements). Everything under them is manifested to the SEED collection
+   * and excluded from the corpus — §11 P1 gold set, and the structural
+   * precondition for Gate 4's canary.
+   */
+  seedFolderIds: string[];
+  /**
+   * Subset of the seed folders held out as the Gate 4 canary (the Trust
+   * Agreements boilerplate). Excluded from corpus input like all seed
+   * folders; the pipeline must re-derive their clauses from client documents
+   * alone. Ids listed here must also appear in seedFolderIds.
+   */
+  canaryFolderIds: string[];
 }
 
 function required(name: string): string {
@@ -39,6 +53,18 @@ export function loadEnv(): Env {
       throw new Error(`SAMPLE_LIMIT must be a positive integer, got ${sampleLimitRaw}`);
     }
   }
+  const seedFolderIds = idList(process.env.CLAUSE_MINER_SEED_FOLDER_IDS);
+  const canaryFolderIds = idList(process.env.CLAUSE_MINER_CANARY_FOLDER_IDS);
+  // A canary folder that is not a seed folder would be walked into the corpus
+  // — the exact leak Gate 4 exists to rule out. Fail loudly at startup.
+  const stray = canaryFolderIds.filter((id) => !seedFolderIds.includes(id));
+  if (stray.length > 0) {
+    throw new Error(
+      `CLAUSE_MINER_CANARY_FOLDER_IDS must be a subset of CLAUSE_MINER_SEED_FOLDER_IDS; ` +
+        `not listed as seed folders: ${stray.join(', ')}`,
+    );
+  }
+
   return {
     firmId: required('FIRM_ID'),
     runId: required('RUN_ID'),
@@ -46,7 +72,18 @@ export function loadEnv(): Env {
     gcsBucket: required('GCS_BUCKET'),
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     sampleLimit,
+    seedFolderIds,
+    canaryFolderIds,
   };
+}
+
+/** Comma/whitespace-separated Drive folder id list; empty when unset. */
+export function idList(raw: string | undefined): string[] {
+  if (raw === undefined) return [];
+  return raw
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /** LLM stages fail fast without the key rather than mid-batch. */

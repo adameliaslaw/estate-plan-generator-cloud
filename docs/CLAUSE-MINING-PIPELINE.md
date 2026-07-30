@@ -2,7 +2,9 @@
 
 **Corpus-mining pipeline for the firm clause catalog — ultracode checkpoint #1 design of record.**
 
-Status: **APPROVED by Adam 2026-07-30** (see §15 for his decisions on the checkpoint questions and the resulting amendments in §6.2, §7.3, §11 Gate 3, and Stage 0). Remaining gate before build: the Never-Break sign-off PR (§9, P0.3).
+Status: **APPROVED by Adam 2026-07-30** (see §15 for his decisions on the checkpoint questions and the resulting amendments in §6.2, §7.3, §11 Gate 3, and Stage 0). The Never-Break sign-off PR (§9, P0.3) shipped as #222.
+
+**Build status:** all pipeline stages plus the §11 P1 calibration path and the §11 P3 validation gates are implemented in `clause-miner/`. **The one remaining build-blocker is P0.1 — confirming the `drive.readonly` service-account Viewer grant on the Drive root** (see §11 P0). Not yet built, and deliberately: §6.4 union-template assembly and Gate 5 (checkpoint-2), the §12 weekly incremental function, and the review UI that renders the calibration packet and collects Adam's labels.
 Pilot scope: **trusts only** (revocable living trusts, amendments, restatements). Full corpus follows.
 
 ---
@@ -340,13 +342,19 @@ The cost **shape** is the design's spine: zero per-occurrence LLM calls — hash
 ## 11. Pilot plan (trusts) with acceptance criteria
 
 ### Phase P0 — prerequisites (build-blocking)
-1. Confirm `drive.readonly` service-account Viewer grant on the root folder (the `google-drive-sync.ts` token cannot read it — verified scopes).
-2. Replace the mining extractor's few-shot examples (the repo itself flags them as placeholders) + 50-doc extraction QA.
-3. Never-Break sign-off PR (rules, indexes, storage rules, workflow paths) — §9.
-4. `clause-miner/` package with Dockerfile + `workflow_dispatch` deploy workflow (Artifact Registry + `gcloud run jobs deploy`, mirroring the functions workflow's service-account auth; no manual local deploys, per repo rules).
+1. Confirm `drive.readonly` service-account Viewer grant on the root folder (the `google-drive-sync.ts` token cannot read it — verified scopes). ⚠️ **STILL OPEN — the only P0 item not closed in code.**
+2. Replace the mining extractor's few-shot examples (the repo itself flags them as placeholders) — ✅ **DONE** (real examples, dummy JOHN DOE / MARY ROE families). The **50-doc extraction QA** still runs against real converted documents before corpus-wide spend.
+3. Never-Break sign-off PR (rules, indexes, storage rules, workflow paths) — §9. ✅ **DONE (#222, Adam-approved, deployed).**
+4. `clause-miner/` package with Dockerfile + `workflow_dispatch` deploy workflow (Artifact Registry + `gcloud run jobs deploy`, mirroring the functions workflow's service-account auth; no manual local deploys, per repo rules). ✅ **DONE (#223/#226).**
 
 ### Phase P1 — calibration (before corpus spend)
 60-file stratified conversion/segmentation QA (§4.4) + **Adam's bounded 1-hour session**: (a) confirm clause boundaries on the ~31 seed files, parsed by a dedicated **clause-library segmenter** (blank-line/separator cues, commentary lines classified out by haiku — curated files are structurally unlike instruments and the instrument segmenter would pollute the gold set); (b) label ~30 same/different pairs sampled from the pilot's own candidate band; (c) hand-mark boundaries on 5 representative trusts spanning eras (the CLAUDE.md rule-9 "one bounded diagnostic" in place of guessing).
+
+✅ **BUILT** — `STAGE=seed` and `STAGE=calibrate`. Three implementation decisions worth recording, each of which the design left open:
+
+- **The curated seed leaves the corpus by construction, not by filter.** Seed trees are manifested to a separate `seedFiles` collection the corpus stages never walk, so Gate 4's held-out canary cannot leak back in through a filter someone forgets to apply. `CLAUSE_MINER_CANARY_FOLDER_IDS` is validated at startup to be a subset of the seed folders — a canary folder that is not a seed folder would be walked into the corpus while the gate believed it was held out.
+- **Adam's own filing supplies the negative labels for free.** Two distinct pieces in his library are two clauses he chose to keep apart, so any near-duplicate pair among them is a labeled NEGATIVE at no time cost. His 30 hand labels are spent entirely on the band where the answer is genuinely in doubt.
+- **Tuning is F1-maximizing *subject to zero false auto-merges*, and is allowed to fail.** §4.3 and §13 risk 1 both name over-merge as the catastrophic error, so a tuner that traded one bad merge for a point of F1 would contradict the design it calibrates. When no split qualifies, the stage selects nothing, records why, and leaves the configured defaults in force.
 
 ### Phase P2 — the run
 Stages 0–9 per §3, spend-gated, with a **projected-vs-actual reconciliation after the first 100 documents** as a mandatory gate (grafted from ANCHORLINE).
@@ -358,6 +366,8 @@ Stages 0–9 per §3, spend-gated, with a **projected-vs-actual reconciliation a
 - **Gate 3 — CANONICAL FIDELITY (amended):** median token-Levenshtein between matched seed text and the data-chosen canonical is computed and reported as a **divergence diagnostic**; families under 0.80 are flagged `seed-divergent` for Adam's side-by-side review (§6.2). Seed text is never auto-promoted — per Adam's decision, the predecessors' curated library is evidence to be evaluated, not ground truth for canonical selection. The gate fails only if divergence flags exceed 50% of matched families (which would indicate a normalization or clustering defect rather than genuine drafting drift).
 - **Gate 4 — INDEPENDENT-RECOVERY CANARY** (grafted from STRATA — the strongest falsifier available): the 6 Trust Agreements boilerplate files are **excluded from corpus input**; the pipeline must independently re-derive ≥ 90% of their clauses from client documents alone. Passing means the pipeline reconstructs the attorney's library from raw evidence.
 - **Gate 5 — TEMPLATE ROUND-TRIP:** §6.4 QA gate green (all-on/all-off/random fills, empty `missingTags`, numbering continuity, golden-fill diff).
+
+✅ **BUILT** — `STAGE=gates` (Gates 1–4; Gate 5 reports `skipped`, never `passed`, because §6.4 template assembly is checkpoint-2 work). The stage exits non-zero unless every gate passes, and **refuses to run at all without a seed-match artifact** rather than reporting vacuous passes. Three guards are load-bearing and negative-controlled in the suite: an empty gold set FAILS Gate 1 (0/0 is not 100%); a canary that was not actually held out FAILS Gate 4 whatever its recovery rate (100% "recovery" of a file the pipeline was handed proves nothing); and a co-landing of two separately-filed pieces passes Gate 2 only when it carries an adjudication transcript.
 
 **Deliverable to Adam:** validation report (per-gate scores, side-by-side diffs, unmatched pieces, merge transcripts) + the Zipf-triaged review queue. Only then does card-level review begin — confirming, not re-deriving.
 

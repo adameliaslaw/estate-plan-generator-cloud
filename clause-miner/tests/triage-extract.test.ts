@@ -13,16 +13,9 @@ import {
 } from '../src/stages/extract.js';
 import { fileDocPath, textPath } from '../src/paths.js';
 import type { Env } from '../src/env.js';
-import { FakeBatchClient, FakeBlobStore, FakeDocStore } from './helpers/fakes.js';
+import { FakeBatchClient, FakeBlobStore, FakeDocStore, makeEnv } from './helpers/fakes.js';
 
-const env: Env = {
-  firmId: 'firm1',
-  runId: 'run1',
-  rootFolderId: 'root',
-  gcsBucket: 'b',
-  anthropicApiKey: 'k',
-  sampleLimit: undefined,
-};
+const env: Env = makeEnv({ gcsBucket: 'b', anthropicApiKey: 'k' });
 
 describe('triage request/parse (Stage 2)', () => {
   it('truncates to ~1,500 tokens of text on haiku', () => {

@@ -99,6 +99,48 @@ export const config = {
     newestEraWeight: 2,
   },
 
+  /** §11 P1 — seed calibration (clause-library segmentation + labeled pairs). */
+  calibration: {
+    /**
+     * §11 P1(b): ~30 same/different pairs Adam labels, sampled from the
+     * pilot's own candidate band (active learning — the pairs nearest the
+     * decision boundary, where a threshold change actually flips an answer).
+     */
+    labelPairCount: 30,
+    /** §11 P1(c): representative trusts spanning eras for hand-marked boundaries. */
+    handMarkDocCount: 5,
+    /**
+     * Band the label sample is drawn from. Below this nothing is a plausible
+     * merge; above it the diff filter has already decided. Pairs are ranked
+     * by distance from the band midpoint.
+     */
+    labelBand: { low: 0.6, high: 0.98 },
+    /**
+     * §4.3: LSH band/row splits searched during tuning. bands × rows must
+     * equal minhash.numPermutations — the signature length is fixed.
+     */
+    lshGrid: [
+      { lshBands: 16, lshRows: 8 },
+      { lshBands: 32, lshRows: 4 },
+      { lshBands: 64, lshRows: 2 },
+    ],
+  },
+
+  /** §11 P3 — validation gates (all must pass before Adam reviews). */
+  gates: {
+    /** Gate 1: ≥ 90% of trust-relevant seed clauses land in some mined family. */
+    recallMin: 0.9,
+    /**
+     * Gate 3: divergence is a DIAGNOSTIC, not a promotion rule (§6.2 amended
+     * — Adam's decision #2). The gate fails only when more than half of the
+     * matched families diverge, which indicates a normalization/clustering
+     * defect rather than genuine drafting drift.
+     */
+    seedDivergentMaxShare: 0.5,
+    /** Gate 4: ≥ 90% of the excluded canary file's clauses re-derived. */
+    canaryRecallMin: 0.9,
+  },
+
   /** §7.3 — trigger-card statistics gate. */
   stats: {
     liftHigh: 2.0,

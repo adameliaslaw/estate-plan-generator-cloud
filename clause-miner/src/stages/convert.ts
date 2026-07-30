@@ -35,6 +35,8 @@ import {
   fileDocPath,
   filesCollection,
   runLedgerPath,
+  seedFileDocPath,
+  seedFilesCollection,
   segmentsReadyPath,
   textPath,
 } from '../paths.js';
@@ -83,6 +85,35 @@ export interface ConvertSummary {
   skipped: number;
 }
 
+/**
+ * Which manifest the conversion pass walks. The corpus and the curated seed
+ * (§11 P1) live in separate collections — see paths.seedFilesCollection for
+ * why — but they need byte-identical conversion, or the gold set would be
+ * measured through a different parser than the corpus it validates.
+ */
+export interface ConvertScope {
+  collectionPath: string;
+  docPath: (driveFileId: string) => string;
+  /** Ledger key for this pass's summary. */
+  ledgerKey: string;
+}
+
+export function corpusScope(env: Env): ConvertScope {
+  return {
+    collectionPath: filesCollection(env.firmId, env.runId),
+    docPath: (id) => fileDocPath(env.firmId, env.runId, id),
+    ledgerKey: 'convert',
+  };
+}
+
+export function seedScope(env: Env): ConvertScope {
+  return {
+    collectionPath: seedFilesCollection(env.firmId, env.runId),
+    docPath: (id) => seedFileDocPath(env.firmId, env.runId, id),
+    ledgerKey: 'seedConvert',
+  };
+}
+
 function plainParagraphs(text: string): OoxmlParagraph[] {
   return text.split(/\r?\n/).map((line) => ({
     text: line,
@@ -114,6 +145,7 @@ async function writeErrorRecord(
 async function persistArtifacts(
   deps: ConvertDeps,
   env: Env,
+  scope: ConvertScope,
   driveFileId: string,
   opts: {
     docxBytes: Buffer | null;
@@ -137,7 +169,7 @@ async function persistArtifacts(
     segmentsReadyPath(env.firmId, driveFileId),
     JSON.stringify(segmentsReady),
   );
-  await deps.store.set(fileDocPath(env.firmId, env.runId, driveFileId), {
+  await deps.store.set(scope.docPath(driveFileId), {
     status: 'converted',
     sniffedFormat: opts.sniffedFormat,
     structureConfidence: opts.structureConfidence,
@@ -213,7 +245,11 @@ async function fallbackExtract(
   return null;
 }
 
-export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSummary> {
+export async function runConvert(
+  deps: ConvertDeps,
+  env: Env,
+  scope: ConvertScope = corpusScope(env),
+): Promise<ConvertSummary> {
   const summary: ConvertSummary = {
     converted: 0,
     passthrough: 0,
@@ -223,7 +259,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
     skipped: 0,
   };
   const unrecognizedFormats: Record<string, number> = {};
-  const rows = await deps.store.listDocs(filesCollection(env.firmId, env.runId));
+  const rows = await deps.store.listDocs(scope.collectionPath);
   const pending = rows.filter(
     (r) => r.data.status === 'manifested', // resumable: converted/error rows skip
   );
@@ -244,7 +280,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
       summary.errors++;
       await writeErrorRecord(
         deps.store,
-        fileDocPath(env.firmId, env.runId, row.id),
+        scope.docPath(row.id),
         row.data,
         `sniff download failed: ${String(err)}`,
       );
@@ -258,7 +294,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
       summary.unrecognized++;
       const ext = fileExtension(typeof s.data.fileName === 'string' ? s.data.fileName : '');
       unrecognizedFormats[ext] = (unrecognizedFormats[ext] ?? 0) + 1;
-      await deps.store.set(fileDocPath(env.firmId, env.runId, s.id), {
+      await deps.store.set(scope.docPath(s.id), {
         status: 'unrecognized-format',
         sniffedFormat: 'unknown',
         updatedAt: new Date().toISOString(),
@@ -282,7 +318,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
       const bytes = await deps.drive.download(s.id);
       if (isOoxmlDocx(bytes)) {
         const paragraphs = parseDocxParagraphs(bytes);
-        await persistArtifacts(deps, env, s.id, {
+        await persistArtifacts(deps, env, scope, s.id, {
           docxBytes: bytes,
           paragraphs,
           structureConfidence: 'ooxml',
@@ -297,7 +333,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
       summary.errors++;
       await writeErrorRecord(
         deps.store,
-        fileDocPath(env.firmId, env.runId, s.id),
+        scope.docPath(s.id),
         s.data,
         `passthrough failed: ${String(err)}`,
       );
@@ -336,7 +372,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
           summary.errors++;
           await writeErrorRecord(
             deps.store,
-            fileDocPath(env.firmId, env.runId, s.id),
+            scope.docPath(s.id),
             s.data,
             `download failed: ${String(err)}`,
           );
@@ -383,7 +419,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
 
         if (docxBytes !== null && isOoxmlDocx(docxBytes)) {
           const paragraphs = parseDocxParagraphs(docxBytes);
-          await persistArtifacts(deps, env, s.id, {
+          await persistArtifacts(deps, env, scope, s.id, {
             docxBytes,
             paragraphs,
             structureConfidence: 'ooxml',
@@ -397,7 +433,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
         // §8 fallback ladder.
         const fallback = await fallbackExtract(deps, format, path, bytes);
         if (fallback !== null) {
-          await persistArtifacts(deps, env, s.id, {
+          await persistArtifacts(deps, env, scope, s.id, {
             docxBytes: null,
             paragraphs: plainParagraphs(fallback.text),
             structureConfidence: 'none',
@@ -412,7 +448,7 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
         summary.errors++;
         await writeErrorRecord(
           deps.store,
-          fileDocPath(env.firmId, env.runId, s.id),
+          scope.docPath(s.id),
           s.data,
           `conversion ladder exhausted (soffice: ${batchResult.stderr || 'no output'})`,
         );
@@ -422,9 +458,9 @@ export async function runConvert(deps: ConvertDeps, env: Env): Promise<ConvertSu
   }
 
   await deps.store.set(runLedgerPath(env.firmId, env.runId), {
-    stage: 'convert',
+    stage: scope.ledgerKey,
     status: 'completed',
-    convert: { ...summary, unrecognizedFormats, parserVersion: PARSER_VERSION },
+    [scope.ledgerKey]: { ...summary, unrecognizedFormats, parserVersion: PARSER_VERSION },
     updatedAt: new Date().toISOString(),
   });
   return summary;

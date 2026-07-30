@@ -4,6 +4,7 @@
  * orchestration under test.
  */
 
+import type { Env } from '../../src/env.js';
 import type {
   BatchClient,
   BatchRequest,
@@ -212,4 +213,22 @@ export class FakeEmbeddings implements EmbeddingClient {
       return out.map((v) => v / norm);
     });
   }
+}
+
+/**
+ * Env for stage tests. Overrides let a test opt into the curated-seed /
+ * canary folders (§11 P1) without every other test having to know they exist.
+ */
+export function makeEnv(overrides: Partial<Env> = {}): Env {
+  return {
+    firmId: 'firm1',
+    runId: 'run1',
+    rootFolderId: 'root',
+    gcsBucket: 'bucket',
+    anthropicApiKey: undefined,
+    sampleLimit: undefined,
+    seedFolderIds: [],
+    canaryFolderIds: [],
+    ...overrides,
+  };
 }
