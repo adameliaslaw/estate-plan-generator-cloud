@@ -1,0 +1,21 @@
+{
+  "name": "clause-miner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clause-mining pipeline Cloud Run Job (docs/CLAUSE-MINING-PIPELINE.md). Deterministic core + stage dispatcher.",
+  "type": "module",
+  "main": "lib/main.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.5.4",
+    "vitest": "^2.1.9"
+  }
+}

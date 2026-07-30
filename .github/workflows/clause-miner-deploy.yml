@@ -1,0 +1,85 @@
+name: Clause-miner deploy
+
+# Deploys the clause-mining Cloud Run Job (docs/CLAUSE-MINING-PIPELINE.md
+# §2, §11 P0.4): builds the clause-miner/ Docker image, pushes it to
+# Artifact Registry, and `gcloud run jobs deploy`s it.
+#
+# workflow_dispatch ONLY — no push triggers. The pipeline is spend-gated and
+# stage-driven; a deploy is an explicit operator action, never a side effect
+# of a merge. (This also keeps the ~1.4 GB LibreOffice image build off the
+# hot CI path.)
+#
+# Auth mirrors .github/workflows/firebase-functions-deploy.yml: the SAME
+# GitHub secret (FIREBASE_SERVICE_ACCOUNT_EPG) via google-github-actions/auth.
+# The Job itself runs as the project's default compute service account
+# (gcloud run jobs deploy default when --service-account is omitted), so the
+# existing drive.readonly grant, Vertex access, and Secret Manager mounts
+# carry over per §2 "Runs-where summary".
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: clause-miner-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT: estate-plan-generator
+  REGION: us-east1
+  AR_REPO: clause-miner
+  JOB_NAME: clause-miner
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPG }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: estate-plan-generator
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Ensure Artifact Registry repository exists
+        run: |
+          gcloud artifacts repositories describe "$AR_REPO" \
+            --project "$PROJECT" --location "$REGION" >/dev/null 2>&1 || \
+          gcloud artifacts repositories create "$AR_REPO" \
+            --project "$PROJECT" --location "$REGION" \
+            --repository-format=docker \
+            --description="Clause-mining pipeline Cloud Run Job images"
+
+      - name: Build and push image
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${AR_REPO}/${JOB_NAME}:${GITHUB_SHA}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build -t "$IMAGE" clause-miner
+          docker push "$IMAGE"
+
+      # 4 CPU / 8 Gi and a 6 h task timeout per the spec: 4 conversion
+      # workers (§8 throughput math) inside a multi-hour batch envelope.
+      # --max-retries 0: stages checkpoint per-file to Firestore (§3) and are
+      # resumed by re-execution, not blind retry.
+      - name: Deploy Cloud Run Job
+        run: |
+          gcloud run jobs deploy "$JOB_NAME" \
+            --image "$IMAGE" \
+            --project "$PROJECT" \
+            --region "$REGION" \
+            --cpu 4 \
+            --memory 8Gi \
+            --task-timeout 21600 \
+            --tasks 1 \
+            --max-retries 0
