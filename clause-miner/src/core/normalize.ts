@@ -143,13 +143,15 @@ export function normalize(
     (parameters[kind] ??= []).push(value.trim());
   };
 
-  // Sentinel protection: protected substrings are swapped for \u0000<n>\u0000
+  // Sentinel protection: protected substrings are swapped for \uE000<n>\uE000
+  // (Private Use Area — passes no-control-regex and cannot occur in converted
+  // legal text, unlike NUL which broken conversions can emit)
   // tokens (NUL never occurs in document text) so later passes cannot touch
   // them; all sentinels are restored in one pass at the end.
   const protectedSpans: string[] = [];
   const protect = (s: string): string => {
     protectedSpans.push(s);
-    return `\u0000${protectedSpans.length - 1}\u0000`;
+    return `\uE000${protectedSpans.length - 1}\uE000`;
   };
 
   let t = text;
@@ -376,7 +378,7 @@ export function normalize(
   );
 
   // Restore all protected spans.
-  t = t.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => protectedSpans[Number(i)]);
+  t = t.replace(/\uE000(\d+)\uE000/g, (_m, i: string) => protectedSpans[Number(i)]);
 
   return { normText: t, parameters };
 }
