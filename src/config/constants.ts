@@ -453,6 +453,6 @@ export const ROUTES = {
 // ---------------------------------------------------------------------------
 // AI / OpenAI
 // ---------------------------------------------------------------------------
-export const DEFAULT_AI_MODEL = 'gpt-5.6';
+export const DEFAULT_AI_MODEL = 'claude-opus-5';
 export const AI_PROMPT_MAX_FIELD_LENGTH = 2000;
 export const AI_MAX_CONTEXT_TOKENS = 128_000;

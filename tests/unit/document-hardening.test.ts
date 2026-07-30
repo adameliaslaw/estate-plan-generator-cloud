@@ -108,7 +108,7 @@ describe('validateAndResolveModel — model allowlist', () => {
 
   it('falls back on unknown Anthropic model', () => {
     const result = validateAndResolveModel('claude-99', 'anthropic');
-    expect(result).toBe('claude-sonnet-5'); // Anthropic default (bumped 2026-07-30)
+    expect(result).toBe('claude-opus-5'); // Anthropic default — firm default per Adam (2026-07-30)
   });
 
   it('falls back on unknown Gemini model', () => {

@@ -166,7 +166,7 @@ Generate the complete pour-over will now. The POUR-OVER ARTICLE must name the tr
   const systemPrompt = POUR_OVER_WILL_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
 
   const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-5.6',
+    model: safeFirm?.documentDraftingModel || 'claude-opus-5',
     temperature: 0.15,
     maxTokens: 16384,
     jsonMode: true,

@@ -48,7 +48,7 @@ describe('current-generation models are in the allowlist (no silent downgrade)',
   });
 
   it('unknown models fall back to the current-generation defaults', () => {
-    expect(validateAndResolveModel('claude-nonexistent', 'anthropic')).toBe('claude-sonnet-5');
+    expect(validateAndResolveModel('claude-nonexistent', 'anthropic')).toBe('claude-opus-5');
     expect(validateAndResolveModel('gpt-99', 'openai')).toBe('gpt-5.6');
     expect(validateAndResolveModel('gemini-99', 'gemini')).toBe('gemini-3.5-flash');
   });
@@ -78,6 +78,6 @@ describe('resolveRequestedModel — pre-flight for the document warning', () => 
     const result = resolveRequestedModel('claude-sonnet-6-experimental');
     expect(result.supported).toBe(false);
     expect(result.provider).toBe('anthropic');
-    expect(result.resolved).toBe('claude-sonnet-5');
+    expect(result.resolved).toBe('claude-opus-5');
   });
 });
