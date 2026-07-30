@@ -150,7 +150,7 @@ Generate the complete affidavit. Include the state/county caption, deponent ID, 
 `.trim();
 
   const raw = await callAI(AFFIDAVIT_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-5.6',
+    model: safeFirm?.documentDraftingModel || 'claude-opus-5',
     temperature: 0.15,
     maxTokens: 4096,
     jsonMode: true,

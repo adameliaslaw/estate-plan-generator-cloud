@@ -166,7 +166,7 @@ Generate the complete GIT/REP-3 form styled as an official NJ tax form. Clearly 
 `.trim();
 
   const raw = await callAI(GIT_REP3_SYSTEM_PROMPT, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-5.6',
+    model: safeFirm?.documentDraftingModel || 'claude-opus-5',
     temperature: 0.15,
     maxTokens: 3072,
     jsonMode: true,

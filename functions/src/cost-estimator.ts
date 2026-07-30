@@ -157,7 +157,7 @@ function estimateInputTokens(docType: string, clientDataCharCount: number): numb
  */
 function resolveModel(firmData: FirmData, modelOverride?: string): { model: string; provider: string } {
   let provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
-  let model = modelOverride ?? firmData?.documentDraftingModel ?? 'gpt-5.6';
+  let model = modelOverride ?? firmData?.documentDraftingModel ?? 'claude-opus-5';
 
   const m = model.toLowerCase();
   if (m.startsWith('gemini')) provider = 'gemini';
@@ -236,7 +236,7 @@ export const estimateGenerationCost = functions
 
       // Resolve model and pricing
       const { model, provider } = resolveModel(firmData, modelOverride);
-      const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-5.6'];
+      const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['claude-opus-5'];
       const modelLabel = pricing.label;
 
       // Calculate per-document estimates

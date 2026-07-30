@@ -146,7 +146,7 @@ const KNOWN_MODELS: Record<string, Set<string>> = {
 
 const DEFAULT_MODELS: Record<string, string> = {
   openai: 'gpt-5.6',
-  anthropic: 'claude-sonnet-5',
+  anthropic: 'claude-opus-5',
   gemini: 'gemini-3.5-flash',
   perplexity: 'sonar-pro',
 };
@@ -364,7 +364,7 @@ async function _callAnthropic(
     throw new Error('Anthropic API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'claude-sonnet-5';
+  const model = options.model ?? 'claude-opus-5';
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 64000;  // Claude Sonnet 4 supports up to 64K output
 
