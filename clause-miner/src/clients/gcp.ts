@@ -20,6 +20,7 @@ import type {
   DriveClient,
   DriveFileMeta,
   EmbeddingClient,
+  FolderMatch,
   ShellResult,
   ShellRunner,
 } from './interfaces.js';
@@ -168,6 +169,64 @@ export class GoogleDriveClient implements DriveClient {
       { responseType: 'arraybuffer' },
     );
     return Buffer.from(res.data as ArrayBuffer);
+  }
+
+  /**
+   * The service-account email this client authenticates as. Read from the
+   * ADC credentials; on Cloud Run those come from the metadata server, which
+   * reports the literal string 'default' rather than an address, so fall
+   * back to asking the metadata server for the real email.
+   */
+  async identity(): Promise<string | null> {
+    try {
+      const auth = new google.auth.GoogleAuth({ scopes: DRIVE_SCOPES });
+      const credentials = await auth.getCredentials();
+      const email = credentials.client_email;
+      if (typeof email === 'string' && email.includes('@')) return email;
+    } catch {
+      // fall through to the metadata server
+    }
+    try {
+      const res = await fetch(
+        'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email',
+        { headers: { 'Metadata-Flavor': 'Google' } },
+      );
+      if (!res.ok) return null;
+      const text = (await res.text()).trim();
+      return text.length > 0 ? text : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async findFolders(name: string): Promise<FolderMatch[]> {
+    // Escape single quotes for the Drive query language.
+    const escaped = name.replace(/'/g, "\\'");
+    const res = await this.drive.files.list({
+      q:
+        `name = '${escaped}' and ` +
+        `mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: 'files(id,name,parents)',
+      pageSize: 100,
+    });
+    const out: FolderMatch[] = [];
+    for (const f of res.data.files ?? []) {
+      if (typeof f.id !== 'string') continue;
+      const parentNames: string[] = [];
+      for (const parentId of f.parents ?? []) {
+        try {
+          const parent = await this.drive.files.get({
+            fileId: parentId,
+            fields: 'name',
+          });
+          if (typeof parent.data.name === 'string') parentNames.push(parent.data.name);
+        } catch {
+          parentNames.push(`(unreadable parent ${parentId})`);
+        }
+      }
+      out.push({ id: f.id, name: f.name ?? f.id, parentNames });
+    }
+    return out;
   }
 }
 

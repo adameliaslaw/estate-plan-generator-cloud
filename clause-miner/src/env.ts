@@ -34,6 +34,11 @@ export interface Env {
    * alone. Ids listed here must also appear in seedFolderIds.
    */
   canaryFolderIds: string[];
+  /**
+   * Folder NAMES the preflight searches for (§11 P0.1). Names rather than ids
+   * on purpose: the preflight exists to discover the ids.
+   */
+  seedFolderNames: string[];
 }
 
 function required(name: string): string {
@@ -74,7 +79,17 @@ export function loadEnv(): Env {
     sampleLimit,
     seedFolderIds,
     canaryFolderIds,
+    seedFolderNames: nameList(process.env.CLAUSE_MINER_SEED_FOLDER_NAMES),
   };
+}
+
+/** Comma-separated folder NAMES (names may contain spaces, so only commas split). */
+export function nameList(raw: string | undefined): string[] {
+  if (raw === undefined) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /** Comma/whitespace-separated Drive folder id list; empty when unset. */

@@ -15,8 +15,63 @@ name: Clause-miner deploy
 # (gcloud run jobs deploy default when --service-account is omitted), so the
 # existing drive.readonly grant, Vertex access, and Secret Manager mounts
 # carry over per §2 "Runs-where summary".
+#
+# The Job needs its env contract set at deploy time (clause-miner/README.md)
+# and a way to be EXECUTED, or a deploy leaves something nobody can run
+# without a local gcloud. Both are dispatch inputs below. `stage` defaults to
+# the read-only preflight (§11 P0.1) because that is the only stage safe to
+# run before the Drive grant is confirmed — it makes no LLM calls, spends
+# nothing, and writes nothing to Drive.
 on:
   workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Stage to execute after deploying (deploy-only = build and deploy, run nothing)'
+        type: choice
+        default: preflight
+        options:
+          - preflight
+          - deploy-only
+          - manifest
+          - seed
+          - calibrate
+          - convert
+          - triage
+          - extract
+          - segment
+          - identity
+          - canonicalize
+          - stats
+          - catalog
+          - gates
+      firm_id:
+        description: 'FIRM_ID — Firestore scope firms/{firmId}/…'
+        type: string
+        required: true
+      run_id:
+        description: 'RUN_ID — run ledger id (reuse one to RESUME that run)'
+        type: string
+        required: true
+      gcs_bucket:
+        description: 'GCS_BUCKET for converted/text artifacts'
+        type: string
+        required: true
+      sample_limit:
+        description: 'SAMPLE_LIMIT — stratified calibration sample size (blank = whole corpus)'
+        type: string
+        default: ''
+      seed_folder_ids:
+        description: 'CLAUSE_MINER_SEED_FOLDER_IDS — curated-library folder ids (comma separated). Run preflight first to discover them.'
+        type: string
+        default: ''
+      canary_folder_ids:
+        description: 'CLAUSE_MINER_CANARY_FOLDER_IDS — held-out Gate 4 folder ids (must be a subset of the seed ids)'
+        type: string
+        default: ''
+      mount_anthropic_secret:
+        description: 'Mount ANTHROPIC_API_KEY from Secret Manager (required by the LLM stages; leave off for preflight/manifest/convert)'
+        type: boolean
+        default: false
 
 concurrency:
   group: clause-miner-deploy
@@ -27,6 +82,9 @@ env:
   REGION: us-east1
   AR_REPO: clause-miner
   JOB_NAME: clause-miner
+  # The corpus root, kept identical to functions/src/wills-backfill.ts
+  # DRIVE_ROOT_FOLDER_ID so both pipelines walk one corpus under one grant.
+  ROOT_FOLDER_ID: 1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j
 
 jobs:
   deploy:
@@ -73,7 +131,26 @@ jobs:
       # --max-retries 0: stages checkpoint per-file to Firestore (§3) and are
       # resumed by re-execution, not blind retry.
       - name: Deploy Cloud Run Job
+        env:
+          IN_STAGE: ${{ inputs.stage }}
+          IN_FIRM_ID: ${{ inputs.firm_id }}
+          IN_RUN_ID: ${{ inputs.run_id }}
+          IN_GCS_BUCKET: ${{ inputs.gcs_bucket }}
+          IN_SAMPLE_LIMIT: ${{ inputs.sample_limit }}
+          IN_SEED_IDS: ${{ inputs.seed_folder_ids }}
+          IN_CANARY_IDS: ${{ inputs.canary_folder_ids }}
+          IN_MOUNT_SECRET: ${{ inputs.mount_anthropic_secret }}
         run: |
+          set -euo pipefail
+          # STAGE is baked in at deploy so an execution is a pure re-run of a
+          # known configuration — no per-execution overrides to reconstruct
+          # when diagnosing what a run actually did.
+          STAGE_ENV="$IN_STAGE"
+          if [ "$STAGE_ENV" = "deploy-only" ]; then STAGE_ENV="preflight"; fi
+
+          # Comma-separated id lists collide with gcloud's default delimiter,
+          # so the whole set is passed with the ^@^ alternate-delimiter form.
+          # Empty values are fine: env.ts treats blank as unset.
           gcloud run jobs deploy "$JOB_NAME" \
             --image "$IMAGE" \
             --project "$PROJECT" \
@@ -82,4 +159,40 @@ jobs:
             --memory 8Gi \
             --task-timeout 21600 \
             --tasks 1 \
-            --max-retries 0
+            --max-retries 0 \
+            --set-env-vars "^@^STAGE=${STAGE_ENV}@FIRM_ID=${IN_FIRM_ID}@RUN_ID=${IN_RUN_ID}@GCS_BUCKET=${IN_GCS_BUCKET}@CLAUSE_MINER_ROOT_FOLDER_ID=${ROOT_FOLDER_ID}@SAMPLE_LIMIT=${IN_SAMPLE_LIMIT}@CLAUSE_MINER_SEED_FOLDER_IDS=${IN_SEED_IDS}@CLAUSE_MINER_CANARY_FOLDER_IDS=${IN_CANARY_IDS}"
+
+          if [ "$IN_MOUNT_SECRET" = "true" ]; then
+            gcloud run jobs update "$JOB_NAME" \
+              --project "$PROJECT" --region "$REGION" \
+              --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest"
+          fi
+
+      # Executing is opt-in per dispatch. `deploy-only` stops here, which is
+      # the escape hatch if a deploy needs to land without touching Drive.
+      - name: Execute stage
+        if: ${{ inputs.stage != 'deploy-only' }}
+        env:
+          IN_STAGE: ${{ inputs.stage }}
+        run: |
+          set -euo pipefail
+          echo "Executing stage '${IN_STAGE}' …"
+          set +e
+          EXECUTION=$(gcloud run jobs execute "$JOB_NAME" \
+            --project "$PROJECT" --region "$REGION" \
+            --wait --format='value(metadata.name)')
+          EXEC_STATUS=$?
+          set -e
+          echo "execution: ${EXECUTION:-<none>} (exit ${EXEC_STATUS})"
+
+          # The Job's own stdout is the report — surface it in the Actions log
+          # so nobody needs Cloud Console to read the result.
+          if [ -n "${EXECUTION:-}" ]; then
+            echo "──────── job output ────────"
+            gcloud logging read \
+              "resource.type=cloud_run_job AND resource.labels.job_name=${JOB_NAME} AND labels.\"run.googleapis.com/execution_name\"=${EXECUTION}" \
+              --project "$PROJECT" --limit 1000 --order asc --freshness 2h \
+              --format 'value(textPayload)' || echo '(could not read logs)'
+            echo "────────────────────────────"
+          fi
+          exit $EXEC_STATUS

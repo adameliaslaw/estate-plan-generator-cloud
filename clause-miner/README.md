@@ -18,6 +18,7 @@ runs with in-memory fakes and zero network.
 | `GCS_BUCKET` | yes | Bucket for converted/text/segment artifacts (`firms/{firmId}/clause-mining/**` — storage.rules path ships in the Never-Break sign-off PR, §9). |
 | `ANTHROPIC_API_KEY` | LLM stages | Mounted as a **Cloud Run secret** (Secret Manager → env var). Never baked into the image. Required for `triage`, `extract`, `segment`, `identity`, `canonicalize`, `stats`. |
 | `SAMPLE_LIMIT` | no | **Calibration-sample mode** (§4.4): limits the manifest to N files, stratified round-robin across attorney folders (adams/george/jerome/elizabeth/legacy-root). Set it on the `manifest` stage of a calibration run; downstream stages then only ever see those files. Seed files are **never** sampled — a partial gold set silently weakens every gate. |
+| `CLAUSE_MINER_SEED_FOLDER_NAMES` | no | Comma-separated folder NAMES the `preflight` stage searches for. Defaults to `AAA WILL PIECES, Trust Agreements`. Names, not ids — discovering the ids is the point. |
 | `CLAUSE_MINER_SEED_FOLDER_IDS` | seed/gate stages | Comma-separated Drive folder ids of the curated clause library (AAA WILL PIECES, Trust Agreements). Everything beneath them is manifested to the **seed** collection and **excluded from the corpus** — the §11 P1 gold set, and the structural precondition for Gate 4. |
 | `CLAUSE_MINER_CANARY_FOLDER_IDS` | Gate 4 | Subset of the seed folders held out as the independent-recovery canary (the Trust Agreements boilerplate). Validated at startup to be a subset — a canary folder that is not a seed folder would be walked into the corpus while the gate believed it was held out. |
 
@@ -29,6 +30,16 @@ existing `drive.readonly` grant and Vertex access carry over.
 
 Each Job execution runs ONE stage (`STAGE=<name>`), in this order:
 
+0. `preflight` — Stage P (§11 P0.1): **read-only, no LLM calls, no spend.**
+   Confirms the Drive grant empirically — it lists the root folder AND pulls
+   8 bytes out of a real file, because listing and downloading are different
+   permissions in practice and Stage 1 opens with a Range request. Then finds
+   the curated-seed folders BY NAME and prints their ids, reporting each
+   match's parent folders so duplicates can be told apart. Every failure
+   names the identity it authenticated as — the usual cause is a grant made
+   to a different service account than the Job runs as. Exits non-zero when
+   blocked. A readable-but-EMPTY root and duplicate folder names both BLOCK:
+   each looks like success and silently mis-scopes the run.
 1. `manifest` — Stage 0: Drive BFS, sniff-everything filter (no extension
    whitelist; PDFs by mime AND extension + debris excluded), attorney-folder
    classification, share-request list for unreadable files (all-included
