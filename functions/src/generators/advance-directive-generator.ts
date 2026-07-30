@@ -165,7 +165,7 @@ Generate the complete Advance Directive now. Mark the declarant's ACTUAL choices
   const systemPrompt = ADVANCE_DIRECTIVE_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
 
   const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+    model: safeFirm?.documentDraftingModel || 'gpt-5.6',
     temperature: 0.15,
     maxTokens: 16384,
     jsonMode: true,

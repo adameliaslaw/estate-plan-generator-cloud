@@ -1493,8 +1493,10 @@ export default function SettingsPage() {
                             <SelectContent>
                               {chatbotAiProvider === 'openai' && (
                                 <>
+                                  <SelectItem value="gpt-5.6">gpt-5.6 (Sol — latest)</SelectItem>
+                                  <SelectItem value="gpt-5.6-terra">gpt-5.6-terra (balanced)</SelectItem>
+                                  <SelectItem value="gpt-5.6-luna">gpt-5.6-luna (budget)</SelectItem>
                                   <SelectItem value="gpt-5.4">gpt-5.4</SelectItem>
-                                  <SelectItem value="gpt-5.4-pro">gpt-5.4-pro</SelectItem>
                                   <SelectItem value="gpt-5-mini">gpt-5-mini</SelectItem>
                                   <SelectItem value="o4-mini">o4-mini</SelectItem>
                                   <SelectItem value="o3">o3</SelectItem>
@@ -1502,15 +1504,20 @@ export default function SettingsPage() {
                               )}
                               {chatbotAiProvider === 'anthropic' && (
                                 <>
-                                  <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
+                                  <SelectItem value="claude-opus-5">claude-opus-5 (latest)</SelectItem>
+                                  <SelectItem value="claude-sonnet-5">claude-sonnet-5 (latest)</SelectItem>
+                                  <SelectItem value="claude-fable-5">claude-fable-5 (most capable)</SelectItem>
+                                  <SelectItem value="claude-opus-4-8">claude-opus-4-8</SelectItem>
                                   <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
                                 </>
                               )}
                               {chatbotAiProvider === 'gemini' && (
                                 <>
+                                  <SelectItem value="gemini-3.5-flash">gemini-3.5-flash (latest)</SelectItem>
+                                  <SelectItem value="gemini-3.6-flash">gemini-3.6-flash</SelectItem>
+                                  <SelectItem value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (budget)</SelectItem>
                                   <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
                                   <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
-                                  <SelectItem value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</SelectItem>
                                 </>
                               )}
                               {chatbotAiProvider === 'perplexity' && (
@@ -1542,8 +1549,10 @@ export default function SettingsPage() {
                             <SelectContent>
                               {documentDraftingAiProvider === 'openai' && (
                                 <>
+                                  <SelectItem value="gpt-5.6">gpt-5.6 (Sol — latest)</SelectItem>
+                                  <SelectItem value="gpt-5.6-terra">gpt-5.6-terra (balanced)</SelectItem>
+                                  <SelectItem value="gpt-5.6-luna">gpt-5.6-luna (budget)</SelectItem>
                                   <SelectItem value="gpt-5.4">gpt-5.4</SelectItem>
-                                  <SelectItem value="gpt-5.4-pro">gpt-5.4-pro</SelectItem>
                                   <SelectItem value="gpt-5-mini">gpt-5-mini</SelectItem>
                                   <SelectItem value="o4-mini">o4-mini</SelectItem>
                                   <SelectItem value="o3">o3</SelectItem>
@@ -1551,15 +1560,20 @@ export default function SettingsPage() {
                               )}
                               {documentDraftingAiProvider === 'anthropic' && (
                                 <>
-                                  <SelectItem value="claude-opus-4-6">claude-opus-4-6</SelectItem>
+                                  <SelectItem value="claude-opus-5">claude-opus-5 (latest)</SelectItem>
+                                  <SelectItem value="claude-sonnet-5">claude-sonnet-5 (latest)</SelectItem>
+                                  <SelectItem value="claude-fable-5">claude-fable-5 (most capable)</SelectItem>
+                                  <SelectItem value="claude-opus-4-8">claude-opus-4-8</SelectItem>
                                   <SelectItem value="claude-sonnet-4-6">claude-sonnet-4-6</SelectItem>
                                 </>
                               )}
                               {documentDraftingAiProvider === 'gemini' && (
                                 <>
+                                  <SelectItem value="gemini-3.5-flash">gemini-3.5-flash (latest)</SelectItem>
+                                  <SelectItem value="gemini-3.6-flash">gemini-3.6-flash</SelectItem>
+                                  <SelectItem value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (budget)</SelectItem>
                                   <SelectItem value="gemini-2.5-pro">gemini-2.5-pro</SelectItem>
                                   <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
-                                  <SelectItem value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</SelectItem>
                                 </>
                               )}
                               {documentDraftingAiProvider === 'perplexity' && (

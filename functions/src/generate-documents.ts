@@ -34,7 +34,7 @@ const GenerateRequestSchema = z.object({
   packageType: z.enum(['foundation', 'guardian', 'fortress']),
   trustTypes: z.array(z.string()).optional(),
   generationMode: z.enum(['template', 'ai', 'hybrid', 'high-fidelity']).optional(),
-  /** Optional model override (e.g. 'gpt-5.4', 'claude-sonnet-4-6') */
+  /** Optional model override (e.g. 'gpt-5.6', 'claude-sonnet-5') */
   modelOverride: z.string().optional(),
   /** Optional software source filter for template selection */
   softwareSource: z.string().optional(),

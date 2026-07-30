@@ -214,7 +214,7 @@ Generate the complete ${trustType} now. Include all standard articles, comprehen
   const systemPrompt = TRUST_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
 
   const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
-    model: safeFirm?.documentDraftingModel || 'gpt-5.4',
+    model: safeFirm?.documentDraftingModel || 'gpt-5.6',
     temperature: 0.15,
     maxTokens: 32768,
     jsonMode: true,

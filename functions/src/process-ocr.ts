@@ -159,7 +159,7 @@ export const processQuestionnaireScan = functions
             const systemPrompt = OCR_EXTRACTION_SCHEMA_PROMPT;
 
             const response = await openai.chat.completions.create({
-                model: 'gpt-5.4',
+                model: 'gpt-5.6',
                 messages: [
                     { role: 'system', content: systemPrompt },
                     {

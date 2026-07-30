@@ -2,7 +2,7 @@
  * functions/src/wills-extractor.ts
  *
  * Metadata extraction module for the Wills ingestion pipeline.
- * Model: claude-sonnet-4-6
+ * Model: claude-sonnet-5
  * Method: Anthropic tool-use (forced) — guarantees structured JSON output.
  * Prompt caching on system prompt + schema prefix.
  * Retries once on tool-call failure; stubs record on second failure.
@@ -322,7 +322,7 @@ async function _attempt(
   const userPrompt = `Document type: ${docType}\n\nDocument text:\n${text.slice(0, 900_000)}`;
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 4096,
     system: [
       {

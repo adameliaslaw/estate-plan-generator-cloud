@@ -27,7 +27,11 @@ interface ModelPricing {
 }
 
 const MODEL_PRICING: Record<string, ModelPricing> = {
-  // OpenAI
+  // OpenAI — GPT-5.6 family (July 2026); 'gpt-5.6' aliases -sol
+  'gpt-5.6':       { inputPer1M: 5.00,  outputPer1M: 30.00, label: 'GPT-5.6 (Sol)' },
+  'gpt-5.6-sol':   { inputPer1M: 5.00,  outputPer1M: 30.00, label: 'GPT-5.6 Sol' },
+  'gpt-5.6-terra': { inputPer1M: 2.50,  outputPer1M: 15.00, label: 'GPT-5.6 Terra' },
+  'gpt-5.6-luna':  { inputPer1M: 1.00,  outputPer1M: 6.00,  label: 'GPT-5.6 Luna' },
   'gpt-5.4':       { inputPer1M: 2.00,  outputPer1M: 8.00,  label: 'GPT-5.4' },
   'gpt-5.4-nano':  { inputPer1M: 0.20,  outputPer1M: 1.25,  label: 'GPT-5.4 Nano' },
   'gpt-5':         { inputPer1M: 2.00,  outputPer1M: 8.00,  label: 'GPT-5' },
@@ -39,14 +43,21 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'o3-mini':       { inputPer1M: 1.10,  outputPer1M: 4.40,  label: 'o3-mini' },
   'o4-mini':       { inputPer1M: 1.10,  outputPer1M: 4.40,  label: 'o4-mini' },
 
-  // Anthropic
+  // Anthropic — Claude 5 family (sonnet-5 lists $2/$10 intro pricing through
+  // 2026-08-31; standard $3/$15 after — estimator uses the standard rate)
+  'claude-sonnet-5': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude Sonnet 5' },
+  'claude-opus-5':   { inputPer1M: 5.00,  outputPer1M: 25.00, label: 'Claude Opus 5' },
+  'claude-fable-5':  { inputPer1M: 10.00, outputPer1M: 50.00, label: 'Claude Fable 5' },
   'claude-sonnet-4-6': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude Sonnet 4' },
   'claude-opus-4-8':   { inputPer1M: 5.00,  outputPer1M: 25.00, label: 'Claude Opus 4.8' },
   'claude-4-opus':     { inputPer1M: 15.00, outputPer1M: 75.00, label: 'Claude 4 Opus' },
   'claude-3.7-sonnet': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude 3.7 Sonnet' },
   'claude-3.5-sonnet': { inputPer1M: 3.00,  outputPer1M: 15.00, label: 'Claude 3.5 Sonnet' },
 
-  // Gemini
+  // Gemini — 3.x series (July 2026)
+  'gemini-3.6-flash':      { inputPer1M: 1.50, outputPer1M: 7.50, label: 'Gemini 3.6 Flash' },
+  'gemini-3.5-flash':      { inputPer1M: 1.50, outputPer1M: 9.00, label: 'Gemini 3.5 Flash' },
+  'gemini-3.5-flash-lite': { inputPer1M: 0.30, outputPer1M: 2.50, label: 'Gemini 3.5 Flash-Lite' },
   'gemini-2.5-flash': { inputPer1M: 0.15,  outputPer1M: 0.60,  label: 'Gemini 2.5 Flash' },
   'gemini-2.5-pro':   { inputPer1M: 1.25,  outputPer1M: 10.00, label: 'Gemini 2.5 Pro' },
   'gemini-2.0-flash': { inputPer1M: 0.10,  outputPer1M: 0.40,  label: 'Gemini 2.0 Flash' },
@@ -146,7 +157,7 @@ function estimateInputTokens(docType: string, clientDataCharCount: number): numb
  */
 function resolveModel(firmData: FirmData, modelOverride?: string): { model: string; provider: string } {
   let provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
-  let model = modelOverride ?? firmData?.documentDraftingModel ?? 'gpt-5.4';
+  let model = modelOverride ?? firmData?.documentDraftingModel ?? 'gpt-5.6';
 
   const m = model.toLowerCase();
   if (m.startsWith('gemini')) provider = 'gemini';
@@ -225,7 +236,7 @@ export const estimateGenerationCost = functions
 
       // Resolve model and pricing
       const { model, provider } = resolveModel(firmData, modelOverride);
-      const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-5.4'];
+      const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-5.6'];
       const modelLabel = pricing.label;
 
       // Calculate per-document estimates

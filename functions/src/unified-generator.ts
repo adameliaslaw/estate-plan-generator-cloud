@@ -8,7 +8,7 @@ import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext, ClientContext } from './client-context-aggregator';
 import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper';
 import { recordDraftHistory } from './ai-memory';
-import { sanitizeForPrompt } from './ai-client';
+import { sanitizeForPrompt, resolveRequestedModel } from './ai-client';
 import { serializeClientData } from './client-data-serializer';
 import { checkClientFactConsistency } from './client-facts';
 import { swapClientDataForSpouse, swapClientContextForSpouse } from './spouse-swap';
@@ -491,6 +491,24 @@ export async function generateDocument(
     (firmData as Record<string, unknown>).documentDraftingModel = modelOverride;
   }
 
+  // Pre-flight model check: callAI silently substitutes the provider default
+  // when a requested model isn't in the allowlist — only a server log records
+  // it. Surface that substitution as a visible warning on the document so the
+  // attorney knows which model actually drafted it.
+  const modelFallbackWarnings: string[] = [];
+  const requestedModel =
+    modelOverride ?? (firmData.documentDraftingModel as string | undefined);
+  if (requestedModel) {
+    const check = resolveRequestedModel(requestedModel);
+    if (!check.supported) {
+      modelFallbackWarnings.push(
+        `[warning] model-fallback: requested model '${requestedModel}' is not supported — ` +
+        `generated with '${check.resolved}' instead. Update the drafting model in Settings.`,
+      );
+      console.warn(`[unifiedGenerator] ${modelFallbackWarnings[0]}`);
+    }
+  }
+
   // Inject formatting preset if specified (so generators can apply correct paragraph classes)
   if (formattingPreset) {
     (firmData as Record<string, unknown>).formattingPreset = formattingPreset;
@@ -941,8 +959,8 @@ export async function generateDocument(
       changeNotes,
       tags,
       warnings:
-        completenessWarnings.length > 0 || dataConsistencyWarnings.length > 0 || (params.extraWarnings?.length ?? 0) > 0
-          ? [...(params.extraWarnings ?? []), ...dataConsistencyWarnings, ...completenessWarnings]
+        completenessWarnings.length > 0 || dataConsistencyWarnings.length > 0 || modelFallbackWarnings.length > 0 || (params.extraWarnings?.length ?? 0) > 0
+          ? [...(params.extraWarnings ?? []), ...modelFallbackWarnings, ...dataConsistencyWarnings, ...completenessWarnings]
           : undefined,
       validationFindings: validationFindings.length > 0 ? validationFindings : undefined,
       promptVersion: generatedDoc.promptVersion,
