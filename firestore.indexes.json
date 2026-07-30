@@ -399,6 +399,27 @@
         { "fieldPath": "client_name",      "order": "ASCENDING" },
         { "fieldPath": "ingest_timestamp", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "clauseCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "docType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 768,
+            "flat": {}
+          }
+        }
+      ]
     }
   ],
   "fieldOverrides": [

@@ -149,8 +149,11 @@ describe('Firestore Rules — /firms/{firmId} collection', () => {
     expect(rulesContain(/allow\s+delete\s*:\s*if\s+isFirmAdmin\(firmId\)/)).toBe(true);
     // The old cross-firm `allow ...: if isAdmin()` grants must be gone from
     // firm-scoped collections (R5-037). Bare `if isAdmin()` survives ONLY on the
-    // two global single-tenant pipeline collections.
-    expect(countOccurrences(/if\s+isAdmin\(\)/g)).toBe(2);
+    // three global single-tenant pipeline collections: pipeline_state,
+    // pipeline_audit_log, and clause_mining_state (added with the clause-mining
+    // sign-off PR — same class: global kill-switch/spend state, admin-read,
+    // Admin-SDK-write-only).
+    expect(countOccurrences(/if\s+isAdmin\(\)/g)).toBe(3);
   });
 });
 

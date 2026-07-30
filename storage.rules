@@ -115,5 +115,16 @@ service firebase.storage {
       allow write: if (isFirmAdmin(firmId) || isFirmStaff(firmId))
                     && request.resource.size < 200 * 1024 * 1024;
     }
+
+    // Clause-mining working cache (docs/CLAUSE-MINING-PIPELINE.md §5.3/§9):
+    // converted .docx + extracted plaintext of client DRAFTS — the ONLY
+    // place raw client text lives during mining. Staff read (provenance
+    // click-through from the clause review UI); NO client-SDK writes —
+    // the pipeline writes via the Admin SDK, which bypasses these rules.
+    match /firms/{firmId}/clause-mining/{allPaths=**} {
+      allow read: if isFirmAdmin(firmId)
+                    || isFirmStaff(firmId);
+      allow write: if false; // Cloud Run job / Functions (Admin SDK) only
+    }
   }
 }
