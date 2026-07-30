@@ -302,6 +302,30 @@ LibreOffice conversion, Batches-API triage/extraction/adjudication, canonicalize
 stats, catalog write). Adam's next touchpoint is the ~1-hour calibration session once the 60-file
 sample converts. Then: pilot run → §11 gates → ultracode checkpoint #2 → review queue.
 
+### Working-with-Adam notes (carry into every session — distilled 2026-07-30)
+
+- **North star, in Adam's words:** "one click estate planning drafting software drafting, or as
+  close as I can to it." The firm has NOT yet used the software live; building since day one.
+  Architecture serving it: deterministic template-first drafting, AI at the edges (intake
+  extraction + review), clause catalog mined from the practice's own archive.
+- **Communication:** plain-language breakdowns, decisions surfaced as SHORT questions with
+  recommended defaults — never hand Adam a long technical document to review (the full design doc
+  overwhelmed him; the five-promises summary + guided Q&A is what worked). Explain AI/token/cost
+  concepts from scratch when they come up.
+- **Consequential go-aheads need real confirmation.** Adam once sent "proceed with the pilot" via
+  an auto-suggest he hadn't read, and retracted it. Treat terse approvals of big autonomous
+  actions (spend, client-data processing, irreversible steps) as suspect — restate what's about
+  to happen and get a deliberate yes.
+- **Model economy:** session stays on Fable through the pilot/checkpoint-2 arc (judgment-heavy);
+  mechanical subagents pinned to cheaper models; firm drafting default is claude-opus-5 (#219);
+  revisit session tier after the catalog ships.
+- **PR conventions settled in practice:** docs + verified non-Never-Break code auto-merge (squash)
+  with confirmation to Adam; Never-Break bundles ship as annotated PRs HELD for his explicit
+  words; every PR watched until merged; deploys confirmed via armed check-ins.
+- **Scratchpad caveat:** the detailed Drive inventory (per-folder JSONL + report) lives only in
+  the session container (client names — deliberately uncommitted) and dies with it; Stage 0 of
+  the miner re-derives it properly. Summary numbers are in this file's 2026-07-30 entry.
+
 ---
 
 ## 🔵 SESSION — 2026-07-28 PM #6 (Adam's IT-R review · Schedule E column D filled · the deploy-blanks-the-site bug root-caused)
