@@ -55,12 +55,28 @@ export interface DriveFileMeta {
   canDownload: boolean;
 }
 
+/** A folder found by name, with enough context to tell duplicates apart. */
+export interface FolderMatch {
+  id: string;
+  name: string;
+  /** Names of the immediate parent folders (a Drive file can have several). */
+  parentNames: string[];
+}
+
 export interface DriveClient {
   /** All non-trashed children of a folder (paging handled internally). */
   listChildren(folderId: string): Promise<DriveFileMeta[]>;
   /** First `length` bytes via a Range request (format sniffing, §8). */
   downloadRange(fileId: string, length: number): Promise<Uint8Array>;
   download(fileId: string): Promise<Buffer>;
+  /**
+   * The identity the client is authenticating as. Preflight reports it so a
+   * permission failure names the exact account to grant, instead of leaving
+   * someone to guess which of several service accounts is in play.
+   */
+  identity(): Promise<string | null>;
+  /** Exact-name folder search across everything the identity can see. */
+  findFolders(name: string): Promise<FolderMatch[]>;
 }
 
 export interface ShellResult {

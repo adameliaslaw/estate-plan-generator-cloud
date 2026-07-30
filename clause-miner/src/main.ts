@@ -34,9 +34,11 @@ import { runCatalog, assembleUnionTemplate } from './stages/catalog.js';
 import { runSeed } from './stages/seed.js';
 import { runCalibrate } from './stages/calibrate.js';
 import { runGates } from './stages/gates.js';
+import { formatPreflight, runPreflight } from './stages/preflight.js';
 import type { BatchClient, DocStore } from './clients/interfaces.js';
 
 const STAGES = [
+  'preflight', // Stage P — read-only Drive grant + seed-folder discovery (§11 P0.1)
   'manifest', // Stage 0 — Drive BFS + sniff-everything filter (§3 Stage 0)
   'seed', // Stage S — curated clause-library ingestion (§11 P1a)
   'calibrate', // Stage C — labeling packet / threshold tuning (§11 P1b)
@@ -95,6 +97,13 @@ async function main(): Promise<void> {
     case 'manifest': {
       const summary = await runManifest({ drive: new GoogleDriveClient(), store }, env);
       console.log('manifest:', JSON.stringify(summary));
+      break;
+    }
+    case 'preflight': {
+      const report = await runPreflight({ drive: new GoogleDriveClient(), store }, env);
+      console.log(formatPreflight(report));
+      // Blocked must not read as success to whoever ran the Job.
+      if (!report.ready) process.exitCode = 4;
       break;
     }
     case 'seed': {

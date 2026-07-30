@@ -15,6 +15,7 @@ import type {
   DriveClient,
   DriveFileMeta,
   EmbeddingClient,
+  FolderMatch,
   ShellResult,
   ShellRunner,
 } from '../../src/clients/interfaces.js';
@@ -118,13 +119,18 @@ export function file(
 
 export class FakeDrive implements DriveClient {
   private readonly byId = new Map<string, FakeDriveNode>();
+  private readonly parentNames = new Map<string, string[]>();
 
-  constructor(root: FakeDriveNode) {
-    const walk = (node: FakeDriveNode): void => {
+  constructor(
+    root: FakeDriveNode,
+    private readonly identityEmail: string | null = 'miner@estate-plan-generator.iam.gserviceaccount.com',
+  ) {
+    const walk = (node: FakeDriveNode, parent: FakeDriveNode | null): void => {
       this.byId.set(node.meta.id, node);
-      for (const child of node.children ?? []) walk(child);
+      if (parent !== null) this.parentNames.set(node.meta.id, [parent.meta.name]);
+      for (const child of node.children ?? []) walk(child, node);
     };
-    walk(root);
+    walk(root, null);
   }
 
   async listChildren(folderId: string): Promise<DriveFileMeta[]> {
@@ -144,6 +150,24 @@ export class FakeDrive implements DriveClient {
     const node = this.byId.get(fileId);
     if (node?.bytes === undefined) throw new Error(`404 no content: ${fileId}`);
     return node.bytes;
+  }
+
+  async identity(): Promise<string | null> {
+    return this.identityEmail;
+  }
+
+  async findFolders(name: string): Promise<FolderMatch[]> {
+    const out: FolderMatch[] = [];
+    for (const node of this.byId.values()) {
+      if (node.meta.mimeType !== 'application/vnd.google-apps.folder') continue;
+      if (node.meta.name !== name) continue;
+      out.push({
+        id: node.meta.id,
+        name: node.meta.name,
+        parentNames: this.parentNames.get(node.meta.id) ?? [],
+      });
+    }
+    return out;
   }
 }
 
@@ -229,6 +253,7 @@ export function makeEnv(overrides: Partial<Env> = {}): Env {
     sampleLimit: undefined,
     seedFolderIds: [],
     canaryFolderIds: [],
+    seedFolderNames: [],
     ...overrides,
   };
 }
