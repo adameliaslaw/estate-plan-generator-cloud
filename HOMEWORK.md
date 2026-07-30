@@ -284,12 +284,17 @@ provider and set claude-opus-5 as the firm drafting default (#219). Ultracode ch
 [docs/CLAUSE-MINING-PIPELINE.md](./docs/CLAUSE-MINING-PIPELINE.md). Also shipped today: export
 binary/edits fix (#217), current-generation model update (#218).
 
-**▶ NEXT (needs Adam): review the pipeline design.** Adam explicitly retracted an auto-suggested
-"proceed with pilot" — the pilot is HELD until he reviews the design breakdown and answers the 8
-open questions in §15 of the design doc (granularity, canonical preference, jurisdictional variants,
-legacy attribution, review-time budget, external-owner files, the Never-Break sign-off PR, spend
-ceiling ~$350 pilot / $500–800 full corpus). No client documents are to be processed before his
-explicit go. Checkpoint #2 (ultracode catalog verification) still gates after the pilot runs.
+**UPDATE (same day, later): DESIGN APPROVED.** Adam reviewed via guided Q&A and approved on the
+five-promises basis (see design doc §15 for his 8 recorded decisions — notable: canonical text is
+decided by usage data, NOT the seed library, which he disclosed was authored by his predecessors
+and never evaluated; primary stats cover the whole practice; all files included). Amendments
+applied to §6.2, §7.3, §11 Gate 3, Stage 0. Budget approved: $350 pilot / $250 day breaker.
+
+**▶ NEXT (needs Adam): approve the Never-Break sign-off PR** (firestore.rules + vector index +
+storage.rules + functions-workflow trigger paths for the clause-mining collections). It is the
+last gate before the clause-miner build starts. NOT auto-mergeable — requires Adam's explicit
+sign-off per the Never-Break List. After that: build → calibration session (Adam, ~1 hr) → pilot
+run → §11 gates → ultracode checkpoint #2 → Adam's review queue.
 
 ---
 
