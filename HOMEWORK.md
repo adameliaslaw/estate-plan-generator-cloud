@@ -489,28 +489,41 @@ too. If it did not, the webhook is the thing to look at, not the charge.
 
 These have been repeated verbatim for weeks without saying what they mean. Written out once here.
 
-**As of 2026-07-28 PM #6, what is actually left is four things:**
+### ❌ NOT DOING — decided, do not re-raise
+
+Adam answered these on 2026-07-28. They kept coming back as open questions because the answers were
+recorded in `docs/IT-R-FORMS-BUILD-PLAN.md` §3.0 and in this file's own 7/28 PM #3 entry, but never
+in the carried-forward table — which is the part that actually gets re-read. Cost: five sessions of
+re-litigating a closed decision.
+
+| Question | Answer |
+|---|---|
+| Nonresident decedents (Track 3 / IT-NR)? | **No — the firm does not take them.** Track 3 is closed. |
+| Pre-2018 deaths? | **Not in practice** — so the L-9(A) and both IT-Estate returns are not being built. |
+| A life-insurance asset type? | **No, and it would be harmful** — it would invite entry of the *exempt* policies and over-tax the estate. |
+
+**No code is needed for Track 3 to stay closed** — checked rather than assumed. A nonresident matter
+is already refused at `computeEstate`, at `buildITRFormData` and at the L-9 builder; each message
+cites N.J.A.C. 18:26-2.15 and names the correct form (IT-NR, L-9 NR); and the intake screen shows an
+amber notice the moment **NJ resident** is unchecked, before any estate is entered. That is settled
+behaviour, not a placeholder.
+
+**What is actually left is three things:**
 
 | # | Item | Blocked on |
 |---|------|-----------|
-| 1 | **Track 3 — IT-NR, nonresident decedents** | **Adam's decision.** Not a coding task. |
-| 2 | **Official filled PDFs for IT-EXT / L-9 / IT-Estate** | Nobody — real work, no decisions |
-| 3 | **A real payment through the payment page** | Adam, live |
-| 4 | **Open a PRE-allocation-model matter in the browser** | Adam, live — small |
+| 1 | **Official filled PDFs for IT-EXT / L-9** | Nobody — real work, no decisions |
+| 2 | **A real payment through the payment page** | Adam, live |
+| 3 | **Open a PRE-allocation-model matter in the browser** | Adam, live — small |
 
-**1. Track 3 (IT-NR).** The only untouched track, and the standing `▶ NEXT` for five sessions. It
-changes how the tax is COMPUTED — NJ-situs property only (N.J.A.C. 18:26-2.15), with its own gold
-cases — so it is a product decision before it is code. Today a nonresident matter is refused
-cleanly at compute, which is defensible and is why this has been deferrable. Scoped in
-[docs/IT-R-FORMS-BUILD-PLAN.md](./docs/IT-R-FORMS-BUILD-PLAN.md) §3.1.
+**1. Official filled PDFs for the companion forms.** IT-EXT and the L-9 render as HTML workpapers
+today. Each needs its own blank form and field inventory — the same work the IT-R already had done
+to it. No decision required; just not started. (The two IT-Estate returns are NOT in this item: they
+are pre-2018 and were declined above.)
 
-**2. Official filled PDFs for the companion forms.** IT-EXT, L-9 and the two IT-Estate returns
-render as HTML workpapers today. Each needs its own blank form and field inventory — the same work
-the IT-R already had done to it. No decision required; just not started.
+**2. A real payment through the payment page.** See item 2 below — unchanged.
 
-**3. A real payment through the payment page.** See item 2 below — unchanged.
-
-**4. Opening a matter saved before the allocation model.** See §3 above. Normalisation is tested;
+**3. Opening a matter saved before the allocation model.** See §3 above. Normalisation is tested;
 the screen reading correctly afterwards is not.
 
 ---
@@ -690,6 +703,7 @@ Four negative controls run and reverted (L-9 lot/block swapped, L-9 two-digit ye
 testate/intestate widgets swapped, IT-EXT correspondence block filled) — each failed exactly the
 assertions it should. Every assertion reads its value back **out of the produced PDF**.
 
+*(Superseded 2026-07-28 — Adam declined nonresident decedents; Track 3 is closed. See the ❌ NOT DOING section above. Kept for the reasoning, not as a live instruction.)*
 **▶ NEXT — Track 3 (IT-NR) is still the only untouched track and still needs Adam's decision**: it
 changes how tax is computed (NJ-situs property only, N.J.A.C. 18:26-2.15, its own gold cases).
 Today a nonresident matter is refused cleanly at compute. The remaining form work is the L-9(A) and
@@ -736,6 +750,7 @@ Every rule test asserts **both** what the page reports and what the server's rea
 does with the payload the page would send, so a client rule that drifts from the regulation fails
 on the server assertion rather than agreeing with itself.
 
+*(Superseded 2026-07-28 — Adam declined nonresident decedents; Track 3 is closed. See the ❌ NOT DOING section above. Kept for the reasoning, not as a live instruction.)*
 **▶ NEXT — unchanged, and both need Adam.** Track 3 (IT-NR, nonresident decedents) is still the
 only untouched track and still a product decision: it changes how tax is computed (NJ-situs
 property only, N.J.A.C. 18:26-2.15, its own gold cases). Today a nonresident matter is refused
@@ -780,6 +795,7 @@ does not say:**
 **Green:** 847/847 (up from 812), functions + root tsc, lint 0 errors, build. Two negative controls
 run and reverted. Every PDF assertion reads its value back out of the produced file.
 
+*(Superseded 2026-07-28 — Adam declined nonresident decedents; Track 3 is closed. See the ❌ NOT DOING section above. Kept for the reasoning, not as a live instruction.)*
 **▶ NEXT — Track 3 (IT-NR, nonresident decedents) is the only untouched track**, and it is the one
 that changes how tax is computed (NJ-situs property only, N.J.A.C. 18:26-2.15, with its own gold
 cases). Today a nonresident matter is refused cleanly at compute, which is defensible. Smaller
