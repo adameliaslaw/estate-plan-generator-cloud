@@ -237,6 +237,50 @@ covering one sixth of the problem.
 
 ---
 
+## 🔵 SESSION — 2026-07-30 (drafting-engine assessment → the clause-mining project is scoped)
+
+**TL;DR — Adam asked whether his docassemble / python-docx-template forks should replace the
+drafting engines. Answer: neither. The assessment surfaced the real direction: make the
+high-fidelity .docx path the primary drafting spine (deterministic template fill; AI moves to
+intake extraction and post-assembly review), then mine Adam's Google Drive archive — thousands of
+client documents — into a clause catalog with usage statistics, powering a clause recommender
+("include the bloodline clause — your 6/12 note mentions the daughter's marriage"). Full analysis
+is in the session transcript; nothing is built yet.**
+
+**Two stale-doc corrections from the assessment:** (1) CLAUDE.md / README.md / MEMORY.md still say
+high-fidelity mode is "planned, not implemented" — it shipped in #196/#205 (`docx-fidelity.ts`,
+`docx-package-fill.ts`, docxtemplater). (2) The Export → DOCX button rebuilds from HTML and never
+serves the preserved binary (`hasBinary` is written but read nowhere) — the fidelity win is lost at
+the last step.
+
+**Build order agreed:** ① Drive inventory pass (counts by doc type / format / year — needs Adam to
+point at the folder) · ② engine upgrade: loops + conditional sections in the high-fidelity data map,
+serve the stored binary on export · ③ pilot: mine all trusts → clause catalog with frequencies ·
+④ Adam reviews the catalog · ⑤ recommender + checklist UI + full corpus run.
+
+### ⚠️ EFFORT CHECKPOINTS — flag these when we get there (Adam's standing instruction)
+
+Session baseline is **high** effort. At the following two steps, the agent must STOP and tell Adam
+to invoke **ultracode** (multi-agent adversarial verification) before proceeding — being wrong at
+these steps is expensive and hard to undo; everywhere else max effort buys nothing:
+
+1. **Mining-pipeline design** (start of ③) — the segmentation/clustering decisions ("what counts as
+   the same clause," normalization rules) silently shape everything downstream. Independent design
+   proposals + adversarial checks against sample documents.
+2. **Clause-catalog verification** (end of ③, before Adam's review in ④) — every "you use this
+   when X" card is derived from correlation; a plausible-but-wrong card pollutes the judgment
+   catalog permanently. Adversarial refutation of clause boundaries and fact-correlations against
+   the source documents before Adam ever sees the catalog.
+
+**Confidentiality note for ③:** the mining pass sends client-document text to the firm's selected
+AI provider at corpus scale. Adam decides the provider and confirms retention terms before the
+pilot runs. The output clause bank itself is clean boilerplate with placeholders.
+
+**▶ NEXT (needs Adam): point at the Drive folder for the inventory pass** (folder name/path, and
+how it's organized — by client, year, or doc type). The inventory is cheap and read-only.
+
+---
+
 ## 🔵 SESSION — 2026-07-28 PM #6 (Adam's IT-R review · Schedule E column D filled · the deploy-blanks-the-site bug root-caused)
 
 **TL;DR — Adam produced a real IT-R off the new intake and asked for an accuracy review. Every
