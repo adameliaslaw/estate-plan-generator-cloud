@@ -619,6 +619,43 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // CLAUSE-MINING COLLECTIONS (docs/CLAUSE-MINING-PIPELINE.md §9)
+    //
+    // /firms/{firmId}/clauseCatalog/{clauseId} (+ variants, occurrences)
+    // The mined clause catalog: placeholder-only texts, usage stats,
+    // trigger cards, provenance spans. Contains NO raw client text by
+    // construction (PII gates fail closed before write). Staff read for
+    // the review UI; ALL writes happen via the Admin SDK pipeline, which
+    // bypasses rules — so no client-SDK write is granted at all.
+    //
+    // Deliberately NO rules (⇒ default-deny to every client SDK):
+    //   /firms/{firmId}/clauseMining/**   — run ledger + docFacts, which
+    //     holds extracted party NAMES; functions-only workspace.
+    //   /firms/{firmId}/clausePending/**  — incremental segments that have
+    //     NOT yet passed the PII gates; must stay unreadable.
+    // ==========================================================
+    match /firms/{firmId}/clauseCatalog/{clauseId} {
+      allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      allow write: if false; // Cloud Functions (Admin SDK) only
+
+      match /variants/{sigHash} {
+        allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow write: if false; // Cloud Functions (Admin SDK) only
+      }
+      match /occurrences/{occId} {
+        allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+        allow write: if false; // Cloud Functions (Admin SDK) only
+      }
+    }
+
+    // Union-master-template build ledger (storagePath, switch list, QA
+    // report). Staff read for the review UI; writes via Admin SDK only.
+    match /firms/{firmId}/masterTemplates/{docType} {
+      allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      allow write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // ==========================================================
     // COLLECTION GROUP QUERY — documents
     // Needed so staff can query all documents across clients in a
     // single firm-scoped call (e.g. dashboard "Awaiting Review" queue).
@@ -652,6 +689,17 @@ service cloud.firestore {
     // Admins may read (for monitoring); all writes via Admin SDK.
     // ==========================================================
     match /pipeline_state/{docId} {
+      allow read: if isAdmin();
+      allow write: if false; // Cloud Functions (Admin SDK) only
+    }
+
+    // ==========================================================
+    // /clause_mining_state/{docId}
+    // Operational state for the clause-mining pipeline (mirrors
+    // pipeline_state): kill switch, daily-spend tracking, Drive cursor.
+    // Admins may read (monitoring); all writes via Admin SDK.
+    // ==========================================================
+    match /clause_mining_state/{docId} {
       allow read: if isAdmin();
       allow write: if false; // Cloud Functions (Admin SDK) only
     }

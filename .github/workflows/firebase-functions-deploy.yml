@@ -23,6 +23,10 @@ on:
       - 'functions/**'
       - 'firestore.rules'
       - 'storage.rules'
+      # Without this trigger an index-only commit deploys NOTHING — verified
+      # gap found in the clause-mining design review (#220 §9). Indexes are
+      # deployed alongside rules in the deploy step below.
+      - 'firestore.indexes.json'
       - 'firebase.json'
       - '.firebaserc'
       - '.github/workflows/firebase-functions-deploy.yml'
@@ -282,9 +286,11 @@ jobs:
             return 1
           }
 
-          # 1. Rules first — independent of the function op-queue.
-          deploy_with_retry "rules" "firestore:rules,storage" 3 || {
-            echo "❌ firestore:rules / storage failed to deploy."; exit 1; }
+          # 1. Rules + indexes first — independent of the function op-queue.
+          #    firestore:indexes added for the clause-mining vectorConfig
+          #    index (additive; existing indexes are never deleted by deploy).
+          deploy_with_retry "rules" "firestore:rules,firestore:indexes,storage" 3 || {
+            echo "❌ firestore:rules / firestore:indexes / storage failed to deploy."; exit 1; }
 
           # 2. Enumerate the default-codebase functions — used only to validate
           #    straggler names below. The batched pre-deploy was removed in the
@@ -311,7 +317,7 @@ jobs:
           #    which functions failed from the deploy log and deploy each one
           #    individually. Anything larger still fails loud — a big failure set
           #    means something real is broken, not burst-409 noise.
-          if ! deploy_with_retry "final" "functions,firestore:rules,storage" 1; then
+          if ! deploy_with_retry "final" "functions,firestore:rules,firestore:indexes,storage" 1; then
             # Parse failed function names from the deploy attempt; the log is
             # tee'd raw (may carry ANSI codes), so keep only valid name chars.
             mapfile -t STRAGGLERS < <(grep -hoE 'failed to (update|create) function [^ ]+' "deploy-final-1.log" \
