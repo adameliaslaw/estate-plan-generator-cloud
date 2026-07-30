@@ -297,6 +297,15 @@ typed placeholders, sigText + Ring-0 hashing, MinHash/LSH Ring-1, token diff + l
 hard-router, execution-block detector) — 116 unit tests, all stage entry points stubbed, dispatch-
 only deploy workflow. Zero runtime deps until stages land.
 
+**FEATURE DECISION (Adam, 2026-07-30 evening): in-questionnaire Clause Picker.** Adam found the
+pattern in a competitor (Statular): a "Clause Library" button on questionnaire free-text fields
+opening a searchable/filterable clause modal with preview + "Use Clause" insert. Integrate the
+FEATURE (not their clause content — IP): attorney-only picker over firms/{firmId}/clauseCatalog
+on questionnaire free-text fields + the document editor, folders All/My/Mined, state+category
+filters, preview, insert with client-context placeholder resolution; manual "My Clauses" adds via
+a staff-authed callable (catalog client-writes stay false per #222). Ships with the review UI
+(shared backend/components) — folded into the gaps slice (task #6).
+
 **▶ NEXT (agent work, no Adam action needed): implement the pipeline stages** (Drive manifest,
 LibreOffice conversion, Batches-API triage/extraction/adjudication, canonicalize + PII gates,
 stats, catalog write). Adam's next touchpoint is the ~1-hour calibration session once the 60-file
