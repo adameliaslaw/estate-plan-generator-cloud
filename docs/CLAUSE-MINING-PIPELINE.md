@@ -2,7 +2,7 @@
 
 **Corpus-mining pipeline for the firm clause catalog — ultracode checkpoint #1 design of record.**
 
-Status: PROPOSED — awaiting Adam's sign-off on the checkpoint decisions in §15.
+Status: **APPROVED by Adam 2026-07-30** (see §15 for his decisions on the checkpoint questions and the resulting amendments in §6.2, §7.3, §11 Gate 3, and Stage 0). Remaining gate before build: the Never-Break sign-off PR (§9, P0.3).
 Pilot scope: **trusts only** (revocable living trusts, amendments, restatements). Full corpus follows.
 
 ---
@@ -68,7 +68,7 @@ All stages checkpoint per-file to Firestore (`firms/{firmId}/clauseMining/{runId
 ### Stage 0 — Manifest
 - **Purpose:** turn the Drive tree into a work queue with provenance.
 - **Tooling:** BFS reusing the pattern of `wills-backfill.ts` (same ADC `drive.readonly` service account, same root folder ID pinned at `wills-backfill.ts:23` — **prerequisite: confirm the Viewer grant is still active**; `google-drive-sync.ts` is `drive.file`-scoped and cannot read this corpus).
-- **Filter (fixed per critique):** keep **every non-folder file that is not** a PDF or known debris (`Thumbs.db`, `~WRL*.tmp`, `*.lnk`, WordPerfect `wfx32`/`.BK!` database files). **No extension or Drive-mimeType whitelist** — the existing `SUPPORTED_MIME_TYPES` sets (verified: pdf/docx/msword only, omitting `text/rtf`) are live evidence that whitelists silently drop the oldest tranche (8.3-era extensions, `application/octet-stream` `.wpd`s). Byte-sniffing in Stage 1 decides format; unrecognized-format counts are written to the run ledger so every exclusion is visible. Files owned by external accounts are flagged, not fetched.
+- **Filter (fixed per critique):** keep **every non-folder file that is not** a PDF or known debris (`Thumbs.db`, `~WRL*.tmp`, `*.lnk`, WordPerfect `wfx32`/`.BK!` database files). **No extension or Drive-mimeType whitelist** — the existing `SUPPORTED_MIME_TYPES` sets (verified: pdf/docx/msword only, omitting `text/rtf`) are live evidence that whitelists silently drop the oldest tranche (8.3-era extensions, `application/octet-stream` `.wpd`s). Byte-sniffing in Stage 1 decides format; unrecognized-format counts are written to the run ledger so every exclusion is visible. Files owned by external accounts are **included** *(amended per Adam's decision)*: the manifest attempts every file; any the service account cannot read produce a named share-request list for Adam, and join via the incremental path once shared — nothing is excluded by policy.
 - **Output:** manifest rows `{driveFileId, drivePath, fileName, size, driveMime, attorneyFolder: adams|george|jerome|elizabeth|legacy-root}`; sanity check of word-file yield vs. folder count (expect 8,000–18,000 word-processing files — the estimate carries ±50% error bars until this stage reports).
 
 ### Stage 1 — Convert + cache
@@ -186,8 +186,8 @@ The asymmetry is explicit: **over-merging two legally distinct provisions is the
 ### 6.1 Mechanics
 Union-find over the adjudicated edge set (§4.3). MinHash signatures ~15k × 128 × 4 B ≈ 8 MB; LSH tables and union-find are in-memory trivial inside the Job. No density heuristics (HDBSCAN etc.) decide anything — checkpoint #1 demands replayable thresholds.
 
-### 6.2 Canonical selection
-Most frequent variant from the newest era, preferring an InteractiveLegal exemplar for styling — **overridden by the seed**: if an AAA/Trust-Agreements piece matched the family and canonical fidelity is low, the seed text is promoted to canonical (his curation outranks frequency), mined variants kept underneath. Stale-canon detection (from ANCHORLINE): a family whose matches all predate ~2015 while a divergent modern variant dominates is flagged `stale — modern drafts diverge` and shown side-by-side.
+### 6.2 Canonical selection *(amended per Adam's decision, 2026-07-30)*
+**The data decides.** Canonical = the most frequent variant weighted toward the newest era, preferring an InteractiveLegal exemplar for styling. The curated seed (AAA WILL PIECES / Trust Agreements) does **not** auto-promote: Adam disclosed the library was prepared by his predecessors and never evaluated by him, so it encodes their judgment, not his. Where a matched seed text differs materially from the data-chosen canonical (token-Levenshtein < 0.80), the family is flagged `seed-divergent` and the review queue presents a side-by-side diff with per-variant usage counts by attorney and era — Adam evaluates the predecessors' text for the first time with evidence in hand, one click per clause. Stale-canon detection (from ANCHORLINE) is retained: a family whose matches all predate ~2015 while a divergent modern variant dominates is flagged `stale — modern drafts diverge` and shown side-by-side.
 
 ### 6.3 Fill contract (resolves the proven placeholder-mismatch flaw)
 Mining placeholders (SCREAMING_SNAKE role tokens) exist for clustering and display. **They never reach the master template raw.** Stage 7 emits, per clause, a mapping of each placeholder to:
@@ -217,12 +217,12 @@ One TypeScript module (mirroring `wills-schema.ts`'s controlled-vocab style) con
 - `'unknown'` handling defined once, in the module: excluded from both contingency cells.
 
 ### 7.2 Counting unit
-One counting unit per (client matter, trust instrument): drafts collapse via full-document SimHash ≥ 0.97 within a matter, version pointer chosen by `_extractVersionLabel` (verified in `wills-processor.ts`) plus an execution-date regex tiebreak; instrument distinction (original vs restatement vs amendment) from the Stage-2 classification + title-line parse. **Matter identity is verified, not assumed**: same-name folders are confirmed same-client only if extracted party names agree (else suffixed distinct — handles the known duplicate-folder cases); the same party-name join runs across legacy-root vs mega-folder trees to catch cross-tree duplicates. Legacy-root matters carry `attorney: 'unknown'`, and attribution coverage is reported so Adams-scoped denominators are honest.
+One counting unit per (client matter, trust instrument): drafts collapse via full-document SimHash ≥ 0.97 within a matter, version pointer chosen by `_extractVersionLabel` (verified in `wills-processor.ts`) plus an execution-date regex tiebreak; instrument distinction (original vs restatement vs amendment) from the Stage-2 classification + title-line parse. **Matter identity is verified, not assumed**: same-name folders are confirmed same-client only if extracted party names agree (else suffixed distinct — handles the known duplicate-folder cases); the same party-name join runs across legacy-root vs mega-folder trees to catch cross-tree duplicates. Legacy-root matters carry `attorney: 'unknown'`, and attribution coverage is reported so the per-attorney stratification (§7.3) stays honest about what it can and cannot attribute.
 
 ### 7.3 Statistics
-For each (family, fact=value): 2×2 contingency table → support, P(clause|fact), P(clause|¬fact), lift, Fisher's exact p, with **Benjamini–Hochberg correction across the whole grid** (grafted from STRATA — ~600 families × ~40 fact-values ≈ 24k hypotheses; uncorrected p<0.05 would hand Adam hundreds of spurious "insights"). Computed twice (Adams-only primary; all-attorneys context) and stratified by era so drafting-era drift surfaces as an era effect (post-2012 portability abandonment of A/B language must read as era, not client wealth). Card gate: lift ≥ 2.0 or ≤ 0.5, corrected p < 0.01, n ≥ 10.
+For each (family, fact=value): 2×2 contingency table → support, P(clause|fact), P(clause|¬fact), lift, Fisher's exact p, with **Benjamini–Hochberg correction across the whole grid** (grafted from STRATA — ~600 families × ~40 fact-values ≈ 24k hypotheses; uncorrected p<0.05 would hand Adam hundreds of spurious "insights"). *(Amended per Adam's decision, 2026-07-30:)* **primary statistics compute over ALL matters — the whole practice's history is the evidence base**, including the ~900 attribution-unknown legacy-root matters. Per-attorney and per-era stratification is always computed and displayed on every card, so Adam can see whose habit and which era a pattern reflects (post-2012 portability abandonment of A/B language must read as era, not client wealth). Card gate: lift ≥ 2.0 or ≤ 0.5, corrected p < 0.01, n ≥ 10.
 
-**Honest power statement:** at pilot scale (Adams trust matters plausibly 80–150), few associations survive correction. Cards therefore carry two tiers: *significant* (survives BH) and *exploratory* (lift-ranked with support counts, labeled as such) — no significance theater.
+**Honest power statement:** whole-practice inclusion raises pilot n substantially (plausibly 400–900 trust matters vs 80–150 Adams-only), so more associations should survive correction than the original Adams-only plan — but the two-tier card labeling stands: *significant* (survives BH) and *exploratory* (lift-ranked with support counts, labeled as such) — no significance theater.
 
 ### 7.4 Card generation
 Opus receives **only** the clause title, the stats rows, and 3 provenance snippets, and writes ≤ 3 sentences in which every claim cites a stat row. The `rules[]` array is stored beside the prose; the recommender consumes `rules[]` (intake-observable facts only), the prose is for Adam. Cards carry a `statsHash`; numbers render live from stored counts, so prose can never drift from evidence.
@@ -355,7 +355,7 @@ Stages 0–9 per §3, spend-gated, with a **projected-vs-actual reconciliation a
 
 - **Gate 1 — RECALL:** ≥ 90% of trust-relevant seed clauses land in some mined family via the same identity rings. Misses are diagnosed (segmentation cut vs normalization divergence — both deterministic fixes + cheap ring re-run from cache), never waved off. *Honest caveat:* the trust-relevant seed is thin (~10–12 pieces: the 6 Trust Agreements files + SNT/trust paragraphs), which is why Gates 1–3 are supplemented by the canary and Adam's labeled pairs rather than carrying the proof alone.
 - **Gate 2 — PURITY:** no two seed pieces Adam stored as separate files may land in one family without an adjudication transcript flagged for his confirmation. Any silent merge = hard fail → tighten diff-whitelist/lexicon, re-run rings.
-- **Gate 3 — CANONICAL FIDELITY:** median token-Levenshtein ≥ 0.80 between matched seed text and chosen canonical; low fidelity promotes the seed text to canonical.
+- **Gate 3 — CANONICAL FIDELITY (amended):** median token-Levenshtein between matched seed text and the data-chosen canonical is computed and reported as a **divergence diagnostic**; families under 0.80 are flagged `seed-divergent` for Adam's side-by-side review (§6.2). Seed text is never auto-promoted — per Adam's decision, the predecessors' curated library is evidence to be evaluated, not ground truth for canonical selection. The gate fails only if divergence flags exceed 50% of matched families (which would indicate a normalization or clustering defect rather than genuine drafting drift).
 - **Gate 4 — INDEPENDENT-RECOVERY CANARY** (grafted from STRATA — the strongest falsifier available): the 6 Trust Agreements boilerplate files are **excluded from corpus input**; the pipeline must independently re-derive ≥ 90% of their clauses from client documents alone. Passing means the pipeline reconstructs the attorney's library from raw evidence.
 - **Gate 5 — TEMPLATE ROUND-TRIP:** §6.4 QA gate green (all-on/all-off/random fills, empty `missingTags`, numbering continuity, golden-fill diff).
 
@@ -386,7 +386,7 @@ The catalog is content-addressed; joining is lookup, not re-clustering.
 | 4 | **Silent corpus skew from dropped odd-extension files** | Sniff-everything manifest; unrecognized-format counts in the ledger; yield sanity-check vs folder count |
 | 5 | **Union template renders blanks / breaks numbering** | Fill-contract registry with fail-on-unregistered-tag (§6.3); auto-numbered headings; XREF detection + resolver; round-trip QA gate; golden fill |
 | 6 | **Recommender circularity** | Intake-observable vs document-derived fact partition in one shared module (§7.1) |
-| 7 | **Era/attorney confounding in cards** | Mandatory stratification; Adams-primary stats; `attorney: 'unknown'` for legacy-root reported, not hidden; era from text + metadata fallbacks with confidence |
+| 7 | **Era/attorney confounding in cards** | Mandatory stratification displayed on every card (whole-practice primary per Adam's decision); `attorney: 'unknown'` for legacy-root reported, not hidden; era from text + metadata fallbacks with confidence |
 | 8 | **Count inflation (drafts, duplicate folders)** | Matter-level counting units; SimHash draft dedup; party-name-verified matter identity incl. cross-tree join (§7.2) |
 | 9 | **Thin trust ground truth overfits thresholds** | Seed calibration + Adam's 30 labeled band pairs + 5 hand-marked trusts + the recovery canary; per-docType recalibration before the wills run |
 | 10 | **Review-queue stall for a solo practitioner** | Zipf triage (~120 families ≈ 90% coverage, 4–6 h); seed-match pre-approval; deferred tail; review UI + storage rules shipped **before** handoff |
@@ -423,15 +423,17 @@ The catalog is content-addressed; joining is lookup, not re-clustering.
 
 ---
 
-## 15. Open questions for Adam
+## 15. Checkpoint decisions — ANSWERED by Adam, 2026-07-30
 
-Only questions that genuinely need his judgment — everything else above is decided and defended.
+Recorded verbatim from the review session; amendments applied where marked.
 
-1. **Clause granularity for powers articles:** should the union template switch the whole trustee-powers article on/off, or expose per-power switches (digital assets, real-estate powers, business continuation)? The pipeline tracks both granularities (§4.2); the template can only ship one default.
-2. **Canonical preference:** when your curated AAA/Trust-Agreements phrasing differs from the most-frequent modern variant, the design promotes *your* text to canonical. Confirm — or prefer "what I draft now" with the curated text kept as a variant?
-3. **Jurisdictional variants:** NY vs NJ versions default to separate clauses (your seed stores them as separate files). Confirm, or should any pairs live as variants under one switch?
-4. **Legacy-root attribution:** should the ~900 unattributed legacy matters count toward "your practice" trigger stats, or context-only? (Default: context-only; your cards are computed from Adams-folder matters.)
-5. **Review budget:** the pilot asks ~1 hour up front (calibration session, §11 P1) and ~4–6 hours of card review across 2–3 sessions for the approved core, with the tail deferred indefinitely. Workable?
-6. **External-owner files:** a few files are owned by outside accounts and can't be read by the service account. Request ownership transfer/sharing, or exclude and log?
-7. **Sign-off PR:** the Never-Break bundle (firestore rules + vector index + storage rules + workflow trigger paths) needs your explicit approval before anything deploys — flagging now so it doesn't surprise you mid-pilot.
-8. **Spend ceiling:** pilot budget $350 with a $250/day breaker; full corpus later ≈ $500–800. Approve, or set different ceilings?
+1. **Powers articles → whole-article switch.** One switch for the full trustee-powers article; per-power (item-level) data retained (§4.2) so per-power switches can ship later without re-mining.
+2. **Canonical preference → the data decides.** Adam disclosed the curated seed library was prepared by his predecessors and he has never evaluated it. Canonical = most-used (era-weighted) variant; seed-divergent families get side-by-side review with usage stats (amendments in §6.2 and §11 Gate 3).
+3. **NY vs NJ → separate clauses.** Confirmed.
+4. **Legacy-root matters → included in primary stats.** The whole practice's history is the evidence base; per-attorney/era stratification displayed on every card (amendment in §7.3).
+5. **Review budget → accepted** (~1 hour calibration + ~4–6 hours core review; queue waits indefinitely; token cost is invariant to review depth — the choice was purely his hours).
+6. **External-owner files → all included.** Nothing excluded by policy; unreadable files produce a share-request list and join via the incremental path (amendment in Stage 0).
+7. **Sign-off PR → acknowledged**; delivered as its own annotated PR immediately after these amendments, held for Adam's explicit approval.
+8. **Spend → approved**: $350 pilot ceiling, $250/day breaker, kill switch. Full corpus (~$500–800) returns as its own approval when the pilot is judged.
+
+**Overall design approval given by Adam 2026-07-30** on the five-promises basis: nothing publishes without his click; no client name can reach the catalog (fail-closed); no non-exact merge without stored, reversible evidence; the pipeline must pass the §11 gates (including the independent-recovery canary) plus checkpoint #2 adversarial verification before he reviews; hard spend caps.
