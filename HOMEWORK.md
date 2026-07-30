@@ -290,11 +290,17 @@ decided by usage data, NOT the seed library, which he disclosed was authored by 
 and never evaluated; primary stats cover the whole practice; all files included). Amendments
 applied to §6.2, §7.3, §11 Gate 3, Stage 0. Budget approved: $350 pilot / $250 day breaker.
 
-**▶ NEXT (needs Adam): approve the Never-Break sign-off PR** (firestore.rules + vector index +
-storage.rules + functions-workflow trigger paths for the clause-mining collections). It is the
-last gate before the clause-miner build starts. NOT auto-mergeable — requires Adam's explicit
-sign-off per the Never-Break List. After that: build → calibration session (Adam, ~1 hr) → pilot
-run → §11 gates → ultracode checkpoint #2 → Adam's review queue.
+**UPDATE: Never-Break PR APPROVED by Adam and merged (#222).** Rules, vector index, storage path,
+and the firestore:indexes CI fix are deployed. Build underway: `clause-miner/` package landed with
+the full deterministic core (sniffer, reflow, segmentation grammar, gazetteer normalization with
+typed placeholders, sigText + Ring-0 hashing, MinHash/LSH Ring-1, token diff + legal-delta lexicon
+hard-router, execution-block detector) — 116 unit tests, all stage entry points stubbed, dispatch-
+only deploy workflow. Zero runtime deps until stages land.
+
+**▶ NEXT (agent work, no Adam action needed): implement the pipeline stages** (Drive manifest,
+LibreOffice conversion, Batches-API triage/extraction/adjudication, canonicalize + PII gates,
+stats, catalog write). Adam's next touchpoint is the ~1-hour calibration session once the 60-file
+sample converts. Then: pilot run → §11 gates → ultracode checkpoint #2 → review queue.
 
 ---
 
