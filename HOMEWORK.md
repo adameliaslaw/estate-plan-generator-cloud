@@ -276,8 +276,20 @@ these steps is expensive and hard to undo; everywhere else max effort buys nothi
 AI provider at corpus scale. Adam decides the provider and confirms retention terms before the
 pilot runs. The output clause bank itself is clean boilerplate with placeholders.
 
-**▶ NEXT (needs Adam): point at the Drive folder for the inventory pass** (folder name/path, and
-how it's organized — by client, year, or doc type). The inventory is cheap and read-only.
+**UPDATE (same day, PM):** Inventory DONE (My Drive → Everybody → Wills and Trusts: ~2,000+ folders,
+est. 12–25k files, .doc/RTF majority, AAA WILL PIECES is a hand-curated clause library — full report
+in session scratchpad, not committed: contains client names). Adam confirmed Anthropic as processing
+provider and set claude-opus-5 as the firm drafting default (#219). Ultracode checkpoint #1 RAN
+(10-agent adversarial workflow): design of record committed at
+[docs/CLAUSE-MINING-PIPELINE.md](./docs/CLAUSE-MINING-PIPELINE.md). Also shipped today: export
+binary/edits fix (#217), current-generation model update (#218).
+
+**▶ NEXT (needs Adam): review the pipeline design.** Adam explicitly retracted an auto-suggested
+"proceed with pilot" — the pilot is HELD until he reviews the design breakdown and answers the 8
+open questions in §15 of the design doc (granularity, canonical preference, jurisdictional variants,
+legacy attribution, review-time budget, external-owner files, the Never-Break sign-off PR, spend
+ceiling ~$350 pilot / $500–800 full corpus). No client documents are to be processed before his
+explicit go. Checkpoint #2 (ultracode catalog verification) still gates after the pilot runs.
 
 ---
 
