@@ -437,3 +437,12 @@ Recorded verbatim from the review session; amendments applied where marked.
 8. **Spend → approved**: $350 pilot ceiling, $250/day breaker, kill switch. Full corpus (~$500–800) returns as its own approval when the pilot is judged.
 
 **Overall design approval given by Adam 2026-07-30** on the five-promises basis: nothing publishes without his click; no client name can reach the catalog (fail-closed); no non-exact merge without stored, reversible evidence; the pipeline must pass the §11 gates (including the independent-recovery canary) plus checkpoint #2 adversarial verification before he reviews; hard spend caps.
+
+9. **Durable powers of attorney → EXCLUDED from clause mining** (Adam, same day, post-approval):
+   "They are template driven as a whole document and do not really vary by clause often enough to
+   justify this workload." POAs remain on the existing whole-document high-fidelity path
+   (`docxTemplateMap` fill). The corpus-wide stages (manifest, conversion, triage) still cover POA
+   files — that work is doc-type-blind and already paid — but no POA mining pass, clause families,
+   or trigger cards will be built. **Scope principle established:** clause mining applies only to
+   document types with genuine clause-level variation; each future doc-type phase (wills, living
+   wills, …) gets an explicit is-it-worth-it call from Adam before its mining pass runs.
