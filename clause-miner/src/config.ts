@@ -67,6 +67,46 @@ export const config = {
     cosineRelated: 0.8,
   },
 
+  /** §8 — LibreOffice conversion batching. */
+  convert: {
+    /** §8: bytes downloaded via Range request for magic sniffing. */
+    sniffBytes: 8,
+    /** §8: 25 files per soffice invocation (batched, warm profile). */
+    batchSize: 25,
+    /** §8: 60 s kill timer per soffice invocation; profile wipe on crash. */
+    killTimerMs: 60_000,
+  },
+
+  /** §3 Stage 2 — triage classify. */
+  triage: {
+    /** ~1,500 tokens of text for the haiku classifier (≈4 chars/token). */
+    triageChars: 6000,
+  },
+
+  /** §7.2 — counting units. */
+  countingUnits: {
+    /** §7.2: full-doc SimHash similarity ≥ 0.97 collapses drafts in-matter. */
+    simhashCollapse: 0.97,
+  },
+
+  /** §6.2 / §11 Gate 3 — canonical selection. */
+  canonical: {
+    /** §7 Stage 7: min-support ≥ 3 distinct counting units per cluster. */
+    minSupport: 3,
+    /** §6.2: matched-seed token-Levenshtein < 0.80 flags `seed-divergent`. */
+    seedDivergenceLevenshtein: 0.8,
+    /** §6.2: era weighting — newest-era occurrence weight multiplier. */
+    newestEraWeight: 2,
+  },
+
+  /** §7.3 — trigger-card statistics gate. */
+  stats: {
+    liftHigh: 2.0,
+    liftLow: 0.5,
+    pAdjMax: 0.01,
+    minN: 10,
+  },
+
   /** §10 / §15 — spend controls (Adam-approved 2026-07-30). */
   spend: {
     /** §10, §15(8): pilot LLM spend ceiling — $350 (estimate ≈ $215). */
