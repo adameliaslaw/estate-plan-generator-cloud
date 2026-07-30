@@ -516,7 +516,7 @@ Generate the complete document now. Use the client's actual names.
 `.trim();
 
   const raw = await callAI(SUMMARY_SYSTEM_PROMPT, userPrompt, firmData, {
-    model: firmData?.documentDraftingModel || 'gpt-5.4',
+    model: firmData?.documentDraftingModel || 'gpt-5.6',
     temperature: 0.3,
     maxTokens: 16384,
     jsonMode: true,

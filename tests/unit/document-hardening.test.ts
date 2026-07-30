@@ -103,17 +103,17 @@ describe('validateAndResolveModel — model allowlist', () => {
 
   it('falls back on unknown OpenAI model', () => {
     const result = validateAndResolveModel('gpt-99-turbo', 'openai');
-    expect(result).toBe('gpt-5.4'); // OpenAI default
+    expect(result).toBe('gpt-5.6'); // OpenAI default (bumped 2026-07-30)
   });
 
   it('falls back on unknown Anthropic model', () => {
     const result = validateAndResolveModel('claude-99', 'anthropic');
-    expect(result).toBe('claude-sonnet-4-6'); // Anthropic default
+    expect(result).toBe('claude-sonnet-5'); // Anthropic default (bumped 2026-07-30)
   });
 
   it('falls back on unknown Gemini model', () => {
     const result = validateAndResolveModel('gemini-99', 'gemini');
-    expect(result).toBe('gemini-2.5-flash'); // Gemini default
+    expect(result).toBe('gemini-3.5-flash'); // Gemini default (bumped 2026-07-30)
   });
 
   it('falls back on unknown Perplexity model', () => {

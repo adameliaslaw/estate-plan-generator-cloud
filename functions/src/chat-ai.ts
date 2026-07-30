@@ -642,17 +642,17 @@ export const chatAi = functions
       // 3b. Detect model override in user message
       let modelOverride: string | undefined;
       const modelPatterns: Array<{ regex: RegExp; model: string }> = [
-        { regex: /\busing\s+opus\b/i, model: 'claude-opus-4-6' },
-        { regex: /\bwith\s+opus\b/i, model: 'claude-opus-4-6' },
-        { regex: /\buse\s+opus\b/i, model: 'claude-opus-4-6' },
-        { regex: /\busing\s+sonnet\b/i, model: 'claude-sonnet-4-6' },
-        { regex: /\bwith\s+sonnet\b/i, model: 'claude-sonnet-4-6' },
-        { regex: /\busing\s+gpt-?5\b/i, model: 'gpt-5.4' },
-        { regex: /\bwith\s+gpt-?5\b/i, model: 'gpt-5.4' },
-        { regex: /\busing\s+gemini\b/i, model: 'gemini-2.5-flash' },
-        { regex: /\bwith\s+gemini\b/i, model: 'gemini-2.5-flash' },
-        { regex: /\busing\s+gpt-?4\b/i, model: 'gpt-5.4' },
-        { regex: /\bwith\s+gpt-?4\b/i, model: 'gpt-5.4' },
+        { regex: /\busing\s+opus\b/i, model: 'claude-opus-5' },
+        { regex: /\bwith\s+opus\b/i, model: 'claude-opus-5' },
+        { regex: /\buse\s+opus\b/i, model: 'claude-opus-5' },
+        { regex: /\busing\s+sonnet\b/i, model: 'claude-sonnet-5' },
+        { regex: /\bwith\s+sonnet\b/i, model: 'claude-sonnet-5' },
+        { regex: /\busing\s+gpt-?5\b/i, model: 'gpt-5.6' },
+        { regex: /\bwith\s+gpt-?5\b/i, model: 'gpt-5.6' },
+        { regex: /\busing\s+gemini\b/i, model: 'gemini-3.5-flash' },
+        { regex: /\bwith\s+gemini\b/i, model: 'gemini-3.5-flash' },
+        { regex: /\busing\s+gpt-?4\b/i, model: 'gpt-5.6' },
+        { regex: /\bwith\s+gpt-?4\b/i, model: 'gpt-5.6' },
       ];
       for (const { regex, model } of modelPatterns) {
         if (regex.test(message)) {

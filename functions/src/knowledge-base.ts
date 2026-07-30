@@ -349,7 +349,7 @@ Respond with ONLY the JSON object, no markdown fences.`;
     const userPrompt = `Analyze this text and extract metadata:\n\n${text.slice(0, 5000)}`;
 
     const raw = await callAI(systemPrompt, userPrompt, firmData, {
-      model: 'gpt-5.4-nano',
+      model: 'gpt-5.6-luna',
       temperature: 0.1,
       maxTokens: 1024,
       jsonMode: true,

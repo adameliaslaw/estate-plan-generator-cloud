@@ -190,7 +190,7 @@ export const checkDocumentCompliance = onCall(
     // Fetch the firm to get settings for AI provider. Merge Functions-only
     // secrets (provider API keys moved off the firm doc in #59 / finding AR)
     // AFTER sanitizing so callAI can route to the firm's provider — without this
-    // merge the forced gpt-5.4 call has no OpenAI key and throws for every firm.
+    // merge the forced gpt-5.6 call has no OpenAI key and throws for every firm.
     const firmSnap = await db.doc(`firms/${firmId}`).get();
     const firmData = {
       ...(firmSnap.exists ? sanitizeObject(firmSnap.data()!) : {}),
@@ -225,7 +225,7 @@ Check this document against all applicable NJ statutory requirements as describe
     let rawResponse: string;
     try {
       rawResponse = await callAI(COMPLIANCE_SYSTEM_PROMPT, userPrompt, firmData, {
-        model: 'gpt-5.4',
+        model: 'gpt-5.6',
         temperature: 0.1, // Maximum accuracy for legal compliance
         maxTokens: 3000,
         jsonMode: true,

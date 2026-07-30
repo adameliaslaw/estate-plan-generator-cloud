@@ -118,18 +118,25 @@ export interface FirmData {
 /** Known-good models per provider. If a model isn't in this list, we fall back. */
 const KNOWN_MODELS: Record<string, Set<string>> = {
   openai: new Set([
+    // GPT-5.6 family (July 2026) — 'gpt-5.6' is OpenAI's alias for -sol
+    'gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
     'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
     'gpt-4.5-preview', 'gpt-5', 'gpt-5-mini', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.5',
     'o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o4-mini',
   ]),
   anthropic: new Set([
+    // Claude 5 family
+    'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
     'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307',
     'claude-3.5-sonnet', 'claude-3.5-haiku', 'claude-3.7-sonnet',
     'claude-sonnet-4-6', 'claude-4-opus', 'claude-opus-4-6', 'claude-opus-4-8',
     'claude-haiku-4-5-20251001',
   ]),
   gemini: new Set([
-    'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro',
+    // Gemini 3.x series (gemini-2.0-* is deprecated by Google; 2.5 still served)
+    'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview',
+    'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro',
     'gemini-1.5-flash', 'gemini-1.5-pro',
   ]),
   perplexity: new Set([
@@ -138,11 +145,34 @@ const KNOWN_MODELS: Record<string, Set<string>> = {
 };
 
 const DEFAULT_MODELS: Record<string, string> = {
-  openai: 'gpt-5.4',
-  anthropic: 'claude-sonnet-4-6',
-  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-5.6',
+  anthropic: 'claude-sonnet-5',
+  gemini: 'gemini-3.5-flash',
   perplexity: 'sonar-pro',
 };
+
+/** Infer the provider from a model ID — same rules callAI uses for dispatch. */
+export function inferProviderFromModel(model: string): string {
+  const m = model.toLowerCase();
+  if (m.startsWith('gemini')) return 'gemini';
+  if (m.startsWith('claude') || m.includes('opus') || m.includes('sonnet') || m.includes('haiku') || m.includes('fable')) return 'anthropic';
+  if (m.startsWith('sonar')) return 'perplexity';
+  return 'openai';
+}
+
+/**
+ * Pre-flight check for a firm-requested model: what will actually run.
+ * Callers (unified-generator) use a mismatch to attach a visible warning to
+ * the generated document — the in-call fallback below only reaches the
+ * server log, which nobody reads.
+ */
+export function resolveRequestedModel(
+  model: string,
+): { provider: string; resolved: string; supported: boolean } {
+  const provider = inferProviderFromModel(model);
+  const resolved = validateAndResolveModel(model, provider);
+  return { provider, resolved, supported: resolved === model };
+}
 
 /**
  * Validate a model name against the known allowlist for a provider.
@@ -186,12 +216,7 @@ export async function callAI(
   let provider = firmData?.activeAiProvider ?? firmData?.settings?.activeAiProvider ?? 'openai';
 
   if (options.model) {
-    const m = options.model.toLowerCase();
-    if (m.startsWith('gemini')) provider = 'gemini';
-    else if (m.startsWith('claude') || m.includes('opus') || m.includes('sonnet') || m.includes('haiku')) provider = 'anthropic';
-    else if (m.startsWith('sonar')) provider = 'perplexity';
-    else if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('gpt-5')) provider = 'openai';
-    else provider = 'openai';
+    provider = inferProviderFromModel(options.model);
   }
 
   // Validate the model name against the known allowlist for this provider
@@ -283,7 +308,7 @@ async function _callOpenAI(
   }
 
   const client = new OpenAI({ apiKey, httpAgent: OPENAI_HTTP_AGENT });
-  const model = options.model ?? 'gpt-5.4'; // Default OpenAI model — validated upstream in callAI
+  const model = options.model ?? 'gpt-5.6'; // Default OpenAI model — validated upstream in callAI
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 128000;  // GPT-5.4 supports up to 128K output
 
@@ -339,7 +364,7 @@ async function _callAnthropic(
     throw new Error('Anthropic API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'claude-sonnet-4-6';
+  const model = options.model ?? 'claude-sonnet-5';
   const temperature = options.temperature ?? 0.2;
   const maxTokens = options.maxTokens ?? 64000;  // Claude Sonnet 4 supports up to 64K output
 
@@ -438,7 +463,7 @@ async function _callGemini(
     throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'gemini-2.5-flash';
+  const model = options.model ?? 'gemini-3.5-flash';
   const temperature = options.temperature ?? 0.2;
 
   // Gemini requires system prompt to be passed inside 'system_instruction'
@@ -776,7 +801,7 @@ export async function callAIWithVision(
     throw new Error('Gemini API key is missing. Configure it in Firm Settings.');
   }
 
-  const model = options.model ?? 'gemini-2.5-flash';
+  const model = options.model ?? 'gemini-3.5-flash';
   const temperature = options.temperature ?? 0.1;
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;

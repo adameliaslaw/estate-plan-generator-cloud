@@ -412,7 +412,7 @@ export const summarizeTranscription = functions
     let aiSummary: string;
     try {
       aiSummary = await callAI(systemPrompt, userPrompt, firmData, {
-        model: 'gpt-5.4-nano',
+        model: 'gpt-5.6-luna',
         temperature: 0.2,
         maxTokens: 1024,
       });

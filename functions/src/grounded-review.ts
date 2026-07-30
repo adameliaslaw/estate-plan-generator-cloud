@@ -173,7 +173,7 @@ export async function runGroundedReview(
     userPrompt,
     firmData,
     {
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       temperature: 0.1,
       maxTokens: 4096,
       jsonMode: true,

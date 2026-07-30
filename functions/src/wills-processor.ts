@@ -16,7 +16,7 @@
  *   5.  Parse folder path → client_name, matter_id, version_label
  *   6.  Classify (claude-haiku-4-5-20251001)
  *   7.  Route: Correspondence | Other | requires_ocr → write record, done
- *   8.  Extract metadata (claude-sonnet-4-6)
+ *   8.  Extract metadata (claude-sonnet-5)
  *   9.  Validate schema; stub on second failure
  *  10.  Write Firestore record, write audit log
  */
