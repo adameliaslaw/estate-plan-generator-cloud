@@ -36,6 +36,7 @@ on:
           - seed
           - calibrate
           - convert
+          - qa-convert
           - triage
           - extract
           - segment
