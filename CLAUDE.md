@@ -12,6 +12,20 @@
 8. **Never idle while waiting.** When blocked on CI, a deploy, or any long-running background task, start the next backlog item (HOMEWORK.md `▶ NEXT` or the open task list) and check back when the watcher reports — don't sit on your hands or end the session to wait.
 9. **A recurring bug does not get another guess.** If a fix already shipped for a symptom and the symptom came back, stop hypothesising and read the code until you can name the *mechanism* — the specific line that produces it. Then write a test that **fails against the current code** before writing the fix. Where the loop is human-gated (a live card, a browser, a device), the bar for shipping rises rather than falls: each wrong guess costs days, not minutes, so "plausible" is not good enough and it is better to ask for one diagnostic than to ship a third hypothesis.
    *Earned:* the AffiniPay card charge. #156 (CSS selectors) and #185 (stale singleton) were both real fixes for real problems, both shipped on a hypothesis about the vendor SDK, both untested — three weeks, no progress. #207 came from reading our own component, named the mechanism (`if (showConfirm) return <Dialog>` unmounts the hosted fields, and a detached iframe's `contentWindow` is null), and shipped with a test that fails without it. It worked first try.
+10. **A cloud round trip is human-gated. Verify it locally before spending one.** Before dispatching
+   any workflow or job that takes minutes and reports back through a person: parse the YAML, run
+   `bash -n` over the scripts, and **simulate the failure path, not just the happy one** — the
+   failure path is the one you need working, because that is when you need the output. And never
+   ship a probe whose *failure* resembles a *finding*: if a check cannot run, it must say so
+   distinctly from what it says when it runs and finds nothing. An empty result is not a negative
+   result.
+   *Earned:* the clause-miner preflight took eleven runs to reach green. Most waited on external
+   state only Adam could change, but at least three were self-inflicted and cost him a round trip
+   each — a permission precheck that reported ALL permissions missing because its `gcloud` output
+   was swallowed with `2>/dev/null || true` (minutes after a run had demonstrably used those same
+   permissions), and a log-capture step that failed to fire on the failure path twice, the second
+   time because `set -uo pipefail` does not clear errexit under GitHub's `bash -e {0}` shell. Every
+   one of those was catchable in a shell in ten seconds.
 
 ---
 
