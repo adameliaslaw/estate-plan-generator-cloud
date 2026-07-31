@@ -335,47 +335,73 @@ recovery rate; Gate 5 (template round-trip) reports **skipped**, never passed, b
 is checkpoint-2 work; and `STAGE=gates` refuses to run at all without a seed-match artifact. Each of
 those four is negative-controlled — flipping it green makes a test fail.
 
-### 🔴 FIRST DEPLOY, 2026-07-31 — the preflight ran and named the blocker
+### ✅ FIRST DEPLOY COMPLETE, 2026-07-31 — preflight READY, P0.1 CLOSED
 
-The Cloud Run Job deployed and executed for the first time. Sequence, so it is not re-derived:
-IAM roles were the first wall (Artifact Registry / Cloud Run / Service Account User on
-`github-action-1189038360@…`); once granted, image build, push and Job deploy all succeed. The
-preflight then ran and reported **BLOCKED** with the real cause:
+The Cloud Run Job deploys and runs. **`STAGE=preflight` reports READY.** Every P0 prerequisite is
+now closed; the pipeline is unblocked and needs nothing from Adam until his calibration session.
 
-> **Google Drive API has not been used in project 749324460027 before or it is disabled.**
+**The values every later stage needs — recorded here so they are never re-derived:**
 
-Not a sharing problem — the code could not ask Drive a question at all. The two "folder not
-visible" lines are the same cause, since the name search needs the same API. **One click to fix:**
-enable Drive API on project 749324460027, wait for propagation, re-run `STAGE=preflight`.
+```
+CLAUSE_MINER_ROOT_FOLDER_ID   1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j   ("Wills and Trusts", 920 subfolders)
+CLAUSE_MINER_SEED_FOLDER_IDS  1GYk0lZsGo-TMFWNMPNIiQyiUpel6X0MA   (AAA WILL PIECES)
+                              1vOS1zZMBuQAiYZkPpfG7YIy7fpd9119p   (Trust Agreements — ALSO the canary)
+CLAUSE_MINER_CANARY_FOLDER_IDS 1vOS1zZMBuQAiYZkPpfG7YIy7fpd9119p
+Job identity                  749324460027-compute@developer.gserviceaccount.com
+FIRM_ID used so far           firm-001  ⚠️ A PLACEHOLDER — see below
+GCS_BUCKET                    estate-plan-generator.firebasestorage.app
+```
 
-**The Job authenticates as `749324460027-compute@developer.gserviceaccount.com`** — the compute
-default. That is the account that needs Viewer on the Drive root, and the name to look for in the
-folder's Share dialog. Whether that sharing exists is still UNKNOWN; the disabled API masked it.
+**The preflight proved four things, not one:** the folder is visible and is genuinely named "Wills
+and Trusts" (so the id pinned in `wills-backfill.ts` was right); 920 subfolders, matching the Drive
+inventory estimate; **a real byte read off a real client file succeeded** (`ZUSS.WIL.doc`) — listing
+and downloading are separate permissions and Stage 1 opens with a Range request, so a listings-only
+grant would have passed everything else and died on the first file; and both seed folders resolve by
+name to exactly one match each, inside the corpus tree.
 
-⚠️ **This implies the wills Drive pipeline has never actually worked.** `wills-backfill.ts` reads
-Drive from the same project with the same ADC identity. If the Drive API is disabled there, that
-pipeline cannot have been reading Drive either. Not in scope for clause mining, but it is a
-standing assumption in this repo that now looks false, and worth checking before anything else
-depends on it.
+⚠️ **`FIRM_ID=firm-001` is a placeholder.** It only decided where a preflight status note was
+written. **Get the real firm id from Firestore (`firms` collection) before any stage that writes
+data** — manifest onward writes under `firms/{firmId}/…`, and a wrong id scatters the run ledger
+into a non-existent firm.
 
-**Two self-inflicted detours worth not repeating:**
+**What each blocker turned out to be, in order — none was guessable in advance:** IAM roles
+(Artifact Registry / Cloud Run / Service Account User on the GitHub deploy SA) → the **Google Drive
+API was disabled** on project 749324460027 → the corpus folder **was not shared** with the compute
+service account. Adam fixed each; the last one closed it.
+
+⚠️ **The wills Drive pipeline cannot ever have worked.** `wills-backfill.ts` reads Drive from this
+project with this identity, and the Drive API was off until 2026-07-31. Out of scope for clause
+mining, but it is a standing assumption in this repo that is now known false.
+
+**Three self-inflicted detours, kept so they are not repeated:**
 - A "check every permission up front" precheck reported ALL permissions missing minutes after a run
-  had demonstrably used them. Cause: `gcloud projects test-iam-permissions` output was swallowed
-  with `2>/dev/null || true`, so an empty result was indistinguishable from "has none" — the same
-  empty-means-zero mistake the §11 gates are written to avoid. Reverted, not repaired: the real
-  steps already fail with the permission, resource and account named.
-- The execute step's log fetch did not fire on the failure path — twice. First because the
-  execution name was captured from `gcloud ... --wait --format=…`, which prints nothing to stdout
-  when the execution fails; then because `set -uo pipefail` does NOT clear errexit under GitHub's
-  `bash -e {0}` shell. **An explicit `set +e` is required.** Verified in a shell, not reasoned
-  about.
+  had demonstrably used them: `gcloud projects test-iam-permissions` output was swallowed with
+  `2>/dev/null || true`, so an empty result was indistinguishable from "has none". Reverted. **Any
+  probe whose failure looks like a negative result must report the failure separately** — the same
+  empty-means-zero mistake the §11 gates exist to avoid.
+- The execute step's log fetch did not fire on the failure path twice. First the execution name was
+  captured from `gcloud … --wait --format=…`, which prints nothing to stdout when the execution
+  fails; then `set -uo pipefail` was assumed to clear errexit. **GitHub runs `run:` blocks as
+  `bash -e {0}` — only an explicit `set +e` clears it.**
+- The preflight called an unshared folder "readable but EMPTY". **Drive returns an empty listing,
+  not an error, for a folder you cannot see** — so listing children cannot tell "not shared" from
+  "empty". `DriveClient.getFolder` fetches the folder itself, which does fail, and the report now
+  prints the folder's NAME when visible, which also proves the id points where intended.
 
-**⚠️ ▶ NEXT NEEDS ADAM — one thing, and it is small.** P0.1 is now the *only* build-blocker left:
-**confirm the `drive.readonly` service-account still has Viewer on the Drive root folder**, and give
-the folder IDs for **AAA WILL PIECES** and **Trust Agreements** (the latter is the held-out canary).
-Nothing can convert until then. After that the sequence is: 60-file calibration sample converts →
-`STAGE=seed` + `STAGE=calibrate` produce his packet → **his ~1-hour session** → pilot run → §11
-gates → ultracode checkpoint #2 → review queue.
+**▶ NEXT — Step 2: convert the 60-file calibration sample.** Nothing here needs Adam except the
+real FIRM_ID. Sequence:
+
+1. `STAGE=manifest` with `SAMPLE_LIMIT=60` — stratified across the attorney folders (§4.4). Seed
+   folders are excluded from the corpus by construction and are never sampled.
+2. `STAGE=convert` — LibreOffice ladder. **First stage that costs real money** (CPU only, no AI —
+   small). This is the §4.4 / §8 QA gate: conversion fidelity, numbering survival, RTF bold/caps run
+   survival, reflow correctness on pre-2000 files, and whether Schedule A carries asset values
+   (which decides `estateSizeBand`'s fate, §7.1).
+3. `STAGE=seed` + `STAGE=calibrate` — produces Adam's labelling packet. **First AI spend**; bring
+   him the projected cost first, against the $350 pilot ceiling / $250 day breaker.
+
+Run stages with `ref=main` now that #232 is merged. The workflow's `stage` input defaults to
+`preflight`, which is always safe to re-run.
 
 **Agent work still available with no Adam action:** the review UI (calibration packet + label
 capture + the Zipf-triaged catalog queue + the Clause Picker, task #6 above), and the §12 weekly
