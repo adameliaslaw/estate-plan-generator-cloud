@@ -110,6 +110,35 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
+      # Diagnostic, not a gate: prints which Drive-related APIs are actually
+      # enabled on this project, and the project's identity. "Enable the API"
+      # failures are otherwise indistinguishable from "enabled it on a
+      # different project", and each guess costs a human round trip.
+      - name: Report enabled Drive APIs
+        continue-on-error: true
+        run: |
+          set +e
+          echo "project: $(gcloud config get-value project 2>/dev/null)"
+          echo "project number: $(gcloud projects describe "$PROJECT" --format='value(projectNumber)' 2>&1)"
+          # TOTAL first. Without it an empty Drive result is ambiguous — it
+          # reads the same whether nothing is enabled or this account simply
+          # cannot list services. A non-zero total proves the listing works,
+          # which is what makes the Drive answer below mean anything.
+          ALL=$(gcloud services list --enabled --project "$PROJECT" \
+            --format='value(config.name)' 2>&1)
+          LIST_STATUS=$?
+          TOTAL=$(printf '%s\n' "$ALL" | grep -c 'googleapis.com$')
+          echo "services list exit: ${LIST_STATUS}; total enabled APIs: ${TOTAL}"
+          if [ "$LIST_STATUS" -ne 0 ] || [ "$TOTAL" -eq 0 ]; then
+            echo "!! Could not list services — the Drive answer below is NOT conclusive."
+            printf '%s\n' "$ALL" | head -5
+          fi
+          echo "--- enabled services matching 'drive' ---"
+          printf '%s\n' "$ALL" | grep -i drive || echo "(none)"
+          echo "--- is drive.googleapis.com enabled? ---"
+          printf '%s\n' "$ALL" | grep -c '^drive.googleapis.com$'
+          echo "----------------------------------------"
+
       - name: Ensure Artifact Registry repository exists
         run: |
           gcloud artifacts repositories describe "$AR_REPO" \
@@ -175,18 +204,32 @@ jobs:
         env:
           IN_STAGE: ${{ inputs.stage }}
         run: |
-          set -euo pipefail
-          echo "Executing stage '${IN_STAGE}' …"
+          # GitHub runs this as `bash -e {0}`. `set -uo pipefail` does NOT
+          # clear errexit, so without an explicit `set +e` a failed execution
+          # aborts the step here — before the logs below are read, which is
+          # the one case they are needed. Verified, not assumed.
+          set -uo pipefail
           set +e
-          EXECUTION=$(gcloud run jobs execute "$JOB_NAME" \
-            --project "$PROJECT" --region "$REGION" \
-            --wait --format='value(metadata.name)')
+          echo "Executing stage '${IN_STAGE}' …"
+          gcloud run jobs execute "$JOB_NAME" \
+            --project "$PROJECT" --region "$REGION" --wait
           EXEC_STATUS=$?
-          set -e
-          echo "execution: ${EXECUTION:-<none>} (exit ${EXEC_STATUS})"
 
-          # The Job's own stdout is the report — surface it in the Actions log
-          # so nobody needs Cloud Console to read the result.
+          # The execution name is read back from the API rather than from the
+          # execute command's stdout. On the failure path gcloud prints
+          # nothing to stdout, so capturing it there yielded an empty name and
+          # skipped the log fetch — losing the report on precisely the runs
+          # that need one. Listing works on both paths.
+          EXECUTION=$(gcloud run jobs executions list \
+            --job "$JOB_NAME" --project "$PROJECT" --region "$REGION" \
+            --limit 1 --sort-by '~metadata.creationTimestamp' \
+            --format 'value(metadata.name)' 2>/dev/null)
+          echo "execution: ${EXECUTION:-<none>} (execute exit ${EXEC_STATUS})"
+
+          # The Job's own stdout IS the report, and it is fetched whether the
+          # execution passed or failed: a preflight that reports BLOCKED exits
+          # non-zero on purpose, so a non-zero execution is a result to read,
+          # not only an error to raise.
           if [ -n "${EXECUTION:-}" ]; then
             echo "──────── job output ────────"
             gcloud logging read \
@@ -194,5 +237,7 @@ jobs:
               --project "$PROJECT" --limit 1000 --order asc --freshness 2h \
               --format 'value(textPayload)' || echo '(could not read logs)'
             echo "────────────────────────────"
+          else
+            echo "Could not determine the execution name; read it in Cloud Console."
           fi
           exit $EXEC_STATUS

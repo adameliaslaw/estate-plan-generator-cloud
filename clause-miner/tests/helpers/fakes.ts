@@ -121,9 +121,16 @@ export class FakeDrive implements DriveClient {
   private readonly byId = new Map<string, FakeDriveNode>();
   private readonly parentNames = new Map<string, string[]>();
 
+  /**
+   * `unsharedListsEmpty` models the Drive behaviour the preflight exists to
+   * catch: a folder this identity cannot see lists as EMPTY rather than
+   * raising. Default false keeps the throwing behaviour, which models a
+   * genuine API error (disabled API, network fault).
+   */
   constructor(
     root: FakeDriveNode,
     private readonly identityEmail: string | null = 'miner@estate-plan-generator.iam.gserviceaccount.com',
+    private readonly unsharedListsEmpty = false,
   ) {
     const walk = (node: FakeDriveNode, parent: FakeDriveNode | null): void => {
       this.byId.set(node.meta.id, node);
@@ -136,6 +143,7 @@ export class FakeDrive implements DriveClient {
   async listChildren(folderId: string): Promise<DriveFileMeta[]> {
     const node = this.byId.get(folderId);
     if (node === undefined || node.children === undefined) {
+      if (this.unsharedListsEmpty) return [];
       throw new Error(`403 not a readable folder: ${folderId}`);
     }
     return node.children.map((c) => c.meta);
@@ -154,6 +162,13 @@ export class FakeDrive implements DriveClient {
 
   async identity(): Promise<string | null> {
     return this.identityEmail;
+  }
+
+  async getFolder(folderId: string): Promise<{ id: string; name: string } | null> {
+    const node = this.byId.get(folderId);
+    if (node === undefined) return null;
+    if (node.meta.mimeType !== 'application/vnd.google-apps.folder') return null;
+    return { id: node.meta.id, name: node.meta.name };
   }
 
   async findFolders(name: string): Promise<FolderMatch[]> {

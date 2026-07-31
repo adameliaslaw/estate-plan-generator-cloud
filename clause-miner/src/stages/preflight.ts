@@ -30,6 +30,8 @@ export const DEFAULT_SEED_FOLDER_NAMES = ['AAA WILL PIECES', 'Trust Agreements']
 export interface PreflightReport {
   identity: string | null;
   rootFolderId: string;
+  /** Folder metadata, or null when this identity cannot see it at all. */
+  rootFolder: { id: string; name: string } | null;
   rootReadable: boolean;
   rootError: string | null;
   rootChildFolders: number;
@@ -66,6 +68,22 @@ export function interpretPreflight(
 
   findings.push(`Authenticated as: ${describeIdentity(report.identity)}`);
 
+  // Visibility is checked BEFORE contents, because an unshared folder lists
+  // as empty rather than erroring — see DriveClient.getFolder.
+  if (report.rootFolder === null) {
+    ready = false;
+    findings.push(
+      `❌ The folder ${report.rootFolderId} is NOT VISIBLE to this account — it is not shared with it, or the id is wrong`,
+    );
+    nextSteps.push(
+      `Share the Drive folder ${report.rootFolderId} with ${describeIdentity(report.identity)} ` +
+        `as Viewer (untick "Notify people" — it is a robot account). If it IS already shared, the ` +
+        `configured id is wrong: open the folder in Drive and send the part of the URL after /folders/.`,
+    );
+  } else {
+    findings.push(`✅ Folder is visible, and it is named "${report.rootFolder.name}"`);
+  }
+
   if (!report.rootReadable) {
     ready = false;
     findings.push(`❌ Cannot read the corpus root folder ${report.rootFolderId}: ${report.rootError ?? 'unknown error'}`);
@@ -76,17 +94,33 @@ export function interpretPreflight(
         `check whether that pipeline authenticates as a DIFFERENT account than this one.`,
     );
   } else {
-    findings.push(
-      `✅ Root folder readable — ${report.rootChildFolders} subfolders, ${report.rootChildFiles} files at the top level`,
-    );
-    if (report.rootChildFolders === 0 && report.rootChildFiles === 0) {
-      // Readable but empty is suspicious: a wrong-but-shared folder id looks
-      // exactly like this, and would silently mine nothing.
-      ready = false;
-      findings.push('⚠️ The root folder is readable but EMPTY — is this the right folder id?');
-      nextSteps.push(
-        'Confirm CLAUSE_MINER_ROOT_FOLDER_ID points at "My Drive → Everybody → Wills and Trusts".',
+    // Only claim readable when the folder is actually VISIBLE. A listing that
+    // "succeeded" by returning nothing for an invisible folder is not a
+    // success, and a report printing ❌ NOT VISIBLE beside ✅ readable makes
+    // the reader arbitrate between its own two claims. The empty-listing
+    // diagnosis below still runs either way — that is the explanation.
+    if (report.rootFolder !== null) {
+      findings.push(
+        `✅ Root folder readable — ${report.rootChildFolders} subfolders, ${report.rootChildFiles} files at the top level`,
       );
+    }
+    if (report.rootChildFolders === 0 && report.rootChildFiles === 0) {
+      // Empty is never a pass. With the visibility check above, the two causes
+      // are now distinguishable rather than conflated.
+      ready = false;
+      if (report.rootFolder === null) {
+        findings.push(
+          '⚠️ Listed 0 items — expected, since the folder is not visible. Drive returns an empty list rather than an error for a folder you cannot see.',
+        );
+      } else {
+        findings.push(
+          `⚠️ "${report.rootFolder.name}" is visible but contains NOTHING this account can see — its CONTENTS are not shared, or it is genuinely empty`,
+        );
+        nextSteps.push(
+          `Confirm the share on ${report.rootFolderId} applies to the folder's contents, and that ` +
+            `CLAUSE_MINER_ROOT_FOLDER_ID points at "My Drive → Everybody → Wills and Trusts".`,
+        );
+      }
     }
   }
 
@@ -144,6 +178,7 @@ export function interpretPreflight(
 
 export async function runPreflight(deps: PreflightDeps, env: Env): Promise<PreflightReport> {
   const identity = await deps.drive.identity();
+  const rootFolder = await deps.drive.getFolder(env.rootFolderId);
 
   let rootReadable = false;
   let rootError: string | null = null;
@@ -209,6 +244,7 @@ export async function runPreflight(deps: PreflightDeps, env: Env): Promise<Prefl
   const base = {
     identity,
     rootFolderId: env.rootFolderId,
+    rootFolder,
     rootReadable,
     rootError,
     rootChildFolders,

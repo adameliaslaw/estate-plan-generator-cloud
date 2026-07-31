@@ -335,6 +335,41 @@ recovery rate; Gate 5 (template round-trip) reports **skipped**, never passed, b
 is checkpoint-2 work; and `STAGE=gates` refuses to run at all without a seed-match artifact. Each of
 those four is negative-controlled — flipping it green makes a test fail.
 
+### 🔴 FIRST DEPLOY, 2026-07-31 — the preflight ran and named the blocker
+
+The Cloud Run Job deployed and executed for the first time. Sequence, so it is not re-derived:
+IAM roles were the first wall (Artifact Registry / Cloud Run / Service Account User on
+`github-action-1189038360@…`); once granted, image build, push and Job deploy all succeed. The
+preflight then ran and reported **BLOCKED** with the real cause:
+
+> **Google Drive API has not been used in project 749324460027 before or it is disabled.**
+
+Not a sharing problem — the code could not ask Drive a question at all. The two "folder not
+visible" lines are the same cause, since the name search needs the same API. **One click to fix:**
+enable Drive API on project 749324460027, wait for propagation, re-run `STAGE=preflight`.
+
+**The Job authenticates as `749324460027-compute@developer.gserviceaccount.com`** — the compute
+default. That is the account that needs Viewer on the Drive root, and the name to look for in the
+folder's Share dialog. Whether that sharing exists is still UNKNOWN; the disabled API masked it.
+
+⚠️ **This implies the wills Drive pipeline has never actually worked.** `wills-backfill.ts` reads
+Drive from the same project with the same ADC identity. If the Drive API is disabled there, that
+pipeline cannot have been reading Drive either. Not in scope for clause mining, but it is a
+standing assumption in this repo that now looks false, and worth checking before anything else
+depends on it.
+
+**Two self-inflicted detours worth not repeating:**
+- A "check every permission up front" precheck reported ALL permissions missing minutes after a run
+  had demonstrably used them. Cause: `gcloud projects test-iam-permissions` output was swallowed
+  with `2>/dev/null || true`, so an empty result was indistinguishable from "has none" — the same
+  empty-means-zero mistake the §11 gates are written to avoid. Reverted, not repaired: the real
+  steps already fail with the permission, resource and account named.
+- The execute step's log fetch did not fire on the failure path — twice. First because the
+  execution name was captured from `gcloud ... --wait --format=…`, which prints nothing to stdout
+  when the execution fails; then because `set -uo pipefail` does NOT clear errexit under GitHub's
+  `bash -e {0}` shell. **An explicit `set +e` is required.** Verified in a shell, not reasoned
+  about.
+
 **⚠️ ▶ NEXT NEEDS ADAM — one thing, and it is small.** P0.1 is now the *only* build-blocker left:
 **confirm the `drive.readonly` service-account still has Viewer on the Drive root folder**, and give
 the folder IDs for **AAA WILL PIECES** and **Trust Agreements** (the latter is the held-out canary).
