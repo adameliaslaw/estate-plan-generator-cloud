@@ -395,7 +395,45 @@ mining, but it is a standing assumption in this repo that is now known false.
   "empty". `DriveClient.getFolder` fetches the folder itself, which does fail, and the report now
   prints the folder's NAME when visible, which also proves the id points where intended.
 
-**▶ NEXT — Step 2: convert the 60-file calibration sample.** Nothing here needs Adam except the
+### ✅ STEP 2 COMPLETE, 2026-07-31 PM — manifest + convert + §4.4 QA gate (run `pilot-1`)
+
+All three runs on `ref=main`, resuming run_id `pilot-1`, no AI spend anywhere.
+
+**Manifest (SAMPLE_LIMIT=60):** 28,496 files discovered across 4,383 folders; **word-file yield
+18,311** — inside the §3 Stage-0 sanity band (8,000–18,000), at its top edge; 9,572 PDFs excluded,
+174 debris, **0 folder errors, 0 share-required**. 60 corpus files manifested, 122 seed files,
+4 canary files.
+
+**Convert:** 42 soffice + 17 OOXML passthrough + 1 error = 60. **0 fallback-text, 0 unrecognized.**
+Formats: 38 ole-doc, 17 docx, 2 wpd, 2 rtf.
+
+**§4.4 QA gate — PASS, read off the new `STAGE=qa-convert` report (#236), with these findings:**
+
+- **The 1 error is `Assets.xls`** (a spreadsheet in a client folder) — the sniff-everything
+  manifest correctly carried it and the ladder correctly exhausted; not a word-processing file,
+  not a fidelity problem.
+- **Numbering/heading survival: good.** Every real instrument shows healthy boundary counts
+  (8–132 per doc; the InteractiveLegal ILIT converted from ole-doc with 132 boundaries intact).
+  The only zero-boundary file is a 676-char note ("I prepared a deed for…"), not an instrument.
+- **RTF bold-run survival: PASS** — both RTF files kept their bold runs (4 and 35).
+- **⚠️ The §4.1 hard-wrap heuristic over-fires: 37/59 flagged, including modern InteractiveLegal
+  .docx passthroughs.** Median-paragraph-length < 90 trips on docs with many short headings,
+  signature lines and address blocks. Reflow's rejoin rules are conservative (headings and
+  punctuated lines never join), so the blast radius is bounded — but this is exactly what the
+  calibration phase exists to tune. **Open item: tighten the trigger (e.g. skip docs with
+  OOXML style boundaries) before `STAGE=segment` runs on the corpus.**
+- **Schedule A / `estateSizeBand` (§7.1): evidence thin but leaning DROP.** Only 2 of 59 docs
+  carry a Schedule A at all: one trust with real values, one ILIT with the "$10 and other
+  property" convention. The doc-type-blind sample contains few trusts; re-check on
+  triage-classified trusts before the final call.
+
+**▶ NEXT — Step 3: `STAGE=seed` + `STAGE=calibrate` (first AI spend — needs Adam's deliberate
+yes).** Projected cost is small — seed's haiku commentary-classification over ~122 curated files
+at batch prices is well under $5 against the $350 ceiling — but per the working-with-Adam notes,
+restate the spend and get a real confirmation before dispatching with
+`mount_anthropic_secret=true`.
+
+**Step 2 was:** Nothing here needs Adam except the
 real FIRM_ID. Sequence:
 
 1. `STAGE=manifest` with `SAMPLE_LIMIT=60` — stratified across the attorney folders (§4.4). Seed
