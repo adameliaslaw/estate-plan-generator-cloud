@@ -427,11 +427,43 @@ Formats: 38 ole-doc, 17 docx, 2 wpd, 2 rtf.
   property" convention. The doc-type-blind sample contains few trusts; re-check on
   triage-classified trusts before the final call.
 
-**▶ NEXT — Step 3: `STAGE=seed` + `STAGE=calibrate` (first AI spend — needs Adam's deliberate
-yes).** Projected cost is small — seed's haiku commentary-classification over ~122 curated files
-at batch prices is well under $5 against the $350 ceiling — but per the working-with-Adam notes,
-restate the spend and get a real confirmation before dispatching with
-`mount_anthropic_secret=true`.
+### ✅ STEP 3 COMPLETE, 2026-07-31 PM — seed + calibrate ran; the labelling packet exists
+
+Adam approved the spend ("Dispatch"). It took three runs, and both failures taught something
+worth keeping:
+
+- **Run 1: Anthropic 401 "API key is invalid" — the Secret Manager key was dead and had
+  plausibly NEVER worked.** Adam pushed back ("if it's the key from yesterday that's
+  impossible") and he was right to: his daily drafting uses the per-firm key in **Firestore firm
+  settings**, not the Secret Manager copy. The Secret Manager `ANTHROPIC_API_KEY` (3 versions,
+  all May 5–6) existed for the wills pipeline — which never ran — so its invalidity was
+  undetectable until today. Diagnosed with a **masked** secret-version diagnostic step in the
+  workflow (#238): version list + length/prefix/whitespace fingerprint, never the value. Adam
+  added a working version 4. ⚠️ **The Anthropic key now lives in TWO places** (firm settings +
+  Secret Manager); a rotation must update both. Versions 1–3 are safe to disable (Disable, not
+  Destroy).
+- **Run 2: authenticated, then `custom_id must match ^[a-zA-Z0-9_-]{1,64}$`.** Every one of the
+  nine batch call sites used `prefix:id` customIds — a latent bug in ALL LLM stages, never
+  surfaced because no batch had ever gotten past auth. Fixed at the single API boundary
+  (#239): bijective escape on submit (`_`→`_u`, `:`→`_c`, `~`→`_t`), decode on results; encode
+  throws naming the id on anything unrepresentable. Wire-format test fails against the old code.
+- **Run 3: GREEN.** `seed`: 122 files (conversions all cache hits from the failed runs),
+  **417 pieces → 293 operative clauses / 124 commentary, 120 trust-relevant, 19 canary pieces,
+  0 unclassified**. The trust gold set is ~10× the design's "thin (~10–12 pieces)" worry.
+  Spend: ~417 short haiku batch calls — under a dollar. `calibrate` (emit mode, no AI): packet
+  written — 293 pieces for boundary confirmation, **30 same/different pairs** sampled from the
+  candidate band for Adam's labels; threshold tuning correctly reports selected=null until
+  labels exist.
+
+**▶ NEXT — two tracks, either order:**
+1. **The review UI** (task #6: calibration packet renderer + label capture + catalog queue +
+   Clause Picker) — agent work, no Adam action, and it is what makes Adam's 1-hour labelling
+   session possible.
+2. **Corpus stages up to the next spend gate:** `triage` over the 60-file sample is possible
+   now, but the real sequencing question (sample-only vs full-corpus conversion first, §10
+   wall-clock plan) should be decided when dispatching.
+
+The §4.4 open item stands: tighten the hard-wrap trigger before corpus-wide `STAGE=segment`.
 
 **Step 2 was:** Nothing here needs Adam except the
 real FIRM_ID. Sequence:
