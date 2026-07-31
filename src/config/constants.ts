@@ -447,6 +447,7 @@ export const ROUTES = {
   SETTINGS_USERS: '/settings/users',
   SETTINGS_BILLING: '/settings/billing',
   INHERITANCE_TAX: '/inheritance-tax',
+  CLAUSE_CALIBRATION: '/clause-calibration',
   ADMIN_NAME_SPLITS: '/admin/name-splits',
 } as const;
 
