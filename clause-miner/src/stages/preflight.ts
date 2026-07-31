@@ -39,6 +39,14 @@ export interface PreflightReport {
   /** Proof the drive.readonly grant covers CONTENT, not just metadata. */
   downloadProbe: { attempted: boolean; ok: boolean; fileName: string | null; error: string | null };
   seedFolders: Record<string, FolderMatch[]>;
+  /**
+   * One-time observation, NOT a gate: how much the earlier wills pipeline
+   * actually produced. It reads the same Drive folder through the same
+   * identity, and that identity could not reach Drive until 2026-07-31 — so
+   * whether any work product exists is worth knowing. Never affects `ready`;
+   * the clause miner shares no state with that pipeline.
+   */
+  priorPipeline: { willsDocuments: number | null; pipelineState: number | null };
   /** True when everything the pilot needs is confirmed. */
   ready: boolean;
   findings: string[];
@@ -166,6 +174,20 @@ export function interpretPreflight(
     }
   }
 
+  // Reported, never gating.
+  const wd = report.priorPipeline.willsDocuments;
+  const ps = report.priorPipeline.pipelineState;
+  if (wd === null && ps === null) {
+    findings.push('ℹ️ Prior wills pipeline: counts unavailable (could not read those collections)');
+  } else {
+    findings.push(
+      `ℹ️ Prior wills pipeline: wills_documents=${wd ?? '?'}, pipeline_state=${ps ?? '?'}` +
+        (wd === 0
+          ? ' — EMPTY, so that pipeline produced no work product. Independent of clause mining.'
+          : ''),
+    );
+  }
+
   if (ready) {
     nextSteps.push(
       'All clear. Set CLAUSE_MINER_SEED_FOLDER_IDS (both ids) and ' +
@@ -179,6 +201,20 @@ export function interpretPreflight(
 export async function runPreflight(deps: PreflightDeps, env: Env): Promise<PreflightReport> {
   const identity = await deps.drive.identity();
   const rootFolder = await deps.drive.getFolder(env.rootFolderId);
+
+  // Best-effort: a missing collection reads as 0, an unreadable one as null,
+  // so "could not check" never masquerades as "nothing there" (rule 10).
+  const countOrNull = async (path: string): Promise<number | null> => {
+    try {
+      return await deps.store.count(path);
+    } catch {
+      return null;
+    }
+  };
+  const priorPipeline = {
+    willsDocuments: await countOrNull('wills_documents'),
+    pipelineState: await countOrNull('pipeline_state'),
+  };
 
   let rootReadable = false;
   let rootError: string | null = null;
@@ -251,6 +287,7 @@ export async function runPreflight(deps: PreflightDeps, env: Env): Promise<Prefl
     rootChildFiles,
     downloadProbe,
     seedFolders,
+    priorPipeline,
   };
   const report: PreflightReport = { ...base, ...interpretPreflight(base, names) };
 

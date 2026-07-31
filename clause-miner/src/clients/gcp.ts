@@ -75,6 +75,11 @@ export class FirestoreDocStore implements DocStore {
     return snap.docs.map((d) => d.id);
   }
 
+  async count(collectionPath: string): Promise<number> {
+    const snap = await this.db.collection(collectionPath).count().get();
+    return snap.data().count;
+  }
+
   async transact(path: string, fn: (current: DocData | null) => DocData): Promise<DocData> {
     return this.db.runTransaction(async (tx) => {
       const ref = this.db.doc(path);

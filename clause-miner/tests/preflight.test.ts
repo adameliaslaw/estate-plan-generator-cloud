@@ -190,6 +190,7 @@ describe('interpretPreflight', () => {
       'AAA WILL PIECES': [{ id: 'f1', name: 'AAA WILL PIECES', parentNames: ['Wills and Trusts'] }],
       'Trust Agreements': [{ id: 'f2', name: 'Trust Agreements', parentNames: ['Wills and Trusts'] }],
     } as Record<string, FolderMatch[]>,
+    priorPipeline: { willsDocuments: 0, pipelineState: 1 },
   };
 
   it('BLOCKS when listing succeeds but download fails', async () => {
@@ -205,6 +206,36 @@ describe('interpretPreflight', () => {
     expect(result.ready).toBe(false);
     expect(result.findings.join('\n')).toContain('DOWNLOAD fails');
     expect(result.nextSteps.join('\n')).toContain('download-restriction');
+  });
+
+  it('reports the counts and NEVER gates on them', () => {
+    // The clause miner shares no state with the wills pipeline. An empty
+    // wills_documents is information, not a blocker.
+    const clean = interpretPreflight(base, DEFAULT_SEED_FOLDER_NAMES);
+    expect(clean.ready).toBe(true);
+    expect(clean.findings.join('\n')).toContain('wills_documents=0');
+    expect(clean.findings.join('\n')).toContain('produced no work product');
+  });
+
+  it('distinguishes unreadable from empty', () => {
+    // Rule 10: a probe that could not run must not read as a finding.
+    const result = interpretPreflight(
+      { ...base, priorPipeline: { willsDocuments: null, pipelineState: null } },
+      DEFAULT_SEED_FOLDER_NAMES,
+    );
+    expect(result.ready).toBe(true);
+    const findings = result.findings.join('\n');
+    expect(findings).toContain('counts unavailable');
+    expect(findings).not.toContain('produced no work product');
+  });
+
+  it('does not claim "no work product" when records exist', () => {
+    const result = interpretPreflight(
+      { ...base, priorPipeline: { willsDocuments: 4210, pipelineState: 1 } },
+      DEFAULT_SEED_FOLDER_NAMES,
+    );
+    expect(result.findings.join('\n')).toContain('wills_documents=4210');
+    expect(result.findings.join('\n')).not.toContain('produced no work product');
   });
 
   it('gives the exact next command when everything is clear', () => {
