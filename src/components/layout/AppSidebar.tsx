@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Knowledge Base', href: ROUTES.KNOWLEDGE_BASE, icon: BookOpen },
   { label: 'Transcripts', href: ROUTES.PENDING_TRANSCRIPTS, icon: FileText },
   { label: 'Inheritance Tax', href: ROUTES.INHERITANCE_TAX, icon: Calculator },
+  { label: 'Clause Calibration', href: ROUTES.CLAUSE_CALIBRATION, icon: Scale },
 ];
 
 interface AppSidebarProps {

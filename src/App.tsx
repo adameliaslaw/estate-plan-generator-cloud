@@ -30,6 +30,7 @@ const PaymentsPage = lazy(() => import('@/pages/admin/PaymentsPage'));
 const NewClientPage = lazy(() => import('@/pages/admin/NewClientPage'));
 const InheritanceTaxPage = lazy(() => import('@/pages/admin/InheritanceTaxPage'));
 const KnowledgeBasePage = lazy(() => import('@/pages/admin/KnowledgeBasePage'));
+const ClauseCalibrationPage = lazy(() => import('@/pages/admin/ClauseCalibrationPage'));
 const PendingTranscriptsPage = lazy(() => import('@/pages/admin/PendingTranscriptsPage'));
 const ClientPortalPage = lazy(() => import('@/pages/client/ClientPortalPage'));
 const NameSplitsReview = lazy(() => import('@/pages/admin/NameSplitsReview'));
@@ -94,6 +95,14 @@ export default function App() {
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]}>
                   <InheritanceTaxPage />
+                </AppLayout>
+              }
+            />
+            <Route
+              path={ROUTES.CLAUSE_CALIBRATION}
+              element={
+                <AppLayout allowedRoles={[...STAFF_ROLES]}>
+                  <ClauseCalibrationPage />
                 </AppLayout>
               }
             />
