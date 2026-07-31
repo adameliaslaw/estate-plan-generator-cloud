@@ -348,7 +348,7 @@ CLAUSE_MINER_SEED_FOLDER_IDS  1GYk0lZsGo-TMFWNMPNIiQyiUpel6X0MA   (AAA WILL PIEC
                               1vOS1zZMBuQAiYZkPpfG7YIy7fpd9119p   (Trust Agreements — ALSO the canary)
 CLAUSE_MINER_CANARY_FOLDER_IDS 1vOS1zZMBuQAiYZkPpfG7YIy7fpd9119p
 Job identity                  749324460027-compute@developer.gserviceaccount.com
-FIRM_ID used so far           firm-001  ⚠️ A PLACEHOLDER — see below
+FIRM_ID                       firm-001  ← Adam's decision 2026-07-31; see below
 GCS_BUCKET                    estate-plan-generator.firebasestorage.app
 ```
 
@@ -359,10 +359,17 @@ and downloading are separate permissions and Stage 1 opens with a Range request,
 grant would have passed everything else and died on the first file; and both seed folders resolve by
 name to exactly one match each, inside the corpus tree.
 
-⚠️ **`FIRM_ID=firm-001` is a placeholder.** It only decided where a preflight status note was
-written. **Get the real firm id from Firestore (`firms` collection) before any stage that writes
-data** — manifest onward writes under `firms/{firmId}/…`, and a wrong id scatters the run ledger
-into a non-existent firm.
+**`FIRM_ID=firm-001` is the real value — do not go looking for another one.** Asked on
+2026-07-31, Adam confirmed there is no other firm id: he is the only user and the firm has not used
+the product live, so no `firms` document has been created yet. `firm-001` IS the id.
+
+Two consequences worth keeping:
+- **Use it consistently.** Every artifact path and all resume state key off
+  `firms/{firmId}/clauseMining/{runId}`, so a stage run under a different id silently starts a
+  fresh empty run instead of resuming one.
+- **When the product does go live, the firm document must be created as `firm-001`.** The catalog
+  lands at `firms/firm-001/clauseCatalog` and the UI reads the catalog for the logged-in user's
+  firm; a mismatch would leave the mined catalog invisible to the app and require a migration.
 
 **What each blocker turned out to be, in order — none was guessable in advance:** IAM roles
 (Artifact Registry / Cloud Run / Service Account User on the GitHub deploy SA) → the **Google Drive
@@ -569,18 +576,40 @@ cites N.J.A.C. 18:26-2.15 and names the correct form (IT-NR, L-9 NR); and the in
 amber notice the moment **NJ resident** is unchecked, before any estate is entered. That is settled
 behaviour, not a placeholder.
 
-**What is actually left is three things:**
+**What is actually left is four things:**
 
 | # | Item | Blocked on |
 |---|------|-----------|
 | 1 | **Official filled PDFs for IT-EXT / L-9** | Nobody — real work, no decisions |
 | 2 | **A real payment through the payment page** | Adam, live |
 | 3 | **Open a PRE-allocation-model matter in the browser** | Adam, live — small |
+| 4 | **The wills Drive pipeline — does it work at all?** | Nobody — investigation, then a scope call from Adam |
 
 **1. Official filled PDFs for the companion forms.** IT-EXT and the L-9 render as HTML workpapers
 today. Each needs its own blank form and field inventory — the same work the IT-R already had done
 to it. No decision required; just not started. (The two IT-Estate returns are NOT in this item: they
 are pre-2018 and were declined above.)
+
+**4. The wills Drive pipeline.** Found 2026-07-31 while getting the clause miner's Drive access
+working: **the Google Drive API was disabled on project 749324460027** until that day. Four separate
+consumers authenticate through it — `wills-backfill.ts`, `wills-drive-client.ts`,
+`wills-drive-watcher.ts`, `wills-pilot.ts` — all via ADC with `drive.readonly`, so all shared one
+point of failure. The `STAGE=preflight` report now counts `wills_documents` and `pipeline_state`
+and prints them; read that count before assuming anything.
+
+**MEASURED 2026-07-31: `wills_documents=0`, `pipeline_state=0`.** Both collections read
+successfully — this is a genuine zero, not an unreadable one. The pipeline produced no work product,
+and an empty `pipeline_state` means it was never even initialized: it did not run and stop, it never
+started.
+
+**This does NOT affect clause mining**, which shares no state with it — separate manifest, separate
+conversion, separate collections — and whose Drive access is now independently verified. The 7/30
+Drive inventory is also unaffected: it was obtained through the Claude Drive connector
+(OAuth as Adam), a different path that was never blocked by the project's disabled API.
+
+What it needs is a scope call from Adam once the count is known: repair the wills pipeline, or
+retire it if clause mining supersedes what it was for. Do not fold this into the clause-mining
+pilot.
 
 **2. A real payment through the payment page.** See item 2 below — unchanged.
 

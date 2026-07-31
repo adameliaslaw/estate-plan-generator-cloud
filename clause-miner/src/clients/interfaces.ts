@@ -31,6 +31,12 @@ export interface DocStore {
   /** Doc ids only (cheap resume checks). */
   listIds(collectionPath: string): Promise<string[]>;
   /**
+   * Server-side aggregate count. O(1) and cheap — used where the question is
+   * "does this collection hold anything" and listing every id would be
+   * wasteful or unbounded.
+   */
+  count(collectionPath: string): Promise<number>;
+  /**
    * Read-modify-write transaction on a single doc. `fn` returns the merged
    * update to write, or throws to abort (the throw propagates).
    */

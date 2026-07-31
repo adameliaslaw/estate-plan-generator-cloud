@@ -48,6 +48,10 @@ export class FakeDocStore implements DocStore {
     return (await this.listDocs(collectionPath)).map((d) => d.id);
   }
 
+  async count(collectionPath: string): Promise<number> {
+    return (await this.listDocs(collectionPath)).length;
+  }
+
   async transact(path: string, fn: (current: DocData | null) => DocData): Promise<DocData> {
     const next = fn(this.docs.get(path) ?? null);
     const current = this.docs.get(path) ?? {};
