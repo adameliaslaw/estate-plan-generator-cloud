@@ -175,7 +175,12 @@ jobs:
         env:
           IN_STAGE: ${{ inputs.stage }}
         run: |
+          # GitHub runs this as `bash -e {0}`. `set -uo pipefail` does NOT
+          # clear errexit, so without an explicit `set +e` a failed execution
+          # aborts the step here — before the logs below are read, which is
+          # the one case they are needed. Verified, not assumed.
           set -uo pipefail
+          set +e
           echo "Executing stage '${IN_STAGE}' …"
           gcloud run jobs execute "$JOB_NAME" \
             --project "$PROJECT" --region "$REGION" --wait
