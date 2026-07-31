@@ -4,6 +4,8 @@ import {
   BATCH_PRICES_PER_MTOK,
   chargeSpend,
   costUsd,
+  decodeCustomId,
+  encodeCustomId,
   KillSwitchError,
   MODEL_IDS,
   SpendBreakerError,
@@ -195,5 +197,57 @@ describe('AnthropicBatchClient', () => {
       pollIntervalMs: 1,
     });
     await expect(client.pollBatch('msgbatch_test1')).rejects.toThrow(SpendBreakerError);
+  });
+});
+
+describe('custom_id encoding (Anthropic ^[a-zA-Z0-9_-]{1,64}$)', () => {
+  const realShapes = [
+    'seedpiece:1AbC_dEf-9:12',
+    'triage:1TuJOw7hy4xKm6EJeyFb5IYS4I6eoVk-j',
+    'adj:abcdef123456-bcdef1234567',
+    'pii:fam_ab12:0123456789ab',
+    'label:fam_ab12',
+    'cal:1AbC~2DeF',
+  ];
+
+  it('round-trips every real id shape and emits only pattern-valid ids', () => {
+    for (const id of realShapes) {
+      const enc = encodeCustomId(id);
+      expect(enc).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
+      expect(decodeCustomId(enc)).toBe(id);
+    }
+  });
+
+  it('escapes literal underscores so decode cannot collide', () => {
+    expect(decodeCustomId(encodeCustomId('a_c'))).toBe('a_c'); // not ':'
+    expect(encodeCustomId('a_c')).not.toBe(encodeCustomId('a:'));
+  });
+
+  it('throws on ids that cannot be represented, naming the id', () => {
+    expect(() => encodeCustomId('bad|id')).toThrow(/bad\|id/);
+    expect(() => encodeCustomId('x'.repeat(70))).toThrow(/invalid/);
+  });
+
+  it('submitBatch sends encoded ids over the wire; results decode back', async () => {
+    const { sdk, state } = fakeSdk([succeeded('seedpiece_c1Ab_uC_c12', 'claude-haiku-4-5', 10, 1)]);
+    const store = new FakeDocStore();
+    const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+    });
+    await client.submitBatch('seed-triage', [
+      {
+        customId: 'seedpiece:1Ab_C:12',
+        model: 'haiku',
+        maxTokens: 100,
+        system: 'sys',
+        userText: 'text',
+        tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+      },
+    ]);
+    const wireId = state.created[0].requests[0].custom_id;
+    expect(wireId).toBe('seedpiece_c1Ab_uC_c12');
+    expect(wireId).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
+    const results = await client.pollBatch('msgbatch_test1');
+    expect(results[0].customId).toBe('seedpiece:1Ab_C:12');
   });
 });

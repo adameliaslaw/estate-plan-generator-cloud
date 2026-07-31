@@ -129,6 +129,30 @@ function modelFromId(modelId: string): BatchModel {
   return 'opus';
 }
 
+/**
+ * Anthropic requires batch custom_id to match ^[a-zA-Z0-9_-]{1,64}$. Stage
+ * code uses richer ids ('seedpiece:driveId:3', pair ids with '~'), so the
+ * translation lives HERE, at the one API boundary, as a bijective escape:
+ * '_'→'_u', ':'→'_c', '~'→'_t'. Every literal underscore is escaped, so any
+ * '_x' pair in an encoded id is unambiguously an escape — decode cannot
+ * collide with real id content. Anything still outside the allowed set (or
+ * over 64 chars) throws with the offending id named: a silently truncated or
+ * mangled id would misroute results to the wrong document.
+ */
+export function encodeCustomId(id: string): string {
+  const encoded = id.replace(/_/g, '_u').replace(/:/g, '_c').replace(/~/g, '_t');
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(encoded)) {
+    throw new Error(`customId ${JSON.stringify(id)} encodes to invalid custom_id ${JSON.stringify(encoded)}`);
+  }
+  return encoded;
+}
+
+export function decodeCustomId(encoded: string): string {
+  return encoded.replace(/_(u|c|t)/g, (_, ch: string) =>
+    ch === 'u' ? '_' : ch === 'c' ? ':' : '~',
+  );
+}
+
 interface RawResultShape {
   custom_id?: unknown;
   result?: {
@@ -144,7 +168,7 @@ interface RawResultShape {
 
 function parseResult(raw: unknown): { item: BatchResultItem; model: BatchModel } {
   const r = raw as RawResultShape;
-  const customId = typeof r.custom_id === 'string' ? r.custom_id : '';
+  const customId = typeof r.custom_id === 'string' ? decodeCustomId(r.custom_id) : '';
   const type = r.result?.type;
   if (type !== 'succeeded') {
     return {
@@ -206,7 +230,7 @@ export class AnthropicBatchClient implements BatchClient {
   async submitBatch(name: string, requests: BatchRequest[]): Promise<string> {
     if (requests.length === 0) throw new Error(`submitBatch(${name}): empty request list`);
     const created = await this.anthropic.messages.batches.create({
-      requests: requests.map((req) => ({ custom_id: req.customId, params: toParams(req) })),
+      requests: requests.map((req) => ({ custom_id: encodeCustomId(req.customId), params: toParams(req) })),
     });
     // Persist the batchId to the run ledger before returning (§3 resumability).
     await this.store.set(this.runLedgerDocPath, { batches: { [name]: created.id } });
