@@ -569,18 +569,39 @@ cites N.J.A.C. 18:26-2.15 and names the correct form (IT-NR, L-9 NR); and the in
 amber notice the moment **NJ resident** is unchecked, before any estate is entered. That is settled
 behaviour, not a placeholder.
 
-**What is actually left is three things:**
+**What is actually left is four things:**
 
 | # | Item | Blocked on |
 |---|------|-----------|
 | 1 | **Official filled PDFs for IT-EXT / L-9** | Nobody — real work, no decisions |
 | 2 | **A real payment through the payment page** | Adam, live |
 | 3 | **Open a PRE-allocation-model matter in the browser** | Adam, live — small |
+| 4 | **The wills Drive pipeline — does it work at all?** | Nobody — investigation, then a scope call from Adam |
 
 **1. Official filled PDFs for the companion forms.** IT-EXT and the L-9 render as HTML workpapers
 today. Each needs its own blank form and field inventory — the same work the IT-R already had done
 to it. No decision required; just not started. (The two IT-Estate returns are NOT in this item: they
 are pre-2018 and were declined above.)
+
+**4. The wills Drive pipeline.** Found 2026-07-31 while getting the clause miner's Drive access
+working: **the Google Drive API was disabled on project 749324460027** until that day. Four separate
+consumers authenticate through it — `wills-backfill.ts`, `wills-drive-client.ts`,
+`wills-drive-watcher.ts`, `wills-pilot.ts` — all via ADC with `drive.readonly`, so all shared one
+point of failure. The `STAGE=preflight` report now counts `wills_documents` and `pipeline_state`
+and prints them; read that count before assuming anything.
+
+- `wills_documents = 0` ⇒ the pipeline produced no work product and the feature has never run.
+- Non-zero ⇒ it worked at some point and the question becomes WHEN IT STOPPED, not whether it ran.
+- "counts unavailable" ⇒ the collections could not be read; that is not the same as zero.
+
+**This does NOT affect clause mining**, which shares no state with it — separate manifest, separate
+conversion, separate collections — and whose Drive access is now independently verified. The 7/30
+Drive inventory is also unaffected: it was obtained through the Claude Drive connector
+(OAuth as Adam), a different path that was never blocked by the project's disabled API.
+
+What it needs is a scope call from Adam once the count is known: repair the wills pipeline, or
+retire it if clause mining supersedes what it was for. Do not fold this into the clause-mining
+pilot.
 
 **2. A real payment through the payment page.** See item 2 below — unchanged.
 
