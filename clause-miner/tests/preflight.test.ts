@@ -82,11 +82,11 @@ describe('runPreflight (§11 P0.1)', () => {
     expect(report.findings.join('\n')).toContain('UNKNOWN');
   });
 
-  it('BLOCKS on a readable but EMPTY root — that is a wrong folder id, not a pass', async () => {
+  it('BLOCKS on a readable but EMPTY root — that is not a pass', async () => {
     const { report } = await run(tree({ empty: true }));
     expect(report.rootReadable).toBe(true);
     expect(report.ready).toBe(false);
-    expect(report.findings.join('\n')).toContain('readable but EMPTY');
+    expect(report.findings.join('\n')).toContain('contains NOTHING this account can see');
   });
 
   it('BLOCKS on duplicate folder names and makes a human choose', async () => {
@@ -122,10 +122,61 @@ describe('runPreflight (§11 P0.1)', () => {
   });
 });
 
+describe('folder visibility vs emptiness (the Drive trap)', () => {
+  it('reports NOT VISIBLE when the folder cannot be fetched', async () => {
+    // FakeDrive holds only the tree it was given, so an unknown id is
+    // invisible — the same shape as a folder that was never shared.
+    const store = new FakeDocStore();
+    const report = await runPreflight(
+      { drive: new FakeDrive(folder('other', 'Elsewhere', [])), store },
+      env,
+    );
+    expect(report.rootFolder).toBeNull();
+    expect(report.ready).toBe(false);
+    const findings = report.findings.join('\n');
+    expect(findings).toContain('NOT VISIBLE');
+    expect(report.nextSteps.join('\n')).toContain('as Viewer');
+  });
+
+  it('names the folder when it IS visible — proving the id points where we think', async () => {
+    const { report } = await run();
+    expect(report.rootFolder?.name).toBe('Wills and Trusts');
+    expect(report.findings.join('\n')).toContain('named "Wills and Trusts"');
+  });
+
+  it('distinguishes a visible-but-empty folder from an invisible one', async () => {
+    // Visible and genuinely empty: the message must blame CONTENTS sharing,
+    // not folder sharing — sending someone to re-share a folder they already
+    // shared is how a diagnostic wastes a human round trip.
+    const { report } = await run(tree({ empty: true }));
+    expect(report.rootFolder?.name).toBe('Wills and Trusts');
+    expect(report.ready).toBe(false);
+    const findings = report.findings.join('\n');
+    expect(findings).toContain('contains NOTHING this account can see');
+    expect(findings).not.toContain('NOT VISIBLE');
+  });
+
+  it('explains the empty listing when the folder is invisible', async () => {
+    // The production shape: Drive does NOT error for an unshared folder, it
+    // returns nothing. Without the getFolder check that is indistinguishable
+    // from success on an empty corpus.
+    const store = new FakeDocStore();
+    const report = await runPreflight(
+      { drive: new FakeDrive(folder('other', 'Elsewhere', []), 'sa@x.iam.gserviceaccount.com', true), store },
+      env,
+    );
+    expect(report.rootReadable).toBe(true); // the listing "succeeded"…
+    expect(report.rootFolder).toBeNull(); // …but the folder is not visible
+    expect(report.ready).toBe(false);
+    expect(report.findings.join('\n')).toContain('empty list rather than an error');
+  });
+});
+
 describe('interpretPreflight', () => {
   const base = {
     identity: 'miner@epg.iam.gserviceaccount.com',
     rootFolderId: 'root',
+    rootFolder: { id: 'root', name: 'Wills and Trusts' },
     rootReadable: true,
     rootError: null,
     rootChildFolders: 3,

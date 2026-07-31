@@ -199,6 +199,19 @@ export class GoogleDriveClient implements DriveClient {
     }
   }
 
+  async getFolder(folderId: string): Promise<{ id: string; name: string } | null> {
+    try {
+      const res = await this.drive.files.get({ fileId: folderId, fields: 'id,name' });
+      const id = res.data.id;
+      if (typeof id !== 'string') return null;
+      return { id, name: res.data.name ?? id };
+    } catch {
+      // 404 for a folder that is not shared, 403 for one that is withheld —
+      // both mean "this identity cannot see it".
+      return null;
+    }
+  }
+
   async findFolders(name: string): Promise<FolderMatch[]> {
     // Escape single quotes for the Drive query language.
     const escaped = name.replace(/'/g, "\\'");

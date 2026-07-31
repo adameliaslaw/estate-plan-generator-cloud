@@ -77,6 +77,17 @@ export interface DriveClient {
   identity(): Promise<string | null>;
   /** Exact-name folder search across everything the identity can see. */
   findFolders(name: string): Promise<FolderMatch[]>;
+  /**
+   * Metadata for one folder, or null when it is not visible to this identity.
+   *
+   * This exists because listing a folder's children CANNOT tell the two apart:
+   * Drive returns an empty result set for a folder you cannot see, exactly as
+   * it does for a folder that is genuinely empty. Fetching the folder itself
+   * fails when it is not shared, which is the distinction the preflight needs
+   * — and the returned name also proves whether the configured id points at
+   * the folder we think it does.
+   */
+  getFolder(folderId: string): Promise<{ id: string; name: string } | null>;
 }
 
 export interface ShellResult {
