@@ -234,18 +234,27 @@ jobs:
         env:
           IN_STAGE: ${{ inputs.stage }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           echo "Executing stage '${IN_STAGE}' …"
-          set +e
-          EXECUTION=$(gcloud run jobs execute "$JOB_NAME" \
-            --project "$PROJECT" --region "$REGION" \
-            --wait --format='value(metadata.name)')
+          gcloud run jobs execute "$JOB_NAME" \
+            --project "$PROJECT" --region "$REGION" --wait
           EXEC_STATUS=$?
-          set -e
-          echo "execution: ${EXECUTION:-<none>} (exit ${EXEC_STATUS})"
 
-          # The Job's own stdout is the report — surface it in the Actions log
-          # so nobody needs Cloud Console to read the result.
+          # The execution name is read back from the API rather than from the
+          # execute command's stdout. On the failure path gcloud prints
+          # nothing to stdout, so capturing it there yielded an empty name and
+          # skipped the log fetch — losing the report on precisely the runs
+          # that need one. Listing works on both paths.
+          EXECUTION=$(gcloud run jobs executions list \
+            --job "$JOB_NAME" --project "$PROJECT" --region "$REGION" \
+            --limit 1 --sort-by '~metadata.creationTimestamp' \
+            --format 'value(metadata.name)' 2>/dev/null)
+          echo "execution: ${EXECUTION:-<none>} (execute exit ${EXEC_STATUS})"
+
+          # The Job's own stdout IS the report, and it is fetched whether the
+          # execution passed or failed: a preflight that reports BLOCKED exits
+          # non-zero on purpose, so a non-zero execution is a result to read,
+          # not only an error to raise.
           if [ -n "${EXECUTION:-}" ]; then
             echo "──────── job output ────────"
             gcloud logging read \
@@ -253,5 +262,7 @@ jobs:
               --project "$PROJECT" --limit 1000 --order asc --freshness 2h \
               --format 'value(textPayload)' || echo '(could not read logs)'
             echo "────────────────────────────"
+          else
+            echo "Could not determine the execution name; read it in Cloud Console."
           fi
           exit $EXEC_STATUS
