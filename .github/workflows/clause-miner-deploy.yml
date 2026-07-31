@@ -110,6 +110,24 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
+      # Diagnostic, not a gate: prints which Drive-related APIs are actually
+      # enabled on this project, and the project's identity. "Enable the API"
+      # failures are otherwise indistinguishable from "enabled it on a
+      # different project", and each guess costs a human round trip.
+      - name: Report enabled Drive APIs
+        continue-on-error: true
+        run: |
+          set +e
+          echo "project: $(gcloud config get-value project 2>/dev/null)"
+          echo "project number: $(gcloud projects describe "$PROJECT" --format='value(projectNumber)' 2>&1)"
+          echo "--- enabled services matching 'drive' ---"
+          gcloud services list --enabled --project "$PROJECT" \
+            --filter="config.name~drive" --format='value(config.name)' 2>&1
+          echo "--- is drive.googleapis.com enabled? ---"
+          gcloud services list --enabled --project "$PROJECT" \
+            --format='value(config.name)' 2>&1 | grep -c '^drive.googleapis.com$'
+          echo "----------------------------------------"
+
       - name: Ensure Artifact Registry repository exists
         run: |
           gcloud artifacts repositories describe "$AR_REPO" \
