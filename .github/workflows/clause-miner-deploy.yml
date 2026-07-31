@@ -140,6 +140,44 @@ jobs:
           printf '%s\n' "$ALL" | grep -c '^drive.googleapis.com$'
           echo "----------------------------------------"
 
+      # Diagnostic, not a gate: the seed run got 401 "API key is invalid"
+      # from Anthropic while the deployed Functions (which PIN a secret
+      # version at deploy time) may still be working — the Job reads :latest.
+      # This prints every version's age/state and a masked fingerprint of
+      # :latest (length, prefix shape, trailing-whitespace check) — never the
+      # value — so "same key as yesterday" is settled by evidence.
+      - name: Report ANTHROPIC_API_KEY secret versions (masked)
+        continue-on-error: true
+        run: |
+          set +e
+          echo "--- versions of ANTHROPIC_API_KEY ---"
+          gcloud secrets versions list ANTHROPIC_API_KEY --project "$PROJECT" \
+            --format 'table(name, state, createTime)' 2>&1
+          echo "--- :latest fingerprint (masked) ---"
+          VAL=$(gcloud secrets versions access latest --secret ANTHROPIC_API_KEY \
+            --project "$PROJECT" 2>&1)
+          ACCESS_STATUS=$?
+          if [ "$ACCESS_STATUS" -ne 0 ]; then
+            echo "!! cannot access :latest from this identity — fingerprint unavailable:"
+            printf '%s\n' "$VAL" | head -3
+          else
+            # RAW byte count through a pipe: command substitution strips
+            # trailing newlines, which are precisely the suspected defect.
+            LEN=$(gcloud secrets versions access latest --secret ANTHROPIC_API_KEY \
+              --project "$PROJECT" 2>/dev/null | wc -c)
+            TRIMLEN=$(gcloud secrets versions access latest --secret ANTHROPIC_API_KEY \
+              --project "$PROJECT" 2>/dev/null | tr -d '[:space:]' | wc -c)
+            case "$VAL" in
+              sk-ant-*) PREFIX="sk-ant-… (expected shape)";;
+              *)        PREFIX="UNEXPECTED prefix: $(printf '%s' "$VAL" | cut -c1-4)…";;
+            esac
+            echo "length=${LEN} length-without-whitespace=${TRIMLEN} prefix=${PREFIX}"
+            if [ "$LEN" != "$TRIMLEN" ]; then
+              echo "!! value contains whitespace/newline — likely the 401 cause"
+            fi
+          fi
+          echo "-------------------------------------"
+
       - name: Ensure Artifact Registry repository exists
         run: |
           gcloud artifacts repositories describe "$AR_REPO" \
