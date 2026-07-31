@@ -24,6 +24,7 @@ import {
 } from './clients/gcp.js';
 import { runManifest } from './stages/manifest.js';
 import { runConvert } from './stages/convert.js';
+import { formatQaConvert, runQaConvert } from './stages/qa-convert.js';
 import { runTriage } from './stages/triage.js';
 import { runExtract } from './stages/extract.js';
 import { runSegmentNormalize } from './stages/segment-normalize.js';
@@ -43,6 +44,7 @@ const STAGES = [
   'seed', // Stage S — curated clause-library ingestion (§11 P1a)
   'calibrate', // Stage C — labeling packet / threshold tuning (§11 P1b)
   'convert', // Stage 1 — LibreOffice headless convert + GCS cache (§8)
+  'qa-convert', // Stage 1 QA — read-only §4.4 gate evidence report
   'triage', // Stage 2 — haiku triage classify via Batches API (§3 Stage 2)
   'extract', // Stage 3 — facts + gazetteer (§3 Stage 3)
   'segment', // Stages 4-5 — reflow + segment + normalize (§4.1-4.2, §5)
@@ -131,6 +133,11 @@ async function main(): Promise<void> {
         env,
       );
       console.log('convert:', JSON.stringify(summary));
+      break;
+    }
+    case 'qa-convert': {
+      const report = await runQaConvert({ store, blobs }, env);
+      console.log(formatQaConvert(report));
       break;
     }
     case 'triage': {
