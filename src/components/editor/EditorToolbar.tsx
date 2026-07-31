@@ -56,6 +56,7 @@ import {
   FileCheck,
   FileEdit,
   Columns,
+  BookMarked,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -98,6 +99,8 @@ interface EditorToolbarProps {
   status: DocStatus;
   onStatusChange: (status: DocStatus) => Promise<void>;
   onFindReplace: () => void;
+  /** Opens the Clause Library picker; hidden when absent. */
+  onClauseLibrary?: () => void;
   readOnly?: boolean;
   className?: string;
   /** Whether this document has a template baseline for comparison */
@@ -304,6 +307,7 @@ export default function EditorToolbar({
   status,
   onStatusChange,
   onFindReplace,
+  onClauseLibrary,
   readOnly = false,
   className,
   hasTemplateBaseline,
@@ -808,6 +812,13 @@ export default function EditorToolbar({
         >
           <Search className="h-4 w-4" />
         </ToolbarButton>
+
+        {/* Clause Library */}
+        {onClauseLibrary && (
+          <ToolbarButton onClick={onClauseLibrary} tooltip="Clause Library">
+            <BookMarked className="h-4 w-4" />
+          </ToolbarButton>
+        )}
 
         {/* Compare with Template (only for hybrid docs) */}
         {hasTemplateBaseline && onCompareTemplate && (

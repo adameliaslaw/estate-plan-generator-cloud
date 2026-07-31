@@ -59,6 +59,7 @@ export { exchangeGoogleAuthCode, disconnectGoogleCalendar } from './google-auth'
 export { linkClient } from './link-client';
 export { createFirmUser, updateUserCapabilities } from './user-management';
 export { updateFirmApiKeys, migrateFirmApiKeysToSecrets } from './firm-settings';
+export { addMyClause } from './clause-library';
 
 // Phase 7: Knowledge Base & Template Engine
 export { addKnowledgeResource, updateKnowledgeResource, deleteKnowledgeResource, searchKnowledgeResources, bulkImportKnowledgeResources, analyzeKnowledgeContent } from './knowledge-base';

@@ -92,6 +92,7 @@ import EditorStatusBar, { type SaveStatus } from './EditorStatusBar';
 import CommentsPanel from './CommentsPanel';
 import VersionHistory from './VersionHistory';
 import FindReplaceDialog from './FindReplaceDialog';
+import ClauseLibraryDialog from '@/components/clauses/ClauseLibraryDialog';
 import TemplateComparePanel from './TemplateComparePanel';
 import DocumentStatusBadge from '@/components/documents/DocumentStatusBadge';
 
@@ -139,6 +140,7 @@ export default function DocumentEditor({
   const [commentsCollapsed, setCommentsCollapsed] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [showClauseLibrary, setShowClauseLibrary] = useState(false);
   const [showComparePanel, setShowComparePanel] = useState(false);
   const [contentLoaded, setContentLoaded] = useState(false);
   const [docUnlocked, setDocUnlocked] = useState(false);
@@ -820,6 +822,7 @@ export default function DocumentEditor({
         status={status}
         onStatusChange={handleStatusChange}
         onFindReplace={() => setShowFindReplace((prev) => !prev)}
+        onClauseLibrary={isReadOnly ? undefined : () => setShowClauseLibrary(true)}
         readOnly={isReadOnly}
         hasTemplateBaseline={!!document.templateBaseline}
         onCompareTemplate={() => setShowComparePanel(true)}
@@ -856,6 +859,25 @@ export default function DocumentEditor({
             editor={editor}
             open={showFindReplace}
             onClose={() => setShowFindReplace(false)}
+          />
+
+          {/* Clause Library picker */}
+          <ClauseLibraryDialog
+            open={showClauseLibrary}
+            onOpenChange={setShowClauseLibrary}
+            firmId={firmId}
+            onInsert={(text) => {
+              if (!editor) return;
+              const escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+              const html = escaped
+                .split(/\n{2,}/)
+                .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+                .join('');
+              editor.chain().focus().insertContent(html).run();
+            }}
           />
 
           {/* Legal page wrapper */}
