@@ -94,9 +94,16 @@ export function interpretPreflight(
         `check whether that pipeline authenticates as a DIFFERENT account than this one.`,
     );
   } else {
-    findings.push(
-      `✅ Root folder readable — ${report.rootChildFolders} subfolders, ${report.rootChildFiles} files at the top level`,
-    );
+    // Only claim readable when the folder is actually VISIBLE. A listing that
+    // "succeeded" by returning nothing for an invisible folder is not a
+    // success, and a report printing ❌ NOT VISIBLE beside ✅ readable makes
+    // the reader arbitrate between its own two claims. The empty-listing
+    // diagnosis below still runs either way — that is the explanation.
+    if (report.rootFolder !== null) {
+      findings.push(
+        `✅ Root folder readable — ${report.rootChildFolders} subfolders, ${report.rootChildFiles} files at the top level`,
+      );
+    }
     if (report.rootChildFolders === 0 && report.rootChildFiles === 0) {
       // Empty is never a pass. With the visibility check above, the two causes
       // are now distinguishable rather than conflated.

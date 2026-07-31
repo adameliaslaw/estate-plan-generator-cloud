@@ -168,7 +168,11 @@ describe('folder visibility vs emptiness (the Drive trap)', () => {
     expect(report.rootReadable).toBe(true); // the listing "succeeded"…
     expect(report.rootFolder).toBeNull(); // …but the folder is not visible
     expect(report.ready).toBe(false);
-    expect(report.findings.join('\n')).toContain('empty list rather than an error');
+    const findings = report.findings.join('\n');
+    expect(findings).toContain('empty list rather than an error');
+    // The report must not contradict itself: no ✅ readable beside ❌ NOT VISIBLE.
+    expect(findings).toContain('NOT VISIBLE');
+    expect(findings).not.toContain('✅ Root folder readable');
   });
 });
 
