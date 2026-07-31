@@ -120,12 +120,23 @@ jobs:
           set +e
           echo "project: $(gcloud config get-value project 2>/dev/null)"
           echo "project number: $(gcloud projects describe "$PROJECT" --format='value(projectNumber)' 2>&1)"
+          # TOTAL first. Without it an empty Drive result is ambiguous — it
+          # reads the same whether nothing is enabled or this account simply
+          # cannot list services. A non-zero total proves the listing works,
+          # which is what makes the Drive answer below mean anything.
+          ALL=$(gcloud services list --enabled --project "$PROJECT" \
+            --format='value(config.name)' 2>&1)
+          LIST_STATUS=$?
+          TOTAL=$(printf '%s\n' "$ALL" | grep -c 'googleapis.com$')
+          echo "services list exit: ${LIST_STATUS}; total enabled APIs: ${TOTAL}"
+          if [ "$LIST_STATUS" -ne 0 ] || [ "$TOTAL" -eq 0 ]; then
+            echo "!! Could not list services — the Drive answer below is NOT conclusive."
+            printf '%s\n' "$ALL" | head -5
+          fi
           echo "--- enabled services matching 'drive' ---"
-          gcloud services list --enabled --project "$PROJECT" \
-            --filter="config.name~drive" --format='value(config.name)' 2>&1
+          printf '%s\n' "$ALL" | grep -i drive || echo "(none)"
           echo "--- is drive.googleapis.com enabled? ---"
-          gcloud services list --enabled --project "$PROJECT" \
-            --format='value(config.name)' 2>&1 | grep -c '^drive.googleapis.com$'
+          printf '%s\n' "$ALL" | grep -c '^drive.googleapis.com$'
           echo "----------------------------------------"
 
       - name: Ensure Artifact Registry repository exists
