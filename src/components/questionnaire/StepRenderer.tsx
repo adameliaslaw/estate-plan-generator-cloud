@@ -21,6 +21,9 @@ import { RepeaterField } from './fields/RepeaterField';
 import { DateField } from './fields/DateField';
 import { ComboboxField } from './fields/ComboboxField';
 import { PersonPicker } from './fields/PersonPicker';
+import { BookMarked } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import ClauseLibraryDialog from '@/components/clauses/ClauseLibraryDialog';
 
 // ============================================================================
 // Props
@@ -148,8 +151,47 @@ function PhoneField({ field, value, onChange }: FieldProps) {
 }
 
 function TextareaField({ field, value, onChange }: FieldProps) {
+  // Attorney-only Clause Picker (clients never see the firm's clause bank).
+  const { userProfile } = useAuth();
+  const { data } = useQuestionnaire();
+  const [showLibrary, setShowLibrary] = React.useState(false);
+  const isStaff =
+    userProfile?.role === 'admin' ||
+    userProfile?.role === 'attorney' ||
+    userProfile?.role === 'paralegal';
+
+  const record = data as unknown as Record<string, unknown>;
+  const first = getNestedValue(record, 'personalInfo.firstName');
+  const last = getNestedValue(record, 'personalInfo.lastName');
+  const clientName = [first, last].filter((v) => typeof v === 'string' && v).join(' ');
+
   return (
-    <textarea
+    <div className="relative">
+      {isStaff && userProfile?.firmId && (
+        <>
+          <div className="mb-1 text-right">
+            <button
+              type="button"
+              onClick={() => setShowLibrary(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#1a365d] hover:underline"
+            >
+              <BookMarked className="h-3.5 w-3.5" />
+              Clause Library
+            </button>
+          </div>
+          <ClauseLibraryDialog
+            open={showLibrary}
+            onOpenChange={setShowLibrary}
+            firmId={userProfile.firmId}
+            placeholderValues={clientName ? { GRANTOR_NAME: clientName, CLIENT_NAME: clientName } : {}}
+            onInsert={(text) => {
+              const current = (value as string) ?? '';
+              onChange(current ? `${current}\n\n${text}` : text);
+            }}
+          />
+        </>
+      )}
+      <textarea
       id={field.name}
       value={(value as string) ?? ''}
       onChange={(e) => onChange(e.target.value)}
@@ -162,7 +204,8 @@ function TextareaField({ field, value, onChange }: FieldProps) {
         'focus:border-[#1a365d] focus:outline-none focus:ring-2 focus:ring-[#1a365d]/20',
         'transition-colors',
       )}
-    />
+      />
+    </div>
   );
 }
 
