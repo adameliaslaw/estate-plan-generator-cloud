@@ -150,7 +150,14 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
     }
   };
 
+  let lshPairCount = 0;
   for (const [idA, idB] of candidatePairs(entries)) {
+    if (++lshPairCount > config.identity.maxAdjudicationPairs) {
+      throw new Error(
+        `identity: LSH produced over ${config.identity.maxAdjudicationPairs} candidate pairs ` +
+          `(seeds=${seeds.length}) — banding thresholds need calibration before this run is affordable`,
+      );
+    }
     const a = byHash.get(idA) as UniqueSignature;
     const b = byHash.get(idB) as UniqueSignature;
     const jaccard = jaccardFromSignatures(
@@ -162,10 +169,32 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
 
   // §4.2 enumerated-section item-set path.
   const withItems = seeds.filter((u) => u.itemSet !== null && u.itemSet.length > 0);
-  for (let i = 0; i < withItems.length; i++) {
-    for (let j = i + 1; j < withItems.length; j++) {
-      const a = withItems[i];
-      const b = withItems[j];
+  // Candidate generation via an inverted index over item hashes instead of an
+  // all-pairs sweep: Jaccard ≥ threshold requires at least one shared item, so
+  // the prefilter is EXACT (no recall loss) — and the all-pairs loop was
+  // quadratic over every enumerated section in the corpus, which is what
+  // OOM-killed the identity run on 512 near-identical form trusts.
+  const byItem = new Map<string, number[]>();
+  withItems.forEach((u, idx) => {
+    for (const item of u.itemSet as string[]) {
+      const list = byItem.get(item);
+      if (list === undefined) byItem.set(item, [idx]);
+      else list.push(idx);
+    }
+  });
+  const itemCandidates = new Set<string>();
+  for (const list of byItem.values()) {
+    for (let x = 0; x < list.length; x++) {
+      for (let y = x + 1; y < list.length; y++) {
+        itemCandidates.add(`${list[x]}|${list[y]}`);
+      }
+    }
+  }
+  for (const cand of itemCandidates) {
+    const [iStr, jStr] = cand.split('|');
+    {
+      const a = withItems[Number(iStr)];
+      const b = withItems[Number(jStr)];
       const jaccard = itemSetJaccard(a.itemSet as string[], b.itemSet as string[]);
       if (jaccard < config.itemSet.jaccardThreshold) continue;
       const key = a.ring0Hash < b.ring0Hash ? `${a.ring0Hash}|${b.ring0Hash}` : `${b.ring0Hash}|${a.ring0Hash}`;
@@ -189,6 +218,16 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
         });
       }
     }
+  }
+
+  // Spend/memory guard (§10 spirit): a pair explosion must be a NAMED failure
+  // with counts, never an OOM or a runaway adjudication bill.
+  if (plan.adjudicationPairs.length > config.identity.maxAdjudicationPairs) {
+    throw new Error(
+      `identity: ${plan.adjudicationPairs.length} adjudication pairs exceeds the ` +
+        `${config.identity.maxAdjudicationPairs} guard (uniques=${uniques.length}, ` +
+        `seeds=${seeds.length}) — thresholds need calibration before this run is affordable`,
+    );
   }
   return plan;
 }
