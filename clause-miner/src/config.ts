@@ -64,6 +64,8 @@ export const config = {
      * boilerplate: pairing every sharer is quadratic and non-discriminative.
      */
     maxItemBucket: 100,
+    /** Memory guard on total LSH candidates (free auto-merges included). */
+    maxTotalPairs: 500_000,
   },
 
   itemSet: {

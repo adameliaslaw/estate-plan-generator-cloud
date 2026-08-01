@@ -166,10 +166,19 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
 
   let lshPairCount = 0;
   for (const [idA, idB] of candidatePairs(entries)) {
-    if (++lshPairCount > config.identity.maxAdjudicationPairs) {
+    // Memory guard on TOTAL pairs; the cost guard below counts only pairs
+    // that actually reach paid adjudication — trivial diffs auto-merge free.
+    if (++lshPairCount > config.identity.maxTotalPairs) {
       throw new Error(
-        `identity: LSH produced over ${config.identity.maxAdjudicationPairs} candidate pairs ` +
-          `(seeds=${seeds.length}) — banding thresholds need calibration before this run is affordable`,
+        `identity: LSH produced over ${config.identity.maxTotalPairs} total candidate pairs ` +
+          `(seeds=${seeds.length}) — banding thresholds need calibration`,
+      );
+    }
+    if (plan.adjudicationPairs.length > config.identity.maxAdjudicationPairs) {
+      throw new Error(
+        `identity: over ${config.identity.maxAdjudicationPairs} BILLABLE adjudication pairs ` +
+          `(totalLshPairs=${lshPairCount}, autoMerges=${plan.autoMergeEdges.length}, ` +
+          `seeds=${seeds.length}) — needs calibration or an explicit spend approval`,
       );
     }
     const a = byHash.get(idA) as UniqueSignature;
