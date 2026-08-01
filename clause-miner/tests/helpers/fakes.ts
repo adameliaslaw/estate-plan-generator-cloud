@@ -20,6 +20,18 @@ import type {
   ShellRunner,
 } from '../../src/clients/interfaces.js';
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function deepMerge(base: DocData, patch: DocData): DocData {
+  const out: DocData = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    out[k] = isPlainObject(out[k]) && isPlainObject(v) ? deepMerge(out[k], v) : v;
+  }
+  return out;
+}
+
 export class FakeDocStore implements DocStore {
   readonly docs = new Map<string, DocData>();
 
@@ -30,7 +42,10 @@ export class FakeDocStore implements DocStore {
   async set(path: string, data: DocData, opts?: { merge?: boolean }): Promise<void> {
     const merge = opts?.merge ?? true;
     const current = merge ? (this.docs.get(path) ?? {}) : {};
-    this.docs.set(path, { ...current, ...data });
+    // Firestore set({merge:true}) deep-merges nested maps — mirror that, or
+    // per-key ledger writes (batches.extract-1, …) clobber their siblings in
+    // tests while surviving in production.
+    this.docs.set(path, deepMerge(current, data));
   }
 
   async listDocs(collectionPath: string): Promise<Array<{ id: string; data: DocData }>> {
@@ -225,6 +240,16 @@ export class FakeBatchClient implements BatchClient {
     const id = `batch_${this.counter++}`;
     this.pending.set(id, requests);
     return id;
+  }
+
+  async submitBatchChunked(name: string, requests: BatchRequest[]): Promise<string[]> {
+    // Mirror the real client's naming; chunk size 2 keeps multi-batch paths testable.
+    const ids: string[] = [];
+    for (let i = 0; i * 2 < requests.length; i++) {
+      const chunkName = i === 0 ? name : `${name}-${i}`;
+      ids.push(await this.submitBatch(chunkName, requests.slice(i * 2, i * 2 + 2)));
+    }
+    return ids;
   }
 
   async pollBatch(batchId: string): Promise<BatchResultItem[]> {

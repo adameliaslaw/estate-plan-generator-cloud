@@ -210,11 +210,22 @@ function parseResult(raw: unknown): { item: BatchResultItem; model: BatchModel }
 export interface AnthropicBatchClientOpts {
   pollIntervalMs?: number;
   maxWaitMs?: number;
+  /** Chunk ceiling for submitBatchChunked; override in tests. */
+  maxBatchBytes?: number;
 }
+
+/**
+ * Conservative ceiling on one batch-create body. The API's documented cap is
+ * far higher, but the edge terminates very large uploads with an empty
+ * '400 terminated' (observed on the corpus extract submit) — so oversized
+ * request lists are split into several batches well below the edge limit.
+ */
+export const MAX_BATCH_BYTES = 30 * 1024 * 1024;
 
 export class AnthropicBatchClient implements BatchClient {
   private readonly pollIntervalMs: number;
   private readonly maxWaitMs: number;
+  private readonly maxBatchBytes: number;
 
   constructor(
     private readonly anthropic: AnthropicLike,
@@ -225,6 +236,7 @@ export class AnthropicBatchClient implements BatchClient {
     this.pollIntervalMs = opts.pollIntervalMs ?? 30_000;
     // Batches are guaranteed within 24 h (§10).
     this.maxWaitMs = opts.maxWaitMs ?? 24 * 60 * 60 * 1000;
+    this.maxBatchBytes = opts.maxBatchBytes ?? MAX_BATCH_BYTES;
   }
 
   async submitBatch(name: string, requests: BatchRequest[]): Promise<string> {
@@ -235,6 +247,33 @@ export class AnthropicBatchClient implements BatchClient {
     // Persist the batchId to the run ledger before returning (§3 resumability).
     await this.store.set(this.runLedgerDocPath, { batches: { [name]: created.id } });
     return created.id;
+  }
+
+  async submitBatchChunked(name: string, requests: BatchRequest[]): Promise<string[]> {
+    if (requests.length === 0) throw new Error(`submitBatchChunked(${name}): empty request list`);
+    const maxBytes = this.maxBatchBytes;
+    const chunks: BatchRequest[][] = [];
+    let current: BatchRequest[] = [];
+    let currentBytes = 0;
+    for (const req of requests) {
+      const bytes = JSON.stringify(toParams(req)).length + 200;
+      if (current.length > 0 && currentBytes + bytes > maxBytes) {
+        chunks.push(current);
+        current = [];
+        currentBytes = 0;
+      }
+      current.push(req);
+      currentBytes += bytes;
+    }
+    if (current.length > 0) chunks.push(current);
+
+    const ids: string[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      // First chunk keeps the bare name so single-batch ledgers stay readable.
+      const chunkName = i === 0 ? name : `${name}-${i}`;
+      ids.push(await this.submitBatch(chunkName, chunks[i]));
+    }
+    return ids;
   }
 
   async pollBatch(batchId: string): Promise<BatchResultItem[]> {

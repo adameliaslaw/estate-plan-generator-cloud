@@ -157,6 +157,12 @@ export interface BatchClient {
    */
   submitBatch(name: string, requests: BatchRequest[]): Promise<string>;
   /**
+   * Split an oversized request list into several batches (the API edge
+   * terminates very large create bodies with an empty 400) and submit each,
+   * persisting ids under `batches.{name}` / `batches.{name}-{i}`.
+   */
+  submitBatchChunked(name: string, requests: BatchRequest[]): Promise<string[]>;
+  /**
    * Poll until the batch ends, stream results, and charge spend per request
    * transactionally against clause_mining_state/control. Throws
    * SpendBreakerError as soon as the breaker trips (hard stop).

@@ -251,3 +251,44 @@ describe('custom_id encoding (Anthropic ^[a-zA-Z0-9_-]{1,64}$)', () => {
     expect(results[0].customId).toBe('seedpiece:1Ab_C:12');
   });
 });
+
+describe('submitBatchChunked (oversized create bodies get 400 terminated)', () => {
+  it('splits by serialized size, persists per-chunk ledger ids, keeps bare name for chunk 0', async () => {
+    const { sdk, state } = fakeSdk([]);
+    const store = new FakeDocStore();
+    const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+      maxBatchBytes: 1200, // tiny ceiling: forces one request per chunk below
+    });
+    const req = (id: string) => ({
+      customId: id,
+      model: 'haiku' as const,
+      maxTokens: 10,
+      system: 'sys',
+      userText: 'x'.repeat(600),
+      tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+    });
+    const ids = await client.submitBatchChunked('extract', [req('a'), req('b'), req('c')]);
+    expect(ids).toHaveLength(3);
+    expect(state.created).toHaveLength(3);
+    const ledger = store.docs.get('firms/f/clauseMining/r');
+    const batches = ledger?.batches as Record<string, string>;
+    expect(Object.keys(batches).sort()).toEqual(['extract', 'extract-1', 'extract-2']);
+  });
+
+  it('keeps small lists in a single batch', async () => {
+    const { sdk, state } = fakeSdk([]);
+    const store = new FakeDocStore();
+    const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+    });
+    const ids = await client.submitBatchChunked('extract', [
+      {
+        customId: 'a', model: 'haiku', maxTokens: 10, system: 's', userText: 'short',
+        tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+      },
+    ]);
+    expect(ids).toHaveLength(1);
+    expect(state.created).toHaveLength(1);
+  });
+});
