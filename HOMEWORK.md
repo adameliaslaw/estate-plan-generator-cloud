@@ -482,7 +482,29 @@ worth keeping:
   was terminated at the API edge (chunked submission + multi-batch resume, #245), and a $100
   credit purchase that never attached to the org stalled two attempts (Anthropic-side, Adam
   resolved).
-- **▶ NEXT: `STAGE=segment`** (CPU + small haiku boundary fallback) → `identity` (deterministic
+- **✅ SEGMENT COMPLETE** (512 trusts; 497 first pass + 15 on resume after a GCS flake;
+  quarantine/review tail tiny, zero LLM fallback — the §4.4 hard-wrap worry did not distort).
+- **⏸ IDENTITY: PAUSED AT A CALIBRATION DECISION (2026-08-01 ~7:25 PM ET).** Seven runs. Five
+  distinct OOM mechanisms found, each pinpointed by phase heap logs added along the way and each
+  fixed before costing anything: Node heap cap (#247), item-set all-pairs quadratic (#248),
+  ubiquitous-item mega-bucket (#250), artifact hoarding (#249), BigInt shingle storm on
+  wall-of-prose sigTexts (#251). Adjudication now resumes from durable per-pair transcripts and
+  submits chunked (#247/#245 pattern). Run 7 executed every phase with flat memory (~150-200 MB)
+  and stopped at the honest number: **>40,000 BILLABLE adjudication pairs from 5,407 unique
+  signatures, with only 131 trivial auto-merges** — the corpus is so form-uniform that untuned
+  LSH banding routes nearly every candidate to paid adjudication (>$160, ceiling unknown), and
+  the tiny auto-merge rate hints normalization may be leaving residual content diffs too.
+- **THE DECISION PUT TO ADAM:** (1) *recommended* — do the 1-hour calibration session at
+  /clause-calibration (live, packet ready): his 30 pair labels + seed-structure negatives let
+  `STAGE=calibrate` (tune mode) pick banding that concentrates candidates in the genuinely
+  ambiguous band, then identity re-runs free of charge to a sane billable count; or (2) approve
+  a raised cap at ~$4/1k pairs with the ceiling still unknown. No identity re-run until one of
+  these happens.
+- **▶ NEXT after identity passes:** canonicalize → stats → catalog → gates, then Adam's catalog
+  review. Standing pattern: judge stages by Cloud Run execution output; resume dispatches are
+  the normal way to read a finished stage.
+- ~~**▶ NEXT: `STAGE=segment`**~~ (done, above)
+- **(superseded)** `STAGE=segment` (CPU + small haiku boundary fallback) → `identity` (deterministic
   rings; the sonnet adjudication of non-trivial merges is the one remaining spend decision —
   bring Adam the projected pair count × cost before dispatching identity with the secret) →
   canonicalize → stats → catalog → gates.
