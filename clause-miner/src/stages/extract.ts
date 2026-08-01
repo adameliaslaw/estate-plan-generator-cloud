@@ -329,6 +329,30 @@ export async function runExtract(deps: ExtractDeps, env: Env): Promise<ExtractSu
   };
   if (pending.length === 0) return summary;
 
+  // Resume (§3): same shape as triage — a prior execution may have submitted
+  // the batch and outlived its launcher before applying results. Re-poll the
+  // ledgered batch first; resubmitting the same trusts would double-bill the
+  // most expensive per-document stage in the pilot.
+  const ledger = await deps.store.get(runLedgerPath(env.firmId, env.runId));
+  const priorBatchId = (ledger?.batches as Record<string, string> | undefined)?.extract;
+  if (priorBatchId !== undefined) {
+    const priorResults = await deps.batches.pollBatch(priorBatchId);
+    const covered = new Set<string>();
+    const rowByIdPrior = new Map(rows.map((r) => [r.id, r.data]));
+    for (const result of priorResults) {
+      covered.add(result.customId.replace(/^extract:/, ''));
+      await applyExtractResult(deps, env, summary, rowByIdPrior, result);
+    }
+    const stillPending = pending.filter((r) => !covered.has(r.id));
+    summary.skipped += pending.length - stillPending.length;
+    pending.length = 0;
+    pending.push(...stillPending);
+    if (pending.length === 0) {
+      await writeExtractLedger(deps, env, summary);
+      return summary;
+    }
+  }
+
   const requests: BatchRequest[] = [];
   for (const row of pending) {
     const text = (await deps.blobs.read(textPath(env.firmId, row.id))).toString('utf8');
@@ -341,38 +365,52 @@ export async function runExtract(deps: ExtractDeps, env: Env): Promise<ExtractSu
 
   const rowById = new Map(rows.map((r) => [r.id, r.data]));
   for (const result of results) {
-    const driveFileId = result.customId.replace(/^extract:/, '');
-    if (!result.ok) {
-      summary.failed++;
-      await deps.store.set(docFactsPath(env.firmId, env.runId, driveFileId), {
-        status: 'error',
-        error: result.error ?? 'unknown',
-      });
-      continue;
-    }
-    const parsed = parseExtraction(result.toolInput);
-    // Deterministic version-label fallback from path + filename
-    // (wills-processor._extractVersionLabel convention).
-    const row = rowById.get(driveFileId) ?? {};
-    const pathLabel = extractVersionLabel(
-      `${typeof row.drivePath === 'string' ? row.drivePath : ''} ${typeof row.fileName === 'string' ? row.fileName : ''}`,
-    );
-    summary.extracted++;
-    await deps.store.set(docFactsPath(env.firmId, env.runId, driveFileId), {
-      status: 'extracted',
-      parties: parsed.parties,
-      executionDate: parsed.executionDate,
-      facts: parsed.facts as unknown as DocData,
-      versionLabel: parsed.versionLabel ?? pathLabel,
-      updatedAt: new Date().toISOString(),
-    });
+    await applyExtractResult(deps, env, summary, rowById, result);
   }
 
+  await writeExtractLedger(deps, env, summary);
+  return summary;
+}
+
+async function applyExtractResult(
+  deps: ExtractDeps,
+  env: Env,
+  summary: ExtractSummary,
+  rowById: Map<string, DocData>,
+  result: { customId: string; ok: boolean; toolInput: DocData | undefined; error?: string },
+): Promise<void> {
+  const driveFileId = result.customId.replace(/^extract:/, '');
+  if (!result.ok) {
+    summary.failed++;
+    await deps.store.set(docFactsPath(env.firmId, env.runId, driveFileId), {
+      status: 'error',
+      error: result.error ?? 'unknown',
+    });
+    return;
+  }
+  const parsed = parseExtraction(result.toolInput);
+  // Deterministic version-label fallback from path + filename
+  // (wills-processor._extractVersionLabel convention).
+  const row = rowById.get(driveFileId) ?? {};
+  const pathLabel = extractVersionLabel(
+    `${typeof row.drivePath === 'string' ? row.drivePath : ''} ${typeof row.fileName === 'string' ? row.fileName : ''}`,
+  );
+  summary.extracted++;
+  await deps.store.set(docFactsPath(env.firmId, env.runId, driveFileId), {
+    status: 'extracted',
+    parties: parsed.parties,
+    executionDate: parsed.executionDate,
+    facts: parsed.facts as unknown as DocData,
+    versionLabel: parsed.versionLabel ?? pathLabel,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+async function writeExtractLedger(deps: ExtractDeps, env: Env, summary: ExtractSummary): Promise<void> {
   await deps.store.set(runLedgerPath(env.firmId, env.runId), {
     stage: 'extract',
     status: 'completed',
     extract: { ...summary },
     updatedAt: new Date().toISOString(),
   });
-  return summary;
 }
