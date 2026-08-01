@@ -87,27 +87,35 @@ export function collectUniqueSignatures(
 ): UniqueSignature[] {
   const map = new Map<string, UniqueSignature>();
   for (const { artifact, structureConfidence } of artifacts) {
-    const seedable = structureConfidence !== 'none';
-    for (const seg of artifact.segments) {
-      const existing = map.get(seg.ring0Hash);
-      if (existing === undefined) {
-        map.set(seg.ring0Hash, {
-          ring0Hash: seg.ring0Hash,
-          sigText: seg.sigText,
-          normText: seg.normText,
-          itemSet: seg.itemSet,
-          executionBlock: seg.executionBlock,
-          clusterSeed: seedable,
-          occurrenceCount: 1,
-        });
-      } else {
-        existing.occurrenceCount++;
-        existing.clusterSeed = existing.clusterSeed || seedable;
-        if (existing.itemSet === null && seg.itemSet !== null) existing.itemSet = seg.itemSet;
-      }
-    }
+    foldArtifact(map, artifact, structureConfidence);
   }
   return [...map.values()].sort((a, b) => a.ring0Hash.localeCompare(b.ring0Hash));
+}
+
+function foldArtifact(
+  map: Map<string, UniqueSignature>,
+  artifact: SegmentsArtifact,
+  structureConfidence: string,
+): void {
+  const seedable = structureConfidence !== 'none';
+  for (const seg of artifact.segments) {
+    const existing = map.get(seg.ring0Hash);
+    if (existing === undefined) {
+      map.set(seg.ring0Hash, {
+        ring0Hash: seg.ring0Hash,
+        sigText: seg.sigText,
+        normText: seg.normText,
+        itemSet: seg.itemSet,
+        executionBlock: seg.executionBlock,
+        clusterSeed: seedable,
+        occurrenceCount: 1,
+      });
+    } else {
+      existing.occurrenceCount++;
+      existing.clusterSeed = existing.clusterSeed || seedable;
+      if (existing.itemSet === null && seg.itemSet !== null) existing.itemSet = seg.itemSet;
+    }
+  }
 }
 
 export interface Ring1Plan {
@@ -380,14 +388,29 @@ export async function runIdentity(deps: IdentityDeps, env: Env): Promise<Identit
   const rows = await deps.store.listDocs(filesCollection(env.firmId, env.runId));
   const segmented = rows.filter((r) => r.data.status === 'segmented');
 
-  const artifacts: Array<{ artifact: SegmentsArtifact; structureConfidence: string }> = [];
+  // Stream: parse one artifact at a time and fold it straight into the
+  // signature map. Holding all 512 parsed artifacts (each carrying the full
+  // document's paragraph text alongside its blocks) is what OOM-killed this
+  // stage twice — the guards never even printed. Memory is logged so a
+  // recurrence names its own footprint instead of dying silently.
+  const map = new Map<string, UniqueSignature>();
+  let loaded = 0;
   for (const row of segmented) {
     const raw = await deps.blobs.read(segmentsPath(env.firmId, env.runId, row.id));
     const artifact = JSON.parse(raw.toString('utf8')) as SegmentsArtifact;
-    artifacts.push({ artifact, structureConfidence: artifact.structureConfidence });
+    foldArtifact(map, artifact, artifact.structureConfidence);
+    loaded++;
+    if (loaded % 100 === 0) {
+      console.log(
+        `identity: loaded ${loaded}/${segmented.length} artifacts, ` +
+          `uniques=${map.size}, heapMB=${Math.round(process.memoryUsage().heapUsed / 1048576)}`,
+      );
+    }
   }
-
-  const uniques = collectUniqueSignatures(artifacts);
+  const uniques = [...map.values()].sort((a, b) => a.ring0Hash.localeCompare(b.ring0Hash));
+  console.log(
+    `identity: collected uniques=${uniques.length}, heapMB=${Math.round(process.memoryUsage().heapUsed / 1048576)}`,
+  );
   const summary: IdentitySummary = {
     uniqueSignatures: uniques.length,
     autoMerges: 0,
