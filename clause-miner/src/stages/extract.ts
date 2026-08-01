@@ -334,14 +334,20 @@ export async function runExtract(deps: ExtractDeps, env: Env): Promise<ExtractSu
   // ledgered batch first; resubmitting the same trusts would double-bill the
   // most expensive per-document stage in the pilot.
   const ledger = await deps.store.get(runLedgerPath(env.firmId, env.runId));
-  const priorBatchId = (ledger?.batches as Record<string, string> | undefined)?.extract;
-  if (priorBatchId !== undefined) {
-    const priorResults = await deps.batches.pollBatch(priorBatchId);
+  const ledgerBatches = (ledger?.batches as Record<string, string> | undefined) ?? {};
+  const priorBatchIds = Object.keys(ledgerBatches)
+    .filter((k) => /^extract(-\d+)?$/.test(k))
+    .sort()
+    .map((k) => ledgerBatches[k]);
+  if (priorBatchIds.length > 0) {
     const covered = new Set<string>();
     const rowByIdPrior = new Map(rows.map((r) => [r.id, r.data]));
-    for (const result of priorResults) {
-      covered.add(result.customId.replace(/^extract:/, ''));
-      await applyExtractResult(deps, env, summary, rowByIdPrior, result);
+    for (const priorBatchId of priorBatchIds) {
+      const priorResults = await deps.batches.pollBatch(priorBatchId);
+      for (const result of priorResults) {
+        covered.add(result.customId.replace(/^extract:/, ''));
+        await applyExtractResult(deps, env, summary, rowByIdPrior, result);
+      }
     }
     const stillPending = pending.filter((r) => !covered.has(r.id));
     summary.skipped += pending.length - stillPending.length;
@@ -360,12 +366,14 @@ export async function runExtract(deps: ExtractDeps, env: Env): Promise<ExtractSu
   }
   summary.submitted = requests.length;
 
-  const batchId = await deps.batches.submitBatch('extract', requests);
-  const results = await deps.batches.pollBatch(batchId);
-
+  // Chunked: one giant create body gets '400 terminated' at the API edge.
+  const batchIds = await deps.batches.submitBatchChunked('extract', requests);
   const rowById = new Map(rows.map((r) => [r.id, r.data]));
-  for (const result of results) {
-    await applyExtractResult(deps, env, summary, rowById, result);
+  for (const batchId of batchIds) {
+    const results = await deps.batches.pollBatch(batchId);
+    for (const result of results) {
+      await applyExtractResult(deps, env, summary, rowById, result);
+    }
   }
 
   await writeExtractLedger(deps, env, summary);
