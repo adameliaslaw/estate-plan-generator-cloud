@@ -190,14 +190,33 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
       else list.push(idx);
     }
   });
+  console.log(
+    `identity: LSH done, item-set sections=${withItems.length}, ` +
+      `heapMB=${Math.round(process.memoryUsage().heapUsed / 1048576)}`,
+  );
   const itemCandidates = new Set<string>();
   for (const list of byItem.values()) {
+    // A ubiquitous item (boilerplate power present in thousands of section
+    // variants) is non-discriminative — pairing everything that shares it is
+    // the same quadratic explosion in a bucket. Skip it, stop-word style:
+    // genuinely similar sections still share their RARER items.
+    if (list.length > config.identity.maxItemBucket) continue;
     for (let x = 0; x < list.length; x++) {
       for (let y = x + 1; y < list.length; y++) {
         itemCandidates.add(`${list[x]}|${list[y]}`);
+        if (itemCandidates.size > config.identity.maxAdjudicationPairs * 4) {
+          throw new Error(
+            `identity: item-set candidates exceeded ${config.identity.maxAdjudicationPairs * 4} ` +
+              `(sections=${withItems.length}) — thresholds need calibration`,
+          );
+        }
       }
     }
   }
+  console.log(
+    `identity: item candidates=${itemCandidates.size}, ` +
+      `heapMB=${Math.round(process.memoryUsage().heapUsed / 1048576)}`,
+  );
   for (const cand of itemCandidates) {
     const [iStr, jStr] = cand.split('|');
     {
