@@ -25,4 +25,7 @@ COPY src ./src
 RUN npm run build
 
 # Stage selection via the STAGE env var (see src/main.ts).
+# The Job has 8 GiB; Node's default old-space cap (~2 GB) OOM'd the identity
+# stage's in-memory signature/pair working set. Leave headroom for buffers.
+ENV NODE_OPTIONS=--max-old-space-size=6144
 ENTRYPOINT ["node", "lib/main.js"]
