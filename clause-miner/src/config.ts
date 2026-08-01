@@ -50,6 +50,15 @@ export const config = {
   },
 
   /** §4.2 Enumerated-list sections — item-set identity. */
+  identity: {
+    /**
+     * Hard guard on Ring-1 adjudication pairs: beyond this, the run fails
+     * with counts named instead of OOMing or submitting an unaffordable
+     * batch (~$0.004/pair — 40k ≈ $160, already past the §10 envelope).
+     */
+    maxAdjudicationPairs: 40_000,
+  },
+
   itemSet: {
     /**
      * §4.2: families of enumerated-list sections (e.g. trustee powers) match
