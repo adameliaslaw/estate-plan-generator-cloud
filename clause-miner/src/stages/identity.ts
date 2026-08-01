@@ -127,10 +127,16 @@ export interface Ring1Plan {
 export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
   const seeds = uniques.filter((u) => u.clusterSeed);
   const byHash = new Map(uniques.map((u) => [u.ring0Hash, u]));
-  const entries: SignatureEntry[] = seeds.map((u) => ({
-    id: u.ring0Hash,
-    signature: minhashSignature(u.sigText),
-  }));
+  const entries: SignatureEntry[] = [];
+  for (const u of seeds) {
+    entries.push({ id: u.ring0Hash, signature: minhashSignature(u.sigText) });
+    if (entries.length % 1000 === 0) {
+      console.log(
+        `identity: minhash ${entries.length}/${seeds.length}, ` +
+          `heapMB=${Math.round(process.memoryUsage().heapUsed / 1048576)}`,
+      );
+    }
+  }
   const sigByHash = new Map(entries.map((e) => [e.id, e.signature]));
 
   const plan: Ring1Plan = { autoMergeEdges: [], adjudicationPairs: [] };
