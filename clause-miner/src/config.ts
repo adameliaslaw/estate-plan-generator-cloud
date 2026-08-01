@@ -36,6 +36,8 @@ export const config = {
   minhash: {
     /** §4.3 Ring 1: 128-permutation MinHash. */
     numPermutations: 128,
+    /** Shingle cap per sigText — see minhashSignature. */
+    maxShinglesPerText: 5_000,
     /** §4.3 Ring 1: 5-gram word shingles over sigText. */
     shingleSize: 5,
     /**
