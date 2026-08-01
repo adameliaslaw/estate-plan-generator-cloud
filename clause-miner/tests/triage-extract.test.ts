@@ -166,3 +166,28 @@ describe('triage resume (a prior execution submitted a batch and died)', () => {
     expect(triageSubmits[1].requests.map((r) => r.customId)).toEqual(['triage:d3']);
   });
 });
+
+describe('extract resume (same shape as triage)', () => {
+  it('re-polls the ledgered extract batch instead of resubmitting', async () => {
+    const store = new FakeDocStore();
+    const blobs = new FakeBlobStore();
+    await store.set(fileDocPath('firm1', 'run1', 't1'), {
+      status: 'converted', fileName: 'trust.doc', docCategory: 'trust',
+    });
+    await blobs.write(textPath('firm1', 't1'), 'trust agreement text');
+
+    const batches = new FakeBatchClient(() => ({
+      toolInput: { parties: [], facts: {} },
+    }));
+    const { runExtract } = await import('../src/stages/extract.js');
+    const { buildExtractionRequest } = await import('../src/stages/extract.js');
+    const priorId = await batches.submitBatch('extract', [
+      buildExtractionRequest('t1', 'trust agreement text'),
+    ]);
+    await store.set('firms/firm1/clauseMining/run1', { batches: { extract: priorId } });
+
+    const summary = await runExtract({ store, blobs, batches }, env);
+    expect(summary.extracted).toBe(1);
+    expect(batches.submitted.filter((s) => s.name === 'extract')).toHaveLength(1);
+  });
+});
