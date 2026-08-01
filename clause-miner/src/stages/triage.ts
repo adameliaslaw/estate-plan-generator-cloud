@@ -134,6 +134,30 @@ export async function runTriage(deps: TriageDeps, env: Env): Promise<TriageSumma
   };
   if (pending.length === 0) return summary;
 
+  // Resume (§3): a prior execution may have SUBMITTED a batch and died (or
+  // outlived its launcher) before applying results. The batchId was persisted
+  // to the ledger before polling for exactly this case — re-poll THAT batch
+  // first instead of resubmitting the same files, which would double-bill the
+  // whole stage. Results already applied are rewritten idempotently.
+  const ledger = await deps.store.get(runLedgerPath(env.firmId, env.runId));
+  const priorBatchId = (ledger?.batches as Record<string, string> | undefined)?.triage;
+  if (priorBatchId !== undefined) {
+    const priorResults = await deps.batches.pollBatch(priorBatchId);
+    const covered = new Set<string>();
+    for (const result of priorResults) {
+      covered.add(result.customId.replace(/^triage:/, ''));
+      await applyTriageResult(deps, env, summary, result);
+    }
+    const stillPending = pending.filter((r) => !covered.has(r.id));
+    summary.skipped += pending.length - stillPending.length;
+    pending.length = 0;
+    pending.push(...stillPending);
+    if (pending.length === 0) {
+      await writeTriageLedger(deps, env, summary);
+      return summary;
+    }
+  }
+
   const requests: BatchRequest[] = [];
   for (const row of pending) {
     const text = (await deps.blobs.read(textPath(env.firmId, row.id))).toString('utf8');
@@ -146,33 +170,46 @@ export async function runTriage(deps: TriageDeps, env: Env): Promise<TriageSumma
   const results = await deps.batches.pollBatch(batchId);
 
   for (const result of results) {
-    const driveFileId = result.customId.replace(/^triage:/, '');
-    const path = fileDocPath(env.firmId, env.runId, driveFileId);
-    if (!result.ok) {
-      summary.failed++;
-      await deps.store.set(path, {
-        docCategory: 'other',
-        triageError: result.error ?? 'unknown',
-        needs_human_review: true,
-        needs_human_review_reasons: ['triage_failed'],
-      });
-      continue;
-    }
-    const parsed = parseTriageResult(result.toolInput);
-    summary.classified++;
-    if (parsed.docCategory === 'trust') summary.trusts++;
-    await deps.store.set(path, {
-      docCategory: parsed.docCategory,
-      instrumentKind: parsed.instrumentKind,
-      triageConfidence: parsed.confidence,
-    });
+    await applyTriageResult(deps, env, summary, result);
   }
 
+  await writeTriageLedger(deps, env, summary);
+  return summary;
+}
+
+async function applyTriageResult(
+  deps: TriageDeps,
+  env: Env,
+  summary: TriageSummary,
+  result: { customId: string; ok: boolean; toolInput: DocData | undefined; error?: string },
+): Promise<void> {
+  const driveFileId = result.customId.replace(/^triage:/, '');
+  const path = fileDocPath(env.firmId, env.runId, driveFileId);
+  if (!result.ok) {
+    summary.failed++;
+    await deps.store.set(path, {
+      docCategory: 'other',
+      triageError: result.error ?? 'unknown',
+      needs_human_review: true,
+      needs_human_review_reasons: ['triage_failed'],
+    });
+    return;
+  }
+  const parsed = parseTriageResult(result.toolInput);
+  summary.classified++;
+  if (parsed.docCategory === 'trust') summary.trusts++;
+  await deps.store.set(path, {
+    docCategory: parsed.docCategory,
+    instrumentKind: parsed.instrumentKind,
+    triageConfidence: parsed.confidence,
+  });
+}
+
+async function writeTriageLedger(deps: TriageDeps, env: Env, summary: TriageSummary): Promise<void> {
   await deps.store.set(runLedgerPath(env.firmId, env.runId), {
     stage: 'triage',
     status: 'completed',
     triage: { ...summary },
     updatedAt: new Date().toISOString(),
   });
-  return summary;
 }

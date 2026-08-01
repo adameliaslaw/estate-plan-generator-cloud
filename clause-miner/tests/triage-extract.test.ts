@@ -109,3 +109,60 @@ describe('extraction prompt (Stage 3 — P0.2 few-shots)', () => {
     expect(parseExtraction({ executionDate: null }).executionDate).toBeNull();
   });
 });
+
+describe('triage resume (a prior execution submitted a batch and died)', () => {
+  it('re-polls the ledgered batch instead of resubmitting — no double billing', async () => {
+    const store = new FakeDocStore();
+    const blobs = new FakeBlobStore();
+    await store.set(fileDocPath('firm1', 'run1', 'd1'), { status: 'converted', fileName: 'a.doc' });
+    await store.set(fileDocPath('firm1', 'run1', 'd2'), { status: 'converted', fileName: 'b.doc' });
+    await blobs.write(textPath('firm1', 'd1'), 'trust text');
+    await blobs.write(textPath('firm1', 'd2'), 'will text');
+
+    // First execution: submits, persists the batchId, then "dies" before applying.
+    const batches = new FakeBatchClient((req) => ({
+      toolInput: {
+        docCategory: req.customId === 'triage:d1' ? 'trust' : 'will',
+        confidence: 0.9,
+      },
+    }));
+    const firstBatchId = await batches.submitBatch('triage', [
+      buildTriageRequest('d1', 'a.doc', 'trust text'),
+      buildTriageRequest('d2', 'b.doc', 'will text'),
+    ]);
+    await store.set('firms/firm1/clauseMining/run1', { batches: { triage: firstBatchId } });
+
+    // Resume: must classify BOTH rows from the prior batch and submit nothing new.
+    const summary = await runTriage({ store, blobs, batches }, env);
+    expect(summary.classified).toBe(2);
+    expect(summary.trusts).toBe(1);
+    expect(batches.submitted.filter((s) => s.name === 'triage')).toHaveLength(1); // only the pre-seeded one
+    expect(store.docs.get(fileDocPath('firm1', 'run1', 'd1'))).toMatchObject({ docCategory: 'trust' });
+    expect(store.docs.get(fileDocPath('firm1', 'run1', 'd2'))).toMatchObject({ docCategory: 'will' });
+  });
+
+  it('submits a fresh batch only for rows the prior batch did not cover', async () => {
+    const store = new FakeDocStore();
+    const blobs = new FakeBlobStore();
+    await store.set(fileDocPath('firm1', 'run1', 'd1'), { status: 'converted', fileName: 'a.doc' });
+    await store.set(fileDocPath('firm1', 'run1', 'd3'), { status: 'converted', fileName: 'c.doc' });
+    await blobs.write(textPath('firm1', 'd1'), 'trust text');
+    await blobs.write(textPath('firm1', 'd3'), 'poa text');
+
+    const batches = new FakeBatchClient(() => ({
+      toolInput: { docCategory: 'poa', confidence: 0.7 },
+    }));
+    // Prior batch covered only d1.
+    const firstBatchId = await batches.submitBatch('triage', [
+      buildTriageRequest('d1', 'a.doc', 'trust text'),
+    ]);
+    await store.set('firms/firm1/clauseMining/run1', { batches: { triage: firstBatchId } });
+
+    const summary = await runTriage({ store, blobs, batches }, env);
+    // d1 from the prior batch, d3 via a new batch containing ONLY d3.
+    expect(summary.classified).toBe(2);
+    const triageSubmits = batches.submitted.filter((s) => s.name === 'triage');
+    expect(triageSubmits).toHaveLength(2);
+    expect(triageSubmits[1].requests.map((r) => r.customId)).toEqual(['triage:d3']);
+  });
+});
