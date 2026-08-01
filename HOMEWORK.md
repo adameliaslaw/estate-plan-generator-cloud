@@ -474,8 +474,18 @@ worth keeping:
 - **Also this session:** the Clause Picker shipped (#241) and the calibration session page
   shipped (#242) — both deployed; Adam's 1-hour labelling session is unblocked at
   /clause-calibration.
-- **▶ NEXT: `STAGE=extract`** (~$68, approved) over the triaged trusts — its summary reveals the
-  corpus trust count — then segment → identity → canonicalize → stats → catalog → gates.
+- **✅ EXTRACT COMPLETE (2026-08-01 ~noon ET): the corpus contains 512 trust documents** —
+  submitted 512 / extracted 511 / failed 1 / skipped 18,116. Cost ~$15–20, far under the $68
+  budget: the trust population is ~¼ of the design's 1,500–2,500 estimate, which shrinks every
+  downstream stage (adjudication projection drops well below the ~$103 budget). Two more
+  bugs found+fixed on the way, each before it cost anything: extract's single batch-create body
+  was terminated at the API edge (chunked submission + multi-batch resume, #245), and a $100
+  credit purchase that never attached to the org stalled two attempts (Anthropic-side, Adam
+  resolved).
+- **▶ NEXT: `STAGE=segment`** (CPU + small haiku boundary fallback) → `identity` (deterministic
+  rings; the sonnet adjudication of non-trivial merges is the one remaining spend decision —
+  bring Adam the projected pair count × cost before dispatching identity with the secret) →
+  canonicalize → stats → catalog → gates.
 - ⚠️ Standing pattern for all long stages: judge by the Cloud Run execution/job output, never the
   workflow color; resume dispatches are the normal way to read a finished stage's summary.
 
