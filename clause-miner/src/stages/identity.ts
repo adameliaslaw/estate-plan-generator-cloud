@@ -244,7 +244,31 @@ async function adjudicatePairs(
   summary: IdentitySummary,
 ): Promise<void> {
   if (pairs.length === 0) return;
-  const requests = pairs.map(({ a, b }) => {
+
+  // Resume from the durable transcripts (§4.3 writes one per adjudicated
+  // pair): a pair whose transcript exists is replayed from it — verdict and
+  // edge reconstructed with zero re-billing. Only transcript-less pairs are
+  // (re)submitted, and via the chunked path (an oversized create body gets
+  // '400 terminated' at the API edge, as extract proved).
+  const fresh: typeof pairs = [];
+  for (const pair of pairs) {
+    const id = pairId(pair.a.ring0Hash, pair.b.ring0Hash);
+    const transcriptPath = adjudicationPath(env.firmId, env.runId, id);
+    if (!(await deps.blobs.exists(transcriptPath))) {
+      fresh.push(pair);
+      continue;
+    }
+    const stored = JSON.parse((await deps.blobs.read(transcriptPath)).toString('utf8')) as {
+      verdict?: string;
+    };
+    const parsed = parseAdjudication(
+      typeof stored.verdict === 'string' ? { verdict: stored.verdict } : undefined,
+    );
+    applyAdjudication(pair, parsed, transcriptPath, ring, edges, summary);
+  }
+  if (fresh.length === 0) return;
+
+  const requests = fresh.map(({ a, b }) => {
     const diff = classifyDiff(a.sigText, b.sigText);
     return buildAdjudicationRequest({
       pairId: pairId(a.ring0Hash, b.ring0Hash),
@@ -253,16 +277,20 @@ async function adjudicatePairs(
       diffSummary: `A-only: ${diff.changedA.join(' ') || '(none)'}\nB-only: ${diff.changedB.join(' ') || '(none)'}`,
     });
   });
-  const batchId = await deps.batches.submitBatch(batchName, requests);
-  const results = await deps.batches.pollBatch(batchId);
+  const batchIds = await deps.batches.submitBatchChunked(batchName, requests);
+  const results: Awaited<ReturnType<typeof deps.batches.pollBatch>> = [];
+  for (const batchId of batchIds) {
+    results.push(...(await deps.batches.pollBatch(batchId)));
+  }
   const byId = new Map(results.map((r) => [r.customId.replace(/^adj:/, ''), r]));
 
-  for (const { a, b, scores } of pairs) {
+  for (const { a, b, scores } of fresh) {
     const id = pairId(a.ring0Hash, b.ring0Hash);
     const result = byId.get(id);
     const parsed = parseAdjudication(result?.ok === true ? result.toolInput : undefined);
     const diff = classifyDiff(a.sigText, b.sigText);
     const transcriptPath = adjudicationPath(env.firmId, env.runId, id);
+    void scores;
     // Persist the full transcript (§4.3: every LLM edge stores it).
     await deps.blobs.write(
       transcriptPath,
@@ -279,22 +307,34 @@ async function adjudicatePairs(
         error: result?.error ?? null,
       }),
     );
-    summary.adjudicated++;
-    if (parsed.verdict === 'MERGE') summary.merges++;
-    else if (parsed.verdict === 'NORMALIZATION_MISS') summary.normalizationMisses++;
-    else summary.separates++;
-    edges.push({
-      a: a.ring0Hash,
-      b: b.ring0Hash,
-      ring,
-      kind: 'adjudicated',
-      scores,
-      diff: { changedA: diff.changedA, changedB: diff.changedB },
-      adjudicationRef: transcriptPath,
-      verdict: parsed.verdict,
-      merged: parsed.verdict === 'MERGE',
-    });
+    applyAdjudication({ a, b, scores }, parsed, transcriptPath, ring, edges, summary);
   }
+}
+
+function applyAdjudication(
+  pair: { a: UniqueSignature; b: UniqueSignature; scores: Record<string, number> },
+  parsed: ReturnType<typeof parseAdjudication>,
+  transcriptPath: string,
+  ring: 1 | 2,
+  edges: IdentityEdge[],
+  summary: IdentitySummary,
+): void {
+  const diff = classifyDiff(pair.a.sigText, pair.b.sigText);
+  summary.adjudicated++;
+  if (parsed.verdict === 'MERGE') summary.merges++;
+  else if (parsed.verdict === 'NORMALIZATION_MISS') summary.normalizationMisses++;
+  else summary.separates++;
+  edges.push({
+    a: pair.a.ring0Hash,
+    b: pair.b.ring0Hash,
+    ring,
+    kind: 'adjudicated',
+    scores: pair.scores,
+    diff: { changedA: diff.changedA, changedB: diff.changedB },
+    adjudicationRef: transcriptPath,
+    verdict: parsed.verdict,
+    merged: parsed.verdict === 'MERGE',
+  });
 }
 
 export async function runIdentity(deps: IdentityDeps, env: Env): Promise<IdentitySummary> {
