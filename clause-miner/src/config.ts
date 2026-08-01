@@ -57,6 +57,11 @@ export const config = {
      * batch (~$0.004/pair — 40k ≈ $160, already past the §10 envelope).
      */
     maxAdjudicationPairs: 40_000,
+    /**
+     * Item hashes shared by more than this many sections are stop-word-like
+     * boilerplate: pairing every sharer is quadratic and non-discriminative.
+     */
+    maxItemBucket: 100,
   },
 
   itemSet: {
