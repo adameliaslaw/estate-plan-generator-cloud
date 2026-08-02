@@ -50,7 +50,7 @@ const PACKET = {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  svc.getCalibrationPacket.mockResolvedValue({ packet: PACKET, labels: null });
+  svc.getCalibrationPacket.mockResolvedValue({ packet: PACKET, labels: null, draft: null });
   svc.submitCalibrationLabels.mockResolvedValue({ saved: 2 });
 });
 
@@ -102,6 +102,7 @@ describe('ClauseCalibrationPage', () => {
     svc.getCalibrationPacket.mockResolvedValue({
       packet: PACKET,
       labels: { pairs: [{ pairId: 'p1', label: 'same' }] },
+      draft: null,
     });
     await renderPage();
     expect(screen.getByText(/Pairs 1\/2/)).toBeInTheDocument();
@@ -131,5 +132,35 @@ describe('ClauseCalibrationPage', () => {
     svc.getCalibrationPacket.mockRejectedValue(new Error('No calibration packet for run'));
     render(<ClauseCalibrationPage />);
     await screen.findByText(/Calibration packet not available/);
+  });
+});
+
+
+describe('server autosave', () => {
+  it('saves a debounced server draft after labelling', { timeout: 15_000 }, async () => {
+    const user = userEvent.setup();
+    render(<ClauseCalibrationPage />);
+    await screen.findByText(/Clause Calibration — run pilot-1/);
+    await user.click(
+      within(screen.getByTestId('pair-p1')).getByRole('button', { name: 'Same clause' }),
+    );
+    expect(svc.submitCalibrationLabels).not.toHaveBeenCalled(); // debounced
+    await waitFor(
+      () =>
+        expect(svc.submitCalibrationLabels).toHaveBeenCalledWith(
+          expect.objectContaining({ draft: true, pairs: [{ pairId: 'p1', label: 'same' }] }),
+        ),
+      { timeout: 10_000 },
+    );
+  });
+
+  it('rehydrates progress from a server draft when local storage is empty', async () => {
+    svc.getCalibrationPacket.mockResolvedValue({
+      packet: PACKET,
+      labels: null,
+      draft: { pairs: [{ pairId: 'p2', label: 'different' }] },
+    });
+    render(<ClauseCalibrationPage />);
+    await screen.findByText(/Pairs 1\/2/);
   });
 });

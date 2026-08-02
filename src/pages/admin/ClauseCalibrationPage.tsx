@@ -11,7 +11,7 @@
  * over-merge is the catastrophic error the whole checkpoint exists for.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Check, CheckCircle2, Loader2, Scale } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -49,18 +49,24 @@ export default function ClauseCalibrationPage() {
   const [draft, setDraft] = useState<Draft>({ pairs: {}, marks: {} });
   const [submitState, setSubmitState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!firmId) return;
     let cancelled = false;
     (async () => {
       try {
-        const { packet: p, labels } = await getCalibrationPacket(firmId, RUN_ID);
+        const { packet: p, labels, draft: serverDraft } = await getCalibrationPacket(firmId, RUN_ID);
         if (cancelled) return;
         setPacket(p);
-        // Precedence: server labels (a finished session) > local draft.
+        // Precedence: final server labels > server autosave draft > local
+        // draft — so a break on another device (or a cleared browser) costs
+        // nothing.
         const local = localStorage.getItem(draftKey(firmId));
         const base: Draft = local ? (JSON.parse(local) as Draft) : { pairs: {}, marks: {} };
+        for (const entry of serverDraft?.pairs ?? []) base.pairs[entry.pairId] = entry.label;
+        for (const entry of serverDraft?.boundaryMarks ?? []) base.marks[entry.pieceId] = entry.mark;
         for (const entry of labels?.pairs ?? []) base.pairs[entry.pairId] = entry.label;
         for (const entry of labels?.boundaryMarks ?? []) base.marks[entry.pieceId] = entry.mark;
         setDraft(base);
@@ -81,6 +87,22 @@ export default function ClauseCalibrationPage() {
     (next: Draft) => {
       setDraft(next);
       localStorage.setItem(draftKey(firmId), JSON.stringify(next));
+      // Debounced server autosave: a break, another device, or a cleared
+      // browser all resume from the server draft. Fire-and-forget; the
+      // indicator reports failures without blocking labelling.
+      if (autosaveTimer.current !== null) clearTimeout(autosaveTimer.current);
+      setAutosaveState('saving');
+      autosaveTimer.current = setTimeout(() => {
+        submitCalibrationLabels({
+          firmId,
+          runId: RUN_ID,
+          draft: true,
+          pairs: Object.entries(next.pairs).map(([pairId, label]) => ({ pairId, label })),
+          boundaryMarks: Object.entries(next.marks).map(([pieceId, mark]) => ({ pieceId, mark })),
+        })
+          .then(() => setAutosaveState('saved'))
+          .catch(() => setAutosaveState('error'));
+      }, 2000);
     },
     [firmId],
   );
@@ -151,6 +173,13 @@ export default function ClauseCalibrationPage() {
         <div className="text-right">
           <p className="text-sm text-gray-500">
             Pairs {pairsDone}/{packet.labelPairs.length}
+            <span className="ml-2 text-xs text-gray-400">
+              {autosaveState === 'saving' && 'Saving…'}
+              {autosaveState === 'saved' && 'All changes saved'}
+              {autosaveState === 'error' && (
+                <span className="text-amber-600">Autosave failed — kept locally</span>
+              )}
+            </span>
           </p>
           <Button
             className="mt-1"
