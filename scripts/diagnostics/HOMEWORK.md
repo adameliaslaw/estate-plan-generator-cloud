@@ -138,6 +138,72 @@ Residual risk if we build the same thing: an AI-written narrative summarising an
 did not generate can drift from it. Their `Summary of Your Estate Plan` measured fully static;
 the Cover Letter is their only generative surface.
 
+### Package 2 — separate trusts (`Adam_Elias_v1_1.docx`), 2026-08-02
+
+Generated as a **minimum-input run**: Adam answered only the questions the package required
+(trustee appointments and bequest preferences) and left optional toggles unchecked. Same client
+record — Adam, Karen, three children (Alina, Addison, Adam Jr.) — but a much thinner asset set.
+The ASSETS table holds a single row: Real Property, 93 Old Church Road, no description, no value.
+
+```
+paragraphs : 1911   (vs 2513 joint)
+titled docs:   33   (vs 34)
+similarity :  48.4% against the joint package
+```
+
+**Attributable to package selection:**
+
+- One joint trust (282 paras) becomes **two separate trusts** — Adam's (187) + Karen's (190).
+  The joint instrument is larger than either individual one because it alone carries the
+  first-death/second-death machinery. This is exactly the split `trust-joint.hbs` /
+  `trust-single.hbs` encode.
+- The funding set duplicates per trust: Comprehensive Transfer of Assets, Certification of
+  Trust, Assignment of Personal Property ×2. Client Information and Fiduciary Designations
+  summaries likewise ×2.
+- Cross-appointment: spouse is first successor trustee, POA agent, and health care
+  representative for each other; executor is "the then-acting Trustee(s) of THE ADAM J. ELIAS
+  LIVING TRUST".
+
+**NOT attributable to the package** — explained by minimum input, not package logic:
+
+| Absent | Cause |
+|---|---|
+| Retirement / conduit article | no retirement accounts entered |
+| Special needs provisions | no child flagged special needs |
+| Bargain and Sale Deed, Notice of Revocable Trust Transfer | real property on file but no legal description or value |
+| Trust Protector article | option presented, left unchecked |
+| Successor Trustee Checklist, Fiduciary Role Guide, Invoice, Declaration of Capacity | unselected options (static content, so not data-suppressed — but an unchecked toggle explains it) |
+
+### ⚠ Defect found in Statular output — TOC advertises articles the instrument lacks
+
+Verified in **both** packages, including the fuller joint one. Counts are of paragraph
+occurrences, split by paragraph style:
+
+| Concept | TOC entries | Body headings | Body text |
+|---|---|---|---|
+| Trust Protector *(separate pkg, unchecked)* | 4 | 0 | **0** |
+| Bypass Trust | 1–2 | 0 | **0** |
+| Disclaimer Trust | 1–2 | 0 | **0** |
+| Family Pot Trust | 1–8 | 0 | **0** |
+| Qualified Domestic Trust | 2 | 0 | **0** |
+
+Control: in the joint package where Trust Protector *was* selected, it appears in the TOC (2)
+**and** the body (18 headings, 33 mentions). So selected articles render correctly in both
+places.
+
+**Their table of contents is emitted from the master template's full outline rather than from
+the assembled document.** Conditional articles are correctly dropped from the body but remain
+listed in the TOC. Every trust they ship carries a contents page naming articles the instrument
+does not contain.
+
+Relevant to us: this is precisely what `template-fidelity-validator.ts` and
+`doc-content-integrity-checker.ts` exist to catch. If we build a TOC, it must be derived from
+the assembled document, and the integrity check should assert TOC ⊆ body headings.
+
+*Not a defect:* every TOC entry in both packages renders its page number as `[ ]` — 188/188 and
+87/87. That is an un-updated `PAGEREF` field, normal for programmatic OOXML assembly; Word
+populates it on open or F9. Do not report it as dangling.
+
 ### Package composition
 
 ~31% of the portfolio is boilerplate. Measured by name-density per segment:
