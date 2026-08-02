@@ -44,10 +44,10 @@ export interface StoredLabels {
 export async function getCalibrationPacket(
   firmId: string,
   runId: string,
-): Promise<{ packet: CalibrationPacket; labels: StoredLabels | null }> {
+): Promise<{ packet: CalibrationPacket; labels: StoredLabels | null; draft: StoredLabels | null }> {
   const fn = httpsCallable<
     { firmId: string; runId: string },
-    { packet: CalibrationPacket; labels: StoredLabels | null }
+    { packet: CalibrationPacket; labels: StoredLabels | null; draft: StoredLabels | null }
   >(functions, 'getCalibrationPacket');
   return (await fn({ firmId, runId })).data;
 }
@@ -57,6 +57,8 @@ export async function submitCalibrationLabels(req: {
   runId: string;
   pairs: Array<{ pairId: string; label: PairLabel }>;
   boundaryMarks?: Array<{ pieceId: string; mark: BoundaryMark; note?: string }>;
+  /** True = autosave checkpoint, stored apart from final labels. */
+  draft?: boolean;
 }): Promise<{ saved: number }> {
   const fn = httpsCallable<typeof req, { saved: number }>(functions, 'submitCalibrationLabels');
   return (await fn(req)).data;
