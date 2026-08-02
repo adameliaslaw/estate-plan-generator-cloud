@@ -746,6 +746,46 @@ export interface TrustDetail {
   notes?: string;
 }
 
+/**
+ * Drafting elections that change which articles a trust template renders.
+ *
+ * Distinct from TrustDetail, which describes the trust instrument itself —
+ * these are attorney choices about structure, not facts about the trust.
+ * Consumed by functions/src/templates/trust-joint.hbs and trust-single.hbs.
+ */
+export interface TrustOptions {
+  /**
+   * Division at the first settlor's death (joint trusts only).
+   *   none       — single continuing trust, no division
+   *   disclaimer — surviving settlor may disclaim into a credit shelter share (IRC §2518)
+   *   ab_split   — mandatory division into Family (credit shelter) + Marital trusts
+   *   qtip       — marital deduction trust, qualifying income interest (IRC §2056(b)(7))
+   */
+  taxPlanning?: 'none' | 'disclaimer' | 'ab_split' | 'qtip';
+
+  /**
+   * How retirement assets payable to the trust are administered post-SECURE Act.
+   *   conduit      — all RMDs pass through to the beneficiary in the year received
+   *   accumulation — trustee may accumulate; identifiable-beneficiary limits apply
+   *   per_share    — elected separately for each share
+   * Beneficiary data itself lives on Assets.retirementAccounts (RetirementAccount).
+   */
+  retirementTreatment?: 'conduit' | 'accumulation' | 'per_share';
+
+  /** Include the substance-abuse examination and distribution-suspension article. */
+  substanceAbuseProvisions?: boolean;
+}
+
+/**
+ * Trust Protector appointment. Optional article — when `enabled` is false or
+ * the field is absent, the TRUST PROTECTOR article does not render at all.
+ */
+export interface TrustProtector {
+  enabled: boolean;
+  initial?: FiduciaryPerson;
+  successor?: FiduciaryPerson;
+}
+
 // ============================================================================
 // Special considerations
 // ============================================================================
@@ -874,7 +914,20 @@ export interface Client {
   distribution: Distribution;
   healthcarePreferences: HealthcarePreferences;
   trusts: TrustDetail[];
+  /** Drafting elections for the trust templates. Absent → all optional articles omitted. */
+  trustOptions?: TrustOptions;
+  /** Trust Protector appointment. Absent → the TRUST PROTECTOR article is omitted. */
+  trustProtector?: TrustProtector;
   specialConsiderations: SpecialConsiderations;
+
+  /**
+   * Jurisdiction whose law governs the estate plan, spelled out ("New Jersey").
+   * Drives statutory citations and execution formalities in the templates.
+   * Absent → generators default to 'New Jersey'.
+   */
+  governingState?: string;
+  /** Scheduled execution/signing date, ISO 8601. Absent → renders as a fill-in blank. */
+  executionDate?: string;
 
   // Package / matter
   packageDetails: PackageDetails;
