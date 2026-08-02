@@ -41,14 +41,19 @@ export const config = {
     /** §4.3 Ring 1: 5-gram word shingles over sigText. */
     shingleSize: 5,
     /**
-     * §4.3 Ring 1 LSH banding: 32 bands × 4 rows = 128 permutations.
-     * (1/32)^(1/4) ≈ 0.42 candidate threshold — deliberately generous, since
-     * Ring 1 only PROPOSES pairs; the diff filter + sonnet adjudication
-     * decide (§4.3: "no unadjudicated non-exact merge"). Band/row split is
-     * tunable during seed calibration (§4.3, §11 P1).
+     * §4.3 Ring 1 LSH banding: 16 bands × 8 rows = 128 permutations.
+     * (1/16)^(1/8) ≈ 0.71 candidate threshold — MANUALLY ASSERTED, not
+     * calibrated (Adam's decision 2026-08-02: skip the §11 P1b labeling
+     * session; run with a conservative split and accept duplicate noise).
+     * The conservative direction: fewer proposed pairs means fewer merges
+     * found (near-duplicates survive as separate catalog entries) and lower
+     * adjudication spend; over-merge safety is unchanged either way, since
+     * Ring 1 only PROPOSES pairs — the diff filter + sonnet adjudication
+     * decide (§4.3: "no unadjudicated non-exact merge"). The prior design
+     * value was 32×4 (≈ 0.42); restore it if a labeled calibration ever runs.
      */
-    lshBands: 32,
-    lshRows: 4,
+    lshBands: 16,
+    lshRows: 8,
   },
 
   /** §4.2 Enumerated-list sections — item-set identity. */

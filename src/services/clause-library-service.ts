@@ -40,6 +40,26 @@ export async function addMyClause(req: AddMyClauseRequest): Promise<{ clauseId: 
   return (await fn(req)).data;
 }
 
+export interface RemoveClauseRequest {
+  firmId: string;
+  clauseId: string;
+}
+
+/**
+ * Delete a clause from the library. Manual entries are hard-deleted; mined
+ * entries are tombstoned server-side (status 'removed') so pipeline re-runs
+ * don't resurrect them. Either way the entry leaves the picker immediately.
+ */
+export async function removeClause(
+  req: RemoveClauseRequest,
+): Promise<{ removed: 'deleted' | 'tombstoned' }> {
+  const fn = httpsCallable<RemoveClauseRequest, { removed: 'deleted' | 'tombstoned' }>(
+    functions,
+    'removeClause',
+  );
+  return (await fn(req)).data;
+}
+
 /**
  * Fill {{PLACEHOLDER}} tokens from the values we know about this client;
  * unknown tokens are left as-is so the attorney sees exactly what still

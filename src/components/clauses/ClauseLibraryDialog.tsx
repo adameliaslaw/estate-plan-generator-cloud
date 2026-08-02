@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { BookMarked, Loader2, Plus, Search } from 'lucide-react';
+import { BookMarked, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 
 import {
   Dialog,
@@ -31,6 +31,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCollection } from '@/hooks/useFirestore';
 import {
   addMyClause,
+  removeClause,
   resolveClausePlaceholders,
   type ClauseCatalogEntry,
 } from '@/services/clause-library-service';
@@ -64,6 +65,10 @@ export default function ClauseLibraryDialog({
   const [adding, setAdding] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Clause id awaiting removal confirmation — reset when selection moves. */
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [draft, setDraft] = useState({ title: '', text: '', category: '', state: '' });
 
   const { data: entries, loading } = useCollection<ClauseCatalogEntry>(
@@ -112,6 +117,22 @@ export default function ClauseLibraryDialog({
   const preview = selected
     ? resolveClausePlaceholders(selected.canonicalText, placeholderValues)
     : '';
+
+  async function handleRemove(clauseId: string) {
+    setRemoveBusy(true);
+    setRemoveError(null);
+    try {
+      await removeClause({ firmId, clauseId });
+      // The live snapshot drops the entry; clear selection so the preview
+      // falls through to the next visible clause instead of a stale id.
+      setSelectedId(null);
+      setConfirmRemoveId(null);
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : 'Failed to remove clause.');
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
 
   async function handleSave() {
     if (!draft.title.trim() || !draft.text.trim()) {
@@ -293,7 +314,49 @@ export default function ClauseLibraryDialog({
                     {preview}
                   </pre>
                 </ScrollArea>
-                <div className="border-t border-gray-100 px-4 py-2 text-right">
+                <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    {confirmRemoveId === selected.id ? (
+                      <>
+                        <span className="text-sm text-gray-600">
+                          {selected.origin === 'manual'
+                            ? 'Delete this clause permanently?'
+                            : 'Remove this clause from the library?'}
+                        </span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={removeBusy}
+                          onClick={() => handleRemove(selected.id)}
+                        >
+                          {removeBusy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                          Remove
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={removeBusy}
+                          onClick={() => setConfirmRemoveId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-500 hover:text-red-600"
+                        onClick={() => {
+                          setRemoveError(null);
+                          setConfirmRemoveId(selected.id);
+                        }}
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" />
+                        Remove
+                      </Button>
+                    )}
+                    {removeError && <span className="text-sm text-red-600">{removeError}</span>}
+                  </div>
                   <Button
                     onClick={() => {
                       onInsert(preview);

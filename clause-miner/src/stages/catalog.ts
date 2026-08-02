@@ -49,6 +49,18 @@ export function assembleUnionTemplate(): never {
   throw new Error('checkpoint-2 scope: implemented after catalog review begins');
 }
 
+/**
+ * Attorney decisions outlive re-runs: 'approved' (published to drafting) and
+ * 'removed' (deleted via the removeClause callable) are user-set states a
+ * fresh mine must not reset to 'mined' — a re-run silently resurrecting a
+ * deleted clause (or unpublishing an approved one) would break the promise
+ * that the catalog only changes on Adam's click.
+ */
+export function carriedStatus(existing: DocData | null): 'approved' | 'removed' | null {
+  const status = existing?.status;
+  return status === 'approved' || status === 'removed' ? status : null;
+}
+
 export interface CatalogDeps {
   store: DocStore;
   blobs: BlobStore;
@@ -254,6 +266,8 @@ export async function runCatalog(deps: CatalogDeps, env: Env): Promise<CatalogSu
       updatedAt: now,
     };
     const clausePath = catalogDocPath(env.firmId, fam.familyId);
+    const carried = carriedStatus(await deps.store.get(clausePath));
+    if (carried !== null) doc.status = carried;
     await deps.store.set(clausePath, doc);
     summary.written++;
 
