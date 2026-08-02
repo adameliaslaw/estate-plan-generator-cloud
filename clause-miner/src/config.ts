@@ -117,6 +117,19 @@ export const config = {
     newestEraWeight: 2,
   },
 
+  /** §11 P1a — curated-seed ingestion scope (Adam's decisions, 2026-08-02). */
+  seed: {
+    /**
+     * Doc categories whose clauses feed the library. POA is excluded by
+     * Adam's explicit decision (limited clause variation); living wills for
+     * the same reason; letters/questionnaires/invoices/other carry no
+     * clauses. Every excluded file is named in the run ledger.
+     */
+    scopeCategories: ['trust', 'will'],
+    /** A segment shorter than this (after commentary removal) is not a clause. */
+    minPieceChars: 40,
+  },
+
   /** §11 P1 — seed calibration (clause-library segmentation + labeled pairs). */
   calibration: {
     /**

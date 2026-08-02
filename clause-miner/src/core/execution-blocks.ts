@@ -14,6 +14,11 @@ export const EXECUTION_BLOCK_PATTERNS: readonly RegExp[] = [
   /\bsworn\s+to\s+and\s+subscribed\b/i,
   /\bnotary\s+public\b/i,
   /\bwitness(?:eth)?\s+as\s+to\s+signature\b/i,
+  // Will attestation formula ("…published and declared by the said…").
+  /\bsigned,?\s+sealed,?\s+published\s+and\s+declared\b/i,
+  // Self-proving affidavit formula.
+  /\bdeclare\s+to\s+the\s+undersigned\s+authority\b/i,
+  /\bsubscribed\s+our\s+names\s+as\s+witnesses\b/i,
 ];
 
 /** A paragraph that is nothing but a signature line: "________________". */

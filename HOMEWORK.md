@@ -519,7 +519,43 @@ worth keeping:
 - ⚠️ Standing pattern for all long stages: judge by the Cloud Run execution/job output, never the
   workflow color; resume dispatches are the normal way to read a finished stage's summary.
 
-**▶ NEXT — two tracks, either order:**
+### ✅ SEED REWORK, 2026-08-02 — Adam caught the calibration packet showing whole documents as "clauses"
+
+**The finding (Adam's, from the live /clause-calibration page):** entries in both the pairs and the
+boundary list were entire documents or not clauses at all. Diagnosis against his actual Drive files:
+the "clause library" is really a mixed FORMS archive — complete will/POA templates, letters, blank
+intake forms and eight subfolders alongside true single-clause files — and the seed stage ran all
+of it through the library segmenter (separator rules / blank gaps), which keeps a full instrument
+as one giant piece. The Trust Agreements seed folder (also the canary) is entirely full client
+documents. Separately: the pairs UI was rendering **sigText** — the §5.2 fold whose own header
+says "never displayed" — which is why even correct pieces read mangled.
+
+**Adam's decisions (recorded 2026-08-02, enforced in code):**
+- **POA is excluded — limited clause variation.** Was already decided, but the pair-builder never
+  checked `trustRelevant`, so POA pieces reached his 30 labels anyway. Now filtered, with a test.
+- **Everything goes through the instrument segmenter.** Seed and corpus now cut with the same
+  grammar — which Gate 1 implicitly required all along (a seed piece can only land in a mined
+  family if both sides are cut the same way).
+- **The litmus test: a complete document the instrument segmenter cannot segment carries no
+  minable clauses** → excluded as `unsegmentable`, named in the ledger. Enforced via seed-file
+  triage (same haiku family as corpus triage: docCategory + contentKind) with scope = trust/will.
+- **Single-clause excerpt files are kept** (Adam's call): a file that IS one clause passes the
+  litmus as a one-clause document; `contentKind=clause-excerpt` exempts it from the
+  under-segmentation exclusion.
+
+**Also in the same pass:** execution blocks truncate at the first attestation paragraph (the last
+article of a will runs straight into IN WITNESS WHEREOF and its operative text is real); three
+attestation formulas added to the detector (they were surfacing as "clauses"); piece ids became
+`fileId:sN` so stale ledgered batches and old boundary-mark drafts can never collide with new
+pieces; both seed batches got the #243 ledgered-resume pattern; and a latent re-run bug died (the
+old stage only processed `status==='converted'` rows — a completed run left none, so a re-run
+would have written an empty gold set). Old draft labels/marks reference dead pair/piece ids and
+are dropped by the existing staleness guards — nothing to migrate.
+
+**Verified:** clause-miner 398/398 (up from 363), root 1056/1056, builds green. Negative controls
+run and reverted: the POA-pair filter and the execution-truncation each fail their test when
+removed. **▶ NEXT:** dispatch STAGE=seed then STAGE=calibrate on ref=main (~$1, secret mounted for
+seed only); Adam's labelling session restarts on the fresh packet at /clause-calibration.
 1. **The review UI** (task #6: calibration packet renderer + label capture + catalog queue +
    Clause Picker) — agent work, no Adam action, and it is what makes Adam's 1-hour labelling
    session possible.

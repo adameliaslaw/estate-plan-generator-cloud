@@ -42,7 +42,15 @@ const PACKET = {
     },
   ],
   labelPairs: [
-    { pairId: 'p1', aText: 'per stirpes text', bText: 'per capita text', score: 0.97 },
+    {
+      pairId: 'p1',
+      aText: 'per stirpes sigtext',
+      bText: 'per capita sigtext',
+      aDisplay: 'Per stirpes readable text',
+      bDisplay: 'Per capita readable text',
+      score: 0.97,
+    },
+    // A pre-2026-08-02 packet pair without display fields still renders.
     { pairId: 'p2', aText: 'bond waived', bText: 'bond required', score: 0.95 },
   ],
 };
@@ -60,6 +68,14 @@ async function renderPage() {
 }
 
 describe('ClauseCalibrationPage', () => {
+  it('shows the readable display text, never the machine sigText, when the packet has it', async () => {
+    await renderPage();
+    expect(screen.getByText('Per stirpes readable text')).toBeInTheDocument();
+    expect(screen.queryByText('per stirpes sigtext')).not.toBeInTheDocument();
+    // Pairs from an old packet without display fields fall back to aText.
+    expect(screen.getByText('bond waived')).toBeInTheDocument();
+  });
+
   it('refuses to submit until every pair is labelled, then sends exactly the labels', async () => {
     const user = userEvent.setup();
     await renderPage();

@@ -20,8 +20,12 @@ export interface CalibrationSeedPiece {
 
 export interface CalibrationPair {
   pairId: string;
+  /** Machine signature text — fallback only; packets since 2026-08-02 carry displays. */
   aText: string;
   bText: string;
+  /** Readable normalized text for review (absent in pre-2026-08-02 packets). */
+  aDisplay?: string;
+  bDisplay?: string;
   score: number;
 }
 

@@ -56,7 +56,7 @@ export interface CalibrationPacket {
     pieceId: string;
     seedFileName: string;
     title: string | null;
-    separatorSignal: string;
+    structureSignal: string;
     kind: string;
     trustRelevant: boolean;
     normText: string;
@@ -167,12 +167,17 @@ export async function runCalibrate(deps: CalibrateDeps, env: Env): Promise<Calib
   }
 
   const clausePieces = pieces.filter((p) => p.kind === 'clause');
-  const seedItems: TextItem[] = clausePieces.map((p) => ({
-    id: `seed:${p.pieceId}`,
-    sigText: p.sigText,
-    normText: p.normText,
-    seedPieceId: p.pieceId,
-  }));
+  // Pairs and seed-structure negatives draw from TRUST-RELEVANT clauses only
+  // — the pilot is trusts, and Adam's POA-exclusion decision (2026-08-02)
+  // must hold on the label pairs, not just on the gates.
+  const seedItems: TextItem[] = clausePieces
+    .filter((p) => p.trustRelevant)
+    .map((p) => ({
+      id: `seed:${p.pieceId}`,
+      sigText: p.sigText,
+      normText: p.normText,
+      seedPieceId: p.pieceId,
+    }));
 
   // Candidate band comes from the pilot's OWN segments where they exist, so
   // the pairs Adam labels are the pairs the corpus run will actually face.
@@ -228,7 +233,7 @@ export async function runCalibrate(deps: CalibrateDeps, env: Env): Promise<Calib
       pieceId: p.pieceId,
       seedFileName: p.seedFileName,
       title: p.title,
-      separatorSignal: p.separatorSignal,
+      structureSignal: p.structureSignal,
       kind: p.kind,
       trustRelevant: p.trustRelevant,
       normText: p.normText,

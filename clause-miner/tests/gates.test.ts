@@ -24,7 +24,7 @@ function piece(id: string, overrides: Partial<SeedPiece> = {}): SeedPiece {
     normText: `text ${id}`,
     sigText: `text ${id}`,
     ring0Hash: `hash_${id}`,
-    separatorSignal: 'rule',
+    structureSignal: 'text-grammar',
     canary: false,
     trustRelevant: true,
     kind: 'clause',

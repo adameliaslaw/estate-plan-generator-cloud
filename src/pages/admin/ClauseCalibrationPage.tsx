@@ -239,10 +239,10 @@ export default function ClauseCalibrationPage() {
                 <CardContent>
                   <div className="grid gap-3 md:grid-cols-2">
                     <pre className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 font-serif text-sm">
-                      {pair.aText}
+                      {pair.aDisplay ?? pair.aText}
                     </pre>
                     <pre className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 font-serif text-sm">
-                      {pair.bText}
+                      {pair.bDisplay ?? pair.bText}
                     </pre>
                   </div>
                   <div className="mt-3 flex gap-2">
