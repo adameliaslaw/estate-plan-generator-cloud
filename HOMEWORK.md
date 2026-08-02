@@ -554,8 +554,23 @@ are dropped by the existing staleness guards — nothing to migrate.
 
 **Verified:** clause-miner 398/398 (up from 363), root 1056/1056, builds green. Negative controls
 run and reverted: the POA-pair filter and the execution-truncation each fail their test when
-removed. **▶ NEXT:** dispatch STAGE=seed then STAGE=calibrate on ref=main (~$1, secret mounted for
-seed only); Adam's labelling session restarts on the fresh packet at /clause-calibration.
+removed.
+
+**✅ RE-RAN CLEAN the same day (#257 merged, both stages green on Cloud Run):**
+- **Seed:** 121 triaged / 0 failed. **54 excluded by name** — poa:26 (over a fifth of the
+  "library" was POA content — Adam's exclusion fully vindicated), letter:11, livingWill:8,
+  questionnaire:1, other:2, over-segmented:4, no-pieces:2. **67 in scope → 209 pieces** (194
+  clause / 15 commentary, 130 trust-relevant, 17 canary), 47 execution blocks truncated,
+  0 unclassified. All conversions were cache hits — spend was the small haiku batches only.
+- **Calibrate (emit):** seedPieces=194, labelPairsRequested=30, boundaryDocs=5, failure=null.
+  ~33 min of CPU — emit walks all 512 segmented trusts to build the candidate band.
+- The 4 `over-segmented` and 2 `no-pieces` files are named in the run ledger
+  (`firms/firm-001/clauseMining/pilot-1` → seed.excludedFiles) — worth a glance during Adam's
+  session, not blocking.
+
+**▶ NEXT: Adam's 1-hour labelling session at /clause-calibration** (fresh packet, 30 pairs, old
+draft labels/marks are stale-dropped automatically). Then `STAGE=calibrate` (tune) → identity
+re-run at calibrated banding → canonicalize → stats → catalog → gates.
 1. **The review UI** (task #6: calibration packet renderer + label capture + catalog queue +
    Clause Picker) — agent work, no Adam action, and it is what makes Adam's 1-hour labelling
    session possible.
