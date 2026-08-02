@@ -160,4 +160,55 @@ describe('segmentParagraphs (§4.2)', () => {
     expect(result.blocks).toHaveLength(1);
     expect(result.blocks[0].paragraphs).toEqual(['ARTICLE I', 'Body text here.']);
   });
+
+  describe('mid-sentence guard on text-grammar boundaries (2026-08-02, Adam: pieces cut off mid-sentence)', () => {
+    it('does not cut at a Section cross-reference when the previous paragraph is mid-sentence', () => {
+      // A partially hard-wrapped doc can slip past the reflow heuristic, so
+      // the segmenter must not treat a wrapped "Section 5.2 hereof…"
+      // continuation line as a boundary.
+      const result = segmentParagraphs([
+        'ARTICLE V',
+        'The Trustee shall distribute the principal as provided in',
+        'Section 5.2 hereof upon the death of the Grantor.',
+      ]);
+      expect(result.blocks).toHaveLength(1);
+      expect(result.blocks[0].paragraphs).toHaveLength(3);
+    });
+
+    it('does not cut at an all-caps run when the previous paragraph is mid-sentence', () => {
+      const result = segmentParagraphs([
+        'ARTICLE V',
+        'I give all of my estate to my beloved wife,',
+        'MARY ROE, IF SHE SURVIVES ME,',
+        'absolutely and in fee simple.',
+      ]);
+      expect(result.blocks).toHaveLength(1);
+    });
+
+    it('still cuts at a heading that follows a completed sentence', () => {
+      const result = segmentParagraphs([
+        'The Trustee shall pay the income to the Grantor for life.',
+        'Section 5.2 Distribution of Principal. Upon the death of the Grantor the principal shall be distributed.',
+      ]);
+      expect(result.blocks).toHaveLength(2);
+    });
+
+    it('still cuts at a heading that follows a standalone heading', () => {
+      const result = segmentParagraphs([
+        'ARTICLE II',
+        'Section 2.1 Trust Property. The Grantor transfers the property on Schedule A.',
+      ]);
+      expect(result.blocks).toHaveLength(2);
+    });
+
+    it('caller-supplied style/numbering hints bypass the guard', () => {
+      const hints: BoundaryHint[] = [{ paragraphIndex: 1, level: 'section', signal: 'style' }];
+      const result = segmentParagraphs(
+        ['The Trustee shall distribute the principal as provided in', 'Section 5.2 Distributions'],
+        hints,
+      );
+      expect(result.blocks).toHaveLength(2);
+      expect(result.blocks[1].structureSignal).toBe('style');
+    });
+  });
 });

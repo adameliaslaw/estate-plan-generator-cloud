@@ -51,8 +51,13 @@ import type {
  * next STAGE=segment run (a plain resume still skips up-to-date rows).
  * seg/2: leading structural markers ("FIRST:", "ARTICLE IV") extracted to
  * `heading` metadata instead of fragmenting Ring-0 identity (2026-08-02).
+ * seg/3: heading grammar no longer opens a boundary mid-sentence — wrapped
+ * cross-references ("…as provided in ⏎ Section 5.2 hereof"), all-caps
+ * emphasis runs, and bare decimals at continuation-line starts join their
+ * sentence in both reflow and segmentation (2026-08-02, Adam's catch during
+ * calibration labeling).
  */
-export const SEGMENTER_VERSION = 'seg/2';
+export const SEGMENTER_VERSION = 'seg/3';
 
 export interface SegmentRecord {
   segmentIndex: number;

@@ -89,3 +89,67 @@ describe('reflowParagraphs (§4.1 rejoin)', () => {
     expect(paragraphs).toBe(normalDoc);
   });
 });
+
+describe('reflowParagraphs — heading grammar at a wrapped continuation line (2026-08-02, Adam: pieces cut off mid-sentence)', () => {
+  it('joins a wrapped Section N.N cross-reference instead of splitting the sentence', () => {
+    const doc = [
+      'The Trustee shall distribute the principal as provided in',
+      'Section 5.2 hereof upon the death of the Grantor and shall',
+      'thereafter terminate the trust.',
+    ];
+    const { paragraphs, reflowed } = reflowParagraphs(doc);
+    expect(reflowed).toBe(true);
+    expect(paragraphs).toEqual([
+      'The Trustee shall distribute the principal as provided in Section 5.2 hereof upon the death of the Grantor and shall thereafter terminate the trust.',
+    ]);
+  });
+
+  it('joins a wrapped ARTICLE cross-reference instead of splitting the sentence', () => {
+    const doc = [
+      'The share of any deceased child shall be disposed of pursuant to',
+      'ARTICLE IV of this Agreement, and the Trustee shall have no',
+      'further duty with respect thereto.',
+    ];
+    const { paragraphs } = reflowParagraphs(doc);
+    expect(paragraphs).toEqual([
+      'The share of any deceased child shall be disposed of pursuant to ARTICLE IV of this Agreement, and the Trustee shall have no further duty with respect thereto.',
+    ]);
+  });
+
+  it('joins an all-caps emphasis run that wrapped onto its own line', () => {
+    const doc = [
+      'I give all of my estate to my beloved wife,',
+      'MARY ROE, IF SHE SURVIVES ME,',
+      'and if she does not survive me, to my children.',
+    ];
+    const { paragraphs } = reflowParagraphs(doc);
+    expect(paragraphs).toEqual([
+      'I give all of my estate to my beloved wife, MARY ROE, IF SHE SURVIVES ME, and if she does not survive me, to my children.',
+    ]);
+  });
+
+  it('joins a wrapped line starting with a bare decimal that is not numbering', () => {
+    const doc = [
+      'The homestead consists of approximately',
+      '2.5 acres situated in the County of Kings,',
+      'together with all improvements thereon.',
+    ];
+    const { paragraphs } = reflowParagraphs(doc);
+    expect(paragraphs).toEqual([
+      'The homestead consists of approximately 2.5 acres situated in the County of Kings, together with all improvements thereon.',
+    ]);
+  });
+
+  it('still splits at a genuine heading that follows a completed sentence', () => {
+    const doc = [
+      'to my beloved wife if she survives me by thirty days.',
+      'Section 5.1 Payment of Debts. My Executor shall pay all',
+      'my just debts and funeral expenses.',
+    ];
+    const { paragraphs } = reflowParagraphs(doc);
+    expect(paragraphs).toEqual([
+      'to my beloved wife if she survives me by thirty days.',
+      'Section 5.1 Payment of Debts. My Executor shall pay all my just debts and funeral expenses.',
+    ]);
+  });
+});
