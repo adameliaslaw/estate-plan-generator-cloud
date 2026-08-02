@@ -96,6 +96,48 @@ MERGEFIELD/DOCVARIABLE, all 88 field codes are `PAGEREF` for the table of conten
 
 Their moat is quantified: one master Word document, ~46 hours of human drafting, 2,911 saves.
 
+### ✅ Determinism control — RESOLVED 2026-08-02
+
+The revocable trust package was generated twice with identical questionnaire answers
+(`Adam_Elias_v1.docx`, `Adam_Elias_v2.docx`):
+
+```
+non-empty paragraphs : 2513 in both
+identical            : 2508  (99.80%)
+differing            :    5  (0.20%)  — paragraphs 32..36, consecutive
+location             : Cover Letter, plain-English plan narrative
+```
+
+`docProps` are identical between runs (same `revision: 2911`, same `modified: 2026-07-14`), as
+are bookmark count, field-code count, and rsid count.
+
+**Statular is deterministic template assembly with a narrow generative seam.** The five
+divergent paragraphs are not merely reworded — they are **reordered and merged** between runs
+(the special-needs paragraph moves after the families-of-origin paragraph in v2 and is folded
+under a new "A few additional rules apply across these shares" lead-in). No template engine
+reorders paragraphs. That is a model.
+
+Substance is preserved across both runs — joint access, survivor's unrestricted access, equal
+shares to the named children, special-needs conversion, families-of-origin fallback all appear
+in both. The model is re-expressing a fixed fact set, not inventing.
+
+**Every operative instrument rendered identically.** Trust, both POAs, both wills, both advance
+directives, HIPAA, deed, and all funding documents are prose-identical across runs. AI touches
+only non-operative client-facing narrative, where variation is cosmetic.
+
+Two consequences:
+
+1. **Every subsequent package diff is pure conditional logic, not sampling noise.** That was the
+   point of the control. Cross-package diffs can now be read at face value.
+2. **This inverts our architecture.** `trust-generator.ts` produces the trust 100% by AI at
+   temperature 0.15 because no `.hbs` exists for `docType: 'trust'`. Statular's trust is 0% AI.
+   We have the model where they have the template, and nothing where they have the model. Their
+   split — deterministic instruments, generative client narrative — is the defensible one.
+
+Residual risk if we build the same thing: an AI-written narrative summarising an instrument it
+did not generate can drift from it. Their `Summary of Your Estate Plan` measured fully static;
+the Cover Letter is their only generative surface.
+
 ### Package composition
 
 ~31% of the portfolio is boilerplate. Measured by name-density per segment:
@@ -165,10 +207,9 @@ Adam is generating additional Statular packages and uploading them.
 ages, fiduciaries, assets, beneficiary designations. Vary only the package selection. Then every
 inter-package difference is package logic rather than name-substitution noise.
 
-The determinism test remains **unspent**: generate one package twice with identical answers.
-100% paragraph similarity means deterministic template assembly and every later diff is pure
-conditional logic. Any prose divergence means a model is in the loop and diffs carry sampling
-noise.
+The determinism test is **spent and resolved** — see the control result above. 99.80% of
+paragraphs are byte-identical across runs, so package diffs are interpretable at face value.
+The one generative surface is the Cover Letter narrative; discount divergence there.
 
 Consolidated multi-document exports are sufficient — full per-document structure is extractable
 by segmenting on `Title` paragraph style. Separate per-document downloads would only add
@@ -180,7 +221,8 @@ not drafting input.
 ## ▶ NEXT
 
 1. **Await further Statular packages** from Adam. Analyse each on arrival; hold the
-   cross-package synthesis until he says the collection is complete.
+   cross-package synthesis until he says the collection is complete. The determinism control is
+   done — see above — so package diffs are now interpretable at face value.
 2. On arrival, produce: a **document × package matrix** for Statular, the same matrix for this
    repo's `foundation` / `guardian` / `fortress`, and pairwise clause diffs.
    `trust-generator.ts:172` already branches on `packageType === 'fortress'` to produce a joint
