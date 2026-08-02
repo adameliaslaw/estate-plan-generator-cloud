@@ -41,6 +41,7 @@ import { config } from '../config.js';
 import { normalize } from '../core/normalize.js';
 import { reflowParagraphs } from '../core/reflow.js';
 import {
+  extractLeadingHeading,
   segmentParagraphs,
   type ProvisionBlock,
   type SegmentationFlag,
@@ -76,6 +77,8 @@ export interface SeedPiece {
   seedFileName: string;
   pieceIndex: number;
   title: string | null;
+  /** Leading structural marker from the source ("FIRST", "ARTICLE IV"), if any. */
+  heading: string | null;
   normText: string;
   sigText: string;
   ring0Hash: string;
@@ -433,12 +436,15 @@ export async function runSeed(deps: SeedDeps, env: Env): Promise<SeedSummary> {
     const canary = row.data.canary === true;
     let filePieces = 0;
     seg.blocks.forEach((block, i) => {
+      // The leading structural marker ("FIRST:", "ARTICLE IV") is where the
+      // clause SAT, not what it says — kept as metadata, out of the hash.
+      const { heading, body } = extractLeadingHeading(block.paragraphs);
       // Truncate at the first execution paragraph rather than dropping the
       // block: the last article of a will runs straight into "IN WITNESS
       // WHEREOF" with no boundary between, and its operative text is real.
-      const execIdx = block.paragraphs.findIndex((p) => detectExecutionBlock(p) !== null);
+      const execIdx = body.findIndex((p) => detectExecutionBlock(p) !== null);
       if (execIdx !== -1) summary.executionBlocksDropped++;
-      const bodyParas = execIdx === -1 ? block.paragraphs : block.paragraphs.slice(0, execIdx);
+      const bodyParas = execIdx === -1 ? body : body.slice(0, execIdx);
       const operative = bodyParas.filter((l) => !isCommentaryLine(l));
       const rawText = operative.join('\n');
       if (rawText.trim().length < config.seed.minPieceChars) return;
@@ -452,6 +458,7 @@ export async function runSeed(deps: SeedDeps, env: Env): Promise<SeedSummary> {
           seedFileId: row.id,
           seedFileName: fileNameOf(row),
           pieceIndex: i,
+          heading,
           normText,
           sigText,
           ring0Hash: ring0Hash(sigText),
