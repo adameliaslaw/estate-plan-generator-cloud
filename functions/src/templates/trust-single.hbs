@@ -2,7 +2,7 @@
   trust-single.hbs — Revocable Living Trust (one settlor)
 
   SPINE: settlor's lifetime → settlor's death. No first/second-death sequence.
-  Use when personalInfo.maritalStatus !== 'married', or when spouses want
+  Use when personalInfo.maritalStatus !== 'Married', or when spouses want
   separate trusts rather than a joint instrument.
 
   Mirrors trust-joint.hbs section-for-section so the two stay diffable.
@@ -25,9 +25,9 @@
 (the &ldquo;settlor,&rdquo; &ldquo;I,&rdquo; &ldquo;me,&rdquo; or &ldquo;my&rdquo;), as settlor and as initial trustee.</p>
 
 <p><strong>Family.</strong>
-{{#if (eq personalInfo.maritalStatus 'married')}}I am married to {{fullName spouseInfo}}. [[DRAFT: intentional use of a separate rather than joint trust; elective share considerations]]
-{{else if (eq personalInfo.maritalStatus 'widowed')}}I am a widow or widower. [[DRAFT: reference to predeceased spouse if relevant]]
-{{else if (eq personalInfo.maritalStatus 'divorced')}}I am divorced. [[DRAFT: former spouse expressly excluded]]
+{{#if (eq personalInfo.maritalStatus 'Married')}}I am married to {{fullName spouseInfo}}. [[DRAFT: intentional use of a separate rather than joint trust; elective share considerations]]
+{{else if (eq personalInfo.maritalStatus 'Widowed')}}I am a widow or widower. [[DRAFT: reference to predeceased spouse if relevant]]
+{{else if (eq personalInfo.maritalStatus 'Divorced')}}I am divorced. [[DRAFT: former spouse expressly excluded]]
 {{else}}I am not married.{{/if}}
 {{#hasItems children}}I have the following {{#if (gt children.length 1)}}children{{else}}child{{/if}}:</p>
 <ul>
