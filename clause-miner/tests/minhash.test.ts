@@ -76,10 +76,26 @@ describe('candidatePairs (§4.3 Ring 1 LSH banding)', () => {
       { id: 'b', signature: minhashSignature(spendthriftVariant) },
       { id: 'c', signature: minhashSignature(unrelated) },
     ];
-    const pairs = [...candidatePairs(entries)];
+    // Banding pinned to the generous 32×4 split: this test is about LSH
+    // mechanics (near-dupes proposed, unrelated skipped), not the configured
+    // default, which is deliberately more conservative.
+    const pairs = [...candidatePairs(entries, { lshBands: 32, lshRows: 4 })];
     expect(pairs).toContainEqual(['a', 'b']);
     expect(pairs).not.toContainEqual(['a', 'c']);
     expect(pairs).not.toContainEqual(['b', 'c']);
+  });
+
+  it('the manually-asserted 16×8 default does NOT propose a mid-band pair', () => {
+    // Adam's option-2 decision (2026-08-02): with calibration skipped, the
+    // default banding trades merge recall for safety and spend — a ~0.5-0.6
+    // Jaccard variant pair survives as separate catalog entries rather than
+    // being proposed for merge. This is the accepted duplicate noise; if a
+    // labeled calibration ever selects a split, this pins what changed.
+    const entries = [
+      { id: 'a', signature: minhashSignature(spendthrift) },
+      { id: 'b', signature: minhashSignature(spendthriftVariant) },
+    ];
+    expect([...candidatePairs(entries)]).toEqual([]);
   });
 
   it('emits each pair only once across bands', () => {

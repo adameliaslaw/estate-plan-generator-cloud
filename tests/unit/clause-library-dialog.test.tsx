@@ -22,9 +22,10 @@ vi.mock('@/hooks/useAuth', () => ({ useAuth: () => mockAuth }));
 const mockCatalog = vi.hoisted(() => ({ data: [] as unknown[], loading: false, error: null }));
 vi.mock('@/hooks/useFirestore', () => ({ useCollection: () => mockCatalog }));
 
+const mockRemoveClause = vi.hoisted(() => vi.fn());
 vi.mock('@/services/clause-library-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/clause-library-service')>();
-  return { ...actual, addMyClause: vi.fn() };
+  return { ...actual, addMyClause: vi.fn(), removeClause: mockRemoveClause };
 });
 
 import ClauseLibraryDialog from '@/components/clauses/ClauseLibraryDialog';
@@ -121,6 +122,32 @@ describe('ClauseLibraryDialog', () => {
     await user.click(clauseList().getByText('My NY Attestation'));
     await user.click(screen.getByRole('button', { name: 'Use Clause' }));
     expect(onInsert).toHaveBeenCalledWith('Signed for Janice Altieri at {{CITY}}.');
+  });
+
+  it('removes a clause only after explicit confirmation', async () => {
+    const user = userEvent.setup();
+    mockRemoveClause.mockResolvedValue({ removed: 'tombstoned' });
+    renderDialog();
+    await user.click(clauseList().getByText('Spendthrift Clause'));
+    await user.click(screen.getByRole('button', { name: /remove/i }));
+    // Nothing is called until the confirm step.
+    expect(mockRemoveClause).not.toHaveBeenCalled();
+    expect(screen.getByText('Remove this clause from the library?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(mockRemoveClause).toHaveBeenCalledWith({ firmId: 'firm-001', clauseId: 'c1' });
+  });
+
+  it('cancel backs out of removal without calling the service', async () => {
+    const user = userEvent.setup();
+    mockRemoveClause.mockClear();
+    renderDialog();
+    await user.click(clauseList().getByText('My NY Attestation'));
+    await user.click(screen.getByRole('button', { name: /remove/i }));
+    // Manual entries warn about permanence — they are hard-deleted.
+    expect(screen.getByText('Delete this clause permanently?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mockRemoveClause).not.toHaveBeenCalled();
+    expect(screen.queryByText('Delete this clause permanently?')).not.toBeInTheDocument();
   });
 
   it('shows usage counts on mined clauses', () => {
