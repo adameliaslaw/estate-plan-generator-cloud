@@ -11,7 +11,27 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { z } from 'zod';
-import { assertFirmStaff } from './auth-guards';
+import { assertStaff } from './auth-guards';
+import { HttpsError as GuardError } from 'firebase-functions/v2/https';
+
+/**
+ * The mining run is FIRM INFRASTRUCTURE keyed under the pipeline's firm id
+ * ('firm-001', pinned 2026-07-31), while the app's live auth claims carry
+ * 'elias-counsel' — discovered when the calibration page 404'd on its own
+ * packet. Staff of either id operate on the one mining scope. Revisit when
+ * the catalog ships: catalog docs must land under the APP's firm id or the
+ * UI cannot see them (HOMEWORK 2026-07-31 warning, now proven real).
+ */
+const MINING_FIRM_ID = 'firm-001';
+const MINING_STAFF_FIRMS = new Set(['firm-001', 'elias-counsel']);
+
+function assertMiningStaff(request: Parameters<typeof assertStaff>[0]): { uid: string } {
+  const caller = assertStaff(request);
+  if (!caller.firmId || !MINING_STAFF_FIRMS.has(caller.firmId)) {
+    throw new GuardError('permission-denied', 'Not a staff member of the mining firm.');
+  }
+  return caller;
+}
 
 const RUN_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
@@ -36,8 +56,9 @@ export const getCalibrationPacket = onCall(
     if (!parsed.success) {
       throw new HttpsError('invalid-argument', parsed.error.issues[0]?.message ?? 'Invalid input');
     }
-    const { firmId, runId } = parsed.data;
-    assertFirmStaff(request, firmId);
+    const { runId } = parsed.data;
+    assertMiningStaff(request);
+    const firmId = MINING_FIRM_ID;
 
     // The miner writes to its GCS_BUCKET (…firebasestorage.app) explicitly;
     // the Functions default bucket can be the legacy …appspot.com one. Try
@@ -110,8 +131,9 @@ export const submitCalibrationLabels = onCall(
     if (!parsed.success) {
       throw new HttpsError('invalid-argument', parsed.error.issues[0]?.message ?? 'Invalid input');
     }
-    const { firmId, runId, pairs, boundaryMarks } = parsed.data;
-    const caller = assertFirmStaff(request, firmId);
+    const { runId, pairs, boundaryMarks } = parsed.data;
+    const caller = assertMiningStaff(request);
+    const firmId = MINING_FIRM_ID;
 
     await getFirestore()
       .doc(labelsDocPath(firmId, runId))

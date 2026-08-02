@@ -359,6 +359,14 @@ and downloading are separate permissions and Stage 1 opens with a Range request,
 grant would have passed everything else and died on the first file; and both seed folders resolve by
 name to exactly one match each, inside the corpus tree.
 
+⚠️ **CORRECTION 2026-08-01 (~9 PM ET): the app's LIVE firm id is `elias-counsel`, not firm-001.**
+Adam's auth claims carry firmId=elias-counsel — discovered when the calibration page 404'd on its
+own packet (the diagnostic error printed the path it built from his token). The mining run stays
+under firm-001 (renaming would re-key every artifact); the calibration callables map staff of
+either id onto the mining scope. **Before the catalog stage: catalog docs MUST be written under
+elias-counsel (or the callables must map) or the UI cannot see the catalog** — the exact mismatch
+the note below warned about, now proven real.
+
 **`FIRM_ID=firm-001` is the real value — do not go looking for another one.** Asked on
 2026-07-31, Adam confirmed there is no other firm id: he is the only user and the firm has not used
 the product live, so no `firms` document has been created yet. `firm-001` IS the id.
