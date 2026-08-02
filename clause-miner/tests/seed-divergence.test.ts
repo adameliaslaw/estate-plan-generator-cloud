@@ -27,7 +27,7 @@ function seedPiece(id: string, text: string): SeedPiece {
     normText,
     sigText,
     ring0Hash: ring0Hash(sigText),
-    separatorSignal: 'rule',
+    structureSignal: 'text-grammar',
     canary: false,
     trustRelevant: true,
     kind: 'clause',

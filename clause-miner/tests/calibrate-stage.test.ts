@@ -25,7 +25,7 @@ const SPENDTHRIFT =
   'alienate or encumber his or her interest in the trust estate in any way, nor shall any such ' +
   'interest be liable for the debts or obligations of such beneficiary.';
 
-function seedPiece(id: string, text: string, index: number): SeedPiece {
+function seedPiece(id: string, text: string, index: number, trustRelevant = true): SeedPiece {
   const { normText } = normalize(text, []);
   const sigText = toSigText(normText);
   return {
@@ -37,9 +37,9 @@ function seedPiece(id: string, text: string, index: number): SeedPiece {
     normText,
     sigText,
     ring0Hash: ring0Hash(sigText),
-    separatorSignal: 'rule',
+    structureSignal: 'text-grammar',
     canary: false,
-    trustRelevant: true,
+    trustRelevant,
     kind: 'clause',
   };
 }
@@ -69,8 +69,11 @@ async function setup(opts: { labels?: Array<{ pairId: string; label: string }> }
   await blobs.write(
     seedPiecesPath(env.firmId, env.runId),
     JSON.stringify([
-      seedPiece('seedfile:0', SPENDTHRIFT, 0),
-      seedPiece('seedfile:1', SPENDTHRIFT.replace('in any way', 'in any manner'), 1),
+      seedPiece('seedfile:s0', SPENDTHRIFT, 0),
+      seedPiece('seedfile:s1', SPENDTHRIFT.replace('in any way', 'in any manner'), 1),
+      // A non-trust-relevant near-duplicate (a POA clause, per Adam's
+      // exclusion decision) — it must never surface in the label pairs.
+      seedPiece('seedfile:s2', SPENDTHRIFT.replace('in any way', 'in whatever way'), 2, false),
     ]),
   );
 
@@ -114,7 +117,7 @@ describe('runCalibrate — emit mode (§11 P1)', () => {
 
     expect(summary.mode).toBe('emit');
     const packet = await packetOf(blobs);
-    expect(packet.seedPieces).toHaveLength(2);
+    expect(packet.seedPieces).toHaveLength(3);
     expect(packet.boundaryDocs).toHaveLength(1);
     expect(packet.boundaryDocs[0].segmentOpeners).toHaveLength(2);
     expect(packet.instructions).toContain('When in doubt, answer different');
@@ -128,6 +131,30 @@ describe('runCalibrate — emit mode (§11 P1)', () => {
     // the unrelated "without bond" segment is not.
     expect(packet.labelPairs.length).toBeGreaterThan(0);
     expect(packet.labelPairs.every((p) => p.score >= 0.6 && p.score <= 0.98)).toBe(true);
+  });
+
+  it('keeps non-trust-relevant seed pieces out of the label pairs (POA exclusion)', async () => {
+    const { store, blobs } = await setup();
+    await runCalibrate({ store, blobs }, env);
+    const packet = await packetOf(blobs);
+    expect(packet.labelPairs.length).toBeGreaterThan(0);
+    for (const pair of packet.labelPairs) {
+      expect(pair.aId).not.toContain('seedfile:s2');
+      expect(pair.bId).not.toContain('seedfile:s2');
+    }
+  });
+
+  it('shows Adam readable normText, never the sigText fold (§5.2)', async () => {
+    const { store, blobs } = await setup();
+    await runCalibrate({ store, blobs }, env);
+    const packet = await packetOf(blobs);
+    expect(packet.labelPairs.length).toBeGreaterThan(0);
+    for (const pair of packet.labelPairs) {
+      // sigText is lowercased with punctuation stripped; normText keeps both.
+      expect(pair.aDisplay).not.toBe(pair.aText);
+      expect(pair.aDisplay).toMatch(/[A-Z]/);
+      expect(pair.bDisplay).toMatch(/[A-Z]/);
+    }
   });
 
   it('does not write thresholds before Adam has labeled anything', async () => {
@@ -196,7 +223,17 @@ describe('runCalibrate — tune mode', () => {
 
 describe('parseLabels', () => {
   const candidates = [
-    { pairId: 'p1', aId: 'a', bId: 'b', aText: 'x', bText: 'y', score: 0.8, trivial: false },
+    {
+      pairId: 'p1',
+      aId: 'a',
+      bId: 'b',
+      aText: 'x',
+      bText: 'y',
+      aDisplay: 'X',
+      bDisplay: 'Y',
+      score: 0.8,
+      trivial: false,
+    },
   ];
 
   it('keeps only well-formed labels for known pairs', () => {

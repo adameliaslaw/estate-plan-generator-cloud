@@ -177,8 +177,12 @@ export interface CandidatePair {
   pairId: string;
   aId: string;
   bId: string;
+  /** sigText — what the tuner minhashes and diffs. NOT for display. */
   aText: string;
   bText: string;
+  /** normText — what the review UI shows Adam (§5.2: sigText is never displayed). */
+  aDisplay: string;
+  bDisplay: string;
   /** MinHash Jaccard — what the band sample is drawn against. */
   score: number;
   /** True when the deterministic diff filter would auto-merge it today. */
@@ -205,6 +209,8 @@ export function generateCandidatePairs(
       bId: idB,
       aText: a.sigText,
       bText: b.sigText,
+      aDisplay: a.normText,
+      bDisplay: b.normText,
       score: jaccardFromSignatures(
         sigById.get(idA) as Uint32Array,
         sigById.get(idB) as Uint32Array,

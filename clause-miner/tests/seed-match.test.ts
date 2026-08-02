@@ -16,7 +16,7 @@ function piece(overrides: Partial<SeedPiece> & { pieceId: string; text: string }
     normText,
     sigText,
     ring0Hash: ring0Hash(sigText),
-    separatorSignal: 'rule',
+    structureSignal: 'text-grammar',
     canary: overrides.canary ?? false,
     trustRelevant: overrides.trustRelevant ?? true,
     kind: overrides.kind ?? 'clause',
