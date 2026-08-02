@@ -568,7 +568,35 @@ removed.
   (`firms/firm-001/clauseMining/pilot-1` → seed.excludedFiles) — worth a glance during Adam's
   session, not blocking.
 
-**▶ NEXT: Adam's 1-hour labelling session at /clause-calibration** (fresh packet, 30 pairs, old
+### ✅ HEADING FIX, 2026-08-02 evening — Adam caught "FIRST:" inside clause text; it was in the HASH
+
+**Adam's question ("is the FIRST intentional / will it be extricated?") uncovered a real identity
+defect, not cosmetics:** sigText folds spelled CARDINALS ("thirty" → #) but not ordinals, so the
+leading structural marker survived into Ring-0 identity — the same clause under FIRST in one will
+and THIRD in another hashed DIFFERENTLY. On a form-uniform corpus where clauses drift position
+across templates/eras, this fragments exact identity and inflates paid adjudication; it is a live
+suspect for the "only 131 trivial auto-merges from 5,407 signatures" observation that paused
+identity. Adam chose fix-first-then-label.
+
+**The fix:** `extractLeadingHeading` (core/segment.ts) strips ONLY the marker the boundary grammar
+itself fired on — "FIRST:", caps ordinal without colon, "ARTICLE IV", "Section 5.2", leading
+"5.2 " — at the very start of a block, into a `heading` metadata field on SegmentRecord/SeedPiece
+(packet shows it as `found under "FIRST"`). Ordinals in prose ("the first anniversary of my
+death") are untouched, and a block that is ONLY a heading keeps its old text rather than hashing
+empty. Negative-controlled: disabling extraction fails 2 tests, including same-clause-under-
+FIRST-vs-THIRD ⇒ one ring0Hash.
+
+**Re-runs are version-gated now, not status-hacked:** `SEGMENTER_VERSION` (seg/2) is stamped on
+every row; STAGE=segment re-processes rows whose stamp is stale and still skips up-to-date rows on
+a plain resume. (The seed stage got the same property earlier today via eligible statuses.)
+`needs_human_review` rows stay excluded — retrying them re-submits paid boundary batches.
+
+**Consequence:** every ring0Hash changes ⇒ corpus re-segment (CPU only) + seed + calibrate re-run
+(~$1 — today's piece classifications resume from the ledgered batch since pieceIds are unchanged).
+Identity has produced no durable merges yet, so nothing else invalidates.
+
+**▶ NEXT: dispatch `STAGE=segment` (secret on — fallback possible) → `STAGE=seed` → `STAGE=calibrate`
+on main, then Adam's 1-hour labelling session at /clause-calibration** (fresh packet, 30 pairs, old
 draft labels/marks are stale-dropped automatically). Then `STAGE=calibrate` (tune) → identity
 re-run at calibrated banding → canonicalize → stats → catalog → gates.
 1. **The review UI** (task #6: calibration packet renderer + label capture + catalog queue +

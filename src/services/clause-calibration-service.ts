@@ -13,6 +13,9 @@ export interface CalibrationSeedPiece {
   pieceId: string;
   seedFileName: string;
   title: string | null;
+  /** Where the clause sat in its source ("FIRST", "ARTICLE IV") — metadata,
+   *  no longer part of the clause text (absent in pre-2026-08-02 packets). */
+  heading?: string | null;
   kind: string;
   trustRelevant: boolean;
   normText: string;

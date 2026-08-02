@@ -56,6 +56,7 @@ export interface CalibrationPacket {
     pieceId: string;
     seedFileName: string;
     title: string | null;
+    heading: string | null;
     structureSignal: string;
     kind: string;
     trustRelevant: boolean;
@@ -233,6 +234,7 @@ export async function runCalibrate(deps: CalibrateDeps, env: Env): Promise<Calib
       pieceId: p.pieceId,
       seedFileName: p.seedFileName,
       title: p.title,
+      heading: p.heading,
       structureSignal: p.structureSignal,
       kind: p.kind,
       trustRelevant: p.trustRelevant,

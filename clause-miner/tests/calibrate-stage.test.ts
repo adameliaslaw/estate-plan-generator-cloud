@@ -34,6 +34,7 @@ function seedPiece(id: string, text: string, index: number, trustRelevant = true
     seedFileName: 'AAA WILL PIECES.doc',
     pieceIndex: index,
     title: `Piece ${index}`,
+    heading: null,
     normText,
     sigText,
     ring0Hash: ring0Hash(sigText),

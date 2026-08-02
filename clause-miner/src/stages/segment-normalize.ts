@@ -14,6 +14,7 @@
 
 import { reflowParagraphs } from '../core/reflow.js';
 import {
+  extractLeadingHeading,
   segmentParagraphs,
   type BoundaryHint,
   type ProvisionBlock,
@@ -44,12 +45,23 @@ import type {
   DocStore,
 } from '../clients/interfaces.js';
 
+/**
+ * Bump when segmentation/normalization output changes shape or content —
+ * rows whose stored `segmentation.version` differs are re-processed on the
+ * next STAGE=segment run (a plain resume still skips up-to-date rows).
+ * seg/2: leading structural markers ("FIRST:", "ARTICLE IV") extracted to
+ * `heading` metadata instead of fragmenting Ring-0 identity (2026-08-02).
+ */
+export const SEGMENTER_VERSION = 'seg/2';
+
 export interface SegmentRecord {
   segmentIndex: number;
   articleIndex: number;
   sectionIndex: number;
   /** [start, end) into the doc's text artifact (textArtifactPath). */
   charSpan: [number, number];
+  /** Leading structural marker from the source ("FIRST", "ARTICLE IV"), if any. */
+  heading: string | null;
   normText: string;
   sigText: string;
   ring0Hash: string;
@@ -209,10 +221,17 @@ export function segmentDocument(
   const spans = computeSpans(artifactText, seg.blocks);
 
   const segments: SegmentRecord[] = seg.blocks.map((block, i) => {
-    const rawText = block.paragraphs.join('\n');
+    const split = extractLeadingHeading(block.paragraphs);
+    // A block that is ONLY a heading (next boundary followed immediately)
+    // keeps its old text rather than hashing an empty string.
+    const heading = split.body.join('').trim().length > 0 ? split.heading : null;
+    const bodyParas = heading !== null ? split.body : [...block.paragraphs];
+    const rawText = bodyParas.join('\n');
     const executionBlock = detectExecutionBlock(block.paragraphs) !== null;
     const { normText, parameters } = normalize(rawText, gazetteer);
     const sigText = toSigText(normText, { chainCollapse: chainCollapseHook });
+    // Anchored to the raw block (first paragraph is the heading/lead-in),
+    // exactly as before heading extraction existed — item text is unaffected.
     const enumeration = detectEnumeration(block.paragraphs.slice(1));
     const itemSet = enumeration.isEnumerated
       ? enumeration.items.map((item) =>
@@ -224,6 +243,7 @@ export function segmentDocument(
       articleIndex: block.articleIndex,
       sectionIndex: block.sectionIndex,
       charSpan: spans[i],
+      heading,
       normText,
       sigText,
       ring0Hash: ring0Hash(sigText),
@@ -301,6 +321,7 @@ async function persistDoc(
   await deps.store.set(fileDocPath(env.firmId, env.runId, driveFileId), {
     status,
     segmentation: {
+      version: SEGMENTER_VERSION,
       flags: result.flags,
       reflowed: result.artifact.reflowed,
       segmentCount: result.artifact.segments.length,
@@ -310,9 +331,25 @@ async function persistDoc(
   });
 }
 
+// Statuses a previous segment pass leaves behind. Rows carrying one are
+// re-processed ONLY when their stored segmentation.version is stale — a
+// plain resume after a flake still skips everything already done, while a
+// segmenter revision (SEGMENTER_VERSION bump) re-runs the whole corpus
+// without any manual reset. 'needs_human_review' rows are deliberately NOT
+// eligible: retrying them re-submits paid boundary batches.
+const RESEGMENTABLE_STATUSES = new Set(['segmented', 'segmented-under', 'quarantined']);
+
 export async function runSegmentNormalize(deps: SegmentDeps, env: Env): Promise<SegmentSummary> {
   const rows = await deps.store.listDocs(filesCollection(env.firmId, env.runId));
-  const pending = rows.filter((r) => r.data.status === 'converted' && isPilotDoc(r.data));
+  const pending = rows.filter((r) => {
+    if (!isPilotDoc(r.data)) return false;
+    if (r.data.status === 'converted') return true;
+    if (RESEGMENTABLE_STATUSES.has(r.data.status as string)) {
+      const seg = r.data.segmentation as { version?: string } | undefined;
+      return seg?.version !== SEGMENTER_VERSION;
+    }
+    return false;
+  });
   const summary: SegmentSummary = {
     segmented: 0,
     reflowed: 0,

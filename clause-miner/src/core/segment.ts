@@ -106,6 +106,48 @@ export function isStandaloneHeading(line: string): boolean {
 }
 
 /**
+ * Split a provision block's leading structural marker from its operative
+ * text (2026-08-02, Adam's catch): "FIRST:", "ARTICLE IV", "Section 5.2"
+ * mark where a clause SAT in its source instrument, not what it says. Left
+ * in the text they fragment Ring-0 identity — the same clause under FIRST
+ * in one will and THIRD in another hashes differently — and would ship the
+ * position into the catalog's clause text. The marker is preserved as
+ * `heading` metadata; the body is what gets normalized and hashed.
+ *
+ * Deliberately narrow: only the marker forms the boundary grammar itself
+ * fires on, and only at the very start of the block. Ordinals in prose
+ * ("the first anniversary of my death") are untouched.
+ */
+export function extractLeadingHeading(paragraphs: readonly string[]): {
+  heading: string | null;
+  body: string[];
+} {
+  if (paragraphs.length === 0) return { heading: null, body: [] };
+  const first = paragraphs[0].trim();
+
+  // Whole-line heading ("ARTICLE IV", "FIRST:", an ALL-CAPS title line).
+  if (isStandaloneHeading(first)) {
+    return { heading: first, body: paragraphs.slice(1).map((p) => p) };
+  }
+
+  // Inline marker leading the paragraph — strip it, keep the operative text.
+  const inline =
+    first.match(new RegExp(`^(${ORDINAL_ALT})\\s*:\\s*`, 'i')) ??
+    first.match(new RegExp(`^(${ORDINAL_ALT})\\s+`)) ?? // all-caps, no colon (mirrors ORDINAL_CAPS_RE)
+    first.match(/^(ARTICLE\s+(?:[IVXLC]+|\d+))\s*[.:–—-]?\s*/i) ??
+    first.match(/^((?:Section|Paragraph)\s+\d+(?:\.\d+)?)\s*[.:–—-]?\s*/i) ??
+    first.match(/^(\d+\.\d+)\s+/);
+  if (inline !== null) {
+    const rest = first.slice(inline[0].length);
+    return {
+      heading: inline[1],
+      body: rest.length > 0 ? [rest, ...paragraphs.slice(1)] : paragraphs.slice(1).map((p) => p),
+    };
+  }
+  return { heading: null, body: [...paragraphs] };
+}
+
+/**
  * Style/numbering boundary hint supplied by the caller (§4.2 signals 1–2:
  * pStyle TR_/Heading matches, w:numPr numbering). Index refers to the
  * position in the `paragraphs` array passed to `segmentParagraphs`.

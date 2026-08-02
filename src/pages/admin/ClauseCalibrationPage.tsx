@@ -288,7 +288,10 @@ export default function ClauseCalibrationPage() {
                           </Badge>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400">{piece.seedFileName}</p>
+                      <p className="text-xs text-gray-400">
+                        {piece.seedFileName}
+                        {piece.heading ? ` · found under "${piece.heading}"` : ''}
+                      </p>
                     </div>
                     <div className="flex shrink-0 gap-1">
                       {(['ok', 'split', 'merge'] as const).map((m) => (
