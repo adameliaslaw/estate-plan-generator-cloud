@@ -62,6 +62,19 @@ export const SECTION_RE = /^(Section|Paragraph)\s+\d+(\.\d+)?\b/i;
 /** Bare decimal numbering: `5.2 Trust Property…` (§4.2 signal 3). */
 export const DECIMAL_RE = /^\d+\.\d+\s/;
 
+/**
+ * Sentence-final punctuation, optionally followed by closing quotes/brackets.
+ * Shared with the reflow pre-pass; also gates text-grammar boundaries below —
+ * a heading only follows completed text, so heading grammar at the start of a
+ * line whose predecessor stopped mid-sentence is a wrapped continuation
+ * ("…as provided in ⏎ Section 5.2 hereof…"), not a boundary.
+ */
+const SENTENCE_END_RE = /[.!?;:]["'’”)\]]*\s*$/;
+
+export function endsWithSentencePunct(line: string): boolean {
+  return SENTENCE_END_RE.test(line.trimEnd());
+}
+
 /** ALL-CAPS heading line, ≤ 70 chars (§4.2 signal 3). */
 export function isAllCapsHeading(line: string): boolean {
   const t = line.trim();
@@ -201,6 +214,7 @@ export function segmentParagraphs(
   let current: ProvisionBlock | null = null;
   let boundaryCount = 0;
   let totalChars = 0;
+  let prev: string | null = null;
 
   const openBlock = (signal: string, para: string): ProvisionBlock => {
     const block: ProvisionBlock = {
@@ -220,12 +234,17 @@ export function segmentParagraphs(
     totalChars += t.length;
 
     const hint = hintMap.get(i);
+    // Text grammar may only open a block after completed text (2026-08-02,
+    // Adam's catch: pieces cut off mid-sentence). Style/numbering hints are
+    // real document structure and bypass the guard.
+    const grammarAllowed =
+      prev === null || endsWithSentencePunct(prev) || isStandaloneHeading(prev);
     const level: 'article' | 'section' | null =
       hint !== undefined
         ? hint.level
-        : isArticleBoundary(t)
+        : grammarAllowed && isArticleBoundary(t)
           ? 'article'
-          : isSectionBoundary(t)
+          : grammarAllowed && isSectionBoundary(t)
             ? 'section'
             : null;
 
@@ -244,6 +263,7 @@ export function segmentParagraphs(
       // Preamble text before any boundary.
       current = openBlock('none', t);
     }
+    prev = t;
   }
 
   const flags: SegmentationFlag[] = [];

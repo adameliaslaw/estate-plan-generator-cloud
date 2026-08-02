@@ -8,19 +8,16 @@
  */
 
 import { config } from '../config.js';
-import { isHeadingLine, isStandaloneHeading } from './segment.js';
+import {
+  endsWithSentencePunct,
+  isHeadingLine,
+  isStandaloneHeading,
+} from './segment.js';
 
 export interface ReflowResult {
   paragraphs: string[];
   /** True when the hard-wrap heuristic fired and rejoining was applied. */
   reflowed: boolean;
-}
-
-/** Sentence-final punctuation, optionally followed by closing quotes/brackets. */
-const SENTENCE_END_RE = /[.!?;:]["'’”)\]]*\s*$/;
-
-function endsWithSentencePunct(line: string): boolean {
-  return SENTENCE_END_RE.test(line.trimEnd());
 }
 
 function median(values: number[]): number {
@@ -84,7 +81,12 @@ export function reflowParagraphs(paragraphs: string[]): ReflowResult {
       continue;
     }
 
-    if (isHeadingLine(t)) {
+    // Heading grammar only separates at a paragraph start. A non-empty buf
+    // is always mid-sentence (completed lines flush immediately below), so
+    // heading-shaped text there is a wrapped continuation — a cross-reference
+    // ("…as provided in ⏎ Section 5.2 hereof"), an all-caps emphasis run, or
+    // a bare decimal — and must join, not cut (2026-08-02, Adam's catch).
+    if (buf.length === 0 && isHeadingLine(t)) {
       flush();
       if (isStandaloneHeading(t)) {
         out.push(t);
