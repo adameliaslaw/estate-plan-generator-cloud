@@ -39,12 +39,31 @@ export const getCalibrationPacket = onCall(
     const { firmId, runId } = parsed.data;
     assertFirmStaff(request, firmId);
 
-    const file = getStorage().bucket().file(packetPath(firmId, runId));
-    const [exists] = await file.exists();
-    if (!exists) {
+    // The miner writes to its GCS_BUCKET (…firebasestorage.app) explicitly;
+    // the Functions default bucket can be the legacy …appspot.com one. Try
+    // both and name what was tried, so a miss is a diagnosis, not a shrug.
+    const storage = getStorage();
+    const candidates = [
+      storage.bucket(),
+      storage.bucket('estate-plan-generator.firebasestorage.app'),
+    ];
+    let file = null as ReturnType<(typeof candidates)[number]['file']> | null;
+    const tried: string[] = [];
+    for (const bucket of candidates) {
+      if (tried.includes(bucket.name)) continue;
+      tried.push(bucket.name);
+      const candidate = bucket.file(packetPath(firmId, runId));
+      const [exists] = await candidate.exists();
+      if (exists) {
+        file = candidate;
+        break;
+      }
+    }
+    if (file === null) {
       throw new HttpsError(
         'not-found',
-        `No calibration packet for run '${runId}' — run STAGE=calibrate first.`,
+        `No calibration packet for run '${runId}' (looked in ${tried.join(', ')} at ` +
+          `${packetPath(firmId, runId)}) — run STAGE=calibrate first.`,
       );
     }
     const [bytes] = await file.download();
