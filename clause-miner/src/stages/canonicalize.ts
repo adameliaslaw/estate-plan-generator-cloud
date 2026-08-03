@@ -48,6 +48,7 @@ import {
   parseAdjudication,
 } from '../adjudication.js';
 import { classifyDiff } from '../core/diff.js';
+import { parseSeedPiecesArtifact } from './seed.js';
 import type { SeedPiece } from './seed.js';
 import {
   buildOccurrenceIndex,
@@ -281,9 +282,14 @@ export async function matchSeed(
 ): Promise<SeedMatchResult> {
   const empty: SeedMatchResult = { pieces: [], matches: [], byFamily: new Map() };
   let pieces: SeedPiece[];
+  let seedSegmenterVersion: string | null;
+  let seedGeneratedAt: string | null;
   try {
     const raw = await deps.blobs.read(seedPiecesPath(env.firmId, env.runId));
-    pieces = JSON.parse(raw.toString('utf8')) as SeedPiece[];
+    const parsed = parseSeedPiecesArtifact(raw.toString('utf8'));
+    pieces = parsed.pieces;
+    seedSegmenterVersion = parsed.segmenterVersion;
+    seedGeneratedAt = parsed.generatedAt;
   } catch {
     return empty; // no seed stage ran for this run
   }
@@ -359,9 +365,17 @@ export async function matchSeed(
     if (list === undefined) byFamily.set(match.familyId, [match]);
     else list.push(match);
   }
+  // Stamps carried through so the gates stage can hard-fail on staleness
+  // instead of measuring against a seed artifact from a different run (M1).
   await deps.blobs.write(
     seedMatchPath(env.firmId, env.runId),
-    JSON.stringify({ pieces, matches: plan.matches }),
+    JSON.stringify({
+      segmenterVersion: seedSegmenterVersion,
+      seedGeneratedAt,
+      generatedAt: new Date().toISOString(),
+      pieces,
+      matches: plan.matches,
+    }),
   );
   return { pieces, matches: plan.matches, byFamily };
 }

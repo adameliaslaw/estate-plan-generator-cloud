@@ -46,9 +46,11 @@ describe('lift', () => {
     expect(lift({ a: 8, b: 2, c: 2, d: 8 })).toBeCloseTo(4, 10);
   });
 
-  it('handles the zero-denominator edge', () => {
-    expect(lift({ a: 5, b: 0, c: 5, d: 10 })).toBe(Infinity);
+  it('keeps the zero-denominator edge finite (M9: Infinity JSON-serializes to null)', () => {
+    // b = 0: half-count smoothing — pGF 0.5 against 0.5/(0+10+1).
+    expect(lift({ a: 5, b: 0, c: 5, d: 10 })).toBeCloseTo(11);
     expect(lift({ a: 0, b: 0, c: 5, d: 10 })).toBe(1);
+    expect(Number.isFinite(lift({ a: 10, b: 0, c: 0, d: 40 }))).toBe(true);
   });
 });
 

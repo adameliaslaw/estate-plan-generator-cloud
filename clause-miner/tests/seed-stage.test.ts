@@ -6,6 +6,7 @@ import {
   type SeedPiece,
 } from '../src/stages/seed.js';
 import { runLedgerPath, seedFileDocPath, seedPiecesPath, segmentsReadyPath } from '../src/paths.js';
+import { parseSeedPiecesArtifact } from '../src/stages/seed.js';
 import {
   FakeBatchClient,
   FakeBlobStore,
@@ -114,9 +115,9 @@ async function setup(opts: { responder?: (req: BatchRequest) => Record<string, u
 }
 
 async function pieces(blobs: FakeBlobStore): Promise<SeedPiece[]> {
-  return JSON.parse(
+  return parseSeedPiecesArtifact(
     (await blobs.read(seedPiecesPath(env.firmId, env.runId))).toString(),
-  ) as SeedPiece[];
+  ).pieces;
 }
 
 describe('runSeed (§11 P1a, instrument segmentation)', () => {

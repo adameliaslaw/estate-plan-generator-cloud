@@ -51,6 +51,7 @@ import { isCommentaryLine } from '../core/seed-segment.js';
 import { ring0Hash, toSigText } from '../core/sigtext.js';
 import { chainCollapseHook } from '../successor-chain.js';
 import { deriveBoundaryHints } from '../ooxml.js';
+import { SEGMENTER_VERSION } from './segment-normalize.js';
 import { DOC_CATEGORIES, type DocCategory } from './triage.js';
 import { runConvert, seedScope, type SegmentsReadyFile } from './convert.js';
 import {
@@ -70,6 +71,22 @@ import type {
   DriveClient,
   ShellRunner,
 } from '../clients/interfaces.js';
+
+/** Version-stamped seed-pieces artifact (M1). Older runs wrote a bare array. */
+export interface SeedPiecesArtifact {
+  segmenterVersion: string;
+  generatedAt: string;
+  pieces: SeedPiece[];
+}
+
+/** Reads both artifact shapes; a bare array (pre-stamp run) yields null stamps. */
+export function parseSeedPiecesArtifact(raw: string): SeedPiecesArtifact | { segmenterVersion: null; generatedAt: null; pieces: SeedPiece[] } {
+  const parsed = JSON.parse(raw) as unknown;
+  if (Array.isArray(parsed)) {
+    return { segmenterVersion: null, generatedAt: null, pieces: parsed as SeedPiece[] };
+  }
+  return parsed as SeedPiecesArtifact;
+}
 
 export interface SeedPiece {
   pieceId: string;
@@ -537,7 +554,16 @@ export async function runSeed(deps: SeedDeps, env: Env): Promise<SeedSummary> {
     if (p.canary && p.kind === 'clause') summary.canaryPieces++;
   }
 
-  await deps.blobs.write(seedPiecesPath(env.firmId, env.runId), JSON.stringify(pieces));
+  // Version-stamped envelope (checkpoint-2 finding M1): the gates stage
+  // hard-fails on a stamp mismatch instead of silently measuring against a
+  // stale artifact — the pilot-1 gates read denominators that did not
+  // reconcile with the seed run, and nothing could detect it.
+  const artifact: SeedPiecesArtifact = {
+    segmenterVersion: SEGMENTER_VERSION,
+    generatedAt: new Date().toISOString(),
+    pieces,
+  };
+  await deps.blobs.write(seedPiecesPath(env.firmId, env.runId), JSON.stringify(artifact));
   for (const row of includedFiles) {
     await deps.store.set(seedFileDocPath(env.firmId, env.runId, row.id), {
       status: 'seed-segmented',

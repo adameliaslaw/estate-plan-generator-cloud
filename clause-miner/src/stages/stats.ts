@@ -183,21 +183,22 @@ export function buildStatsGrid(
   return { primary, strata };
 }
 
-/** §7.3 card gate. n = units in the fact=value cell. */
-export function passesCardGate(row: StatRow): boolean {
-  const liftOk = row.lift >= config.stats.liftHigh || row.lift <= config.stats.liftLow;
-  return (
-    liftOk &&
-    row.pAdj !== null &&
-    row.pAdj < config.stats.pAdjMax &&
-    row.nFact >= config.stats.minN
-  );
+/** Two-sided support (checkpoint-2 M9): a comparison against 7 matters
+ *  without the fact is as unstable as one against 7 with it. */
+function supported(row: StatRow): boolean {
+  return row.nFact >= config.stats.minN && row.nNotFact >= config.stats.minN;
 }
 
-/** Exploratory tier: lift-ranked with support, labeled as such (§7.3). */
+/** §7.3 card gate. Requires support on BOTH sides of the comparison. */
+export function passesCardGate(row: StatRow): boolean {
+  const liftOk = row.lift >= config.stats.liftHigh || row.lift <= config.stats.liftLow;
+  return liftOk && row.pAdj !== null && row.pAdj < config.stats.pAdjMax && supported(row);
+}
+
+/** Exploratory tier: lift-ranked with two-sided support, labeled as such (§7.3). */
 export function isExploratory(row: StatRow): boolean {
   const liftOk = row.lift >= config.stats.liftHigh || row.lift <= config.stats.liftLow;
-  return liftOk && row.nFact >= config.stats.minN && !passesCardGate(row);
+  return liftOk && supported(row) && !passesCardGate(row);
 }
 
 export function statsHashOf(rows: StatRow[]): string {
@@ -208,9 +209,16 @@ export function statsHashOf(rows: StatRow[]): string {
 /* Opus card narration                                                */
 /* ------------------------------------------------------------------ */
 
+/** Deterministic exploratory disclaimer (checkpoint-2 C2): the reader must
+ *  be able to tell a finding from noise without trusting the narrator. */
+export const EXPLORATORY_PREFIX =
+  'Exploratory signal — no correlation for this clause passed the significance gate; ' +
+  'the numbers below are descriptive, not evidence of a rule. ';
+
 export function buildCardRequest(
   familyId: string,
   title: string,
+  tier: CardTier,
   rows: StatRow[],
   strataRows: StatRow[],
   provenanceSnippets: string[],
@@ -225,7 +233,11 @@ export function buildCardRequest(
       'strata for context), and up to 3 provenance snippets. Write AT MOST 3 sentences. EVERY factual ' +
       'claim must cite a stat row by its numbers (e.g. "present in 14/16 matters with minor children ' +
       'vs 3/41 without, lift 12.0, adjusted p 0.002"). Never infer a rule beyond the rows; never cite ' +
-      'the snippets as evidence — they only show what the clause looks like.',
+      'the snippets as evidence — they only show what the clause looks like.' +
+      (tier === 'exploratory'
+        ? ' These rows did NOT pass the statistical significance gate: write descriptively ' +
+          '("appears in", "tends to accompany"), never as a usage rule ("use this when").'
+        : ''),
     userText: JSON.stringify({
       title,
       primaryRows: rows,
@@ -251,6 +263,10 @@ export interface StatsSummary {
   significant: number;
   exploratory: number;
   cards: number;
+  /** Card-level tier split (C2): the pilot's summary hid that ~290 of 300
+   *  cards were narrated from exploratory rows only. */
+  significantCards: number;
+  exploratoryCards: number;
 }
 
 export async function runStats(deps: StatsDeps, env: Env): Promise<StatsSummary> {
@@ -300,6 +316,8 @@ export async function runStats(deps: StatsDeps, env: Env): Promise<StatsSummary>
     significant: 0,
     exploratory: 0,
     cards: 0,
+    significantCards: 0,
+    exploratoryCards: 0,
   };
 
   // ---- Cards ------------------------------------------------------------
@@ -336,6 +354,7 @@ export async function runStats(deps: StatsDeps, env: Env): Promise<StatsSummary>
       return buildCardRequest(
         plan.familyId,
         fam.title,
+        plan.tier,
         plan.rows,
         plan.strata,
         fam.variants.slice(0, 3).map((v) => v.normText.slice(0, 400)),
@@ -346,14 +365,23 @@ export async function runStats(deps: StatsDeps, env: Env): Promise<StatsSummary>
     const byId = new Map(results.map((r) => [r.customId.replace(/^card:/, ''), r]));
     for (const plan of plans) {
       const result = byId.get(plan.familyId);
+      const narrated = result?.ok === true && result.text !== undefined ? result.text : '';
+      // The disclaimer is prefixed in CODE, not requested from the narrator —
+      // a card the reader cannot mistake for a finding (C2).
+      const prose =
+        plan.tier === 'exploratory' && narrated.length > 0
+          ? EXPLORATORY_PREFIX + narrated
+          : narrated;
       cards.push({
         familyId: plan.familyId,
         tier: plan.tier,
-        prose: result?.ok === true && result.text !== undefined ? result.text : '',
+        prose,
         statsHash: statsHashOf(plan.rows),
         stats: [...plan.rows, ...plan.strata],
       });
       summary.cards++;
+      if (plan.tier === 'significant') summary.significantCards++;
+      else summary.exploratoryCards++;
     }
   }
 

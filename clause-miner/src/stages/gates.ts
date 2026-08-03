@@ -32,16 +32,21 @@
 import { config } from '../config.js';
 import {
   canonicalPath,
+  edgesPath,
+  filesCollection,
   gatesReportPath,
   runLedgerPath,
   seedFilesCollection,
   seedMatchPath,
 } from '../paths.js';
+import { UnionFind } from '../union-find.js';
+import { SEGMENTER_VERSION } from './segment-normalize.js';
 import type { CanonicalFamily } from './canonicalize.js';
+import type { IdentityEdge } from './identity.js';
 import type { SeedPiece } from './seed.js';
 import type { SeedMatch } from '../seed-match.js';
 import type { Env } from '../env.js';
-import type { BlobStore, DocStore } from '../clients/interfaces.js';
+import type { BlobStore, DocData, DocStore } from '../clients/interfaces.js';
 
 export type GateStatus = 'pass' | 'fail' | 'skipped';
 
@@ -72,8 +77,57 @@ export interface GatesDeps {
 }
 
 interface SeedMatchArtifact {
+  /** SEGMENTER_VERSION of the seed run (M1); absent/null on pre-stamp artifacts. */
+  segmenterVersion?: string | null;
+  seedGeneratedAt?: string | null;
+  generatedAt?: string;
   pieces: SeedPiece[];
   matches: SeedMatch[];
+}
+
+/**
+ * M1 — the gates must refuse to measure against a stale artifact. Pilot-1's
+ * report carried denominators that did not reconcile with the seed run
+ * (107+16 ≠ 130) and nothing could tell which side was stale. Returns an
+ * error string (the caller throws) or null when consistent.
+ */
+export function checkSeedMatchConsistency(
+  artifact: SeedMatchArtifact,
+  ledgerSeed: DocData | null | undefined,
+): string | null {
+  if (artifact.segmenterVersion == null) {
+    return (
+      'seed-match artifact carries no segmenter-version stamp (written before M1) — ' +
+      're-run STAGE=seed then STAGE=canonicalize so the gates measure a stamped artifact'
+    );
+  }
+  if (artifact.segmenterVersion !== SEGMENTER_VERSION) {
+    return (
+      `seed-match artifact was built under segmenter ${artifact.segmenterVersion} but the ` +
+      `pipeline is at ${SEGMENTER_VERSION} — re-run STAGE=segment, STAGE=seed, STAGE=canonicalize`
+    );
+  }
+  if (ledgerSeed != null) {
+    const pieces = artifact.pieces;
+    const clause = pieces.filter((p) => p.kind === 'clause').length;
+    const commentary = pieces.filter((p) => p.kind === 'commentary').length;
+    const trustRelevant = pieces.filter((p) => p.kind === 'clause' && p.trustRelevant).length;
+    const checks: Array<[string, number, unknown]> = [
+      ['clausePieces', clause, ledgerSeed.clausePieces],
+      ['commentaryPieces', commentary, ledgerSeed.commentaryPieces],
+      ['trustRelevant', trustRelevant, ledgerSeed.trustRelevant],
+    ];
+    for (const [name, fromArtifact, fromLedger] of checks) {
+      if (typeof fromLedger === 'number' && fromLedger !== fromArtifact) {
+        return (
+          `seed-match artifact disagrees with the seed run ledger on ${name} ` +
+          `(artifact ${fromArtifact}, ledger ${fromLedger}) — one of them is stale; ` +
+          're-run STAGE=seed then STAGE=canonicalize'
+        );
+      }
+    }
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -100,9 +154,26 @@ export function gate1Recall(pieces: readonly SeedPiece[], matches: readonly Seed
   };
 }
 
+/**
+ * "Separately FILED" must mean separate filings, not separate revisions of
+ * one template file (M6): DISCLAIMER WILL.doc / DISCLAIMER WILL (NEW).doc /
+ * DISCLAIMER WILL (NEW) (JJB).doc are three eras of one filing, and the same
+ * clause appearing in each is Adam re-using it, not Adam keeping two clauses
+ * apart. Strips the extension and every parenthesized revision marker.
+ */
+export function filingKey(seedFileName: string): string {
+  return seedFileName
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
 export function gate2Purity(
   pieces: readonly SeedPiece[],
   matches: readonly SeedMatch[],
+  edges: readonly IdentityEdge[] | null,
 ): GateResult {
   const byPieceId = new Map(pieces.map((p) => [p.pieceId, p]));
   const byFamily = new Map<string, SeedMatch[]>();
@@ -112,16 +183,65 @@ export function gate2Purity(
     else list.push(match);
   }
 
+  // Connectivity over TRANSCRIPT-LESS merged edges only (M6): two hashes in
+  // one component of this graph were joined by the corpus rings with no
+  // adjudication anywhere between them. If every route between them crosses
+  // an adjudicated edge, the merge was reviewed and is not silent.
+  const silent = new UnionFind();
+  for (const edge of edges ?? []) {
+    if (edge.merged && edge.adjudicationRef === null) silent.union(edge.a, edge.b);
+  }
+
   const violations: string[] = [];
   for (const [familyId, group] of byFamily) {
     if (group.length < 2) continue;
-    // Distinct curated pieces in one family. Exact-hash collisions between two
-    // pieces are the library repeating itself verbatim, which is not a merge
-    // decision at all — the violation is a NON-exact merge with no transcript.
     const distinct = new Set(group.map((m) => m.pieceId));
     if (distinct.size < 2) continue;
-    const unflagged = group.filter((m) => m.kind !== 'exact' && m.adjudicationRef === null);
-    if (unflagged.length === 0) continue;
+
+    // Only pieces from genuinely different filings can violate purity:
+    // different filing lineages (filingKey differs), or two distinct pieces
+    // of the SAME file (Adam kept them apart within the document). The same
+    // clause carried across revisions of one template (same filingKey,
+    // different files) is one filing re-used, not two kept apart.
+    const entries = group.map((m) => ({ m, p: byPieceId.get(m.pieceId) }));
+    const separatelyFiled = (
+      a: { p?: SeedPiece },
+      b: { p?: SeedPiece },
+    ): boolean => {
+      if (a.p === undefined || b.p === undefined) return true; // fail closed
+      if (filingKey(a.p.seedFileName) !== filingKey(b.p.seedFileName)) return true;
+      return a.p.seedFileId === b.p.seedFileId && a.p.pieceId !== b.p.pieceId;
+    };
+
+    // A separately-filed pair is a violation when their matched hashes were
+    // joined silently: either the SAME hash reached non-exactly without
+    // adjudication (a fold collision), or two DIFFERENT hashes connected
+    // through transcript-less corpus merges — the all-exact blind spot the
+    // old gate had (it excused every exact seed match, never looking at the
+    // corpus edge that actually formed the family).
+    let violated = false;
+    outer: for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        if (!separatelyFiled(entries[i], entries[j])) continue;
+        const ma = entries[i].m;
+        const mb = entries[j].m;
+        if (ma.matchedHash === mb.matchedHash) {
+          const bothReviewed =
+            (ma.kind === 'exact' || ma.adjudicationRef !== null) &&
+            (mb.kind === 'exact' || mb.adjudicationRef !== null);
+          if (!bothReviewed) { violated = true; break outer; }
+        } else if (
+          edges === null ||
+          silent.find(ma.matchedHash) === silent.find(mb.matchedHash)
+        ) {
+          // edges===null: the artifact is missing, so silence cannot be
+          // ruled out — fail closed rather than excuse the merge.
+          violated = true;
+          break outer;
+        }
+      }
+    }
+    if (!violated) continue;
     const names = group
       .map((m) => byPieceId.get(m.pieceId))
       .map((p) => (p === undefined ? '?' : `${p.seedFileName} #${p.pieceIndex}`));
@@ -162,12 +282,15 @@ export function gate3Fidelity(families: readonly CanonicalFamily[]): GateResult 
     // No matched families is not a failure here: Gate 1 already reports that,
     // and double-failing one cause reads as two problems.
     status: share <= config.gates.seedDivergentMaxShare ? 'pass' : 'fail',
-    value: medianRatio,
-    threshold: config.canonical.seedDivergenceLevenshtein,
+    // value/threshold state the ACTUAL pass rule (divergent share vs max
+    // share). The pilot-1 report printed median-ratio 1.000 against the 0.8
+    // Levenshtein cutoff — an unrelated pair that read as the rule (M6-adj).
+    value: share,
+    threshold: config.gates.seedDivergentMaxShare,
     detail:
       matched.length === 0
         ? 'no families matched a curated piece — nothing to compare (see Gate 1)'
-        : `median token-Levenshtein ${medianRatio?.toFixed(3) ?? 'n/a'}; ${divergent.length}/${matched.length} flagged seed-divergent for side-by-side review` +
+        : `divergent share ${share.toFixed(3)} over ${matched.length} matched families; median token-Levenshtein ${medianRatio?.toFixed(3) ?? 'n/a'} (flag cutoff ${config.canonical.seedDivergenceLevenshtein}); ${divergent.length}/${matched.length} flagged seed-divergent for side-by-side review` +
           (share > config.gates.seedDivergentMaxShare
             ? ' — above half, which reads as a normalization/clustering defect rather than drafting drift'
             : ''),
@@ -181,6 +304,8 @@ export function gate4Canary(
   pieces: readonly SeedPiece[],
   matches: readonly SeedMatch[],
   canaryExcludedFromCorpus: boolean,
+  /** Canary files whose byte-identical copy sits in the corpus (md5 match). */
+  compromisedFiles: readonly string[] = [],
 ): GateResult {
   const canary = pieces.filter((p) => p.kind === 'clause' && p.canary && p.trustRelevant);
   const matched = new Set(matches.map((m) => m.pieceId));
@@ -201,6 +326,23 @@ export function gate4Canary(
         'canary files were NOT excluded from corpus input — the recovery result is meaningless. ' +
         'Set CLAUSE_MINER_CANARY_FOLDER_IDS (a subset of the seed folders) and re-manifest.',
       items: [],
+    };
+  }
+  // Folder exclusion is not enough when the same bytes live elsewhere in the
+  // corpus tree: recovery of a duplicated canary proves only that the
+  // pipeline can find a document it was given (M6-adj: cross-check by md5).
+  if (compromisedFiles.length > 0) {
+    return {
+      gate: 'gate4',
+      name: 'INDEPENDENT-RECOVERY CANARY',
+      status: 'fail',
+      value: null,
+      threshold: config.gates.canaryRecallMin,
+      detail:
+        `${compromisedFiles.length} canary file(s) have a byte-identical (md5) copy inside the ` +
+        'corpus — the holdout is compromised and the recovery result is meaningless. Remove the ' +
+        'duplicates from the corpus tree or drop those files from the canary set.',
+      items: [...compromisedFiles],
     };
   }
   return {
@@ -262,12 +404,31 @@ export async function runGates(deps: GatesDeps, env: Env): Promise<GatesReport> 
     );
   }
 
+  // M1 — refuse to measure a stale artifact. Throwing (not a red gate) keeps
+  // the existing contract: gates that cannot run say so loudly.
+  const ledger = await deps.store.get(runLedgerPath(env.firmId, env.runId));
+  const staleness = checkSeedMatchConsistency(
+    artifact,
+    (ledger?.seed ?? null) as DocData | null,
+  );
+  if (staleness !== null) throw new Error(`gates: ${staleness}`);
+
   let families: CanonicalFamily[] = [];
   try {
     const raw = await deps.blobs.read(canonicalPath(env.firmId, env.runId));
     families = JSON.parse(raw.toString('utf8')) as CanonicalFamily[];
   } catch {
     families = [];
+  }
+
+  // Gate 2 walks the corpus merge edges; a missing edges artifact fails
+  // closed inside the gate rather than excusing merges it cannot see.
+  let edges: IdentityEdge[] | null = null;
+  try {
+    const raw = await deps.blobs.read(edgesPath(env.firmId, env.runId));
+    edges = JSON.parse(raw.toString('utf8')) as IdentityEdge[];
+  } catch {
+    edges = null;
   }
 
   // Gate 4's precondition, read from the data rather than from the config:
@@ -277,11 +438,28 @@ export async function runGates(deps: GatesDeps, env: Env): Promise<GatesReport> 
   const canaryExcluded =
     env.canaryFolderIds.length > 0 && seedRows.some((r) => r.data.canary === true);
 
+  // Gate 4 md5 cross-check: a canary file byte-duplicated inside the corpus
+  // tree defeats the folder-level holdout.
+  const corpusRows = await deps.store.listDocs(filesCollection(env.firmId, env.runId));
+  const corpusMd5 = new Set(
+    corpusRows
+      .map((r) => r.data.md5Checksum)
+      .filter((m): m is string => typeof m === 'string' && m.length > 0),
+  );
+  const compromised = seedRows
+    .filter(
+      (r) =>
+        r.data.canary === true &&
+        typeof r.data.md5Checksum === 'string' &&
+        corpusMd5.has(r.data.md5Checksum),
+    )
+    .map((r) => (typeof r.data.fileName === 'string' ? r.data.fileName : r.id));
+
   const results = [
     gate1Recall(artifact.pieces, artifact.matches),
-    gate2Purity(artifact.pieces, artifact.matches),
+    gate2Purity(artifact.pieces, artifact.matches, edges),
     gate3Fidelity(families),
-    gate4Canary(artifact.pieces, artifact.matches, canaryExcluded),
+    gate4Canary(artifact.pieces, artifact.matches, canaryExcluded, compromised),
     gate5Roundtrip(),
   ];
   const report = summarizeGates(env.runId, results, new Date().toISOString());
