@@ -7,10 +7,13 @@
  * Union master template assembly is CHECKPOINT-2 SCOPE (§6.4 gates it behind
  * approved clauses existing) — assembleUnionTemplate throws.
  *
- * Catalog docs are PII-free by construction: placeholder text only;
- * provenance rows carry char-spans into the Storage text artifacts, zero raw
- * text (§9 partition rule). Everything lands status 'mined' — nothing
- * publishes without Adam's click (§1 non-goals).
+ * Catalog docs are PII-free by TWO mechanisms: placeholder text for clean
+ * families, and whitelist redaction (scrubBlockedCatalogDoc /
+ * scrubBlockedVariantDoc, merge:false writes) for families the §5.3 PII gate
+ * blocked — their text, parameters, diff tokens and embedding never reach
+ * Firestore. Provenance rows carry char-spans into the Storage text
+ * artifacts, zero raw text (§9 partition rule). Everything lands status
+ * 'mined' — nothing publishes without Adam's click (§1 non-goals).
  */
 
 import { config } from '../config.js';
@@ -59,6 +62,36 @@ export function assembleUnionTemplate(): never {
 export function carriedStatus(existing: DocData | null): 'approved' | 'removed' | null {
   const status = existing?.status;
   return status === 'approved' || status === 'removed' ? status : null;
+}
+
+/**
+ * PII stop-ship (checkpoint-2 finding C1): a family whose piiScanStatus is
+ * anything but 'clean' must not ship text to Firestore — the scan exists
+ * because its normText plausibly contains real client names. Redaction is a
+ * WHITELIST, not a blocklist, so a new text-bearing field added to the doc
+ * later stays blocked by default. Counts, ids and status survive so the
+ * entry is still visible as "blocked, awaiting remediation" to tooling.
+ */
+const BLOCKED_DOC_FIELDS = new Set([
+  'docType', 'category', 'status', 'structureConfidenceMix', 'counts',
+  'positionMedian', 'cooccurrence', 'relatedTo', 'validation',
+  'piiScanStatus', 'pipelineVersion', 'createdAt', 'updatedAt',
+]);
+const BLOCKED_VARIANT_FIELDS = new Set(['occurrenceCount', 'matterCount', 'eraRange']);
+
+function keepFields(doc: DocData, allowed: Set<string>): DocData {
+  const out: DocData = {};
+  for (const [k, v] of Object.entries(doc)) if (allowed.has(k)) out[k] = v;
+  out.piiBlockedRedacted = true;
+  return out;
+}
+
+export function scrubBlockedCatalogDoc(doc: DocData): DocData {
+  return keepFields(doc, BLOCKED_DOC_FIELDS);
+}
+
+export function scrubBlockedVariantDoc(doc: DocData): DocData {
+  return keepFields(doc, BLOCKED_VARIANT_FIELDS);
 }
 
 export interface CatalogDeps {
@@ -144,9 +177,14 @@ export async function runCatalog(deps: CatalogDeps, env: Env): Promise<CatalogSu
     return out.sort((a, b) => b.jaccard - a.jaccard || b.n - a.n).slice(0, 10);
   }
 
-  // Embeddings for all canonical texts, batched (§3 Stage 6 pattern).
-  const embeddings = await deps.embeddings.embedBatch(
-    canonicalFamilies.map((f) => f.canonicalText),
+  // Embeddings for CLEAN canonical texts only, batched (§3 Stage 6 pattern).
+  // A blocked family's text never leaves the pipeline — not even as a vector.
+  const cleanFamilies = canonicalFamilies.filter((f) => f.piiScanStatus === 'clean');
+  const cleanEmbeddings = await deps.embeddings.embedBatch(
+    cleanFamilies.map((f) => f.canonicalText),
+  );
+  const embeddingByFamily = new Map(
+    cleanFamilies.map((f, i) => [f.familyId, cleanEmbeddings[i]]),
   );
 
   const summary: CatalogSummary = { written: 0, variants: 0, occurrences: 0 };
@@ -259,22 +297,46 @@ export async function runCatalog(deps: CatalogDeps, env: Env): Promise<CatalogSu
           }
         : {}),
       validation: { staleFlag },
-      embedding: vectorValue(embeddings[fi]),
       piiScanStatus: fam.piiScanStatus,
       pipelineVersion: PIPELINE_VERSION,
       createdAt: now,
       updatedAt: now,
     };
+    const blocked = fam.piiScanStatus !== 'clean';
+    const familyEmbedding = embeddingByFamily.get(fam.familyId);
+    if (!blocked && familyEmbedding !== undefined) {
+      doc.embedding = vectorValue(familyEmbedding);
+    }
     const clausePath = catalogDocPath(env.firmId, fam.familyId);
     const carried = carriedStatus(await deps.store.get(clausePath));
     if (carried !== null) doc.status = carried;
-    await deps.store.set(clausePath, doc);
+    // Blocked docs are written WITHOUT merge so that text fields shipped by
+    // an earlier run of this stage (pre-stop-ship) are scrubbed, not merged
+    // around. Clean docs keep the merge-write the stage always used.
+    if (blocked) {
+      await deps.store.set(clausePath, scrubBlockedCatalogDoc(doc), { merge: false });
+    } else {
+      await deps.store.set(clausePath, doc);
+    }
     summary.written++;
 
     // ---- variants/{sigHash} --------------------------------------------
+    // For a blocked family, every PRE-EXISTING variant doc is overwritten
+    // too (ids from earlier runs may not be in the current variant set, and
+    // each carries normText + diff tokens — the very strings the PII gate
+    // fired on).
+    if (blocked) {
+      const staleIds = await deps.store.listIds(`${clausePath}/variants`);
+      const currentIds = new Set(fam.variants.map((v) => v.sigHash));
+      for (const id of staleIds) {
+        if (!currentIds.has(id)) {
+          await deps.store.set(`${clausePath}/variants/${id}`, { piiBlockedRedacted: true }, { merge: false });
+        }
+      }
+    }
     for (const variant of fam.variants) {
       const edge = edgeByHash.get(variant.sigHash);
-      await deps.store.set(`${clausePath}/variants/${variant.sigHash}`, {
+      const variantDoc: DocData = {
         normText: variant.normText, // PII-gated upstream (§5.3 runs HERE too)
         occurrenceCount: variant.occurrenceCount,
         matterCount: variant.matterCount,
@@ -289,7 +351,12 @@ export async function runCatalog(deps: CatalogDeps, env: Env): Promise<CatalogSu
                 ...(edge.adjudicationRef !== null ? { adjudicationRef: edge.adjudicationRef } : {}),
               }
             : { ring: 0, scores: {}, diff: { changedA: [], changedB: [] } },
-      });
+      };
+      await deps.store.set(
+        `${clausePath}/variants/${variant.sigHash}`,
+        blocked ? scrubBlockedVariantDoc(variantDoc) : variantDoc,
+        { merge: !blocked },
+      );
       summary.variants++;
     }
 

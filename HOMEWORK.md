@@ -1617,6 +1617,17 @@ https://claude.ai/code/artifact/12f31ce2-5a85-413c-9636-4aff942aff4c
 cap; tsc ×3 green, 423 + 1058 tests green). **Held un-merged per suspended Rule 7.** After merge:
 run both KB backfills + re-run miner `catalog` together so the space stays unmixed.
 
+**✅ PII STOP-SHIP FIX BUILT (same session, on PR #270's branch):** `runCatalog` now redacts any
+family whose `piiScanStatus` is not `'clean'` — whitelist scrub (`scrubBlockedCatalogDoc` /
+`scrubBlockedVariantDoc`: no canonicalText/title/summary/switchName/placeholders/triggerCard/
+embedding; variants lose normText/parameters/mergeEdge diff tokens), written with `merge:false`
+so a re-run SCRUBS the text the pre-fix run already shipped, including stale variant ids no
+longer in the family. Blocked text is not embedded either. approved/removed status still carries.
+Negative-controlled: disabling the wiring fails 2 tests. 430/430 green. **To actually scrub prod:
+merge #270, then dispatch `STAGE=catalog` on pilot-1** — that one run rewrites all 281 blocked
+docs text-free. (Server-side rules hardening + durable human-clearance state remain open — report
+M7.)
+
 ### ▶ NEXT (fresh session, in order)
 1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
 1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
