@@ -187,13 +187,22 @@ export const config = {
 
   /** §10 / §15 — spend controls (Adam-approved 2026-07-30). */
   spend: {
-    /** §10, §15(8): pilot LLM spend ceiling — $350 (estimate ≈ $215). */
-    pilotCeilingUsd: 350,
     /**
-     * §3, §10, §15(8): daily circuit breaker — $250/day for the pilot
-     * (the wills pipeline's $50/day would trip mid-run).
+     * §10, §15(8): pilot LLM spend ceiling. Originally $350 (estimate ≈
+     * $215); raised to $500 by Adam 2026-08-03 to finish the remediation
+     * re-run — the seg/4 + supplemental-roster re-cut changed most clause
+     * texts, so the pilot's cached adjudications largely could not replay
+     * and the re-run re-bought them (~$96 before the daily breaker hit;
+     * projected completion ≈ $300–350 total).
      */
-    dailyBreakerUsd: 250,
+    pilotCeilingUsd: 500,
+    /**
+     * §3, §10, §15(8): daily circuit breaker. Originally $250/day (the
+     * wills pipeline's $50/day would trip mid-run); raised to $400 by Adam
+     * 2026-08-03 for the same-day remediation re-run, whose real spend
+     * stacked on the pilot's $153.86 in one calendar day.
+     */
+    dailyBreakerUsd: 400,
   },
 } as const;
 
