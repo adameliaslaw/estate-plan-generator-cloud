@@ -363,6 +363,93 @@ not drafting input.
 
 ---
 
+## Reconciliation — Statular findings vs. this codebase
+
+### The headline: the architecture is right and starving, not wrong
+
+`unified-generator.ts:725` already routes non-`ai` modes through
+`generateFromTemplate(clientContext, docType, generationMode, templateId, variant, aiGenFn, ...)`
+— deterministic template first, AI as gap-filler and fallback. **That is Statular's
+architecture.** It is designed and built. `getTemplate()` then finds nothing for
+`docType: 'trust'`, the `aiGenFn` closure fires, and every trust is produced 100% by AI at
+temperature 0.15.
+
+Not an architecture problem. A content problem. The gap between their 455-paragraph instrument
+and our 16-line prompt outline (`trust-generator.ts:51-68`) is drafting hours, not code.
+
+### Layer by layer
+
+| Layer | Statular | Here | Verdict |
+|---|---|---|---|
+| Fact/election separation | client record + matter interview | Firestore `Client` + package/mode params | level — we already have it |
+| Instrument generation | 100% deterministic template | 100% AI, no `.hbs` exists | behind, pipeline already built |
+| Client narrative | AI, 5 paras, Cover Letter | absent | behind; `coverLetter` flex type already wired |
+| Trust article spine | 8 fixed articles | PR #258 matches 8-for-8 | level |
+| Conditional sections | 13 identified | 3 drivable today | small gap, see below |
+| Validation | post-generation suggestions | 5 validator modules | ahead architecturally |
+| Beyond the overlap | — | NJ inheritance tax engine, KB vector search, wills OCR, e-sign, LawPay, transcription→matter | ahead |
+
+### The conditional gap is two fields
+
+| Their section | Driver here |
+|---|---|
+| Marital Trust · Disclaimer Trust · Division of Trust Estate · Survivor's Trust · Distribution of Deceased Settlor's Share | `trustOptions.taxPlanning` — added in PR #258 |
+| QDOT · U.S. Trustee for QDOT · Foreign Trust Savings | `personalInfo.citizenship` — already exists (`CitizenshipStatus`) |
+| Bond Requirement | `fiduciaries.trustee.bondRequired` — already exists |
+| Debts and Advancements | prose only, no field |
+| **Family Pot Trust** | **missing** |
+| **Special Trustee / Independent vs. Interested Trustee** | **missing** |
+
+On QDOT we can do better than they do: they render QDOT provisions for two U.S. citizens
+because the toggle was on. We store `citizenship` — suppress or warn when no settlor is a
+non-citizen.
+
+### Templating the trust dissolves the truncation problem
+
+`trust-generator.ts:219` sets `maxTokens: 32768` and the return type carries a `_truncated`
+flag that fires in production. That is the cost of asking a model to emit a whole instrument.
+Slot-filling does not have that ceiling.
+
+### Package design note
+
+Statular's packages **do not restructure the trust** — 282-paragraph and 455-paragraph runs
+share the same eight articles. Packages select documents and elections. `trust-generator.ts:172`
+currently branches on `packageType === 'fortress'` to flip the trust to joint irrevocable, i.e.
+a package changing an instrument's fundamental nature. Worth revisiting as a `trustType`
+election rather than a package side effect.
+
+### Validation posture
+
+`unified-generator.ts:773` skips structural validation in `template` mode on the reasoning that
+an uploaded template is authoritative. Under a template-first architecture that is backwards for
+completeness and cross-document consistency checks. Fiduciary-conflict and completeness rules
+should run regardless of mode.
+
+### ⚠ Discipline note — do not repeat this mistake
+
+Several findings this session were artifacts of thin or placeholder input read as properties of
+Statular's engine, and had to be retracted: the TOC "defect" (measured on partial-input runs;
+at maximal config the articles render), and a notary-disqualification issue that was purely a
+collision in filler data where Adam was both client and notary. A claimed statutory gap around
+health-care representatives witnessing directives was repeated from a browser-session report and
+never independently verified — treat it as unconfirmed.
+
+**Rule out the test data before attributing anything to their engine.**
+
+### Priority
+
+1. **Make `.hbs` reachable** — nothing in `functions/src` reads disk templates; `getTemplate()`
+   is Firestore-only. Blocks PR #258 and every template deliverable.
+2. Fill `trust-joint.hbs` prose — spine validated, elections mapped, drafting hours.
+3. Two schema fields — Family Pot Trust, Special/Independent Trustee.
+4. Field-level validators, including QDOT suppression.
+5. Cover-letter AI narrative — `coverLetter` flex type already exists.
+6. Document inventory — Estate Plan Signing Instructions, Request for Capacity Evaluation,
+   Trust Funding Instructions, Declaration of Capacity, Visitation Authorization, Final
+   Disposition, Consent to Dual Representation, plus the two static booklets.
+
+---
+
 ## ▶ NEXT
 
 1. **Await further Statular packages** from Adam. Analyse each on arrival; hold the
