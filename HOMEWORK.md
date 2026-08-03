@@ -1542,6 +1542,60 @@ the reviewer-invitation lifecycle, purge tooling, deployment manifests, `@elias/
 
 ---
 
+## 📌 SESSION 2026-08-03 — pilot-1 CORPUS MINE COMPLETE (catalog live, gates RED, review paused)
+
+**Option 2 executed (Adam's decision):** labeled calibration skipped; manual conservative LSH banding
+16×8 (~0.71 candidate threshold, code comment in `clause-miner/src/config.ts` records the assertion);
+curation-by-deletion shipped instead (`removeClause` callable + Clause Picker delete UI + catalog
+re-run status preservation, #264). Rule 7 suspension note: calibration is now moot by this decision —
+Adam may delete the CLAUDE.md block whenever.
+
+**Pipeline result (run pilot-1, all 10 stages executed):**
+- Stages 1–5: checkpoint fast-forward over 18,628 files, $0.
+- identity (#59, 2h1m): 3,889 uniques → **2,677 families**; 41,176 adjudicated (2,380 MERGE /
+  37,693 SEPARATE / 1,103 normalization-miss), 41 trivial auto-merges.
+- canonicalize (#60): **300 families canonicalized** (min-support ≥3), 2,377 below support,
+  **281/300 PII-BLOCKED** (fail-closed gates; likely gazetteer gaps — see remediation), 0 fill failures,
+  83 seed-matched, 1 seed-divergent.
+- stats (#61): 337 units, 4,800 primary rows, **10 significant** trigger correlations, 300 cards.
+- catalog (#62): **300 entries / 1,310 variants / 3,846 occurrences written to Firestore**
+  (`firms/firm-001/clauseCatalog`), Vertex embeddings, status:'mined'.
+- gates (#63): **passed=false, incomplete=true** —
+  Gate 2 PURITY **FAIL** (2 families merged distinct curated pieces w/o transcript:
+  `fam_7d6bc499e63d51d9`, `fam_e2bef41c53ebcd67` — tighten diff whitelist / legal-delta lexicon);
+  Gate 3 fidelity **PASS** (median 1.000, 1/16 divergent);
+  Gate 4 CANARY **FAIL** (9/16 = 56.25% vs ≥90%);
+  Gate 1 recall: see run #63 job log (unmatched-piece list captured there);
+  Gate 5 skipped (checkpoint-2). **Per design, card review does NOT begin until gates pass.**
+
+**Ops fixes shipped en route (all merged):** #265 watcher timeout 45m→6h; #267 edge-terminated
+batch-submit halving + paid-batch recovery from ledger; #268 once-only spend charging
+(chargedBatches map). Firestore `clause_mining_state/control` counters were manually reset to the
+real $153.86 after multi-charge inflation. Total pilot Anthropic spend ≈ **$155–165** (console is
+authoritative). Live dashboard artifact (session-scoped):
+https://claude.ai/code/artifact/12f31ce2-5a85-413c-9636-4aff942aff4c
+
+### ▶ NEXT (fresh session, in order)
+1. **Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
+   multi-agent adversarial verification over the gates report (run #63 job log) + stage summaries.
+   Lenses: gate scores vs claims; over/under-merge at 16×8 given 2,380/37,693; the 2 purity
+   violations (which path merged them — trivial-diff or item-set?); statistical honesty of the 10
+   significant cards; 281/300 PII-block rate (over-aggression vs real leakage). Sandbox has NO
+   Firestore/GCS access — list unverifiable claims explicitly; a read-only `export` stage (prints
+   catalog JSON to job logs) is the proposed bridge if needed.
+2. **Remediation plan** (verification findings first, then): (a) purity — tighten diff whitelist /
+   legal-delta lexicon, re-run identity (cheap: transcripts + charge-once make re-runs ~free);
+   (b) PII blocks — expand gazetteer from the 1,103 normalization misses, re-run canonicalize;
+   (c) canary — likely downstream of (a)+(b) + min-support; re-measure after.
+3. **Embedding refresh (Adam, 2026-08-03): upgrade Vertex `text-embedding-005` → current Gemini
+   embedding model** via the same Vertex plumbing. Coordinated migration: re-embed KB
+   (`functions-backfill`) AND clauseCatalog together — mixed spaces silently degrade findNearest.
+   Cheap (~pennies at this scale). Not a blocker for anything above (embeddings are
+   candidates/related-content only, never deciders).
+4. Card-level review begins only after gates pass. Only status:'approved' reaches drafting.
+
+---
+
 ## 🔴 OPEN CARRY-FORWARD (start here next session)
 
 1. **✅ Smoke test — DONE/VERIFIED 2026-06-29.** "Test Connection" now returns **"API key is valid."** This conclusively closes **AR** and validates the full live path (migrated key → `loadFirmSecrets` merge → `testSendGridConnection`). The earlier *"not configured"* failure was NOT a data problem — the migration was fine; the live function + every email sender were frozen on **2026-06-25 pre-AR code** by the silent 409 deploy storm (see MAJOR FINDING below). Fixed by force-redeploying all stale functions from current `main` in small batches.
