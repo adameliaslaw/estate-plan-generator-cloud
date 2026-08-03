@@ -276,6 +276,117 @@ describe('submitBatchChunked (oversized create bodies get 400 terminated)', () =
     expect(Object.keys(batches).sort()).toEqual(['extract', 'extract-1', 'extract-2']);
   });
 
+  it('halves and retries a chunk the edge terminates; ledger names stay contiguous', async () => {
+    // The edge's kill threshold is variable (pilot-1 identity was terminated
+    // at sizes extract had passed) — so create() here rejects any body over a
+    // fake threshold with the observed empty-body 400, and passes smaller ones.
+    const created: Array<{ requests: unknown[] }> = [];
+    const sdk = {
+      messages: {
+        batches: {
+          async create(body: { requests: unknown[] }) {
+            if (JSON.stringify(body).length > 2600) {
+              throw Object.assign(new Error('400 terminated'), { status: 400, error: undefined });
+            }
+            created.push(body);
+            return { id: `msgbatch_${created.length}` };
+          },
+          async retrieve() {
+            return { processing_status: 'ended' };
+          },
+          async results() {
+            return (async function* () {})();
+          },
+        },
+      },
+    } as unknown as AnthropicLike;
+    const store = new FakeDocStore();
+    const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+      maxBatchBytes: 50_000, // chunker itself would NOT split — the edge forces it
+    });
+    const req = (id: string) => ({
+      customId: id,
+      model: 'sonnet' as const,
+      maxTokens: 10,
+      system: 'sys',
+      userText: 'x'.repeat(500),
+      tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+    });
+    const ids = await client.submitBatchChunked('adj', [req('a'), req('b'), req('c'), req('d')]);
+    expect(ids).toHaveLength(2);
+    expect(created).toHaveLength(2);
+    const batches = (store.docs.get('firms/f/clauseMining/r')?.batches ?? {}) as Record<string, string>;
+    expect(Object.keys(batches).sort()).toEqual(['adj', 'adj-1']);
+  });
+
+  it('rethrows the empty-body 400 when even a single request draws it', async () => {
+    const sdk = {
+      messages: {
+        batches: {
+          async create() {
+            throw Object.assign(new Error('400 terminated'), { status: 400, error: undefined });
+          },
+          async retrieve() {
+            return { processing_status: 'ended' };
+          },
+          async results() {
+            return (async function* () {})();
+          },
+        },
+      },
+    } as unknown as AnthropicLike;
+    const client = new AnthropicBatchClient(sdk, new FakeDocStore(), 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+    });
+    await expect(
+      client.submitBatchChunked('adj', [
+        {
+          customId: 'only', model: 'sonnet', maxTokens: 10, system: 's', userText: 'x',
+          tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+        },
+      ]),
+    ).rejects.toThrow('400 terminated');
+  });
+
+  it('a structured 400 (real bad request) is not treated as edge termination', async () => {
+    const sdk = {
+      messages: {
+        batches: {
+          async create() {
+            throw Object.assign(new Error('400 invalid_request'), {
+              status: 400,
+              error: { type: 'invalid_request_error', message: 'bad params' },
+            });
+          },
+          async retrieve() {
+            return { processing_status: 'ended' };
+          },
+          async results() {
+            return (async function* () {})();
+          },
+        },
+      },
+    } as unknown as AnthropicLike;
+    const client = new AnthropicBatchClient(sdk, new FakeDocStore(), 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+    });
+    // Two requests: a splitter would swallow this into retries; a real 400
+    // must propagate immediately instead.
+    await expect(
+      client.submitBatchChunked('adj', [
+        {
+          customId: 'a', model: 'sonnet', maxTokens: 10, system: 's', userText: 'x',
+          tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+        },
+        {
+          customId: 'b', model: 'sonnet', maxTokens: 10, system: 's', userText: 'y',
+          tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+        },
+      ]),
+    ).rejects.toThrow('400 invalid_request');
+  });
+
   it('keeps small lists in a single batch', async () => {
     const { sdk, state } = fakeSdk([]);
     const store = new FakeDocStore();

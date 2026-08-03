@@ -40,6 +40,7 @@ import type { SegmentsArtifact } from './segment-normalize.js';
 import type { Env } from '../env.js';
 import type {
   BatchClient,
+  BatchResultItem,
   BlobStore,
   DocStore,
   EmbeddingClient,
@@ -315,7 +316,7 @@ export interface IdentitySummary {
   families: number;
 }
 
-async function adjudicatePairs(
+export async function adjudicatePairs(
   deps: IdentityDeps,
   env: Env,
   batchName: string,
@@ -349,30 +350,17 @@ async function adjudicatePairs(
   }
   if (fresh.length === 0) return;
 
-  const requests = fresh.map(({ a, b }) => {
-    const diff = classifyDiff(a.sigText, b.sigText);
-    return buildAdjudicationRequest({
-      pairId: pairId(a.ring0Hash, b.ring0Hash),
-      textA: a.normText,
-      textB: b.normText,
-      diffSummary: `A-only: ${diff.changedA.join(' ') || '(none)'}\nB-only: ${diff.changedB.join(' ') || '(none)'}`,
-    });
-  });
-  const batchIds = await deps.batches.submitBatchChunked(batchName, requests);
-  const results: Awaited<ReturnType<typeof deps.batches.pollBatch>> = [];
-  for (const batchId of batchIds) {
-    results.push(...(await deps.batches.pollBatch(batchId)));
-  }
-  const byId = new Map(results.map((r) => [r.customId.replace(/^adj:/, ''), r]));
-
-  for (const { a, b, scores } of fresh) {
+  // Persist the full transcript (§4.3: every LLM edge stores it) and fold
+  // the verdict into edges/summary — shared by the recovery and fresh paths.
+  const persist = async (
+    pair: (typeof pairs)[number],
+    result: BatchResultItem | undefined,
+  ): Promise<void> => {
+    const { a, b, scores } = pair;
     const id = pairId(a.ring0Hash, b.ring0Hash);
-    const result = byId.get(id);
     const parsed = parseAdjudication(result?.ok === true ? result.toolInput : undefined);
     const diff = classifyDiff(a.sigText, b.sigText);
     const transcriptPath = adjudicationPath(env.firmId, env.runId, id);
-    void scores;
-    // Persist the full transcript (§4.3: every LLM edge stores it).
     await deps.blobs.write(
       transcriptPath,
       JSON.stringify({
@@ -389,6 +377,60 @@ async function adjudicatePairs(
       }),
     );
     applyAdjudication({ a, b, scores }, parsed, transcriptPath, ring, edges, summary);
+  };
+
+  // Batch ids are ledgered BEFORE polling but transcripts are written only
+  // AFTER — a crash between the two orphans results Anthropic was already
+  // paid for (pilot-1 identity attempt 1: ~$94 of batches, then died mid
+  // transcript-write; every resume since re-submitted those pairs). Recover
+  // ledgered batches by id and convert their results to transcripts BEFORE
+  // submitting anything new. Re-polling re-charges the internal spend
+  // ledger — the safe direction: the breaker can only trip early, not late.
+  const ledger = await deps.store.get(runLedgerPath(env.firmId, env.runId));
+  const ledgeredBatches =
+    typeof ledger?.batches === 'object' && ledger.batches !== null
+      ? (ledger.batches as Record<string, unknown>)
+      : {};
+  const priorNames = Object.keys(ledgeredBatches).filter(
+    (n) => n === batchName || n.startsWith(`${batchName}-`),
+  );
+  const recovered = new Map<string, BatchResultItem>();
+  for (const n of priorNames) {
+    const batchId = ledgeredBatches[n];
+    if (typeof batchId !== 'string') continue;
+    for (const item of await deps.batches.pollBatch(batchId)) {
+      recovered.set(item.customId.replace(/^adj:/, ''), item);
+    }
+  }
+
+  const stillFresh: typeof pairs = [];
+  for (const pair of fresh) {
+    const result = recovered.get(pairId(pair.a.ring0Hash, pair.b.ring0Hash));
+    if (result !== undefined) await persist(pair, result);
+    else stillFresh.push(pair);
+  }
+  if (stillFresh.length === 0) return;
+
+  const requests = stillFresh.map(({ a, b }) => {
+    const diff = classifyDiff(a.sigText, b.sigText);
+    return buildAdjudicationRequest({
+      pairId: pairId(a.ring0Hash, b.ring0Hash),
+      textA: a.normText,
+      textB: b.normText,
+      diffSummary: `A-only: ${diff.changedA.join(' ') || '(none)'}\nB-only: ${diff.changedB.join(' ') || '(none)'}`,
+    });
+  });
+  // A resume submits under a fresh name so the new batch ids never clobber
+  // the ledger keys the recovery path reads.
+  const submitName = priorNames.length === 0 ? batchName : `${batchName}-r${priorNames.length}`;
+  const batchIds = await deps.batches.submitBatchChunked(submitName, requests);
+  const results: Awaited<ReturnType<typeof deps.batches.pollBatch>> = [];
+  for (const batchId of batchIds) {
+    results.push(...(await deps.batches.pollBatch(batchId)));
+  }
+  const byId = new Map(results.map((r) => [r.customId.replace(/^adj:/, ''), r]));
+  for (const pair of stillFresh) {
+    await persist(pair, byId.get(pairId(pair.a.ring0Hash, pair.b.ring0Hash)));
   }
 }
 
