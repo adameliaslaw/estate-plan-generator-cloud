@@ -172,6 +172,13 @@ describe('AnthropicBatchClient', () => {
     const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
       pollIntervalMs: 1,
     });
+    // Submit first: charging keys on the 'pending' mark the submit writes.
+    await client.submitBatch('adj', [
+      {
+        customId: 'a', model: 'haiku', maxTokens: 10, system: 's', userText: 'x',
+        tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+      },
+    ]);
     const results = await client.pollBatch('msgbatch_test1');
     expect(results).toHaveLength(3);
     expect(results[0].ok).toBe(true);
@@ -196,7 +203,51 @@ describe('AnthropicBatchClient', () => {
     const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
       pollIntervalMs: 1,
     });
+    await client.submitBatch('adj', [
+      {
+        customId: 'a', model: 'opus', maxTokens: 10, system: 's', userText: 'x',
+        tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+      },
+    ]);
     await expect(client.pollBatch('msgbatch_test1')).rejects.toThrow(SpendBreakerError);
+  });
+
+  it('re-polling a charged batch charges nothing more (crash-recovery idempotency)', async () => {
+    const { sdk } = fakeSdk([succeeded('a', 'claude-sonnet-5', 2000, 200)]);
+    const store = new FakeDocStore();
+    const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+    });
+    await client.submitBatch('adj', [
+      {
+        customId: 'a', model: 'sonnet', maxTokens: 10, system: 's', userText: 'x',
+        tool: { name: 't', description: 'd', input_schema: { type: 'object' } },
+      },
+    ]);
+    await client.pollBatch('msgbatch_test1');
+    const afterFirst = store.docs.get(CONTROL_DOC)?.total_spend_usd as number;
+    await client.pollBatch('msgbatch_test1'); // recovery re-poll
+    await client.pollBatch('msgbatch_test1'); // and again
+    expect(store.docs.get(CONTROL_DOC)?.total_spend_usd).toBe(afterFirst);
+    const ledger = store.docs.get('firms/f/clauseMining/r');
+    const charged = ledger?.chargedBatches as Record<string, unknown>;
+    expect(typeof charged.msgbatch_test1).toBe('number');
+  });
+
+  it('a batch ledgered before the chargedBatches map existed is treated as already charged', async () => {
+    const { sdk } = fakeSdk([succeeded('a', 'claude-sonnet-5', 2000, 200)]);
+    const store = new FakeDocStore();
+    // Legacy state: batch id in the ledger, no chargedBatches entry — every
+    // pre-fix attempt that polled it also charged it.
+    await store.set('firms/f/clauseMining/r', { batches: { adj: 'msgbatch_test1' } });
+    const client = new AnthropicBatchClient(sdk, store, 'firms/f/clauseMining/r', {
+      pollIntervalMs: 1,
+    });
+    const results = await client.pollBatch('msgbatch_test1');
+    expect(results).toHaveLength(1); // results still recovered in full
+    expect(store.docs.get(CONTROL_DOC)?.total_spend_usd).toBeUndefined(); // zero new charge
+    const charged = store.docs.get('firms/f/clauseMining/r')?.chargedBatches as Record<string, unknown>;
+    expect(charged.msgbatch_test1).toBe(0);
   });
 });
 

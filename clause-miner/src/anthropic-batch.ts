@@ -259,7 +259,12 @@ export class AnthropicBatchClient implements BatchClient {
       requests: requests.map((req) => ({ custom_id: encodeCustomId(req.customId), params: toParams(req) })),
     });
     // Persist the batchId to the run ledger before returning (§3 resumability).
-    await this.store.set(this.runLedgerDocPath, { batches: { [name]: created.id } });
+    // 'pending' marks it for a ONE-time spend charge on first poll — see
+    // pollBatch: recovery re-polls must not re-charge the breaker ledger.
+    await this.store.set(this.runLedgerDocPath, {
+      batches: { [name]: created.id },
+      chargedBatches: { [created.id]: 'pending' },
+    });
     return created.id;
   }
 
@@ -317,15 +322,42 @@ export class AnthropicBatchClient implements BatchClient {
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }
+
+    // A batch's spend enters the breaker ledger EXACTLY once, no matter how
+    // many crash-recovery attempts re-poll it. Pre-fix, every re-poll
+    // re-charged: four identity attempts quadruple-counted ~$94 of real
+    // spend until the daily breaker tripped DURING recovery (run #58) while
+    // nothing new was being bought. States in the run ledger's
+    // chargedBatches map: 'pending' (submitted post-fix, charge on this
+    // first poll), a number (already charged — skip), or ABSENT (submitted
+    // before this map existed — every pre-fix attempt that polled also
+    // charged, so treat as charged and record 0).
+    const ledger = await this.store.get(this.runLedgerDocPath);
+    const chargedMap =
+      typeof ledger?.chargedBatches === 'object' && ledger.chargedBatches !== null
+        ? (ledger.chargedBatches as Record<string, unknown>)
+        : {};
+    const shouldCharge = chargedMap[batchId] === 'pending';
+
     const items: BatchResultItem[] = [];
+    let batchUsd = 0;
     const stream = await this.anthropic.messages.batches.results(batchId);
     for await (const raw of stream) {
       const { item, model } = parseResult(raw);
       if (item.usage !== undefined) {
-        // Transactional per-request spend charge; throws on breaker trip.
-        await chargeSpend(this.store, costUsd(model, item.usage));
+        const usd = costUsd(model, item.usage);
+        batchUsd += usd;
+        if (shouldCharge) {
+          // Transactional per-request spend charge; throws on breaker trip.
+          await chargeSpend(this.store, usd);
+        }
       }
       items.push(item);
+    }
+    if (typeof chargedMap[batchId] !== 'number') {
+      await this.store.set(this.runLedgerDocPath, {
+        chargedBatches: { [batchId]: shouldCharge ? batchUsd : 0 },
+      });
     }
     return items;
   }
