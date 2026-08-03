@@ -29,6 +29,7 @@ import { runTriage } from './stages/triage.js';
 import { runExtract } from './stages/extract.js';
 import { runSegmentNormalize } from './stages/segment-normalize.js';
 import { runIdentity } from './stages/identity.js';
+import { runMineMisses } from './stages/mine-misses.js';
 import { runCanonicalize } from './stages/canonicalize.js';
 import { runStats } from './stages/stats.js';
 import { runCatalog, assembleUnionTemplate } from './stages/catalog.js';
@@ -47,6 +48,7 @@ const STAGES = [
   'qa-convert', // Stage 1 QA — read-only §4.4 gate evidence report
   'triage', // Stage 2 — haiku triage classify via Batches API (§3 Stage 2)
   'extract', // Stage 3 — facts + gazetteer (§3 Stage 3)
+  'mine-misses', // Stage M — supplemental gazetteer from adjudicated normalization misses (C4)
   'segment', // Stages 4-5 — reflow + segment + normalize (§4.1-4.2, §5)
   'identity', // Stage 6 — rings 0/1/2 + adjudication (§4.3)
   'canonicalize', // Stage 7 — canonicalize + label + fill contract + PII gates (§6)
@@ -156,6 +158,11 @@ async function main(): Promise<void> {
         env,
       );
       console.log('segment:', JSON.stringify(summary));
+      break;
+    }
+    case 'mine-misses': {
+      const summary = await runMineMisses({ store, blobs }, env);
+      console.log('mine-misses:', JSON.stringify(summary));
       break;
     }
     case 'identity': {

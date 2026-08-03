@@ -35,6 +35,7 @@ import {
   runLedgerPath,
   segmentsPath,
   segmentsReadyPath,
+  supplementalGazetteerPath,
   textPath,
 } from '../paths.js';
 import type { Env } from '../env.js';
@@ -303,6 +304,29 @@ export interface SegmentSummary {
   skipped: number;
 }
 
+/**
+ * Run-level supplemental roster mined from adjudicated normalization misses
+ * (STAGE=mine-misses). Optional: absent on a first run, present on the
+ * remediation re-run. Loaded once and merged into every doc's gazetteer.
+ */
+export async function loadSupplementalGazetteer(
+  blobs: BlobStore,
+  env: Env,
+): Promise<GazetteerEntry[]> {
+  try {
+    const raw = await blobs.read(supplementalGazetteerPath(env.firmId, env.runId));
+    const parsed = JSON.parse(raw.toString('utf8')) as { names?: unknown };
+    const names = Array.isArray(parsed.names)
+      ? parsed.names.filter((n): n is string => typeof n === 'string' && n.length > 0)
+      : [];
+    // One entry per name: normalize()'s ambiguous-surname guard is keyed by
+    // role, and these tokens have no per-doc role — SUPPLEMENTAL is generic.
+    return names.map((n) => ({ role: 'SUPPLEMENTAL_NAME', names: [n] }));
+  } catch {
+    return [];
+  }
+}
+
 async function loadGazetteer(
   store: DocStore,
   env: Env,
@@ -385,10 +409,16 @@ export async function runSegmentNormalize(deps: SegmentDeps, env: Env): Promise<
   }
   const fallbackQueue: FallbackItem[] = [];
 
+  const supplemental = await loadSupplementalGazetteer(deps.blobs, env);
+  // Printed so the execution output PROVES which roster this segment pass
+  // ran under — a re-segment dispatched before mine-misses would silently
+  // split the hash space between two rosters.
+  console.log(`segment: supplemental gazetteer names=${supplemental.length}`);
+
   for (const row of pending) {
     const readyRaw = await deps.blobs.read(segmentsReadyPath(env.firmId, row.id));
     const ready = JSON.parse(readyRaw.toString('utf8')) as SegmentsReadyFile;
-    const gazetteer = await loadGazetteer(deps.store, env, row.id);
+    const gazetteer = [...(await loadGazetteer(deps.store, env, row.id)), ...supplemental];
     const result = segmentDocument(
       row.id,
       ready,
