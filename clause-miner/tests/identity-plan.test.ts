@@ -97,7 +97,28 @@ describe('planRing1 (§4.3 — no unadjudicated non-exact merge)', () => {
     expect(plan.adjudicationPairs).toHaveLength(0);
   });
 
-  it('item-set path: ±1-item power lists auto-align at Jaccard ≥ 0.7 (§4.2)', () => {
+  it('item-set path: ±1-item lists with a TRIVIAL text diff auto-align at Jaccard ≥ 0.7 (§4.2)', () => {
+    const items = ['i1', 'i2', 'i3', 'i4', 'i5', 'i6', 'i7'];
+    const shared = 'trustee powers enumeration with shared surrounding boilerplate text here';
+    const a = sig({ ring0Hash: 'a'.repeat(64), sigText: shared, itemSet: items });
+    const b = sig({
+      ring0Hash: 'b'.repeat(64),
+      sigText: shared,
+      itemSet: [...items, 'digital-assets'], // one inserted item
+    });
+    const plan = planRing1([a, b]);
+    // Identical sigTexts are also LSH candidates, and the seen-key gives the
+    // LSH classification first claim — the property under test is that a
+    // trivial diff merges FREE through some ring-1 edge, never adjudicates.
+    expect(plan.adjudicationPairs).toHaveLength(0);
+    expect(plan.autoMergeEdges).toHaveLength(1);
+    expect(plan.autoMergeEdges[0].merged).toBe(true);
+  });
+
+  it('item-set path: a CONTENT text diff adjudicates instead of auto-merging (C3)', () => {
+    // The pilot-1 defect: overlapping item hashes excused a real content diff
+    // in the surrounding text — two power lists differing by whole powers
+    // could merge with no transcript. Content diffs now pay for adjudication.
     const items = ['i1', 'i2', 'i3', 'i4', 'i5', 'i6', 'i7'];
     const a = sig({
       ring0Hash: 'a'.repeat(64),
@@ -106,15 +127,13 @@ describe('planRing1 (§4.3 — no unadjudicated non-exact merge)', () => {
     });
     const b = sig({
       ring0Hash: 'b'.repeat(64),
-      // No legal-delta lexicon terms here — a lexicon hit would (correctly)
-      // route to adjudication instead of the item-set auto-merge.
       sigText: 'powers enumeration variant two with entirely different filler tokens here',
-      itemSet: [...items, 'digital-assets'], // one inserted item
+      itemSet: [...items, 'digital-assets'],
     });
     const plan = planRing1([a, b]);
-    const itemEdges = plan.autoMergeEdges.filter((e) => e.kind === 'item-set');
-    expect(itemEdges).toHaveLength(1);
-    expect(itemEdges[0].scores.itemJaccard).toBeCloseTo(7 / 8, 10);
+    expect(plan.autoMergeEdges.filter((e) => e.kind === 'item-set')).toHaveLength(0);
+    expect(plan.adjudicationPairs).toHaveLength(1);
+    expect(plan.adjudicationPairs[0].scores.itemJaccard).toBeCloseTo(7 / 8, 10);
   });
 
   it('item-set below threshold produces nothing', () => {

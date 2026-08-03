@@ -14,7 +14,7 @@
  */
 
 import { config } from '../config.js';
-import { classifyDiff, hardRoute } from '../core/diff.js';
+import { classifyDiff } from '../core/diff.js';
 import {
   candidatePairs,
   itemSetJaccard,
@@ -32,6 +32,7 @@ import {
   adjudicationPath,
   edgesPath,
   familiesPath,
+  normalizationMissesPath,
   filesCollection,
   runLedgerPath,
   segmentsPath,
@@ -243,11 +244,14 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
       const key = a.ring0Hash < b.ring0Hash ? `${a.ring0Hash}|${b.ring0Hash}` : `${b.ring0Hash}|${a.ring0Hash}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      // Merge-averse: a lexicon hit on the item diff still adjudicates.
-      if (hardRoute(a.sigText, b.sigText)) {
+      // Merge-averse: only a TRIVIAL diff may auto-merge, exactly like the
+      // LSH path above. The old code auto-merged any non-hardRoute candidate,
+      // which could silently join enumerated power-lists differing by whole
+      // powers (checkpoint-2 C3) — content diffs now go to adjudication.
+      const diff = classifyDiff(a.sigText, b.sigText);
+      if (diff.classification !== 'trivial' || diff.hardRoute) {
         plan.adjudicationPairs.push({ a, b, scores: { itemJaccard: jaccard } });
       } else {
-        const diff = classifyDiff(a.sigText, b.sigText);
         plan.autoMergeEdges.push({
           a: a.ring0Hash,
           b: b.ring0Hash,
@@ -273,6 +277,56 @@ export function planRing1(uniques: UniqueSignature[]): Ring1Plan {
     );
   }
   return plan;
+}
+
+export interface NormalizationMissReport {
+  /** Adjudicated pairs whose verdict was NORMALIZATION_MISS. */
+  pairs: Array<{ a: string; b: string; adjudicationRef: string | null; tokens: string[] }>;
+  /** Diff-token histogram, descending — the tokens ARE the missed names. */
+  tokenCounts: Array<{ token: string; count: number }>;
+}
+
+/**
+ * Checkpoint-2 C4: pilot-1 counted 1,103 NORMALIZATION_MISS verdicts and
+ * dropped them — each one is an adjudicator attesting that a client-specific
+ * token survived normalization. This mines the edges into a gazetteer
+ * worklist: expand the gazetteer from the top tokens, then re-run identity
+ * (transcripts replay free) so the repaired pairs re-classify.
+ */
+export function mineNormalizationMisses(edges: readonly IdentityEdge[]): NormalizationMissReport {
+  const counts = new Map<string, number>();
+  const pairs: NormalizationMissReport['pairs'] = [];
+  for (const edge of edges) {
+    if (edge.verdict !== 'NORMALIZATION_MISS') continue;
+    const tokens = [...new Set([...edge.diff.changedA, ...edge.diff.changedB])].sort();
+    pairs.push({ a: edge.a, b: edge.b, adjudicationRef: edge.adjudicationRef, tokens });
+    for (const token of tokens) counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+  const tokenCounts = [...counts.entries()]
+    .map(([token, count]) => ({ token, count }))
+    .sort((x, y) => y.count - x.count || x.token.localeCompare(y.token));
+  return { pairs, tokenCounts };
+}
+
+/**
+ * Checkpoint-2 M2: the maxAdjudicationPairs guard only covered Ring 1 —
+ * ~75% of pilot-1's adjudication spend arrived through the Ring-2 loop
+ * uncapped. The ceiling is SHARED: Ring-2 pairs count on top of what Ring 1
+ * already adjudicated.
+ */
+export function checkRing2Cap(
+  ring1Adjudicated: number,
+  ring2PairCount: number,
+  repCount: number,
+): void {
+  if (ring1Adjudicated + ring2PairCount > config.identity.maxAdjudicationPairs) {
+    throw new Error(
+      `identity: ring-2 proposals push billable adjudications past the ` +
+        `${config.identity.maxAdjudicationPairs} guard ` +
+        `(ring1Adjudicated=${ring1Adjudicated}, ring2Pairs=${ring2PairCount}, ` +
+        `reps=${repCount}) — cosinePropose needs calibration or an explicit spend approval`,
+    );
+  }
 }
 
 export function cosine(a: number[], b: number[]): number {
@@ -541,6 +595,7 @@ export async function runIdentity(deps: IdentityDeps, env: Env): Promise<Identit
         if (sim >= config.ring2.cosinePropose) {
           summary.ring2Proposals++;
           ring2Pairs.push({ a: reps[i], b: reps[j], scores: { cosine: sim } });
+          checkRing2Cap(summary.adjudicated, ring2Pairs.length, reps.length);
         } else if (sim >= config.ring2.cosineRelated) {
           summary.relatedEdges++;
           edges.push({
@@ -581,6 +636,10 @@ export async function runIdentity(deps: IdentityDeps, env: Env): Promise<Identit
 
   await deps.blobs.write(edgesPath(env.firmId, env.runId), JSON.stringify(edges));
   await deps.blobs.write(familiesPath(env.firmId, env.runId), JSON.stringify(families));
+  await deps.blobs.write(
+    normalizationMissesPath(env.firmId, env.runId),
+    JSON.stringify(mineNormalizationMisses(edges)),
+  );
   await deps.store.set(runLedgerPath(env.firmId, env.runId), {
     stage: 'identity',
     status: 'completed',

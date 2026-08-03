@@ -57,7 +57,8 @@ import type {
  * sentence in both reflow and segmentation (2026-08-02, Adam's catch during
  * calibration labeling).
  */
-export const SEGMENTER_VERSION = 'seg/3';
+// seg/4: execution-tail truncation symmetrized with the seed segmenter (M5).
+export const SEGMENTER_VERSION = 'seg/4';
 
 export interface SegmentRecord {
   segmentIndex: number;
@@ -230,9 +231,18 @@ export function segmentDocument(
     // A block that is ONLY a heading (next boundary followed immediately)
     // keeps its old text rather than hashing an empty string.
     const heading = split.body.join('').trim().length > 0 ? split.heading : null;
-    const bodyParas = heading !== null ? split.body : [...block.paragraphs];
+    let bodyParas = heading !== null ? split.body : [...block.paragraphs];
+    // Symmetry with the seed segmenter (checkpoint-2 M5): truncate at the
+    // first execution paragraph so the operative prefix of a final article
+    // hashes WITHOUT its "IN WITNESS WHEREOF" tail — the seed already cut
+    // there, so a signature-tailed corpus block could never match its seed
+    // twin. A block that is WHOLLY execution machinery keeps its full text
+    // (same rule as heading-only blocks) and stays flagged.
+    const execIdx = bodyParas.findIndex((p) => detectExecutionBlock(p) !== null);
+    const executionBlock =
+      execIdx !== -1 && bodyParas.slice(0, execIdx).join('').trim().length === 0;
+    if (execIdx !== -1 && !executionBlock) bodyParas = bodyParas.slice(0, execIdx);
     const rawText = bodyParas.join('\n');
-    const executionBlock = detectExecutionBlock(block.paragraphs) !== null;
     const { normText, parameters } = normalize(rawText, gazetteer);
     const sigText = toSigText(normText, { chainCollapse: chainCollapseHook });
     // Anchored to the raw block (first paragraph is the heading/lead-in),

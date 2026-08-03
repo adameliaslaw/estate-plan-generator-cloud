@@ -1646,6 +1646,20 @@ phrasing; the summary splits significantCards/exploratoryCards; lift at b=0 is f
 **Consequence: current pilot-1 artifacts are unstamped, so gates now REFUSE to run until
 seed → canonicalize re-run — intended; all mined data predates seg/3 anyway (step ④).**
 
+**✅ STEP ③ FREE RECALL/PURITY LEVERS BUILT (same day):** (a) **M5 symmetry, SEGMENTER_VERSION →
+seg/4:** corpus segments now truncate at the first execution paragraph exactly like the seed cut —
+a signature-tailed final article hashes identically to its clean twin (tested); wholly-execution
+blocks keep text + flag. (b) **C3 item-set gate:** the enumerated-list path auto-merges only
+TRIVIAL text diffs, same rule as the LSH path — content diffs now pay for adjudication instead of
+silently merging. (c) **M2 Ring-2 cap:** ring-2 proposals count against the SHARED
+maxAdjudicationPairs ceiling (the pilot's uncapped loop carried ~75% of spend). (d) **C4 mining
+artifact:** identity now writes `identity/normalization-misses.json` — every NORMALIZATION_MISS
+pair with its diff tokens plus a descending token histogram. **That histogram IS the gazetteer
+worklist**: expand the gazetteer from the top tokens, then re-run identity (transcripts replay
+free). Negative-controlled; 454/454.
+**The gazetteer expansion itself needs the run data (Firestore/GCS) — first item for the
+remediation re-run session, before step ④'s segment → seed → calibrate → identity sequence.**
+
 ### ▶ NEXT (fresh session, in order)
 1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
 1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
