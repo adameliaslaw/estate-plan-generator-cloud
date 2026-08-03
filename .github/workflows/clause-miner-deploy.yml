@@ -90,7 +90,14 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Matches the Cloud Run Job's --task-timeout (6 h): the Execute step
+    # --waits on the execution, and Batches-API stages (identity,
+    # canonicalize) legitimately wait an hour+ on Anthropic's batch queue.
+    # At 45 min GitHub killed the watcher mid-wait and reported the run
+    # "cancelled" while the execution kept running headless (run #55,
+    # 2026-08-03) — the timeout must cover the longest stage, not the
+    # shortest.
+    timeout-minutes: 360
     permissions:
       contents: read
     steps:
