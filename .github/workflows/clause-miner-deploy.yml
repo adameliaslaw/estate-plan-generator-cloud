@@ -39,6 +39,7 @@ on:
           - qa-convert
           - triage
           - extract
+          - mine-misses
           - segment
           - identity
           - canonicalize
