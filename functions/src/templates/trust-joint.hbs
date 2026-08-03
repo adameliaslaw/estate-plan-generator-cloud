@@ -76,6 +76,17 @@ as settlors and as initial trustees.</p>
 
 <p><strong>Limited Waiver of Duty to Account.</strong> [[DRAFT: waiver during settlors' joint lifetimes; accounting duties on incapacity and after death]]</p>
 
+{{#if isNonCitizenSpouse}}
+<p><strong>Foreign Trust Savings Provision.</strong> [[DRAFT: preserve domestic trust status under IRC §7701(a)(30)(E) — a U.S. court must have primary supervision and U.S. persons must control substantial decisions]]</p>
+<p><strong>U.S. Trustee for Qualified Domestic Trust.</strong> [[DRAFT: at least one trustee must be a U.S. citizen or domestic corporation with authority to withhold the §2056A tax]]</p>
+{{/if}}
+
+{{#if trustOptions.specialTrustee}}
+<p><strong>Special Trustee.</strong> [[DRAFT: appointment and removal; holds only those tax-sensitive powers an interested trustee may not exercise — discretionary distributions beyond an ascertainable standard, insurance on a settlor's life, powers affecting the marital deduction. See <em>Definition of Independent Trustee and Interested Trustee</em>]]</p>
+{{/if}}
+
+<p><strong>Depreciation Reserve.</strong> [[DRAFT: trustee's discretion whether to establish a reserve for depreciation, and the effect on income and principal accounting]]</p>
+
 <p><strong>Trustee&rsquo;s Liability.</strong> [[DRAFT: good-faith standard; exculpation limits; no liability for predecessor's acts]]</p>
 
 <h2>TRUSTEE POWERS</h2>
@@ -177,23 +188,48 @@ as settlors and as initial trustees.</p>
 <p><strong>Retirement Accounts.</strong> [[DRAFT: treatment of accounts payable to the trust at first death; spousal rollover preservation — see <em>Distribution of Retirement Accounts</em> below]]</p>
 {{/hasItems}}
 
-{{#if trustOptions.taxPlanning}}
-{{#if (eq trustOptions.taxPlanning 'disclaimer')}}
-<p><strong>Disclaimer Trust.</strong> [[DRAFT: surviving settlor may disclaim within 9 months; disclaimed property funds a credit shelter share; no general power over disclaimed property — IRC §2518]]</p>
-{{else if (eq trustOptions.taxPlanning 'ab_split')}}
-<p><strong>Division into Marital and Family Trusts.</strong> [[DRAFT: fund Family (credit shelter) trust with the deceased settlor's remaining federal exemption; residue to Marital Trust]]</p>
-<p><strong>Family Trust.</strong> [[DRAFT: HEMS distributions to surviving settlor and descendants; not includible in survivor's estate]]</p>
-<p><strong>Marital Trust.</strong> [[DRAFT: all income to surviving settlor at least annually; QTIP election — IRC §2056(b)(7)]]</p>
-{{else if (eq trustOptions.taxPlanning 'qtip')}}
-<p><strong>Marital Deduction Trust (QTIP).</strong> [[DRAFT: qualifying income interest for life; IRC §2056(b)(7) election]]</p>
-{{/if}}
+{{!-- First-death subtrusts are INDEPENDENT, not mutually exclusive. A joint plan
+     routinely carries a Survivor's Trust, a QTIP Marital Trust and a contingent
+     Disclaimer Trust side by side. Do not collapse these into an if/else chain. --}}
+
+<p><strong>Division of Trust Estate.</strong> [[DRAFT: how the trust estate divides at the first death — the survivor's own share versus the deceased settlor's share; funding formula and valuation date]]</p>
+
+<p><strong>Distribution of Deceased Settlor&rsquo;s Share.</strong> [[DRAFT: disposition of the deceased settlor's share among the subtrusts below; order of funding]]</p>
+
+{{#if trustOptions.survivorsTrust}}
+<p><strong>Survivor&rsquo;s Trust.</strong> [[DRAFT: holds the surviving settlor's own share; fully revocable and amendable by the survivor; general power of appointment]]</p>
 {{/if}}
 
-<p><strong>Trust Continues for Surviving Settlor.</strong> [[DRAFT: administration of the survivor's share{{#unless trustOptions.taxPlanning}}; no division at first death{{/unless}}]]</p>
+{{#if trustOptions.maritalTrust}}
+{{#unless (eq trustOptions.maritalTrust 'none')}}
+{{#if (eq trustOptions.maritalTrust 'outright')}}
+<p><strong>Outright Marital Distribution.</strong> [[DRAFT: deceased settlor's share distributed outright to the surviving settlor; unlimited marital deduction — IRC §2056(a)]]</p>
+{{else}}
+<p><strong>Marital Trust.</strong> [[DRAFT: all income to the surviving settlor at least annually; no person may appoint to anyone other than the survivor during their life; QTIP election — IRC §2056(b)(7)]]</p>
+{{/if}}
+{{/unless}}
+{{/if}}
+
+{{#if trustOptions.bypassTrust}}
+{{#unless (eq trustOptions.bypassTrust 'none')}}
+{{#if (eq trustOptions.bypassTrust 'contingent_disclaimer')}}
+<p><strong>Disclaimer Trust.</strong> [[DRAFT: surviving settlor may disclaim within nine months; disclaimed property funds the credit shelter share; survivor holds no general power over disclaimed property — IRC §2518]]</p>
+{{else}}
+<p><strong>Family Trust.</strong> [[DRAFT: funded at the first death with the deceased settlor's remaining applicable exclusion; HEMS distributions to the survivor and descendants; not includible in the survivor's estate]]</p>
+{{/if}}
+{{/unless}}
+{{/if}}
+
+{{#if isNonCitizenSpouse}}
+<p><strong>Qualified Domestic Trust Provision.</strong> [[DRAFT: QDOT requirements under IRC §2056A where the surviving spouse is not a U.S. citizen; hardship distributions; §2056A tax on principal distributions]]</p>
+{{/if}}
+
+<p><strong>Trust Continues for Surviving Settlor.</strong> [[DRAFT: administration of the survivor's share{{#unless trustOptions.survivorsTrust}}; no division at first death{{/unless}}]]</p>
 
 <h2>DISTRIBUTION ON SECOND SETTLOR&rsquo;S DEATH</h2>
 
 <p><strong>Payment of Taxes, Debts, and Expenses.</strong> [[DRAFT]]</p>
+<p><strong>Debts and Advancements.</strong> [[DRAFT: whether lifetime advances to a beneficiary are charged against that beneficiary's share, and how they are valued]]</p>
 <p><strong>Tangible Personal Property.</strong> [[DRAFT: separate writing; division among children; dispute resolution]]</p>
 
 {{#hasItems assets.retirementAccounts}}
@@ -217,6 +253,10 @@ as settlors and as initial trustees.</p>
 <p><strong>Restrictions on Use of Retirement Assets.</strong> [[DRAFT: no payment of debts, taxes, or expenses from Retirement Account Assets]]</p>
 <p><strong>Purpose and Amendment.</strong> [[DRAFT: savings clause — provisions construed to preserve maximum deferral]]</p>
 {{/hasItems}}
+
+{{#if trustOptions.familyPotTrust}}
+<p><strong>Family Pot Trust.</strong> [[DRAFT: children's shares held as a single pooled fund rather than divided immediately; distribution standard across beneficiaries; the event that terminates the pot and triggers division — typically the youngest child reaching a stated age]]</p>
+{{/if}}
 
 {{#hasItems distribution.residualDistributions}}
 <p><strong>Distribution of Residue.</strong> The residue shall be distributed as follows:</p>
@@ -293,6 +333,10 @@ as settlors and as initial trustees.</p>
 </ol>
 <p><strong>Definition of Retirement Account and Eligible Designated Beneficiary.</strong> [[DRAFT: conform to IRC §401(a)(9)(E)]]</p>
 
+{{#if trustOptions.specialTrustee}}
+<p><strong>Definition of Independent Trustee and Interested Trustee.</strong> [[DRAFT: an interested trustee is a settlor, a beneficiary, or a related or subordinate party under IRC §672(c); an independent trustee is anyone else. Powers reserved to the independent trustee are listed in <em>Special Trustee</em>]]</p>
+{{/if}}
+
 <p><strong>Headings.</strong> [[DRAFT: for convenience only]]</p>
 <p><strong>Gender and Number.</strong> [[DRAFT]]</p>
 <p><strong>Severability.</strong> [[DRAFT]]</p>
@@ -364,16 +408,31 @@ as settlors and as initial trustees.</p>
   executionDate : string
       Currently no field. Renders as a blank line via fillOrBlank until added.
 
-  trustOptions.taxPlanning : 'none' | 'disclaimer' | 'ab_split' | 'qtip'
-      Drives the first-death division. No equivalent today.
+  trustOptions.survivorsTrust  : boolean
+  trustOptions.maritalTrust    : 'none' | 'qtip' | 'outright'
+  trustOptions.bypassTrust     : 'none' | 'mandatory' | 'contingent_disclaimer'
+      First-death subtrusts. INDEPENDENT, not mutually exclusive — a joint plan
+      routinely renders Survivor's + Marital + Disclaimer side by side. Verified
+      against a maximal-config Statular package, which carries all three plus a
+      QDOT provision as sibling sections under the first-death article.
+
+  trustOptions.familyPotTrust  : boolean
+  trustOptions.specialTrustee  : boolean
+      specialTrustee also gates the Independent/Interested Trustee definition in
+      ADMINISTRATIVE PROVISIONS.
+
+  isNonCitizenSpouse : boolean
+      Derived at render time, NOT stored. True when either settlor's
+      personalInfo.citizenship / spouseInfo.citizenship is not 'US Citizen'.
+      Gates three blocks in two articles: Foreign Trust Savings Provision and
+      U.S. Trustee for QDOT under TRUSTEESHIP, and Qualified Domestic Trust
+      Provision under FIRST DEATH. Statular renders these whenever the toggle is
+      on without consulting citizenship — we suppress instead.
 
   trustOptions.retirementTreatment : 'conduit' | 'accumulation' | 'per_share'
-      Drives conduit vs. accumulation. RetirementAccount already carries
-      primaryBeneficiary / contingentBeneficiary / isInheritedIra.
-
   trustOptions.substanceAbuseProvisions : boolean
-  trustOptions.terminationAge : number        (move from trusts[0].terminationAge)
-  trustOptions.distributionStandard : string  (move from trusts[0].distributionStandard)
+  trustOptions.terminationAge : number        (from trusts[0] at render time)
+  trustOptions.distributionStandard : string  (from trusts[0] at render time)
 
   trustProtector.enabled : boolean
   trustProtector.initial : FiduciaryPerson

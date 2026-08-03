@@ -71,6 +71,12 @@
 {{else}}[[DRAFT: reasonable compensation per {{governingState}} statute; expense reimbursement]]{{/if}}</p>
 
 <p><strong>Limited Waiver of Duty to Account.</strong> [[DRAFT: waiver during settlor's lifetime; accounting duties on incapacity and after death]]</p>
+
+{{#if trustOptions.specialTrustee}}
+<p><strong>Special Trustee.</strong> [[DRAFT: appointment and removal; holds only those tax-sensitive powers an interested trustee may not exercise. See <em>Definition of Independent Trustee and Interested Trustee</em>]]</p>
+{{/if}}
+
+<p><strong>Depreciation Reserve.</strong> [[DRAFT: trustee's discretion whether to establish a reserve for depreciation, and the effect on income and principal accounting]]</p>
 <p><strong>Trustee&rsquo;s Liability.</strong> [[DRAFT: good-faith standard; exculpation limits; no liability for predecessor's acts]]</p>
 
 <h2>TRUSTEE POWERS</h2>
@@ -164,6 +170,7 @@
 <h2>DISTRIBUTION ON THE SETTLOR&rsquo;S DEATH</h2>
 
 <p><strong>Payment of Taxes, Debts, and Expenses.</strong> [[DRAFT: apportionment; source of payment]]</p>
+<p><strong>Debts and Advancements.</strong> [[DRAFT: whether lifetime advances to a beneficiary are charged against that beneficiary's share, and how they are valued]]</p>
 <p><strong>Tangible Personal Property.</strong> [[DRAFT: separate writing; division; dispute resolution]]</p>
 
 {{#hasItems distribution.specificBequests}}
@@ -191,6 +198,10 @@
 <p><strong>Restrictions on Use of Retirement Assets.</strong> [[DRAFT: no payment of debts, taxes, or expenses from Retirement Account Assets]]</p>
 <p><strong>Purpose and Amendment.</strong> [[DRAFT: savings clause preserving maximum deferral]]</p>
 {{/hasItems}}
+
+{{#if trustOptions.familyPotTrust}}
+<p><strong>Family Pot Trust.</strong> [[DRAFT: children's shares held as a single pooled fund rather than divided immediately; distribution standard across beneficiaries; the event that terminates the pot and triggers division]]</p>
+{{/if}}
 
 {{#hasItems distribution.residualDistributions}}
 <p><strong>Distribution of Residue.</strong> The residue shall be distributed as follows:</p>
@@ -262,6 +273,10 @@
   <li>[[DRAFT: trade, vocational, and technical programs]]</li>
 </ol>
 <p><strong>Definition of Retirement Account and Eligible Designated Beneficiary.</strong> [[DRAFT: conform to IRC §401(a)(9)(E)]]</p>
+
+{{#if trustOptions.specialTrustee}}
+<p><strong>Definition of Independent Trustee and Interested Trustee.</strong> [[DRAFT: an interested trustee is a settlor, a beneficiary, or a related or subordinate party under IRC §672(c); an independent trustee is anyone else]]</p>
+{{/if}}
 
 <p><strong>Headings.</strong> [[DRAFT: for convenience only]]</p>
 <p><strong>Gender and Number.</strong> [[DRAFT]]</p>

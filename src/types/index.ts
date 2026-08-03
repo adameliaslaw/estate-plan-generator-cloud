@@ -755,13 +755,43 @@ export interface TrustDetail {
  */
 export interface TrustOptions {
   /**
-   * Division at the first settlor's death (joint trusts only).
-   *   none       — single continuing trust, no division
-   *   disclaimer — surviving settlor may disclaim into a credit shelter share (IRC §2518)
-   *   ab_split   — mandatory division into Family (credit shelter) + Marital trusts
-   *   qtip       — marital deduction trust, qualifying income interest (IRC §2056(b)(7))
+   * First-death subtrusts (joint trusts only). These are INDEPENDENT, not
+   * mutually exclusive — a joint plan routinely divides into a Survivor's Trust
+   * alongside a QTIP Marital Trust and a contingent Disclaimer Trust, and all
+   * three articles render side by side.
+   *
+   * An earlier revision modelled this as a single `taxPlanning` enum. That was
+   * wrong: it can express only one vehicle, so any plan using more than one
+   * would render structurally incomplete.
    */
-  taxPlanning?: 'none' | 'disclaimer' | 'ab_split' | 'qtip';
+
+  /** Survivor's Trust holding the surviving settlor's own share. */
+  survivorsTrust?: boolean;
+
+  /**
+   * Marital deduction vehicle for the deceased settlor's share.
+   *   none     — no marital trust
+   *   qtip     — qualifying income interest for life, IRC §2056(b)(7) election
+   *   outright — distributed outright to the surviving settlor, no trust
+   */
+  maritalTrust?: 'none' | 'qtip' | 'outright';
+
+  /**
+   * Credit-shelter vehicle.
+   *   none                  — no bypass
+   *   mandatory             — funded at first death up to the remaining exemption
+   *   contingent_disclaimer — funded only if the survivor disclaims, IRC §2518
+   */
+  bypassTrust?: 'none' | 'mandatory' | 'contingent_disclaimer';
+
+  /** Pooled trust for the children's shares before division (Family Pot Trust). */
+  familyPotTrust?: boolean;
+
+  /**
+   * Appoint a Special Trustee for tax-sensitive powers an interested trustee
+   * cannot hold. Also renders the Independent vs. Interested Trustee definition.
+   */
+  specialTrustee?: boolean;
 
   /**
    * How retirement assets payable to the trust are administered post-SECURE Act.
