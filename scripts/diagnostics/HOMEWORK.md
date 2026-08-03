@@ -204,6 +204,85 @@ the assembled document, and the integrity check should assert TOC ⊆ body headi
 87/87. That is an un-updated `PAGEREF` field, normal for programmatic OOXML assembly; Word
 populates it on open or F9. Do not report it as dangling.
 
+### Package 3 — joint revocable, MAXIMAL config (`Adam_Elias_v1_2.docx`), 2026-08-02
+
+Run 01 of the Chrome-extension sweep. Every option enabled, full asset set ($3,375,000),
+Trust Protector on, special-needs flag on, both retirement accounts, block/lot and value.
+2,978 paragraphs, 35 titled documents. Deed deliberately skipped (interview page 23 left empty).
+
+**The trust grew 282 → 455 paragraphs (+61%).** The eight top-level articles are *identical*
+across every configuration observed:
+
+```
+DECLARATION OF TRUST · TRUSTEESHIP · TRUSTEE POWERS · TRUST PROTECTOR
+DISTRIBUTION DURING THE SETTLORS' JOINT LIVES
+DISTRIBUTION ON FIRST SETTLOR'S DEATH
+DISTRIBUTION ON SECOND SETTLOR'S DEATH
+ADMINISTRATIVE PROVISIONS
+```
+
+**The article spine is fixed; only sections vary.** This is an 8-for-8 match with the spine in
+`functions/src/templates/trust-joint.hbs` (PR #258), in the same order — independent validation
+of that skeleton.
+
+**The 13 sections that appear only at maximal config** — this is the conditional-logic map:
+
+| Group | Sections |
+|---|---|
+| First-death division | Division of Trust Estate · Distribution of Deceased Settlor's Share · Survivor's Trust · Marital Trust · Disclaimer Trust |
+| Children's pooled share | Family Pot Trust |
+| Non-citizen / foreign | Qualified Domestic Trust Provision · U.S. Trustee for QDOT · Foreign Trust Savings Provision |
+| Tax-sensitive powers | Special Trustee · Definition of Independent Trustee and Interested Trustee |
+| Misc | Bond Requirement · Debts and Advancements |
+
+### ⚠ CORRECTION — the TOC finding was overstated
+
+An earlier entry claimed Statular's trust TOC "advertises articles the instrument lacks" as a
+general defect, citing Bypass/Disclaimer/Family Pot/QDOT/Marital as TOC-only. **At maximal
+config all of those render in the body** (Disclaimer 3 headings, Family Pot 4, QDOT 12, Marital
+18, Special Trustee 2). The earlier packages were partial-input runs; those articles were
+legitimately absent because their conditions were unmet.
+
+What remains true, and is the correct, narrower claim: **the TOC is static across
+configurations while the body is conditional.** TOC entry counts do not change between runs.
+So any sub-maximal configuration — i.e. essentially every real client — ships a contents page
+listing articles the instrument does not contain. Still worth encoding as a validation rule
+(assert TOC ⊆ body headings), but it is a TOC-generation shortcut, not a broken engine.
+
+Also softened: `Successor Trustee Checklist` grew 556 → 602 paragraphs between runs, so it is
+not purely static boilerplate as previously recorded.
+
+### Possible over-inclusion — QDOT for two U.S. citizens
+
+Both settlors are recorded as `Citizenship: U.S. Citizen` on client 7236, yet maximal config
+renders `Qualified Domestic Trust Provision`, `U.S. Trustee for Qualified Domestic Trust`, and
+`Foreign Trust Savings Provision` (12 + headings). QDOT applies where the surviving spouse is
+*not* a U.S. citizen. Charitably this is savings-clause drafting; less charitably the engine
+honours the toggle without consulting a citizenship fact it already holds.
+
+Consistent with the independent assessment that the engine is *strict about identifiers*
+(refuses a life-insurance transfer without a carrier name) and *loose about substance*
+(40 post-generation suggestions on one package). **Validation rule for us:** suppress or warn on
+QDOT provisions when no settlor is a non-citizen.
+
+### ⚠ Template version drift between runs
+
+`Adam_Elias_v1.docx` (2026-07-30) and the two 2026-08-02 packages use different template
+labels for the same instruments:
+
+| v1 (July 30) | v1_1 / v1_2 (Aug 2) |
+|---|---|
+| Durable Power of Attorney of X | Power of Attorney of X |
+| Advance Health Care Directive of X | Advance Directive of X |
+| General Assignment | Comprehensive Transfer of Assets |
+| The Elias Family Living Trust | The Elias Family Trust |
+
+Sizes moved too (POA 201→225, AD 91→104). Treat v1 as a *different template generation* from
+the August runs; cross-version diffs carry this as noise.
+
+New documents at maximal config: `Estate Plan Signing Instructions` (81),
+`Request for Capacity Evaluation for Estate Planning` ×2 (41, 37).
+
 ### Package composition
 
 ~31% of the portfolio is boilerplate. Measured by name-density per segment:
