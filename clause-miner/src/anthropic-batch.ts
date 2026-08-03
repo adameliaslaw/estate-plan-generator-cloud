@@ -217,10 +217,24 @@ export interface AnthropicBatchClientOpts {
 /**
  * Conservative ceiling on one batch-create body. The API's documented cap is
  * far higher, but the edge terminates very large uploads with an empty
- * '400 terminated' (observed on the corpus extract submit) — so oversized
- * request lists are split into several batches well below the edge limit.
+ * '400 terminated' (observed on the corpus extract submit, then AGAIN on the
+ * pilot-1 identity submit at chunk sizes extract had passed — the kill
+ * threshold is variable). Two defenses: this ceiling keeps first attempts
+ * small, and submitBatchChunked halves any chunk the edge still terminates.
  */
-export const MAX_BATCH_BYTES = 30 * 1024 * 1024;
+export const MAX_BATCH_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The edge-terminated signature: HTTP 400 with NO parsed error body
+ * (`error: undefined, type: null` in the SDK's APIError). A real invalid
+ * request carries a structured error body; the empty-body form means the
+ * upload was cut off, so it is a signal to split the chunk, not to fail.
+ */
+export function isEdgeTerminated(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { status?: unknown; error?: unknown };
+  return e.status === 400 && (e.error === null || e.error === undefined);
+}
 
 export class AnthropicBatchClient implements BatchClient {
   private readonly pollIntervalMs: number;
@@ -256,7 +270,10 @@ export class AnthropicBatchClient implements BatchClient {
     let current: BatchRequest[] = [];
     let currentBytes = 0;
     for (const req of requests) {
-      const bytes = JSON.stringify(toParams(req)).length + 200;
+      // Byte-accurate: .length counts UTF-16 code units and undercounts the
+      // multi-byte characters (§, curly quotes, em-dashes) legal text is
+      // full of — the edge sees UTF-8 bytes.
+      const bytes = Buffer.byteLength(JSON.stringify(toParams(req)), 'utf8') + 200;
       if (current.length > 0 && currentBytes + bytes > maxBytes) {
         chunks.push(current);
         current = [];
@@ -267,11 +284,25 @@ export class AnthropicBatchClient implements BatchClient {
     }
     if (current.length > 0) chunks.push(current);
 
+    // Work queue: a chunk the edge still terminates is halved and both
+    // halves re-queued — a failed create ledgers nothing, so the retry is
+    // free of double-submission. A SINGLE request that still draws the
+    // empty-body 400 is a genuinely bad request: rethrow. Names are
+    // assigned on successful submit so ledger keys stay contiguous.
+    const queue = [...chunks];
     const ids: string[] = [];
-    for (let i = 0; i < chunks.length; i++) {
-      // First chunk keeps the bare name so single-batch ledgers stay readable.
-      const chunkName = i === 0 ? name : `${name}-${i}`;
-      ids.push(await this.submitBatch(chunkName, chunks[i]));
+    let submitted = 0;
+    while (queue.length > 0) {
+      const chunk = queue.shift() as BatchRequest[];
+      const chunkName = submitted === 0 ? name : `${name}-${submitted}`;
+      try {
+        ids.push(await this.submitBatch(chunkName, chunk));
+        submitted++;
+      } catch (err) {
+        if (!isEdgeTerminated(err) || chunk.length <= 1) throw err;
+        const mid = Math.ceil(chunk.length / 2);
+        queue.unshift(chunk.slice(0, mid), chunk.slice(mid));
+      }
     }
     return ids;
   }
