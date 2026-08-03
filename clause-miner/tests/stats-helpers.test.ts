@@ -164,7 +164,7 @@ describe('statsHash + card request (§7.4)', () => {
   });
 
   it('opus card request carries only title, rows, and ≤3 snippets', () => {
-    const req = buildCardRequest('fam1', 'Spendthrift', rows, [], ['s1', 's2', 's3', 's4']);
+    const req = buildCardRequest('fam1', 'Spendthrift', 'significant', rows, [], ['s1', 's2', 's3', 's4']);
     expect(req.model).toBe('opus');
     const payload = JSON.parse(req.userText) as { provenanceSnippets: string[] };
     expect(payload.provenanceSnippets).toEqual(['s1', 's2', 's3']);

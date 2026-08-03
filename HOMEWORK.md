@@ -1628,6 +1628,24 @@ merge #270, then dispatch `STAGE=catalog` on pilot-1** — that one run rewrites
 docs text-free. (Server-side rules hardening + durable human-clearance state remain open — report
 M7.)
 
+**✅ MEASUREMENT FIXES BUILT (remediation step ②, same day):** the gates and stats now measure
+what they claim. (a) **M1 staleness:** seed-pieces and seed-match artifacts carry a
+`segmenterVersion` stamp; `STAGE=gates` HARD-FAILS (throws, not a red gate) on an unstamped/
+mismatched artifact or a piece-count disagreement with the seed ledger — the 123-vs-130
+denominator gap can never go unnoticed again. (b) **Gate 2 rewritten:** walks the corpus merge
+edges (transcript-less-edge connectivity via union-find), closing the all-exact blind spot; and
+`filingKey` folds `X.doc / X (NEW).doc / X (NEW) (JJB).doc` into ONE filing — the pilot's two
+"violations" were exactly this shape and will re-measure under correct ground truth. Missing
+edges artifact fails closed. (c) **Gate 3** reports its actual rule (divergent share vs 0.5), the
+median moves to detail. (d) **Gate 4** cross-checks canary md5s against the corpus manifest — a
+byte-identical copy inside the corpus fails the gate as compromised. (e) **Stats honesty (C2/M9):**
+both card tiers now require support on BOTH sides (min(nFact,nNotFact) ≥ 10); exploratory cards
+get a deterministic code-prefixed disclaimer plus a narrator instruction forbidding usage-rule
+phrasing; the summary splits significantCards/exploratoryCards; lift at b=0 is finite
+(half-count smoothing) instead of JSON-null. Negative controls run; 447/447.
+**Consequence: current pilot-1 artifacts are unstamped, so gates now REFUSE to run until
+seed → canonicalize re-run — intended; all mined data predates seg/3 anyway (step ④).**
+
 ### ▶ NEXT (fresh session, in order)
 1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
 1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**

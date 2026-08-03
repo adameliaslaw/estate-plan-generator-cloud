@@ -38,6 +38,7 @@ import {
   seedPiecesPath,
 } from '../paths.js';
 import { eraYear, loadArtifacts, loadDocFacts, loadSegmentedRows } from './shared.js';
+import { parseSeedPiecesArtifact } from './seed.js';
 import type { SeedPiece } from './seed.js';
 import type { Env } from '../env.js';
 import type { BlobStore, DocData, DocStore } from '../clients/interfaces.js';
@@ -93,7 +94,7 @@ const INSTRUCTIONS =
 async function loadSeedPieces(deps: CalibrateDeps, env: Env): Promise<SeedPiece[]> {
   try {
     const raw = await deps.blobs.read(seedPiecesPath(env.firmId, env.runId));
-    return JSON.parse(raw.toString('utf8')) as SeedPiece[];
+    return parseSeedPiecesArtifact(raw.toString('utf8')).pieces;
   } catch {
     return [];
   }

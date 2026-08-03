@@ -13,6 +13,7 @@ import { FakeBlobStore, FakeDocStore, makeEnv } from './helpers/fakes.js';
 import type { SeedPiece } from '../src/stages/seed.js';
 import type { SeedMatch } from '../src/seed-match.js';
 import type { CanonicalFamily } from '../src/stages/canonicalize.js';
+import { SEGMENTER_VERSION } from '../src/stages/segment-normalize.js';
 
 function piece(id: string, overrides: Partial<SeedPiece> = {}): SeedPiece {
   return {
@@ -117,7 +118,7 @@ describe('Gate 2 — purity', () => {
   it('passes when distinct curated pieces stay in distinct families', () => {
     const pieces = [piece('p1'), piece('p2')];
     const matches = [match('p1', 'fam_A'), match('p2', 'fam_B')];
-    expect(gate2Purity(pieces, matches).status).toBe('pass');
+    expect(gate2Purity(pieces, matches, []).status).toBe('pass');
   });
 
   it('HARD FAILS when two separately-filed pieces merge with no transcript', () => {
@@ -128,7 +129,9 @@ describe('Gate 2 — purity', () => {
       // §11 Gate 2 calls a hard fail.
       match('p2', 'fam_A', { ring: 1, kind: 'trivial', adjudicationRef: null }),
     ];
-    const result = gate2Purity(pieces, matches);
+    // edges = null: the corpus edge artifact is missing, so silence cannot
+    // be ruled out — the gate fails closed.
+    const result = gate2Purity(pieces, matches, null);
     expect(result.status).toBe('fail');
     expect(result.items[0]).toContain('fam_A');
     expect(result.detail).toContain('legal-delta lexicon');
@@ -159,7 +162,10 @@ describe('Gate 3 — canonical fidelity diagnostic', () => {
     ];
     const result = gate3Fidelity(families);
     expect(result.status).toBe('pass');
-    expect(result.value).toBeCloseTo(0.9);
+    // value/threshold are the ACTUAL rule: divergent share vs max share (M6-adj).
+    expect(result.value).toBeCloseTo(1 / 3);
+    expect(result.threshold).toBeCloseTo(0.5);
+    expect(result.detail).toContain('median token-Levenshtein 0.900');
     expect(result.items).toHaveLength(1);
   });
 
@@ -186,7 +192,8 @@ describe('Gate 3 — canonical fidelity diagnostic', () => {
   });
 
   it('ignores families that matched no seed piece', () => {
-    expect(gate3Fidelity([family('f1'), family('f2')]).value).toBeNull();
+    expect(gate3Fidelity([family('f1'), family('f2')]).value).toBe(0);
+    expect(gate3Fidelity([family('f1'), family('f2')]).detail).toContain('nothing to compare');
   });
 });
 
@@ -261,7 +268,10 @@ describe('runGates orchestration', () => {
       ...Array.from({ length: 10 }, (_, i) => piece(`c${i}`, { canary: true })),
     ];
     const matches = pieces.map((p) => match(p.pieceId, `fam_${p.pieceId}`));
-    await blobs.write(seedMatchPath(env.firmId, env.runId), JSON.stringify({ pieces, matches }));
+    await blobs.write(
+      seedMatchPath(env.firmId, env.runId),
+      JSON.stringify({ segmenterVersion: SEGMENTER_VERSION, pieces, matches }),
+    );
     await blobs.write(
       canonicalPath(env.firmId, env.runId),
       JSON.stringify([family('fam_p1', { seedEditRatio: 0.95 })]),

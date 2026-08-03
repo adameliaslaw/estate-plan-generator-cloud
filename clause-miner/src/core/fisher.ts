@@ -74,7 +74,14 @@ export function fisherExactTwoSided(t: Table2x2): number {
 export function lift(t: Table2x2): number {
   const pGivenFact = t.a + t.c > 0 ? t.a / (t.a + t.c) : 0;
   const pGivenNotFact = t.b + t.d > 0 ? t.b / (t.b + t.d) : 0;
-  if (pGivenNotFact === 0) return pGivenFact > 0 ? Infinity : 1;
+  if (pGivenNotFact === 0) {
+    // b = 0 made lift Infinity, which JSON-serializes to null — pilot-1 cards
+    // would have cited "lift null" (checkpoint-2 M9). Haldane-Anscombe-style
+    // half-count keeps the estimate finite and monotone in the evidence.
+    if (pGivenFact === 0) return 1;
+    const smoothed = 0.5 / (t.b + t.d + 1);
+    return pGivenFact / smoothed;
+  }
   return pGivenFact / pGivenNotFact;
 }
 
