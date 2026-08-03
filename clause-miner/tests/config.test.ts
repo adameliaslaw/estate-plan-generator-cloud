@@ -32,7 +32,7 @@ describe('config (design-of-record thresholds)', () => {
   });
 
   it('carries the §10/§15 spend controls', () => {
-    expect(config.spend.pilotCeilingUsd).toBe(350);
-    expect(config.spend.dailyBreakerUsd).toBe(250);
+    expect(config.spend.pilotCeilingUsd).toBe(500); // raised by Adam 2026-08-03 (re-run)
+    expect(config.spend.dailyBreakerUsd).toBe(400); // raised by Adam 2026-08-03 (re-run)
   });
 });
