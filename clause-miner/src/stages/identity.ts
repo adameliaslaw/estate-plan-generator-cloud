@@ -3,7 +3,7 @@
  * MinHash/LSH candidates over unique sigTexts + deterministic diff filter
  * (trivial → auto-merge; ANY content diff → sonnet adjudication with the
  * merge-averse rubric — there is no auto-merge band); enumerated-section
- * item-set path (Jaccard ≥ 0.7); Ring 2 Vertex text-embedding-005 cosine
+ * item-set path (Jaccard ≥ 0.7); Ring 2 Vertex gemini-embedding-001 cosine
  * (≥ 0.92 proposes → adjudication; 0.80–0.92 → relatedTo edges, never
  * merged). Union-find over the confirmed edge set; EVERY non-exact edge is
  * stored {ring, scores, diff, adjudicationRef} so one-edge deletion reverses

@@ -1575,8 +1575,62 @@ real $153.86 after multi-charge inflation. Total pilot Anthropic spend ≈ **$15
 authoritative). Live dashboard artifact (session-scoped):
 https://claude.ai/code/artifact/12f31ce2-5a85-413c-9636-4aff942aff4c
 
+### ✅ ULTRACODE CHECKPOINT #2 RAN, 2026-08-03 evening — full report in [docs/CHECKPOINT2-VERIFICATION.md](./docs/CHECKPOINT2-VERIFICATION.md)
+
+5-lens adversarial panel + per-finding refutation over the run #59–#63 outputs and the code.
+20 findings CONFIRMED, 1 refuted. The headline results, in severity order:
+
+- **🔴 CRITICAL — the PII "fail closed" promise is FALSE.** All 281 blocked families were written
+  to Firestore WITH full clause text (`catalog.ts` never consults `piiScanStatus`), readable by any
+  firm attorney/paralegal; the only thing hiding it is one client-side filter in the Clause Picker
+  dialog. Firm-internal exposure only (staff can already read the source docs), but the
+  security-rules comment "NO raw client text by construction" is currently untrue. **Fix before
+  anyone browses the catalog.**
+- **🔴 ~97% of trigger cards are statistically unvetted:** ~290/300 cards were narrated from
+  "exploratory" rows (lift≥2, one-sided support — 62% of ALL rows qualify) with no disclaimer in
+  the prose; only 10 rows passed the BH-corrected significance gate (which itself is sound).
+- **🔴 A real silent-merge path exists:** the item-set ring can merge enumerated power-lists with
+  genuine content diffs, transcript-less (`identity.ts:247-262` computes `classifyDiff` but never
+  checks it). Separately, the 1,103 normalization-miss verdicts were counted then DROPPED — mining
+  those transcripts is the single highest-leverage fix (shrinks piiBlocked, merges fragments,
+  lifts recall, ~free via transcript replay).
+- **The two failing gates FAIL for partly-artifactual reasons** — do not tune thresholds against
+  them: gate denominators don't reconcile with the seed run (123 vs 130 — no version stamps
+  anywhere, so staleness is undetectable); seed pieces are execution-truncated while corpus
+  segments are not (≥3 misses unmatchable by construction); seed matching gives each piece ONE
+  candidate. Gate 2's number is a lower bound measuring the wrong mechanism, and its two flagged
+  families are likely filename-versions of one template (merging them is probably correct).
+- **Ring-2 bypassed the 40k adjudication cap** (the guard only covers Ring 1) — ~75% of pilot
+  adjudication spend came through the uncapped loop. Guard it before any banding change.
+- **Remediation ordering (report §C):** ① PII stop-ship → ② measurement fixes (version stamps,
+  gate 2/3 rewrites, card-tier disclosure) → ③ free recall levers (normalization-miss mining,
+  execution symmetry, item-set trivial gate, Ring-2 cap) → ④ full re-run (all mined data predates
+  the seg/3 truncation fix anyway) → ⑤ paid levers only if still short.
+- **Unverifiable from the sandbox** (no Firestore/GCS): report §B lists 10 items; first query next
+  session: why identity saw only 371 `segmented` rows out of 512 trusts.
+- **Scope question for Adam before recall targets are set:** the corpus is trusts-only but the
+  seed library includes will clauses — roughly half of Gate 1's denominator may have no corpus
+  counterpart *by design*.
+
+**Also this session: ▶ NEXT item 3 SHIPPED as PR #270** (embeddings → `gemini-embedding-001`,
+768-dim kept so vector indexes untouched, miner predict batch 25→1 per the model's 1-instance
+cap; tsc ×3 green, 423 + 1058 tests green). **Held un-merged per suspended Rule 7.** After merge:
+run both KB backfills + re-run miner `catalog` together so the space stays unmixed.
+
+**✅ PII STOP-SHIP FIX BUILT (same session, on PR #270's branch):** `runCatalog` now redacts any
+family whose `piiScanStatus` is not `'clean'` — whitelist scrub (`scrubBlockedCatalogDoc` /
+`scrubBlockedVariantDoc`: no canonicalText/title/summary/switchName/placeholders/triggerCard/
+embedding; variants lose normText/parameters/mergeEdge diff tokens), written with `merge:false`
+so a re-run SCRUBS the text the pre-fix run already shipped, including stale variant ids no
+longer in the family. Blocked text is not embedded either. approved/removed status still carries.
+Negative-controlled: disabling the wiring fails 2 tests. 430/430 green. **To actually scrub prod:
+merge #270, then dispatch `STAGE=catalog` on pilot-1** — that one run rewrites all 281 blocked
+docs text-free. (Server-side rules hardening + durable human-clearance state remain open — report
+M7.)
+
 ### ▶ NEXT (fresh session, in order)
-1. **Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
+1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
+1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
    multi-agent adversarial verification over the gates report (run #63 job log) + stage summaries.
    Lenses: gate scores vs claims; over/under-merge at 16×8 given 2,380/37,693; the 2 purity
    violations (which path merged them — trivial-diff or item-set?); statistical honesty of the 10

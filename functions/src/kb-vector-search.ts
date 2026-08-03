@@ -3,7 +3,7 @@
  *
  * Core semantic search module for the Knowledge Base.
  * Uses Firestore's native vector search (`findNearest`) with
- * Vertex AI text-embedding-005 (768 dimensions, ADC auth).
+ * Vertex AI gemini-embedding-001 (768 dimensions, ADC auth).
  *
  * Features:
  *  - Generates query embedding, then runs findNearest on both
