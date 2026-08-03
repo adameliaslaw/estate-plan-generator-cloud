@@ -91,6 +91,10 @@ export function normalizationMissesPath(firmId: string, runId: string): string {
   return `${gcsBase(firmId)}/runs/${runId}/identity/normalization-misses.json`;
 }
 
+export function supplementalGazetteerPath(firmId: string, runId: string): string {
+  return `${gcsBase(firmId)}/runs/${runId}/identity/supplemental-gazetteer.json`;
+}
+
 export function adjudicationPath(firmId: string, runId: string, pairId: string): string {
   return `${gcsBase(firmId)}/runs/${runId}/adjudications/${pairId}.json`;
 }
