@@ -2,7 +2,7 @@
  * functions-backfill/src/kb-embeddings.ts
  *
  * Backfill-only embedding functions for Knowledge Base resources and templates.
- * Uses Vertex AI text-embedding-005 (768 dimensions) via Application Default
+ * Uses Vertex AI gemini-embedding-001 (768 dimensions) via Application Default
  * Credentials — no per-firm API key needed.
  *
  * This file is a trimmed copy of functions/src/kb-embeddings.ts containing
@@ -19,7 +19,9 @@ import { GoogleAuth } from 'google-auth-library';
 // ---------------------------------------------------------------------------
 
 const VERTEX_LOCATION      = 'us-central1';
-const EMBEDDING_MODEL      = 'text-embedding-005';
+// Must match functions/src/kb-embeddings.ts — the backfill re-embeds any doc
+// whose stored embeddingModel differs from this value.
+const EMBEDDING_MODEL      = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 768;
 
 /** Content shorter than this gets a single embedding on the document itself.
@@ -62,7 +64,7 @@ async function generateEmbedding(
   text: string,
   taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[]> {
-  // text-embedding-005 caps inputs around 2048 tokens (~8000 chars).
+  // gemini-embedding-001 caps inputs around 2048 tokens (~8000 chars).
   const cleanText = text
     .replace(/\s+/g, ' ')
     .trim()

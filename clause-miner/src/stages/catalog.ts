@@ -1,7 +1,7 @@
 /**
  * Stage 9 — Catalog write (§9): firms/{firmId}/clauseCatalog/{clauseId} with
  * the §9 schema fields verbatim, plus variants/ and occurrences/
- * subcollections, and the 768-dim Vertex embedding (text-embedding-005 —
+ * subcollections, and the 768-dim Vertex embedding (gemini-embedding-001 —
  * same space as kb-vector-search findNearest).
  *
  * Union master template assembly is CHECKPOINT-2 SCOPE (§6.4 gates it behind

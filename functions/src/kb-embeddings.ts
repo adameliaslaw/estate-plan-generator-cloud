@@ -2,7 +2,7 @@
  * functions/src/kb-embeddings.ts
  *
  * Generates and stores vector embeddings for Knowledge Base resources.
- * Uses Vertex AI text-embedding-005 (768 dimensions) via Application Default
+ * Uses Vertex AI gemini-embedding-001 (768 dimensions) via Application Default
  * Credentials — no per-firm API key needed.
  *
  * Features:
@@ -21,7 +21,11 @@ import { GoogleAuth } from 'google-auth-library';
 // ---------------------------------------------------------------------------
 
 const VERTEX_LOCATION      = 'us-central1';
-const EMBEDDING_MODEL      = 'text-embedding-005';
+// Migrating embedding models invalidates every stored vector: mixed spaces
+// silently degrade findNearest. Bump here only together with a full re-embed
+// of knowledgeBase/templates (functions-backfill) AND clauseCatalog
+// (clause-miner/src/clients/gcp.ts uses the same constant pair).
+const EMBEDDING_MODEL      = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 768;
 
 /** Content shorter than this gets a single embedding on the document itself.
@@ -69,7 +73,7 @@ export async function generateEmbedding(
   text: string,
   taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[]> {
-  // text-embedding-005 caps inputs around 2048 tokens (~8000 chars). The
+  // gemini-embedding-001 caps inputs around 2048 tokens (~8000 chars). The
   // chunker stays well under this; this slice is a safety net for any
   // caller that bypasses chunkText.
   const cleanText = text

@@ -1,9 +1,9 @@
 /**
  * Real client implementations: Firestore, Cloud Storage, Drive (ADC,
  * drive.readonly — same auth pattern as functions/src/wills-backfill.ts),
- * Vertex embeddings (text-embedding-005, 768-dim — same model/space as
- * functions/src/kb-embeddings.ts, but BATCHED multi-instance predicts per
- * §3 Stage 6), and a child_process shell runner for LibreOffice.
+ * Vertex embeddings (gemini-embedding-001, 768-dim — same model/space as
+ * functions/src/kb-embeddings.ts; one instance per predict, the model's
+ * per-request cap), and a child_process shell runner for LibreOffice.
  *
  * Nothing in this file is imported by unit tests — tests use fakes behind
  * src/clients/interfaces.ts.
@@ -253,10 +253,13 @@ export class GoogleDriveClient implements DriveClient {
 /* ------------------------------------------------------------------ */
 
 const VERTEX_LOCATION = 'us-central1';
-const EMBEDDING_MODEL = 'text-embedding-005';
+// Must match functions/src/kb-embeddings.ts — catalog and KB vectors share one
+// space; findNearest silently degrades if they diverge.
+const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 768;
-/** Instances per predict call — well under the model's per-request cap. */
-const PREDICT_BATCH_SIZE = 25;
+/** gemini-embedding-001 accepts only ONE instance per predict request
+ *  (unlike text-embedding-005's multi-instance batching). */
+const PREDICT_BATCH_SIZE = 1;
 
 export class VertexEmbeddingClient implements EmbeddingClient {
   private readonly auth = new google.auth.GoogleAuth({
