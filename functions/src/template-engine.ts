@@ -37,6 +37,7 @@ import { buildStandardTitle } from './unified-generator';
 import { computePromptHash } from './unified-generator';
 import { VARIABLE_TO_QUESTIONNAIRE_MAP } from './template-variables';
 import { getFormattingPreset } from './config/formatting-presets';
+import { loadBundledTemplate, deriveBundledVariant } from './bundled-templates';
 
 // Re-export so downstream consumers (tests, etc.) don't break
 export type { VariableMapping } from './template-variables';
@@ -69,7 +70,7 @@ export interface DocumentTemplate {
   /** Which Firestore collection the template was resolved from. Populated by
    *  getTemplate() so downstream callers (provenance, audit) don't have to
    *  re-derive the source. */
-  _sourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates';
+  _sourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | 'bundled';
 }
 
 export type GenerationMode = 'template' | 'ai' | 'hybrid';
@@ -77,7 +78,7 @@ export type GenerationMode = 'template' | 'ai' | 'hybrid';
 type TemplateCandidate = {
   id: string;
   data: FirebaseFirestore.DocumentData;
-  source: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates';
+  source: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | 'bundled';
 };
 
 export interface ValidationResult {
@@ -1481,6 +1482,23 @@ export async function getTemplate(
     }
   }
 
+  // Bundled fallback: templates that ship with the deploy under lib/templates.
+  // Last resort — a firm's own uploads always win. Skipped when softwareSource
+  // was specified, for the same reason the software-source query refuses to
+  // fall back: substituting a different drafting source silently is worse than
+  // returning null and letting the caller surface a missing-template error.
+  if (!rawData && !templateId && !softwareSource) {
+    const bundledData = loadBundledTemplate(docType, variant);
+    if (bundledData) {
+      console.info(
+        `[getTemplate] Bundled template fallback: docType="${docType}"` +
+        `${variant ? ` variant="${variant}"` : ''} — no firm template found.`,
+      );
+      rawCandidate = { id: bundledData.id as string, data: bundledData, source: 'bundled' };
+      rawData = bundledData;
+    }
+  }
+
   // Runtime validation: ensure required fields exist.
   // Support both 'content' (canonical) and 'editorContent' (editor-saved) field names.
   if (rawData && !rawData.content?.trim()) {
@@ -1983,15 +2001,21 @@ export async function generateFromTemplate(
     return aiGeneratorFn();
   }
 
+  // Some bundled templates split on client facts rather than an attorney
+  // election (trust: joint vs. single). Derive that here, where the client is
+  // in scope — getTemplate() is deliberately client-unaware. An explicit
+  // variant from the caller always wins.
+  const resolvedVariant = variant ?? deriveBundledVariant(docType, ctx.client as unknown as admin.firestore.DocumentData);
+
   // Fetch template (with optional software source filtering + auto-fallback)
-  const template = await getTemplate(firmId, docType, templateId, variant, softwareSource);
+  const template = await getTemplate(firmId, docType, templateId, resolvedVariant, softwareSource);
   if (!template) {
     if (aiGeneratorFn) {
       console.warn(`[template-engine] No template found for ${docType} (mode=${mode}), falling back to AI generation.`);
       return aiGeneratorFn();
     }
     throw new Error(
-      `No active template found for docType="${docType}"${variant ? ` variant="${variant}"` : ''}. ` +
+      `No active template found for docType="${docType}"${resolvedVariant ? ` variant="${resolvedVariant}"` : ''}. ` +
       `Upload a template via the Knowledge Base admin, or switch to AI generation mode.`,
     );
   }

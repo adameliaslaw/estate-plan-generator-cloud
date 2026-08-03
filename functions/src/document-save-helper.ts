@@ -43,7 +43,7 @@ export interface SaveDocumentParams {
    *  no template was matched. */
   templateId?: string | null;
   /** Which Firestore collection the template was resolved from. */
-  templateSourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | null;
+  templateSourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | 'bundled' | null;
   /** Software source filter applied at resolution time (e.g. 'InteractiveLegal'). */
   softwareSource?: string | null;
   /**

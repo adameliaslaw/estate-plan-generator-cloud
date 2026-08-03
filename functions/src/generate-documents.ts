@@ -68,7 +68,7 @@ export interface GeneratedDoc {
   /** Template ID used (if any). null when AI-only path produced the doc. */
   resolvedTemplateId?: string | null;
   /** Firestore collection the template was resolved from. */
-  resolvedTemplateSource?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | null;
+  resolvedTemplateSource?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | 'bundled' | null;
   /** softwareSource filter applied at resolution time. */
   resolvedSoftwareSource?: string | null;
 }

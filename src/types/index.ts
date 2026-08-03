@@ -1021,7 +1021,7 @@ export interface Document {
 
   // Generation provenance (written by document-save-helper)
   triggerSource?: 'batch' | 'single' | 'chat-draft' | 'flex' | 'retemplatize';
-  templateSourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | null;
+  templateSourceCollection?: 'documentTemplates' | 'knowledgeBase' | 'legacyTemplates' | 'bundled' | null;
   softwareSource?: string | null;
   /** True when the canonical artifact is a binary (DOCX) in Storage. */
   hasBinary?: boolean;
