@@ -1660,7 +1660,46 @@ free). Negative-controlled; 454/454.
 **The gazetteer expansion itself needs the run data (Firestore/GCS) — first item for the
 remediation re-run session, before step ④'s segment → seed → calibrate → identity sequence.**
 
+### 🔶 REMEDIATION RE-RUN, 2026-08-03→04 overnight — 6 of 9 stages green, PAUSED one stage from
+### the gates on the ANTHROPIC CONSOLE MONTHLY USAGE LIMIT (not our breaker)
+
+**Green so far (all resumable, everything paid is durable):**
+- `mine-misses` (run #64): 1,103 miss pairs → **435 names admitted** to the supplemental
+  gazetteer (369 rejected not-name-shaped, 419 rejected as seed vocabulary).
+- `segment` (run #65, ~5 min — checkpoint caching): roster VERIFIED in output
+  (`supplemental gazetteer names=435`); 371 segmented / 202 reflowed / 3 llmFallback /
+  0 needs-review / **45 quarantined** / 18,212 skipped.
+- `seed` (run #66): 70 in scope → 196 pieces (190 clause/6 commentary), 129 trust-relevant,
+  15 canary, 34 execution blocks truncated. `calibrate` SKIPPED — Option 2 made the packet moot.
+- `identity` (run #67 tripped the $250 daily breaker mid-recovery — REAL spend, not phantom:
+  same-day stacking on the pilot's $153.86; limits raised with Adam's approval in #275 —
+  then run #68 GREEN, 2h27m): uniques=3831, autoMerges=70, adjudicated=38,754,
+  **merges=4,018 (pilot 2,380 — +69%)**, separates=33,026, normalizationMisses=1,710 (up from
+  1,103 — cleaner text surfaced more borderline pairs; ALL captured in the new
+  `identity/normalization-misses.json` worklist), **families=2,537 (pilot 2,677)**.
+
+**BLOCKED:** `canonicalize` (runs #69/#70/#71 all failed identically at $0):
+`"You have reached your specified API usage limits. You will regain access on 2026-09-01"` —
+the org's monthly usage-limit SETTING at console.anthropic.com. **Adam's $100 credits do NOT
+bypass it; the limit value itself must be raised** (Settings → Limits). A silent $0 probe
+re-dispatches canonicalize every ~2h and auto-continues canonicalize → stats → catalog → gates
+the moment it clears. Remaining Anthropic spend to finish: ~$25–45.
+
+**Spend, honestly:** Anthropic console showed **$411.58** before canonicalize (pilot ~$155 +
+re-run identity ~$250 across two attempts). Both of the session's estimates missed low for the
+same reason: the fixes CHANGED the compared text (name redaction + execution truncation), so
+the pilot's cached adjudications largely could not replay and were re-bought. Internal brakes
+now $400/day / $500 total (#275), still armed.
+
+**Coverage note for the gates read-out:** identity operates on 371 `segmented` docs; ~141 of
+the 512 trusts sit in the quarantine/review tail (45 quarantined this pass + prior tail) — the
+checkpoint report's "371 vs 512" open item, now explained. A coverage decision (mine the tail
+or accept it) belongs with the catalog review.
+
 ### ▶ NEXT (fresh session, in order)
+0. **Anthropic monthly usage limit** (Adam, one minute): console.anthropic.com → Settings →
+   Limits → raise the monthly cap. The armed probe then finishes canonicalize → stats →
+   catalog → gates unattended and delivers the plain-language gates verdict.
 1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
 1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
    multi-agent adversarial verification over the gates report (run #63 job log) + stage summaries.
