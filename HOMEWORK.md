@@ -1696,10 +1696,55 @@ the 512 trusts sit in the quarantine/review tail (45 quarantined this pass + pri
 checkpoint report's "371 vs 512" open item, now explained. A coverage decision (mine the tail
 or accept it) belongs with the catalog review.
 
+### ✅ RE-RUN COMPLETE, 2026-08-04 — all 9 stages green; GATES RED but HONEST (run #76, exit(3))
+
+Adam raised the monthly limit to $500; the chain finished: canonicalize (run #72 exposed an
+unregistered `SUPPLEMENTAL_NAME` tag → 166/302 fill-contract failures; fixed+merged #276; re-run
+#73 GREEN: **302/302 labeled, 0 failures**, piiBlocked=276, seedMatched=85) → stats (run #74:
+337 units, 4,832 rows, 14 significant, **cards 301 = 6 significant / 295 exploratory** — the
+tier split now reported and every exploratory card carries the code-level disclaimer) → catalog
+(run #75: **302 entries / 1,394 variants / 3,965 occurrences; blocked families written
+TEXT-FREE**, scrubbing the pilot's leak) → gates (run #76).
+
+**Gates (first trustworthy read — stamped artifacts, denominators reconcile at 114):**
+- **Gate 1 RECALL: FAIL, 74/114 = 64.9%** (pilot's broken read: 61.7%). The 40 misses are named
+  in the run #76 log. A large share are WILL clauses (the DISCLAIMER WILL family, guardianship,
+  residuary-to-minors, tangible-personal-property pieces) — clauses with no counterpart in a
+  trusts-only corpus BY DESIGN, plus Charitable Remainder Unitrust pieces (rare instrument,
+  likely below min-support). **Recall is structurally capped until wills are mined or the
+  denominator is scoped to corpus-reachable clauses — Adam's scope decision.**
+- **Gate 2 PURITY: FAIL, 2 — and now REAL.** With filename-revisions correctly folded, the same
+  two families remain: trustee-powers/bond-waiver boilerplate joined ACROSS genuinely different
+  filings (e.g. the Wells Fargo trustee-powers piece + ETP4 + the DISCLAIMER WILL trustee
+  article) without a transcript. Either tighten the diff whitelist/legal-delta lexicon, or —
+  plausibly — Adam looks at them and rules they ARE the same clause reused across templates.
+  A 2-item human question now, not a measurement artifact.
+- **Gate 3 FIDELITY: PASS** honestly (divergent share 0.059 over 17 matched; 1 flagged for
+  side-by-side).
+- **Gate 4 CANARY: FAIL as COMPROMISED — the new md5 cross-check found 4 canary files with
+  byte-identical copies inside the corpus tree** (named in the run #76 log; client-named files,
+  not repeated here). The pilot's 56% "recovery" was partly measuring the pipeline finding
+  documents it had been given. Fix is cheap: drop those 4 from the canary set (or dedupe the
+  Drive tree) and re-run gates ($0) for a clean holdout read.
+- **Gate 5: skipped** (checkpoint-2 scope), so `incomplete=true` stands by design.
+
+**Spend final (console authoritative): ≈ $412 before the finish + ~$25 canonicalize/stats
+labeling ≈ $435–445 total**, inside the raised $500 monthly cap and the internal $500 ceiling.
+
 ### ▶ NEXT (fresh session, in order)
-0. **Anthropic monthly usage limit** (Adam, one minute): console.anthropic.com → Settings →
-   Limits → raise the monthly cap. The armed probe then finishes canonicalize → stats →
-   catalog → gates unattended and delivers the plain-language gates verdict.
+1. **Adam's two 5-minute calls (both cheap to act on):**
+   (a) the 2 purity families — same clause reused, or genuinely distinct? (viewable in the
+   Clause Picker / run #76 log); (b) canary — drop the 4 duplicated files from
+   CLAUSE_MINER_CANARY_FOLDER_IDS coverage and re-run `gates` ($0) for the clean holdout read.
+2. **Recall scope decision:** exclude corpus-unreachable will clauses from Gate 1's denominator
+   (measure honestly against trusts) OR treat 65% as the trust-only floor and revisit after the
+   wills mine. Either unblocks the catalog review.
+3. **Catalog review can arguably begin now** for the 26 clean families while the above settle —
+   design says gates gate the review, but gates are now failing for SCOPE reasons (wills in the
+   denominator, compromised canary), not correctness ones; Adam's call.
+4. **PII over-aggression (M8):** 276/302 blocked barely moved despite 435 names redacted —
+   the roster sweep/haiku gate over-block (checkpoint report predicted this). Tuning task
+   before the catalog is broadly usable; blocked entries ship text-free meanwhile.
 1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
 1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
    multi-agent adversarial verification over the gates report (run #63 job log) + stage summaries.

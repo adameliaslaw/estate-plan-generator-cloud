@@ -307,7 +307,16 @@ export function gate4Canary(
   /** Canary files whose byte-identical copy sits in the corpus (md5 match). */
   compromisedFiles: readonly string[] = [],
 ): GateResult {
-  const canary = pieces.filter((p) => p.kind === 'clause' && p.canary && p.trustRelevant);
+  // A byte-duplicated canary file defeats the holdout FOR ITS OWN pieces —
+  // the pipeline was effectively handed those answers. Excluding them and
+  // grading the clean remainder keeps the gate meaningful (Adam's call,
+  // 2026-08-04) as long as the exclusion is REPORTED, never silent, and an
+  // empty clean remainder still fails as compromised rather than passing
+  // vacuously.
+  const compromisedSet = new Set(compromisedFiles);
+  const allCanary = pieces.filter((p) => p.kind === 'clause' && p.canary && p.trustRelevant);
+  const canary = allCanary.filter((p) => !compromisedSet.has(p.seedFileName));
+  const excludedPieces = allCanary.length - canary.length;
   const matched = new Set(matches.map((m) => m.pieceId));
   const recovered = canary.filter((p) => matched.has(p.pieceId));
   const value = canary.length === 0 ? 0 : recovered.length / canary.length;
@@ -329,9 +338,10 @@ export function gate4Canary(
     };
   }
   // Folder exclusion is not enough when the same bytes live elsewhere in the
-  // corpus tree: recovery of a duplicated canary proves only that the
-  // pipeline can find a document it was given (M6-adj: cross-check by md5).
-  if (compromisedFiles.length > 0) {
+  // corpus tree (M6-adj: cross-check by md5). If NOTHING clean remains, the
+  // holdout is wholly compromised and the gate fails rather than passing on
+  // zero evidence.
+  if (canary.length === 0 && compromisedFiles.length > 0) {
     return {
       gate: 'gate4',
       name: 'INDEPENDENT-RECOVERY CANARY',
@@ -339,12 +349,16 @@ export function gate4Canary(
       value: null,
       threshold: config.gates.canaryRecallMin,
       detail:
-        `${compromisedFiles.length} canary file(s) have a byte-identical (md5) copy inside the ` +
-        'corpus — the holdout is compromised and the recovery result is meaningless. Remove the ' +
-        'duplicates from the corpus tree or drop those files from the canary set.',
+        `every canary piece comes from the ${compromisedFiles.length} file(s) with a ` +
+        'byte-identical (md5) corpus copy — no clean holdout remains. Remove the duplicates ' +
+        'from the corpus tree or add clean canary files.',
       items: [...compromisedFiles],
     };
   }
+  const exclusionNote =
+    excludedPieces > 0
+      ? `; ${excludedPieces} piece(s) from ${compromisedFiles.length} byte-duplicated file(s) EXCLUDED from the holdout`
+      : '';
   return {
     gate: 'gate4',
     name: 'INDEPENDENT-RECOVERY CANARY — held-out library re-derived from client documents',
@@ -354,7 +368,7 @@ export function gate4Canary(
     detail:
       canary.length === 0
         ? 'no held-out canary clauses — the strongest falsifier did not run'
-        : `${recovered.length}/${canary.length} held-out clauses re-derived from client documents alone`,
+        : `${recovered.length}/${canary.length} held-out clauses re-derived from client documents alone${exclusionNote}`,
     items: canary
       .filter((p) => !matched.has(p.pieceId))
       .map((p) => `${p.seedFileName} #${p.pieceIndex} ${p.title ?? ''}`.trim()),
