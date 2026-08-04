@@ -100,6 +100,11 @@ export const PLACEHOLDER_REGISTRY: Readonly<Record<string, PlaceholderRegistryEn
   BENEFICIARY: { kind: 'party', fillSource: 'attorney' },
   WITNESS: { kind: 'party', fillSource: 'attorney' },
   NAME: { kind: 'party', fillSource: 'attorney' },
+  // Run-level roster from STAGE=mine-misses: a client-specific name the
+  // adjudicators attested to, with no per-doc role — the attorney supplies
+  // the right party per matter. Unregistered, this tag failed 166 of 302
+  // families' fill contracts on the first post-roster canonicalize.
+  SUPPLEMENTAL_NAME: { kind: 'party', fillSource: 'attorney' },
 
   // --- typed values (§5.1(2)) -------------------------------------------
   DATE: { kind: 'date', fillSource: 'clientContext', contractField: 'todayFormatted' },

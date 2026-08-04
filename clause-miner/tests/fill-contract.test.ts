@@ -7,6 +7,16 @@ import {
   type FillContractMapping,
 } from '../src/fill-contract.js';
 
+import { buildFillContract as _bfc } from '../src/fill-contract.js';
+
+describe('SUPPLEMENTAL_NAME (mine-misses roster tag)', () => {
+  it('is registered — an unregistered roster tag failed 166/302 families on 2026-08-04', () => {
+    expect(() =>
+      _bfc('I give to {{SUPPLEMENTAL_NAME}} my residuary estate.', new Map()),
+    ).not.toThrow();
+  });
+});
+
 describe('placeholderBase', () => {
   it('strips ordinal suffixes', () => {
     expect(placeholderBase('{{TRUSTEE_2}}')).toBe('TRUSTEE');
