@@ -122,6 +122,18 @@ export interface TriageSummary {
 
 export async function runTriage(deps: TriageDeps, env: Env): Promise<TriageSummary> {
   const rows = await deps.store.listDocs(filesCollection(env.firmId, env.runId));
+  // Per-category histogram on every run (a $0 resume prints it): the corpus
+  // composition drives every scope/cost decision — e.g. sizing the wills
+  // mine — and previously lived only in Firestore where sessions can't look.
+  const byCategory = new Map<string, number>();
+  for (const r of rows) {
+    const cat = typeof r.data.docCategory === 'string' ? r.data.docCategory : '(untriaged)';
+    byCategory.set(cat, (byCategory.get(cat) ?? 0) + 1);
+  }
+  console.log(
+    'triage: byCategory ' +
+      JSON.stringify(Object.fromEntries([...byCategory.entries()].sort((a, b) => b[1] - a[1]))),
+  );
   const pending = rows.filter(
     (r) => r.data.status === 'converted' && r.data.docCategory === undefined,
   );

@@ -162,11 +162,26 @@ describe('gate 4 — md5 holdout compromise', () => {
   );
   const matches = canary.map((p) => match(p.pieceId, `fam_${p.pieceId}`));
 
-  it('fails as compromised when a canary file has a byte-identical corpus copy', () => {
+  it('fails when EVERY canary piece comes from a byte-duplicated file — no clean holdout', () => {
     const result = gate4Canary(canary, matches, true, ['Canary.doc']);
     expect(result.status).toBe('fail');
     expect(result.detail).toContain('byte-identical');
+    expect(result.detail).toContain('no clean holdout');
     expect(result.items).toEqual(['Canary.doc']);
+  });
+
+  it('EXCLUDES compromised files and grades the clean remainder (Adam, 2026-08-04)', () => {
+    const clean = Array.from({ length: 10 }, (_, i) =>
+      piece(`k${i}`, 'CleanCanary.doc', 'cf2', { canary: true }),
+    );
+    const mixed = [...canary, ...clean];
+    // 9 of the 10 clean pieces recovered; the 10 compromised pieces would
+    // have inflated the score had they been counted.
+    const mixedMatches = clean.slice(0, 9).map((p) => match(p.pieceId, `fam_${p.pieceId}`));
+    const result = gate4Canary(mixed, mixedMatches, true, ['Canary.doc']);
+    expect(result.value).toBeCloseTo(0.9);
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('10 piece(s) from 1 byte-duplicated file(s) EXCLUDED');
   });
 
   it('runGates detects the md5 duplicate from the manifest rows', async () => {
