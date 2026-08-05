@@ -1745,6 +1745,19 @@ labeling ≈ $435–445 total**, inside the raised $500 monthly cap and the inte
 4. **PII over-aggression (M8):** 276/302 blocked barely moved despite 435 names redacted —
    the roster sweep/haiku gate over-block (checkpoint report predicted this). Tuning task
    before the catalog is broadly usable; blocked entries ship text-free meanwhile.
+5. **Quarantine-tail coverage — PENDING (Adam, 2026-08-05: "leave it as pending").** ~141 of
+   512 trusts sit in the segment quarantine/review tail and were never mined (identity ran on
+   371). Options laid out for Adam: accept the gap (recommended — messiest docs, boilerplate
+   likely already captured from the clean 371), chase the tail (diagnose+fix conversion, re-run
+   segment/identity on recovered docs), or first pull the 141 file names from GCS ($0) to
+   eyeball for known templates. No action until Adam decides.
+
+**Shipped this session (2026-08-05, PR #278 — merged by Adam):** the approve-all half of the
+curation-by-deletion decision (#264 had shipped delete only) + the firm-id bridge. New
+`listClauseCatalog` / `approveAllClauses` callables; `mining-firm.ts` shared bridge
+(elias-counsel → firm-001 catalog, server-side — no rules change); Clause Picker reads via
+callable and shows "Approve all mined (N)". Approve-all skips tombstones and PII-blocked
+entries. The mined catalog is now visible and bulk-approvable in the app.
 1. ~~**Ultracode checkpoint #2**~~ — ✅ DONE, above.
 1b. **(was:) Ultracode checkpoint #2 (AUTHORIZED by Adam 2026-08-03, keyword given — do not re-ask):**
    multi-agent adversarial verification over the gates report (run #63 job log) + stage summaries.
