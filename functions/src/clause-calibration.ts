@@ -14,16 +14,7 @@ import { z } from 'zod';
 import { assertStaff } from './auth-guards';
 import { HttpsError as GuardError } from 'firebase-functions/v2/https';
 
-/**
- * The mining run is FIRM INFRASTRUCTURE keyed under the pipeline's firm id
- * ('firm-001', pinned 2026-07-31), while the app's live auth claims carry
- * 'elias-counsel' — discovered when the calibration page 404'd on its own
- * packet. Staff of either id operate on the one mining scope. Revisit when
- * the catalog ships: catalog docs must land under the APP's firm id or the
- * UI cannot see them (HOMEWORK 2026-07-31 warning, now proven real).
- */
-const MINING_FIRM_ID = 'firm-001';
-const MINING_STAFF_FIRMS = new Set(['firm-001', 'elias-counsel']);
+import { MINING_FIRM_ID, MINING_STAFF_FIRMS } from './mining-firm';
 
 function assertMiningStaff(request: Parameters<typeof assertStaff>[0]): { uid: string } {
   const caller = assertStaff(request);

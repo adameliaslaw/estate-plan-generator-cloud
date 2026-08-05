@@ -11,8 +11,8 @@
  * that nothing reaches drafting before Adam's click (status: 'approved').
  */
 
-import { useMemo, useState } from 'react';
-import { BookMarked, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BookMarked, CheckCheck, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 
 import {
   Dialog,
@@ -28,9 +28,10 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
-import { useCollection } from '@/hooks/useFirestore';
 import {
   addMyClause,
+  approveAllClauses,
+  listClauseCatalog,
   removeClause,
   resolveClausePlaceholders,
   type ClauseCatalogEntry,
@@ -70,10 +71,49 @@ export default function ClauseLibraryDialog({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [draft, setDraft] = useState({ title: '', text: '', category: '', state: '' });
+  const [entries, setEntries] = useState<ClauseCatalogEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Mined clauses awaiting approval — drives the "Approve all" button. */
+  const [pendingMined, setPendingMined] = useState(0);
+  const [approveBusy, setApproveBusy] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
-  const { data: entries, loading } = useCollection<ClauseCatalogEntry>(
-    open ? `firms/${firmId}/clauseCatalog` : '',
+  // The catalog is read through a callable (not the client SDK): the mined
+  // catalog lives under the mining firm id, which the server bridges to.
+  const refresh = useCallback(
+    async (showSpinner: boolean) => {
+      if (showSpinner) setLoading(true);
+      setLoadError(null);
+      try {
+        const result = await listClauseCatalog({ firmId });
+        setEntries(result.entries);
+        setPendingMined(result.pendingMined);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load the clause library.');
+      } finally {
+        if (showSpinner) setLoading(false);
+      }
+    },
+    [firmId],
   );
+
+  useEffect(() => {
+    if (open) void refresh(true);
+  }, [open, refresh]);
+
+  async function handleApproveAll() {
+    setApproveBusy(true);
+    setApproveError(null);
+    try {
+      await approveAllClauses({ firmId });
+      await refresh(false);
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Failed to approve clauses.');
+    } finally {
+      setApproveBusy(false);
+    }
+  }
 
   const usable = useMemo(
     () =>
@@ -123,8 +163,9 @@ export default function ClauseLibraryDialog({
     setRemoveError(null);
     try {
       await removeClause({ firmId, clauseId });
-      // The live snapshot drops the entry; clear selection so the preview
-      // falls through to the next visible clause instead of a stale id.
+      // Refetch drops the entry; clear selection so the preview falls
+      // through to the next visible clause instead of a stale id.
+      await refresh(false);
       setSelectedId(null);
       setConfirmRemoveId(null);
     } catch (err) {
@@ -152,6 +193,7 @@ export default function ClauseLibraryDialog({
       setDraft({ title: '', text: '', category: '', state: '' });
       setAdding(false);
       setFolder('my');
+      await refresh(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save clause.');
     } finally {
@@ -219,7 +261,20 @@ export default function ClauseLibraryDialog({
             <Plus className="mr-1 h-4 w-4" />
             My Clause
           </Button>
+          {pendingMined > 0 && (
+            <Button size="sm" onClick={handleApproveAll} disabled={approveBusy}>
+              {approveBusy ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCheck className="mr-1 h-4 w-4" />
+              )}
+              Approve all mined ({pendingMined})
+            </Button>
+          )}
         </div>
+        {(approveError ?? loadError) && (
+          <p className="text-sm text-red-600">{approveError ?? loadError}</p>
+        )}
 
         {adding && (
           <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
