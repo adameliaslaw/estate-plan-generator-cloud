@@ -19,13 +19,18 @@ const mockAuth = vi.hoisted(() => ({
 }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => mockAuth }));
 
-const mockCatalog = vi.hoisted(() => ({ data: [] as unknown[], loading: false, error: null }));
-vi.mock('@/hooks/useFirestore', () => ({ useCollection: () => mockCatalog }));
-
 const mockRemoveClause = vi.hoisted(() => vi.fn());
+const mockListCatalog = vi.hoisted(() => vi.fn());
+const mockApproveAll = vi.hoisted(() => vi.fn());
 vi.mock('@/services/clause-library-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/clause-library-service')>();
-  return { ...actual, addMyClause: vi.fn(), removeClause: mockRemoveClause };
+  return {
+    ...actual,
+    addMyClause: vi.fn(),
+    removeClause: mockRemoveClause,
+    listClauseCatalog: mockListCatalog,
+    approveAllClauses: mockApproveAll,
+  };
 });
 
 import ClauseLibraryDialog from '@/components/clauses/ClauseLibraryDialog';
@@ -67,8 +72,8 @@ function clauseList() {
   return within(screen.getByRole('list', { name: 'Clause results' }));
 }
 
-function renderDialog(extra: Partial<Parameters<typeof ClauseLibraryDialog>[0]> = {}) {
-  return render(
+async function renderDialog(extra: Partial<Parameters<typeof ClauseLibraryDialog>[0]> = {}) {
+  const view = render(
     <ClauseLibraryDialog
       open
       onOpenChange={() => {}}
@@ -77,16 +82,21 @@ function renderDialog(extra: Partial<Parameters<typeof ClauseLibraryDialog>[0]> 
       {...extra}
     />,
   );
+  // The catalog now loads through the listClauseCatalog callable.
+  await screen.findByRole('list', { name: 'Clause results' });
+  return view;
 }
 
 beforeEach(() => {
-  mockCatalog.data = CATALOG;
+  mockListCatalog.mockReset();
+  mockListCatalog.mockResolvedValue({ entries: CATALOG, pendingMined: 0 });
+  mockApproveAll.mockReset();
   mockAuth.userProfile = { uid: 'atty-1', role: 'attorney', firmId: 'firm-001' };
 });
 
 describe('ClauseLibraryDialog', () => {
-  it('offers approved and manual clauses, never unapproved or PII-blocked ones', () => {
-    renderDialog();
+  it('offers approved and manual clauses, never unapproved or PII-blocked ones', async () => {
+    await renderDialog();
     const list = clauseList();
     expect(list.getByText('Spendthrift Clause')).toBeInTheDocument();
     expect(list.getByText('My NY Attestation')).toBeInTheDocument();
@@ -96,7 +106,7 @@ describe('ClauseLibraryDialog', () => {
 
   it('the My Clauses folder shows only the caller’s own manual clauses', async () => {
     const user = userEvent.setup();
-    renderDialog();
+    await renderDialog();
     await user.click(screen.getByRole('tab', { name: 'My Clauses' }));
     expect(clauseList().getByText('My NY Attestation')).toBeInTheDocument();
     expect(clauseList().queryByText('Colleague Clause')).not.toBeInTheDocument();
@@ -105,7 +115,7 @@ describe('ClauseLibraryDialog', () => {
 
   it('search and state filter narrow the list', async () => {
     const user = userEvent.setup();
-    renderDialog();
+    await renderDialog();
     await user.type(screen.getByPlaceholderText('Search clauses…'), 'spendthrift');
     expect(clauseList().getByText('Spendthrift Clause')).toBeInTheDocument();
     expect(clauseList().queryByText('My NY Attestation')).not.toBeInTheDocument();
@@ -118,7 +128,7 @@ describe('ClauseLibraryDialog', () => {
   it('Use Clause inserts resolved text, leaving unknown placeholders visible', async () => {
     const user = userEvent.setup();
     const onInsert = vi.fn();
-    renderDialog({ onInsert, placeholderValues: { CLIENT_NAME: 'Janice Altieri' } });
+    await renderDialog({ onInsert, placeholderValues: { CLIENT_NAME: 'Janice Altieri' } });
     await user.click(clauseList().getByText('My NY Attestation'));
     await user.click(screen.getByRole('button', { name: 'Use Clause' }));
     expect(onInsert).toHaveBeenCalledWith('Signed for Janice Altieri at {{CITY}}.');
@@ -127,7 +137,7 @@ describe('ClauseLibraryDialog', () => {
   it('removes a clause only after explicit confirmation', async () => {
     const user = userEvent.setup();
     mockRemoveClause.mockResolvedValue({ removed: 'tombstoned' });
-    renderDialog();
+    await renderDialog();
     await user.click(clauseList().getByText('Spendthrift Clause'));
     await user.click(screen.getByRole('button', { name: /remove/i }));
     // Nothing is called until the confirm step.
@@ -140,7 +150,7 @@ describe('ClauseLibraryDialog', () => {
   it('cancel backs out of removal without calling the service', async () => {
     const user = userEvent.setup();
     mockRemoveClause.mockClear();
-    renderDialog();
+    await renderDialog();
     await user.click(clauseList().getByText('My NY Attestation'));
     await user.click(screen.getByRole('button', { name: /remove/i }));
     // Manual entries warn about permanence — they are hard-deleted.
@@ -150,11 +160,33 @@ describe('ClauseLibraryDialog', () => {
     expect(screen.queryByText('Delete this clause permanently?')).not.toBeInTheDocument();
   });
 
-  it('shows usage counts on mined clauses', () => {
-    renderDialog();
+  it('shows usage counts on mined clauses', async () => {
+    await renderDialog();
     const row = clauseList().getByText('Spendthrift Clause').closest('button');
     expect(row).not.toBeNull();
     expect(within(row as HTMLElement).getByText('used in 42 matters')).toBeInTheDocument();
+  });
+
+  it('offers Approve-all only when mined clauses are pending, and refetches after it', async () => {
+    const user = userEvent.setup();
+    mockListCatalog.mockResolvedValue({ entries: CATALOG, pendingMined: 26 });
+    mockApproveAll.mockResolvedValue({ approved: 26, skippedBlocked: 276 });
+    await renderDialog();
+    const button = screen.getByRole('button', { name: 'Approve all mined (26)' });
+    mockListCatalog.mockResolvedValue({ entries: CATALOG, pendingMined: 0 });
+    await user.click(button);
+    expect(mockApproveAll).toHaveBeenCalledWith({ firmId: 'firm-001' });
+    // After the refetch reports nothing pending, the button disappears.
+    expect(
+      screen.queryByRole('button', { name: /approve all mined/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides Approve-all when nothing is pending', async () => {
+    await renderDialog();
+    expect(
+      screen.queryByRole('button', { name: /approve all mined/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
