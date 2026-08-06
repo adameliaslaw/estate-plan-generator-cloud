@@ -15,6 +15,7 @@
  */
 
 import type { PackagePerson, PackageContext } from './package-review';
+import { classifyBeneficiary } from './nj-inheritance-tax';
 
 interface SplitName {
   firstName?: unknown;
@@ -57,16 +58,34 @@ export function buildPackageContext(
   const people: PackagePerson[] = [];
   if (!client) return { people };
 
-  const push = (name: string, role: PackagePerson['role'], label?: string) => {
-    if (name && name.trim().split(/\s+/).length >= 2) people.push({ name, role, label });
+  const push = (
+    name: string,
+    role: PackagePerson['role'],
+    label?: string,
+    opts?: { relationship?: string; isBeneficiary?: boolean },
+  ) => {
+    if (!name || name.trim().split(/\s+/).length < 2) return;
+    // A relationship we do not recognise stays null. Guessing "Class D" would
+    // put an 11-16% tax warning on a beneficiary who may owe nothing.
+    const njTaxClass = opts?.relationship ? classifyBeneficiary(opts.relationship) : undefined;
+    people.push({ name, role, label, njTaxClass, isBeneficiary: opts?.isBeneficiary });
   };
 
   push(personName(client.personalInfo as SplitName), 'client', 'client');
-  push(personName(client.spouseInfo as SplitName), 'spouse', 'spouse');
+  push(personName(client.spouseInfo as SplitName), 'spouse', 'spouse', {
+    relationship: 'spouse',
+    isBeneficiary: true,
+  });
 
   const children = Array.isArray(client.children) ? client.children : [];
   for (const child of children) {
-    push(personName(child as SplitName), 'child', 'child');
+    const c = child as SplitName & { relationship?: unknown };
+    // A stepchild is Class A; a step-grandchild is not. classifyBeneficiary
+    // carries that carve-out.
+    push(personName(c), 'child', 'child', {
+      relationship: str(c.relationship) || 'child',
+      isBeneficiary: true,
+    });
   }
 
   // Fiduciary slots vary in shape — some hold one person, some an ordered list.
@@ -76,7 +95,8 @@ export function buildPackageContext(
     const entries = Array.isArray(value) ? value : [value];
     for (const entry of entries) {
       if (!entry || typeof entry !== 'object') continue;
-      push(personName(entry as SplitName), 'fiduciary', label);
+      const f = entry as SplitName & { relationship?: unknown };
+      push(personName(f), 'fiduciary', label, { relationship: str(f.relationship) });
     }
   }
 

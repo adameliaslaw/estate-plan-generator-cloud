@@ -81,6 +81,7 @@ const REASON_LABELS: Record<PackageFindingReason, string> = {
   'inoperative-provision': 'No operative effect',
   'name-collision': 'Two people, one name',
   'suffix-dropped': 'Name inconsistency',
+  'missing-apportionment': 'Death tax unallocated',
 };
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,10 @@ import { GeneratedDoc } from '../generate-documents';
 import { DOCUMENT_SCHEMA } from '../document-schemas';
 import { buildStandardTitle } from '../unified-generator';
 import { getFormattingPreset } from '../config/formatting-presets';
+import {
+  buildApportionmentPromptBlock,
+  type ApportionmentMode,
+} from '../nj-inheritance-tax';
 import * as admin from 'firebase-admin';
 
 // ---------------------------------------------------------------------------
@@ -42,6 +46,8 @@ DOCUMENT STRUCTURE (required articles):
   ARTICLE I   — Declaration of Domicile, Revocation of Prior Wills
   ARTICLE II  — Family (spouse, children — include full legal names and DOBs; omit guardian provisions if no minors)
   ARTICLE III — Payment of Debts and Expenses
+  ARTICLE III-A— Payment and Apportionment of Death Taxes (supplied verbatim below — NJ transfer
+                 inheritance tax under N.J.S.A. 54:33-1 et seq. survived the 2018 estate tax repeal)
   ARTICLE IV  — Specific Bequests (omit article if none)
   ARTICLE V   — Charitable Bequests (omit if none)
   ARTICLE VI  — Residuary Estate — primary and alternate distributions; state per stirpes/per capita
@@ -54,6 +60,8 @@ DOCUMENT STRUCTURE (required articles):
   SELF-PROVING AFFIDAVIT — Full statutory language per N.J.S.A. 3B:3-4 with notary block
 
 %%FORMATTING_RULES%%
+
+%%TAX_APPORTIONMENT%%
 
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
@@ -144,7 +152,21 @@ Generate the complete, execution-ready will now. Include all required articles, 
     ? `${preset.promptBlock}\n\n• NEVER fabricate statutes, case citations, or legal standards.\n• Fill ALL placeholders with actual client data — do not leave "[NAME]" tokens.\n• If a field is unknown, use a blank line "_______________" as a fill-in.`
     : DEFAULT_FORMATTING_RULES;
 
-  const systemPrompt = WILL_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+  // Death-tax apportionment is supplied as fixed prose rather than composed by
+  // the model: the clause carries statutory citations that must be byte-identical
+  // on every run, which is exactly what an LLM cannot promise. Absent an explicit
+  // firm election, 'hybrid' matches what clients mean by "free of tax" — Class A
+  // gifts pass whole, Class C/D beneficiaries bear their own inheritance tax.
+  const apportionmentMode =
+    ((safeFirm as Record<string, unknown>)?.taxApportionmentMode as ApportionmentMode | undefined)
+    ?? 'hybrid';
+
+  const systemPrompt = WILL_SYSTEM_PROMPT_BASE
+    .replace('%%FORMATTING_RULES%%', formattingRules)
+    .replace(
+      '%%TAX_APPORTIONMENT%%',
+      buildApportionmentPromptBlock({ mode: apportionmentMode, instrument: 'will' }),
+    );
 
   const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'claude-opus-5',

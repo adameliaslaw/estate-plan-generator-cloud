@@ -482,6 +482,7 @@ describe('locateSection — letterhead is not a heading', () => {
 
 import { normalizeName, splitSuffix, type PackageContext } from '../../functions/src/package-review';
 import { buildPackageContext, personName } from '../../functions/src/package-review-roster';
+import { renderApportionmentClause } from '../../functions/src/nj-inheritance-tax';
 
 describe('name utilities', () => {
   it('normalizes case, punctuation, and spacing', () => {
@@ -725,5 +726,96 @@ describe('buildPackageContext', () => {
   it('survives a client record with nothing on it', () => {
     expect(buildPackageContext(null).people).toEqual([]);
     expect(buildPackageContext({}).people).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check — Class C/D beneficiary with no apportionment direction
+// ---------------------------------------------------------------------------
+
+describe('missing-apportionment', () => {
+  const WITH_NIECE: PackageContext = {
+    people: [
+      { name: 'Adam Elias', role: 'client', label: 'testator', njTaxClass: 'A' },
+      { name: 'Karen Elias', role: 'spouse', label: 'spouse', njTaxClass: 'A', isBeneficiary: true },
+      { name: 'Sherif Elias', role: 'fiduciary', label: 'executor', njTaxClass: 'C', isBeneficiary: true },
+    ],
+  };
+
+  const SILENT_WILL = doc(
+    'will',
+    '<h2>DEBTS</h2><p>My executor may pay my debts and funeral expenses.</p>',
+    'Last Will and Testament',
+  );
+
+  it('flags a plan with a Class C taker and no direction', () => {
+    const hits = reviewPackage([SILENT_WILL], WITH_NIECE)
+      .filter((f) => f.reason === 'missing-apportionment');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('medium');
+    expect(hits[0].detail).toContain('54:35-6');
+    expect(hits[0].detail).toContain('Sherif Elias (Class C)');
+  });
+
+  it('stays silent on an all-Class-A plan, where there is no tax to apportion', () => {
+    const ctx: PackageContext = {
+      people: [
+        { name: 'Adam Elias', role: 'client', njTaxClass: 'A' },
+        { name: 'Karen Elias', role: 'spouse', njTaxClass: 'A', isBeneficiary: true },
+        { name: 'Alina Elias', role: 'child', njTaxClass: 'A', isBeneficiary: true },
+      ],
+    };
+    expect(reviewPackage([SILENT_WILL], ctx).filter((f) => f.reason === 'missing-apportionment'))
+      .toHaveLength(0);
+  });
+
+  it('stays silent once the document carries an apportionment direction', () => {
+    const covered = doc(
+      'will',
+      renderApportionmentClause({ mode: 'hybrid', instrument: 'will' }),
+      'Last Will and Testament',
+    );
+    expect(reviewPackage([covered], WITH_NIECE).filter((f) => f.reason === 'missing-apportionment'))
+      .toHaveLength(0);
+  });
+
+  it('accepts traditional boilerplate as a direction, even though we would draft it differently', () => {
+    const covered = doc(
+      'will',
+      '<p>All death taxes shall be paid out of my residuary estate as an expense of administration.</p>',
+    );
+    expect(reviewPackage([covered], WITH_NIECE).filter((f) => f.reason === 'missing-apportionment'))
+      .toHaveLength(0);
+  });
+
+  it('does not treat an unclassified relationship as taxable', () => {
+    // classifyBeneficiary returns null for anything it does not recognise, and
+    // null must never behave like Class D.
+    const ctx: PackageContext = {
+      people: [
+        { name: 'Adam Elias', role: 'client', njTaxClass: 'A' },
+        { name: 'Pat Quinn', role: 'fiduciary', label: 'trusted advisor', njTaxClass: null, isBeneficiary: true },
+      ],
+    };
+    expect(reviewPackage([SILENT_WILL], ctx).filter((f) => f.reason === 'missing-apportionment'))
+      .toHaveLength(0);
+  });
+
+  it('ignores non-dispositive documents, which cannot carry the direction', () => {
+    const poaOnly = [doc('poa', '<p>I appoint an agent.</p>'), doc('hipaaRelease', '<p>Release.</p>')];
+    expect(reviewPackage(poaOnly, WITH_NIECE).filter((f) => f.reason === 'missing-apportionment'))
+      .toHaveLength(0);
+  });
+
+  it('does not fire for a Class C person who takes nothing', () => {
+    const ctx: PackageContext = {
+      people: [
+        { name: 'Adam Elias', role: 'client', njTaxClass: 'A' },
+        // Named executor but not a beneficiary — serving is not inheriting.
+        { name: 'Sherif Elias', role: 'fiduciary', label: 'executor', njTaxClass: 'C' },
+      ],
+    };
+    expect(reviewPackage([SILENT_WILL], ctx).filter((f) => f.reason === 'missing-apportionment'))
+      .toHaveLength(0);
   });
 });

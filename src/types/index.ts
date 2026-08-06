@@ -849,7 +849,8 @@ export type PackageFindingReason =
   | 'statutory-limit'
   | 'inoperative-provision'
   | 'name-collision'
-  | 'suffix-dropped';
+  | 'suffix-dropped'
+  | 'missing-apportionment';
 
 export interface PackageFinding {
   docType: string;

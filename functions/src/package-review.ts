@@ -56,7 +56,8 @@ export type PackageFindingReason =
   | 'statutory-limit'
   | 'inoperative-provision'
   | 'name-collision'
-  | 'suffix-dropped';
+  | 'suffix-dropped'
+  | 'missing-apportionment';
 
 export interface PackageFinding {
   /** docType of the document the finding is in. */
@@ -104,6 +105,14 @@ export interface PackagePerson {
   role: PersonRole;
   /** Human-readable role for finding text, e.g. "child", "executor". */
   label?: string;
+  /**
+   * NJ transfer inheritance tax class, when the caller could determine it.
+   * null means the relationship was not recognised — which is NOT the same as
+   * Class D, and must never be treated as taxable by default.
+   */
+  njTaxClass?: 'A' | 'C' | 'D' | 'E' | null;
+  /** True when this person actually takes under the plan. */
+  isBeneficiary?: boolean;
 }
 
 /**
@@ -431,6 +440,80 @@ function checkSuffixDropped(docs: PackageDoc[], context: PackageContext): Packag
     }
   }
   return findings;
+}
+
+// ---------------------------------------------------------------------------
+// Check 9 — a taxable beneficiary with no apportionment direction
+// ---------------------------------------------------------------------------
+
+/**
+ * New Jersey repealed its estate tax in 2018 but kept the transfer inheritance
+ * tax, which is charged on the beneficiary's relationship to the decedent. A
+ * sibling, niece, nephew, or friend pays 11–16% from the first dollar.
+ *
+ * Where an instrument is silent, N.J.S.A. 54:35-6 makes the fiduciary deduct
+ * that tax from the beneficiary's own share — so a gift the client described as
+ * "$100,000 to my niece" arrives as roughly $85,000, and nobody finds out until
+ * administration.
+ *
+ * Fires only when the plan actually has a Class C or Class D taker. A plan that
+ * leaves everything to a spouse and children has no inheritance tax to
+ * apportion, and telling that client about apportionment is noise.
+ */
+const APPORTIONMENT_SIGNALS: ReadonlyArray<RegExp> = [
+  /\bapportion\w*\b/i,
+  /\b54:35-6\b/,
+  /\b3B:24-1\b/,
+  /\b(death|inheritance|estate|transfer)\s+tax(es)?\b[^.]{0,120}\b(paid|borne|charged|payable)\b/i,
+  /\bfree of (all )?(death|inheritance|estate)\s+tax(es)?\b/i,
+];
+
+function checkMissingApportionment(
+  docs: PackageDoc[],
+  context: PackageContext,
+): PackageFinding[] {
+  const taxable = context.people.filter(
+    (p) => p.isBeneficiary && (p.njTaxClass === 'C' || p.njTaxClass === 'D'),
+  );
+  if (taxable.length === 0) return [];
+
+  // Only dispositive instruments can carry the direction.
+  const dispositive = docs.filter((d) =>
+    ['will', 'pourOverWill', 'trust', 'codicil', 'trustRestatement'].includes(d.docType),
+  );
+  if (dispositive.length === 0) return [];
+
+  const covered = dispositive.filter((d) => {
+    const text = htmlToText(d.content);
+    return APPORTIONMENT_SIGNALS.some((rx) => rx.test(text));
+  });
+  if (covered.length === dispositive.length) return [];
+
+  const target = dispositive.find((d) => !covered.includes(d))!;
+  const who = taxable
+    .slice(0, 3)
+    .map((p) => `${p.name} (Class ${p.njTaxClass})`)
+    .join(', ');
+  const more = taxable.length > 3 ? ` and ${taxable.length - 3} other(s)` : '';
+
+  return [
+    {
+      docType: target.docType,
+      title: target.title,
+      location: 'Payment of Debts and Expenses',
+      severity: 'medium',
+      reason: 'missing-apportionment',
+      summary: 'Class C/D beneficiary with no death-tax apportionment direction',
+      detail:
+        `This plan benefits ${who}${more}, who are subject to the New Jersey transfer ` +
+        `inheritance tax at 11–16% (N.J.S.A. 54:33-1 et seq.), but this document contains ` +
+        `no direction as to who bears that tax. Where the instrument is silent, N.J.S.A. ` +
+        `54:35-6 requires the fiduciary to deduct the tax from that beneficiary's own ` +
+        `share before distributing, so the gift arrives reduced. Add an apportionment ` +
+        `article stating whether these transfers pass free of tax from the residue or ` +
+        `bear their own tax — the choice materially changes what each beneficiary receives.`,
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -821,6 +904,7 @@ export function reviewPackage(
   if (context?.people?.length) {
     findings.push(...checkNameCollision(reviewable, context));
     findings.push(...checkSuffixDropped(reviewable, context));
+    findings.push(...checkMissingApportionment(reviewable, context));
   }
 
   // Per-document checks.
