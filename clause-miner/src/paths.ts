@@ -131,3 +131,8 @@ export function calibrationLabelsPath(firmId: string, runId: string): string {
 export function gatesReportPath(firmId: string, runId: string): string {
   return `${gcsBase(firmId)}/runs/${runId}/validation/gates.json`;
 }
+
+/** HOMEWORK J1 — read-only corpus composition audit. Metadata only, no clause text. */
+export function clauseAuditPath(firmId: string, runId: string): string {
+  return `${gcsBase(firmId)}/runs/${runId}/validation/clause-audit.json`;
+}
