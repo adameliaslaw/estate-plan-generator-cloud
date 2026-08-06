@@ -32,25 +32,32 @@ The failure mode to avoid is *cargo-culting*: copying a competitor's shape becau
 than because it solves a problem we actually have. Every item that comes out of this pass should
 name the problem it solves for **this firm**, not the screen it was seen on.
 
-### The operative line — what may and may not be used
+### Source material — how to think about it
 
-This is settled; do not re-litigate it, and do not widen it.
+**Templates from document-assembly vendors are a first-class input to this product, by design.**
+`src/config/software-sources.ts` has listed InteractiveLegal, WealthCounsel, BeyondCounsel, HotDocs,
+LexisNexis and Smokeball as template sources since early on; `softwareSource` is the **Template
+Source** selector that reaches `unified-generator.ts` at draft time; `formatting-presets.ts` and
+`.agent/workflows/samples.md` exist to match each vendor's house formatting. Uploading templates and
+drafting from them is the mission, not a workaround of it. **Do not "helpfully" remove or narrow any
+of that.**
 
-| | |
-|---|---|
-| ✅ **Feature and design observation from the product UI** — what screens exist, what a setting controls, what the information architecture is, what a workflow's steps are. This is ordinary competitive product analysis. Describe it, reason about it, decide whether we want an equivalent, and build our own. | |
-| ✅ **Our own independent implementation** of a capability we decide we want, written from our own understanding of the legal problem. | |
-| ❌ **Competitor document text.** The Statular documents Adam holds carry a **single-matter licence**: no use as a template / form / exemplar / starting point; no extraction, copying, paraphrasing or adaptation of any clause, provision, structure or organisational scheme for use elsewhere; no creation of any clause library, form bank, drafting system, knowledge base or training corpus from them; no reverse engineering. Free-trial documents additionally may not be used to provide legal services to a client. | |
-| ❌ **Their content in our stores.** Nothing from a competitor goes into `documentTemplates`, the knowledge base, or `clauseCatalog`. Not as a template, not as a seed, not as a "reference copy". | |
-| ⚠️ **Feeding competitor documents to an LLM.** The free-trial terms forbid it. Adam waived that clause *as the account holder, for the Rios trust evaluation only.* That waiver does not generalise — ask before doing it again with a different document. | |
+Two working rules:
 
-**Why the distinction holds:** looking at a settings screen and concluding "we need firm-level
-drafting defaults" is an idea, and the licence does not reach ideas. Lifting a paragraph of drafted
-trust prose is expression, and it does. When in doubt, the test is: *could I write this from the
-description alone, without the source document open?* If no, stop.
+1. **Licence terms govern, per source.** They are a property of the specific agreement, not of
+   whether a vendor competes with us, not of how material was obtained, and not of whether money
+   changed hands. Do not generalise from one source to another, and do not invent categories.
+2. **What we have actually read:** the Statular documents carry express single-matter language on
+   their face. Terms for the other sources above are **unread** — record that as unknown rather than
+   assuming in either direction.
 
-Adam is the attorney and this is his call in the end — flag the question rather than deciding it
-alone if a genuinely new situation comes up.
+Practical consequence for the video pass: the **Statular documents** are evaluation material, not a
+template source — treat them accordingly. **UI and feature observation is unaffected by any of
+this** and is ordinary product analysis: describe a screen, decide whether we want an equivalent,
+build our own.
+
+Licence questions are Adam's call as the attorney who signed the agreements. Flag one rather than
+deciding it.
 
 ## Already reviewed — do not redo
 
@@ -60,7 +67,7 @@ alone if a genuinely new situation comes up.
 | `Suggestions.mp4` (in repo, 13s) | Reviewed previously — the pre-generation AI suggestions. |
 | `ScreenRecording_08-06-2026 01-09-42_1.MP4` (Drive → `Statular/`, 5m42s) | **Fully reviewed 2026-08-06.** Interview Settings (9 sections), Client Experience (5 tabs), Clauses (57), Drafting Assistant, Flowcharts, Code Search. Everything material from it is already written up as sections D, E and F of the ordered list. |
 | `exported_50A2…jpeg`, `exported_97E5…jpeg` (on `main`) | iPhone Control Center; Settings → Client Experience. Folded into section E. |
-| `Adam_Elias_v1.docx`, `v2.docx`, `v1 (1).docx`, the Rios trust, + two later trust docs | Reviewed previously. **These are the licence-bearing documents** — the ❌ rows above are about these. |
+| `Adam_Elias_v1.docx`, `v2.docx`, `v1 (1).docx`, the Rios trust, + two later trust docs | Reviewed previously. These are the Statular documents carrying the single-matter language noted above — evaluation material, not a template source. |
 
 **Still never captured, and worth getting on video if the new set does not already cover it:** the
 Document Selection page a matter actually flows through (we have only the *defaults* screen that
@@ -153,9 +160,9 @@ the place to read *why*.
 6. **Parked / declined** — recorded so they stop being re-raised.
 
 Items marked 🆕 came from the 2026-08-06 Statular walkthrough (5m42s iPhone capture, Drive →
-`Statular/ScreenRecording_08-06-2026 01-09-42_1.MP4`). Those are competitive **design**
-observations from the product UI. No Statular document text is copied into this repo or the
-clause catalog — the single-matter licence on their documents is unaffected by any of it.
+`Statular/ScreenRecording_08-06-2026 01-09-42_1.MP4`). Those are **design** observations from the
+product UI — screens, settings and information architecture. No document text from that source is
+reproduced here.
 
 ---
 
