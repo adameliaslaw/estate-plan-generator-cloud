@@ -885,3 +885,102 @@ describe('toc-mismatch', () => {
       .toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Single-bracket placeholders + empty substitution
+//
+// Both patterns come from a real generated package produced by a competing
+// platform, whose own reviewer caught them. Ours caught neither: the token scan
+// only knew {{…}} and [[…]], and the blank scan needs underscores that a
+// collapsed value never leaves behind. Synthetic re-creations — no client data.
+// ---------------------------------------------------------------------------
+
+describe('unresolved-token — single-bracket placeholders', () => {
+  it('flags an ALL-CAPS bracketed placeholder that survived rendering', () => {
+    const findings = reviewPackage([
+      doc('poa', '<p>Executed at [SIGNING CITY], New Jersey.</p>'),
+    ]);
+    const hits = findings.filter((f) => f.reason === 'unresolved-token');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('high');
+    expect(hits[0].summary).toContain('[SIGNING CITY]');
+  });
+
+  it('flags the bracket convention the mined clause corpus uses', () => {
+    const findings = reviewPackage([
+      doc('trust', '<p>I, [SETTLOR NAME], declare this trust.</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'unresolved-token')).toHaveLength(1);
+  });
+
+  it('does not double-report the inner half of a [[…]] token', () => {
+    const findings = reviewPackage([doc('will', '<p>Given to [[BENEFICIARY]] absolutely.</p>')]);
+    // One finding, not one for [[BENEFICIARY]] and another for [BENEFICIARY].
+    expect(findings.filter((f) => f.reason === 'unresolved-token')).toHaveLength(1);
+  });
+
+  it('stays silent on execution-block notation that belongs in a signed instrument', () => {
+    const findings = reviewPackage([
+      doc('will', '<p>Signed and sealed [SEAL] this day.</p>'),
+      doc('deed', '<p>Witness my hand [L.S.] and seal [NOTARY SEAL].</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'unresolved-token')).toHaveLength(0);
+  });
+
+  it('stays silent on ordinary bracketed legal prose', () => {
+    // [sic] and bracketed alterations inside a quotation are correct drafting.
+    const findings = reviewPackage([
+      doc('will', '<p>The prior will said "my neice [sic] Jane" and [emphasis added].</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'unresolved-token')).toHaveLength(0);
+  });
+});
+
+describe('empty-substitution', () => {
+  it('flags a value that rendered empty, leaving punctuation stranded', () => {
+    const findings = reviewPackage([
+      doc('hipaaRelease', '<p>Executed in , New Jersey on the date below.</p>'),
+    ]);
+    const hits = findings.filter((f) => f.reason === 'empty-substitution');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('high');
+  });
+
+  it('fires inside an execution block, where the blank scan deliberately does not', () => {
+    // checkUnfilledBlanks skips signature context because a DRAWN blank is
+    // correct there. A COLLAPSED value is not.
+    const html = '<p>Subscribed and sworn before me in , New Jersey.</p>';
+    const findings = reviewPackage([doc('will', html)]);
+    expect(findings.filter((f) => f.reason === 'empty-substitution')).toHaveLength(1);
+    expect(findings.filter((f) => f.reason === 'blank-field')).toHaveLength(0);
+  });
+
+  it('flags a list element that rendered empty', () => {
+    const findings = reviewPackage([
+      doc('will', '<p>To my children, Alina, , and Addison, in equal shares.</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'empty-substitution')).toHaveLength(1);
+  });
+
+  it('reports a repeated boilerplate phrase once, not once per occurrence', () => {
+    const findings = reviewPackage([
+      doc('will', '<p>Executed in , New Jersey.</p><p>Executed in , New Jersey.</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'empty-substitution')).toHaveLength(1);
+  });
+
+  it('stays silent on correctly filled text', () => {
+    const findings = reviewPackage([
+      doc('will', '<p>Executed in Monroe Township, New Jersey, on 6 August 2026.</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'empty-substitution')).toHaveLength(0);
+  });
+
+  it('stays silent on ordinary prose containing prepositions and commas', () => {
+    const findings = reviewPackage([
+      doc('trust', '<p>The trustee may invest in stocks, bonds, and other securities, ' +
+        'and may distribute to, or for the benefit of, any beneficiary.</p>'),
+    ]);
+    expect(findings.filter((f) => f.reason === 'empty-substitution')).toHaveLength(0);
+  });
+});
