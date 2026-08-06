@@ -17,6 +17,7 @@ import {
   UnifiedGenerateResult,
 } from './unified-generator';
 import { aggregateClientContext } from './client-context-aggregator';
+import { reviewPackage, summarizeFindings } from './package-review';
 import {
   DocxTemplateMapping,
   fillDocxForEntry,
@@ -112,6 +113,13 @@ function getDocumentsForPackage(packageType: string): string[] {
 // ---------------------------------------------------------------------------
 
 const PER_SPOUSE_DOC_TYPES = new Set(['poa', 'livingWill', 'will', 'pourOverWill']);
+
+/**
+ * Upper bound on package-review findings written to the client record. The
+ * Firestore document limit is 1MB and findings carry prose; a realistic package
+ * yields well under ten, so this only ever engages on a pathological run.
+ */
+const MAX_PERSISTED_FINDINGS = 50;
 
 /** Determine if this client is in a living marriage/domestic partnership */
 function isMarriedCouple(clientData: admin.firestore.DocumentData): boolean {
@@ -350,7 +358,42 @@ export const generateDocuments = onCall(
     }
 
     // ------------------------------------------------------------------
-    // 5. Update client record
+    // 5. Cross-document package review
+    // ------------------------------------------------------------------
+    // Runs over the whole set while it is still in memory. Deterministic and
+    // synchronous — no AI call, no extra reads — so it costs a few milliseconds
+    // and cannot fail the batch. Findings ride along on the client record for
+    // the reviewing attorney.
+    const packageFindings = reviewPackage(
+      allResults.map((r) => ({
+        docType: r.docType,
+        title: r.title,
+        content: r.content,
+        status: r.status,
+      })),
+    );
+    const reviewSummary = summarizeFindings(packageFindings);
+
+    // Bound what is written so a pathological package can't approach the 1MB
+    // document limit. Truncation is reported, never silent — a capped list that
+    // looks complete is worse than no list.
+    const persistedFindings = packageFindings.slice(0, MAX_PERSISTED_FINDINGS);
+    const findingsTruncated = packageFindings.length > persistedFindings.length;
+    if (findingsTruncated) {
+      console.warn(
+        `[generateDocuments] Package review produced ${packageFindings.length} findings; ` +
+        `persisting the ${MAX_PERSISTED_FINDINGS} most severe. Counts in packageReview.summary ` +
+        `reflect the full set.`,
+      );
+    }
+
+    console.log(
+      `[generateDocuments] Package review: ${reviewSummary.total} finding(s) ` +
+      `(${reviewSummary.high} high, ${reviewSummary.medium} medium, ${reviewSummary.low} low).`,
+    );
+
+    // ------------------------------------------------------------------
+    // 6. Update client record
     // ------------------------------------------------------------------
     // Bookkeeping — best-effort. The documents are already generated and saved;
     // a failure updating the client record must not throw and report the whole
@@ -359,6 +402,13 @@ export const generateDocuments = onCall(
       await db.doc(`firms/${firmId}/clients/${clientId}`).update({
         documentsGenerated: true,
         'packageDetails.packageType': packageType,
+        packageReview: {
+          findings: persistedFindings,
+          summary: reviewSummary,
+          truncated: findingsTruncated,
+          packageType,
+          reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: auth.uid,
       });
@@ -375,7 +425,7 @@ export const generateDocuments = onCall(
     );
 
     // ------------------------------------------------------------------
-    // 6. Return summary
+    // 7. Return summary
     // ------------------------------------------------------------------
     return {
       // Honest outcome: only a clean run (no per-doc errors) is success.
