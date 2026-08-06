@@ -1098,6 +1098,7 @@ export default function ClientDashboardPage() {
             questionnaireComplete={isQuestionnaireComplete}
             clientUpdatedAt={client.updatedAt as { seconds: number } | null}
             isMarried={isMarried}
+            packageReview={client.packageReview}
           />
         </TabsContent>
 

@@ -6,6 +6,14 @@ import * as crypto from 'crypto';
 import { GeneratedDoc } from './generate-documents';
 import { generateFromTemplate, GenerationMode } from './template-engine';
 import { aggregateClientContext, ClientContext } from './client-context-aggregator';
+import { loadClauseCatalog } from './clause-loader';
+import {
+  selectClausesForDocument,
+  buildClausePlaceholderValues,
+  buildClausePromptBlock,
+  describeSelection,
+} from './clause-selection';
+import { buildDocxTemplateData } from './docx-fidelity';
 import { saveDocumentToVault, SaveDocumentResult } from './document-save-helper';
 import { recordDraftHistory } from './ai-memory';
 import { sanitizeForPrompt, resolveRequestedModel } from './ai-client';
@@ -613,6 +621,39 @@ export async function generateDocument(
     };
   } catch (serErr) {
     console.warn('[unifiedGenerator] Client data serialization failed (non-blocking):', serErr);
+  }
+
+  // ------------------------------------------------------------------
+  // 1d. Firm clause library (clause-selection.ts)
+  // ------------------------------------------------------------------
+  // Injects the firm's APPROVED clauses for this docType as required verbatim
+  // text, so attorney-reviewed prose displaces model-invented prose. Only
+  // clauses whose placeholders fully resolve are injected — see the module
+  // header for why a half-filled clause must not reach a generated document.
+  //
+  // Entirely non-fatal: any failure here degrades to generating without firm
+  // clauses, which is exactly how every document generated before today.
+  if (clientContext) {
+    try {
+      const entries = await loadClauseCatalog(firmId);
+      if (entries.length > 0) {
+        const values = buildClausePlaceholderValues(buildDocxTemplateData(clientContext));
+        const selection = selectClausesForDocument({
+          entries,
+          docType,
+          values,
+          state: (clientContext.client?.personalInfo as Record<string, unknown> | undefined)
+            ?.state as string | undefined,
+        });
+        const block = buildClausePromptBlock(selection);
+        if (block) {
+          clientData = { ...clientData, _clauseBlock: block };
+        }
+        console.log(`[unifiedGenerator] Clause library (${docType}): ${describeSelection(selection)}`);
+      }
+    } catch (clauseErr) {
+      console.warn('[unifiedGenerator] Clause library injection failed (non-blocking):', clauseErr);
+    }
   }
 
   // ------------------------------------------------------------------

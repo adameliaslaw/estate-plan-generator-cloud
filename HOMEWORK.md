@@ -4,6 +4,170 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+# 📋 THE ORDERED LIST (2026-08-06) — work this top to bottom
+
+Everything outstanding, in one place, in the order it should happen. Previously the open items were
+scattered across five `▶ NEXT` blocks written on different days, each ordered only against itself.
+This section supersedes them for *sequencing*; the older blocks keep the reasoning and are still
+the place to read *why*.
+
+**Ordering principle, stated so it can be argued with:**
+
+1. **Verify what is believed done but never confirmed** — cheap, and the consequence of being wrong
+   is highest.
+2. **Release what is already built and waiting** — near-zero effort, unblocks everything after it.
+3. **Settle decisions that gate later work** — building past an unmade decision is the most
+   expensive mistake available.
+4. **Build, in dependency order.**
+5. **Live tests that need Adam at a desk** — they can happen any time, so they never block.
+6. **Parked / declined** — recorded so they stop being re-raised.
+
+Items marked 🆕 came from the 2026-08-06 Statular walkthrough (5m42s iPhone capture, Drive →
+`Statular/ScreenRecording_08-06-2026 01-09-42_1.MP4`). Those are competitive **design**
+observations from the product UI. No Statular document text is copied into this repo or the
+clause catalog — the single-matter licence on their documents is unaffected by any of it.
+
+---
+
+## A · VERIFY FIRST (agent, no decisions)
+
+| # | Item | Why it is first |
+|---|------|-----------------|
+| ~~**A1**~~ | ~~**Confirm the PII scrub actually ran against prod.**~~ **✅ VERIFIED 2026-08-06 — it ran.** | See below. |
+
+**A1 evidence — the scrub executed, and the run was on post-fix code.** Workflow run **#75**
+(job `92091639452`, 2026-08-04 18:31–18:36 UTC):
+
+```
+IN_STAGE: catalog
+Executing stage 'catalog' …
+clause-miner: stage 'catalog' firm=firm-001 run=pilot-1
+catalog: {"written":302,"variants":1394,"occurrences":3965}
+Container called exit(0).
+```
+
+The run's image was built from `27b4260` (#276), which is **after** `b4aca06` (#270, 2026-08-03
+16:38) — so the redaction was in the code that executed. Confirmed at that SHA:
+`catalog.ts:305` computes `blocked = fam.piiScanStatus !== 'clean'` and `catalog.ts:317` writes
+`scrubBlockedCatalogDoc(doc)` with **`{ merge: false }`**, which overwrites rather than merges —
+the point being that a `merge:false` write *removes* the text a previous run had already shipped.
+`written: 302` is the whole catalog, so every blocked family was rewritten text-free, not just
+newly-mined ones.
+
+**What is now true:** the security-rules comment ("NO raw client text by construction") is accurate
+for `clauseCatalog` as of 2026-08-04 18:36 UTC. **What is still open (checkpoint-2 report M7),** and
+was never part of this item: server-side *rules* hardening, and durable human-clearance state. The
+guarantee today rests on the writer scrubbing correctly, not on the rules refusing the read.
+
+---
+
+## B · RELEASE WHAT IS BUILT (Adam, minutes each)
+
+| # | Item | Notes |
+|---|------|-------|
+| ~~**B1**~~ | ~~**Lift the Rule 7 suspension in `CLAUDE.md`.**~~ **✅ DONE 2026-08-06, on Adam's instruction.** | The block's own lift condition was met: #255 (`a2b7162`), #256 (`f8820e7`), #257 (`3747e5c`) all on `main`. Agent-initiated squash-merges are live again; Never-Break changes still need explicit sign-off. |
+| **B2** | **PR #280 — `src/types/index.ts` sign-off.** | Never-Break List. Mechanically additive: **0 deletions, 0 renamed symbols**; four new exported types + one optional field `packageReview?` on `Client`. `firestore.rules` validates with `hasAll(...)` (minimum-fields, not an allowlist) so an added field cannot be rejected; written by the admin SDK, which bypasses rules anyway. |
+| **B3** | **Triage five stale open PRs.** | #266 (template disk fallback), #260 (DOCX forensics harness), #258 (trust template skeletons), #215 (Track 3 doc), #21 (May-31 CLAUDE.md, superseded — recommend close). Merge or close; none should keep sitting. |
+| **B4** | **Delete `feat/nj-inheritance-tax-engine`.** | Verified fully superseded: 64 inheritance-tax paths on `main` vs 37 on the branch, **zero unique to the branch**, `main`'s copies later where they differ, `engine/classify.ts` byte-identical, and the branch's page/service/route/sidebar commits all live on `main`. No merge base — it was an unrelated-history import — which never mattered. |
+
+---
+
+## C · DECISIONS THAT GATE THE CLAUSE WORK (Adam)
+
+| # | Decision | What it blocks |
+|---|----------|----------------|
+| **C1** 🆕 | **Clause library strategy: curate ~60, or unblock the 276?** Statular ships **57** clauses — vendor-authored, tagged (Tax / Powers / Trust Administration / Family), searchable, with "+ New Clause" for firm additions. Ours is 302 mined families with `piiBlocked=276`. | This is now **upstream of C2, C3 and C4.** If the answer is curation, the PII over-aggression tuning (old ▶ NEXT item 4) may not be worth doing at all, and the recall-scope argument largely dissolves. Decide before any more scanner work. |
+| **C2** | **Recall scope:** exclude corpus-unreachable will clauses from Gate 1's denominator, or treat 65% as the trust-only floor and revisit after the wills mine. | Either unblocks the catalog review. |
+| **C3** | **The two 5-minute calls:** (a) the 2 purity families — same clause reused or genuinely distinct? (b) canary — drop the 4 duplicated files from `CLAUSE_MINER_CANARY_FOLDER_IDS` and re-run `gates` ($0) for a clean holdout read. | Both gates currently fail for **scope** reasons, not correctness ones. |
+| **C4** | **Quarantine tail** — ~141 of 512 trusts never mined. **PENDING at Adam's word (2026-08-05: "leave it as pending").** | Nothing, while parked. Listed so it is not forgotten. |
+
+---
+
+## D · BUILD — FIRM INTERVIEW SETTINGS 🆕 (the missing architectural layer)
+
+Statular's **Settings → Interview** is a firm-level drafting-defaults record with nine sections:
+**Documents · Trust · Definitions · Asset Schedules · Power of Attorney · Healthcare · Deeds ·
+Signing · Fiduciaries**, all autosaving. Their own description of it:
+
+> *"These settings control which documents are selected by default on the Document Selection page
+> when creating new matters. These settings apply to Trust packages, Will with Powers, and
+> Powers-Only packages."*
+
+**We have no equivalent.** Every substantive drafting choice in our engine is either hardcoded or
+per-client. This is the single largest structural gap the walkthrough exposed, and D1 is the
+foundation the rest of D sits on.
+
+| # | Item | Notes |
+|---|------|-------|
+| **D1** | **The `FirmInterviewSettings` record** — types, Firestore doc under `firms/{firmId}`, rules, and a settings screen shell. | Touches `src/types/index.ts` (Never-Break → sign-off) and `firestore.rules` (Never-Break → sign-off). Do it once, additively, rather than a Never-Break change per section. |
+| **D2** | **Wire `ApportionmentMode` into it.** | Closes PR #280's loose end. Statular exposes this as a single boolean — *"Prorate estate taxes among beneficiaries"*. Ours is three modes with NJ-specific statutory prose (54:35-6 vs 3B:24-1), which is better on the merits, but theirs is a firm default and ours is a code default. Theirs is the right *shape*. |
+| **D3** | **Trust defaults** — representation type (right of representation / per stirpes / per capita at each generation), no-contest clause, trustee compensation, bond, sole-trustee co-appointment, **Special Distributions Age**, substance-abuse provisions, contingent SNT. | Maps onto work already done. |
+| **D4** | **Healthcare defaults — including the Dementia Directive as a first-class toggle.** | Settles the earlier open question: it is a **toggle under Healthcare defaults**, not a standalone document type. Also: visitation authorisation, "leave health care instructions blank". |
+| **D5** | **Definitions** — incapacity determination as a **multi-select** (two physicians / physician + psychologist / attorney-at-law / governmental official / trust protector / court of competent jurisdiction), disappearance definition, Children Definition (State Probate Code vs Custom). | The multi-select is the notable part — incapacity is not one rule. |
+| **D6** | **Documents** — which documents default on, per package; Pour-Over Will title radio; Comprehensive Transfer / Declaration of Trust / General Assignment title radio; cover letter mode (short vs AI-generated distribution summary). | |
+| **D7** | **POA · Signing · Fiduciaries · Asset Schedules.** | Two patterns to carry through all of D: **nested sub-options that appear only when the parent toggle is on**, and **scope disclaimers on settings that do not reach everywhere** — e.g. theirs reads *"This default affects only Statular's long-form POA language. Statutory and short-form POAs may be controlled by their form text and applicable law."* Asset Schedules also carries a rich-text editor for the Schedule A preamble. |
+
+---
+
+## E · BUILD — CLIENT-FACING INTAKE 🆕
+
+Statular's **Settings → Client Experience** has five tabs: General · Matter-Specific Emailed
+Questionnaires · Client Portal · Public Intake Questionnaires · Client Email Automation.
+
+| # | Item | Notes |
+|---|------|-------|
+| **E1** | **`PotentialNewClient` as a separate record type**, plus the unauthenticated public-intake write path. | **Corrects an earlier wrong assumption of mine.** I had this scoped as an unauthenticated write into `clients/`. It is not: *"each submission creates a Potential New Client record"* — a distinct lead record. Keeps the client roster clean and makes intake a triage queue. `firestore.rules` is Never-Break → sign-off. |
+| **E2** | **Public intake landing page** — firm letterhead, matter-type cards (Estate Planning / Probate Administration / Trust Administration), and the disclaimer. | Their disclaimer, already written for this firm: *"By accessing this public questionnaire form, you acknowledge and agree that access to the questionnaire does not, by itself, create attorney-client relationship with Elias Counsel LLC. Elias Counsel LLC does not represent you unless and until it has expressly agreed to do so in writing."* One firm slug (`/firm/<custom>`) serves both the portal and the public intake links. |
+| **E3** | **Client Portal + email-match behaviour.** | *"What should happen when a new portal account is created with an email that matches an existing client?"* → link to existing **if exactly one matches**, or always create new and merge manually. The "exactly one" guard is the correct one. Portal questionnaire is deliberately **broader** than the matter questionnaire — two instruments, not one form with a flag. Portal also carries document sharing + secure messaging. |
+| **E4** | **Client Task Groups with copy-on-write starter sets.** | Reusable groups (Client Intake, Probate, Trust Administration), one marked default. Their solution to customising vendor content: *"You are viewing Statular starter sets. Customizing them saves a firm-owned copy first."* Worth copying exactly — it is how shipped defaults get customised without breaking on update. |
+| **E5** | **Client Email Automation** — seven templated emails: introduction, portal invite, questionnaire invite, questionnaire reminders, submission, document upload, matter completion. Each with TO/CC and a default internal copy to the attorney / firm owner. | |
+| **E6** | **Questionnaire designer.** | Per State × Practice Area × Package. Live preview with Desktop/Mobile toggle and zoom; drag pages to reorder the client flow; edit instructional text inline; add file requests; **language selector** on the client side. Their welcome copy is worth matching in spirit: *"all questions are optional—if you don't know the answer... leave it blank, and we'll discuss it in person."* |
+
+---
+
+## F · BUILD — SMALLER WINS 🆕
+
+| # | Item | Notes |
+|---|------|-------|
+| **F1** | **Dashboard "Active Matters by Stage."** | One row per matter, a progress bar spanning `Created → Draft In Progress → Draft Generated → Completed`. We have analytics; we have no pipeline view. |
+| **F2** | **Matters list row.** | Status chip (`GENERATED` / `IN PROGRESS` / `MATTER CREATED`) with an underlined *"0/7 tasks completed"* link beneath it, plus a separate **Intake** column (`SENT` / `NOT SENT`). Matter state, task state and intake state in one scannable row. |
+| **F3** | **Flowcharts — trust document → diagram.** | Upload `.docx`/`.pdf`, generate a visualisation of the instrument. Lowest certainty of anything in this list: Adam's account had none generated, so output quality is unknown. Do not start this before D and E. |
+
+---
+
+## G · EXISTING WORK, NO DECISIONS NEEDED (agent)
+
+| # | Item | Notes |
+|---|------|-------|
+| **G1** | **Official filled PDFs for IT-EXT and the L-9.** | They render as HTML workpapers today. Each needs its own blank form + field inventory — the same treatment the IT-R already had. No decision required; just not started. The two IT-Estate returns are **not** in this item (pre-2018, declined). |
+| **G2** | **The wills Drive pipeline — repair or retire.** | **Measured 2026-07-31: `wills_documents=0`, `pipeline_state=0`** — a genuine zero, read successfully. An empty `pipeline_state` means it never initialised: it did not run and stop, it never started. Investigation first, then a scope call from Adam. Shares no state with clause mining; do not fold it in. |
+
+---
+
+## H · NEEDS ADAM AT A DESK (never blocking, do any time)
+
+| # | Item |
+|---|------|
+| **H1** | **A real payment through the payment page** — proves the LawPay webhook end to end after #186. Existing "Paid" records came from Record Payment and the payment-page link, never from the card dialog. |
+| **H2** | **Open a pre-allocation-model matter in the browser** — normalisation is tested; the screen reading correctly afterwards is not. |
+| **H3** | **App Check / reCAPTCHA provisioning** — `registerClientFromLink` is public; rate-limit shipped, App Check still unset. Becomes more pressing once E1/E2 add a second unauthenticated write path. |
+
+---
+
+## I · PARKED / DECLINED — do not re-raise
+
+| Item | Status |
+|------|--------|
+| Nonresident decedents (Track 3 / IT-NR) | **Declined** — the firm does not take them. Refusal is already enforced at `computeEstate`, `buildITRFormData` and the L-9 builder. |
+| Pre-2018 deaths (L-9(A), both IT-Estate returns) | **Declined** — not in practice. |
+| A life-insurance asset type | **Declined, and would be harmful** — invites entry of *exempt* policies and over-taxes the estate. |
+| T9 "server-resolve email recipients" | **Skipped by Adam** — callable-contract + frontend change for marginal gain post-T6 staff-gating. |
+| DZ remainder — payments `sum()` composite indexes | Open, Never-Break (`firestore.indexes.json`) → needs sign-off. |
+| `willsDriveWebhook` channel-token model | Open (BM remainder), low priority. |
+| Standing watch-item: OAuth durability alert | Passive — silence = healthy. |
+
+---
+
 ## ✅ THE ASSET/ALLOCATION MODEL — all three PRs shipped and deployed, plus the follow-ups (#213)
 
 Read this section top to bottom: it is the work in the order it has to happen. Residue is the

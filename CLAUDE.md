@@ -9,23 +9,6 @@
 5. **Never tell the user to deploy manually.** This repo has GitHub Actions that auto-deploy hosting and functions on every push to `main` (`.github/workflows/firebase-hosting-deploy.yml` and `firebase-functions-deploy.yml`). Merging a PR is sufficient — no `firebase deploy` command needed.
 6. **Always confirm when a push or merge completes.** After every `git push` or PR merge, explicitly tell the user it's done and that CI/CD is deploying automatically.
 7. **Auto-merge PRs once verified.** After opening a PR for requested work, merge it yourself (squash) once verification passes (tsc, build, tests) — don't wait for manual approval. Exception: changes touching the Never-Break List (security rules, indexes, templates, data model, CI workflows) still require explicit user sign-off before merging.
-
-   > ### ⏸ RULE 7 IS CURRENTLY SUSPENDED — DO NOT MERGE ANY PR
-   >
-   > A calibration effort is live on `main` (#255 calibration callables, #256 calibration-session
-   > autosave, #257 clause-miner seed segmentation). Concurrent merges risk disrupting it.
-   >
-   > **Until this block is removed: open PRs, verify them, and stop.** Report the PR to the user
-   > and let them merge. This applies to every PR regardless of size, and overrides the
-   > "don't wait for manual approval" instruction above — including for changes that touch
-   > nothing on the Never-Break List.
-   >
-   > Merging remains fine for *the user*. It is agent-initiated merges that are paused.
-   >
-   > **To lift:** delete this block once calibration has landed. Whoever removes it should say so
-   > in the commit message so the change is greppable later.
-   >
-   > *Added 2026-08-02 at Adam's direction.*
 8. **Never idle while waiting.** When blocked on CI, a deploy, or any long-running background task, start the next backlog item (HOMEWORK.md `▶ NEXT` or the open task list) and check back when the watcher reports — don't sit on your hands or end the session to wait.
 9. **A recurring bug does not get another guess.** If a fix already shipped for a symptom and the symptom came back, stop hypothesising and read the code until you can name the *mechanism* — the specific line that produces it. Then write a test that **fails against the current code** before writing the fix. Where the loop is human-gated (a live card, a browser, a device), the bar for shipping rises rather than falls: each wrong guess costs days, not minutes, so "plausible" is not good enough and it is better to ask for one diagnostic than to ship a third hypothesis.
    *Earned:* the AffiniPay card charge. #156 (CSS selectors) and #185 (stale singleton) were both real fixes for real problems, both shipped on a hypothesis about the vendor SDK, both untested — three weeks, no progress. #207 came from reading our own component, named the mechanism (`if (showConfirm) return <Dialog>` unmounts the hosted fields, and a detached iframe's `contentWindow` is null), and shipped with a test that fails without it. It worked first try.

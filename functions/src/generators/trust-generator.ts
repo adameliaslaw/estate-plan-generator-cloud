@@ -75,6 +75,8 @@ EXECUTION BLOCK:
 
 %%FORMATTING_RULES%%
 
+%%CLAUSE_LIBRARY%%
+
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
 do not rephrase, abbreviate, or reformat any proper nouns.
@@ -211,7 +213,13 @@ Generate the complete ${trustType} now. Include all standard articles, comprehen
   const formattingRules = preset?.promptBlock
     ? `${preset.promptBlock}\n\n• Schedule A as a formatted table.\n• Do NOT leave any "[NAME]" tokens — use actual data.`
     : DEFAULT_TRUST_FORMATTING;
-  const systemPrompt = TRUST_SYSTEM_PROMPT_BASE.replace('%%FORMATTING_RULES%%', formattingRules);
+  // Firm clause library, selected and resolved by unified-generator. Empty
+  // string when the firm has no approved clauses for this docType.
+  const clauseBlock = ((safe as Record<string, unknown>)._clauseBlock as string) ?? '';
+
+  const systemPrompt = TRUST_SYSTEM_PROMPT_BASE
+    .replace('%%FORMATTING_RULES%%', formattingRules)
+    .replace('%%CLAUSE_LIBRARY%%', clauseBlock);
 
   const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'claude-opus-5',
