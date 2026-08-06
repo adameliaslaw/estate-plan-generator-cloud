@@ -60,6 +60,33 @@ describe('classifyBeneficiary', () => {
     }
   });
 
+  it('puts the other step-relations in Class D, matching the filing engine', () => {
+    // A stepCHILD is Class A. A stepPARENT and a stepSIBLING are not.
+    // Cross-checked against inheritance-tax/engine/classify.ts on
+    // feat/nj-inheritance-tax-engine so the two can never disagree about a
+    // 15-16% tax while both exist.
+    for (const r of ['stepparent', 'stepmother', 'step-father', 'stepbrother', 'step-sister']) {
+      expect(classifyBeneficiary(r), r).toBe('D');
+    }
+  });
+
+  it('puts the spouse of a stepchild in Class D, not Class C', () => {
+    // N.J.A.C. 18:26-1.1. The spouse of a natural child is Class C; the spouse
+    // of a stepchild is Class D. Non-obvious, and a 15% difference.
+    expect(classifyBeneficiary('stepchild-in-law')).toBe('D');
+    expect(classifyBeneficiary('spouse of a stepchild')).toBe('D');
+    expect(classifyBeneficiary('mutually acknowledged child-in-law')).toBe('D');
+    // Contrast — the natural child's spouse stays Class C.
+    expect(classifyBeneficiary('son-in-law')).toBe('C');
+  });
+
+  it('puts a former spouse in Class D', () => {
+    expect(classifyBeneficiary('ex-spouse')).toBe('D');
+    expect(classifyBeneficiary('ex spouse')).toBe('D');
+    // The current spouse is of course Class A.
+    expect(classifyBeneficiary('spouse')).toBe('A');
+  });
+
   it('returns null rather than guessing at an unfamiliar relationship', () => {
     // Defaulting an unknown word to Class D would print an 11-16% tax warning
     // about a beneficiary who may owe nothing at all.

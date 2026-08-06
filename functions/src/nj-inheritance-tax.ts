@@ -44,6 +44,29 @@
  *   NJ Division of Taxation, "Inheritance Tax Beneficiary Classes"
  *   NJ Division of Taxation, "Inheritance and Estate Tax: Tax Rates"
  *   N.J.S.A. 54:35-6; N.J.S.A. 3B:24-1, 3B:24-2, 3B:24-4
+ *
+ * ---------------------------------------------------------------------------
+ * OVERLAP — READ BEFORE EXTENDING
+ *
+ * The branch `feat/nj-inheritance-tax-engine` carries a fuller engine ported
+ * from elias-estate-suite: a typed Relationship enum, cents-exact bracket
+ * arithmetic, dated rule sets, and IT-R / IT-EXT / IT-Estate / L-9A form
+ * renderers. It computes and FILES the tax. This module only decides who BEARS
+ * it, which that branch does not address at all.
+ *
+ * `classifyBeneficiary` and the rate schedule here therefore duplicate
+ * `inheritance-tax/engine/classify.ts` and `inheritance-tax/rules/sets/`. That
+ * branch has no merge base with main, so it cannot simply be imported today.
+ * The two have been checked against each other and AGREE: the bracket widths
+ * are identical (that branch applies them after subtracting the $25,000 Class C
+ * exemption; this one carries the exemption as a leading 0% band), and the
+ * class assignments now match, including the N.J.A.C. 18:26-1.1 subtleties.
+ *
+ * WHEN THAT BRANCH LANDS: delete `classifyBeneficiary`, `estimateInheritanceTax`,
+ * and RATE_SCHEDULE from this file and import from the engine instead. Both
+ * classifiers return 'A' | 'C' | 'D' | 'E', so the swap is mechanical. Keep the
+ * apportionment clause — it has no counterpart there.
+ * ---------------------------------------------------------------------------
  */
 
 // ---------------------------------------------------------------------------
@@ -126,11 +149,22 @@ export function classifyBeneficiary(relationship: string): NJBeneficiaryClass | 
 
   // Recognised Class D relationships — everyone not in A, C, or E. Listed
   // explicitly rather than inferred, so an unfamiliar word stays unclassified.
+  //
+  // The step-relations below are the ones that catch drafters. A stepCHILD is
+  // Class A, but a stepPARENT, a stepSIBLING, and the spouse of a stepchild are
+  // all Class D. N.J.A.C. 18:26-1.1 puts the spouse of a stepchild in Class D
+  // rather than Class C, even though the spouse of a natural child is Class C.
   if (
     /^(niece|nephew|cousin|aunt|uncle|friend|partner|fianc[ée]e?|godchild|neighbor|colleague)$/.test(r) ||
     /^(step[- ]?)?(parent|mother|father)[- ]in[- ]law$/.test(r) ||
     /^(brother|sister)[- ]in[- ]law$/.test(r) ||
     /^(great[- ]?)?(niece|nephew)$/.test(r) ||
+    /^step[- ]?(parent|mother|father)$/.test(r) ||
+    /^step[- ]?(brother|sister|sibling)$/.test(r) ||
+    /^step[- ]?(child|son|daughter)[- ]in[- ]law$/.test(r) ||
+    /^(spouse|widow|widower|civil union partner) of (a |my )?step[- ]?(child|son|daughter)$/.test(r) ||
+    /^mutually acknowledged child[- ]in[- ]law$/.test(r) ||
+    /^ex[- ]?(spouse|husband|wife)$/.test(r) ||
     /^(unrelated|no relation|none)$/.test(r)
   ) {
     return 'D';
