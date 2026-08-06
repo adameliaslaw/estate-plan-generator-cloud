@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  classifyBeneficiary,
-  estimateInheritanceTax,
+  njClassFor,
+  toRelationship,
   renderApportionmentClause,
   buildApportionmentPromptBlock,
   APPORTIONMENT_EXPLANATIONS,
@@ -16,7 +16,7 @@ import {
  * the numbers and citations in a client's will are reproducible, not recalled.
  */
 
-describe('classifyBeneficiary', () => {
+describe('njClassFor — delegates to the filing engine', () => {
   it('puts the exempt relatives in Class A', () => {
     for (const r of [
       'spouse', 'husband', 'wife', 'civil union partner', 'domestic partner',
@@ -24,39 +24,39 @@ describe('classifyBeneficiary', () => {
       'legally adopted child', 'mutually acknowledged child', 'grandchild',
       'great-grandchild', 'issue', 'descendant',
     ]) {
-      expect(classifyBeneficiary(r), r).toBe('A');
+      expect(njClassFor(r), r).toBe('A');
     }
   });
 
   it('treats a stepchild as Class A', () => {
-    expect(classifyBeneficiary('stepchild')).toBe('A');
-    expect(classifyBeneficiary('step-child')).toBe('A');
-    expect(classifyBeneficiary('stepson')).toBe('A');
+    expect(njClassFor('stepchild')).toBe('A');
+    expect(njClassFor('step-child')).toBe('A');
+    expect(njClassFor('stepson')).toBe('A');
   });
 
   it('treats a step-GRANDchild as Class D, which is the published carve-out', () => {
     // The Division's class list says Class A "does not include a step-grandchild
     // or great-step grandchild". They pay 15-16%; their parent pays nothing.
-    expect(classifyBeneficiary('step-grandchild')).toBe('D');
-    expect(classifyBeneficiary('stepgrandson')).toBe('D');
-    expect(classifyBeneficiary('great-step-grandchild')).toBe('D');
+    expect(njClassFor('step-grandchild')).toBe('D');
+    expect(njClassFor('stepgrandson')).toBe('D');
+    expect(njClassFor('great-step-grandchild')).toBe('D');
   });
 
   it('puts siblings and children-in-law in Class C', () => {
     for (const r of ['brother', 'sister', 'sibling', 'half-brother', 'son-in-law', 'daughter-in-law']) {
-      expect(classifyBeneficiary(r), r).toBe('C');
+      expect(njClassFor(r), r).toBe('C');
     }
   });
 
   it('puts collaterals and strangers in Class D', () => {
     for (const r of ['niece', 'nephew', 'cousin', 'aunt', 'uncle', 'friend', 'godchild', 'brother-in-law']) {
-      expect(classifyBeneficiary(r), r).toBe('D');
+      expect(njClassFor(r), r).toBe('D');
     }
   });
 
   it('puts charities and public bodies in Class E', () => {
     for (const r of ['charity', 'religious institution', 'educational institution', 'State of New Jersey']) {
-      expect(classifyBeneficiary(r), r).toBe('E');
+      expect(njClassFor(r), r).toBe('E');
     }
   });
 
@@ -66,76 +66,57 @@ describe('classifyBeneficiary', () => {
     // feat/nj-inheritance-tax-engine so the two can never disagree about a
     // 15-16% tax while both exist.
     for (const r of ['stepparent', 'stepmother', 'step-father', 'stepbrother', 'step-sister']) {
-      expect(classifyBeneficiary(r), r).toBe('D');
+      expect(njClassFor(r), r).toBe('D');
     }
   });
 
   it('puts the spouse of a stepchild in Class D, not Class C', () => {
     // N.J.A.C. 18:26-1.1. The spouse of a natural child is Class C; the spouse
     // of a stepchild is Class D. Non-obvious, and a 15% difference.
-    expect(classifyBeneficiary('stepchild-in-law')).toBe('D');
-    expect(classifyBeneficiary('spouse of a stepchild')).toBe('D');
-    expect(classifyBeneficiary('mutually acknowledged child-in-law')).toBe('D');
+    expect(njClassFor('stepchild-in-law')).toBe('D');
+    expect(njClassFor('spouse of a stepchild')).toBe('D');
+    expect(njClassFor('mutually acknowledged child-in-law')).toBe('D');
     // Contrast — the natural child's spouse stays Class C.
-    expect(classifyBeneficiary('son-in-law')).toBe('C');
+    expect(njClassFor('son-in-law')).toBe('C');
   });
 
   it('puts a former spouse in Class D', () => {
-    expect(classifyBeneficiary('ex-spouse')).toBe('D');
-    expect(classifyBeneficiary('ex spouse')).toBe('D');
+    expect(njClassFor('ex-spouse')).toBe('D');
+    expect(njClassFor('ex spouse')).toBe('D');
     // The current spouse is of course Class A.
-    expect(classifyBeneficiary('spouse')).toBe('A');
+    expect(njClassFor('spouse')).toBe('A');
   });
 
   it('returns null rather than guessing at an unfamiliar relationship', () => {
     // Defaulting an unknown word to Class D would print an 11-16% tax warning
     // about a beneficiary who may owe nothing at all.
-    expect(classifyBeneficiary('trusted advisor')).toBeNull();
-    expect(classifyBeneficiary('')).toBeNull();
-    expect(classifyBeneficiary('   ')).toBeNull();
+    expect(njClassFor('trusted advisor')).toBeNull();
+    expect(njClassFor('')).toBeNull();
+    expect(njClassFor('   ')).toBeNull();
   });
 
   it('is insensitive to case, spacing, and punctuation', () => {
-    expect(classifyBeneficiary('  STEP CHILD ')).toBe('A');
-    expect(classifyBeneficiary('Son-In-Law')).toBe('C');
+    expect(njClassFor('  STEP CHILD ')).toBe('A');
+    expect(njClassFor('Son-In-Law')).toBe('C');
   });
 });
 
-describe('estimateInheritanceTax', () => {
-  it('taxes Class A and Class E at nothing', () => {
-    expect(estimateInheritanceTax('A', 5_000_000)).toBe(0);
-    expect(estimateInheritanceTax('E', 5_000_000)).toBe(0);
+describe('toRelationship — the bridge to the engine enum', () => {
+  it('maps the step-relations onto the enum values the engine distinguishes', () => {
+    expect(toRelationship('stepchild')).toBe('stepchild');
+    expect(toRelationship('step-grandchild')).toBe('step_grandchild');
+    expect(toRelationship('stepparent')).toBe('stepparent');
+    expect(toRelationship('stepbrother')).toBe('stepbrother_stepsister');
+    expect(toRelationship('stepchild-in-law')).toBe('stepchild_in_law');
   });
 
-  it('applies the Class C schedule: $25k exempt, then 11/13/14/16%', () => {
-    expect(estimateInheritanceTax('C', 25_000)).toBe(0);
-    // $25k exempt, next $75k at 11%
-    expect(estimateInheritanceTax('C', 100_000)).toBeCloseTo(8_250, 2);
-    // Top of the 11% band: $25k exempt + $1,075,000 at 11%
-    expect(estimateInheritanceTax('C', 1_100_000)).toBeCloseTo(118_250, 2);
-    // Plus the full 13% band ($300k)
-    expect(estimateInheritanceTax('C', 1_400_000)).toBeCloseTo(157_250, 2);
-    // Plus the full 14% band ($300k)
-    expect(estimateInheritanceTax('C', 1_700_000)).toBeCloseTo(199_250, 2);
-    // Plus $100k at 16%
-    expect(estimateInheritanceTax('C', 1_800_000)).toBeCloseTo(215_250, 2);
+  it('maps a natural child\'s spouse to child_in_law, not the step form', () => {
+    expect(toRelationship('son-in-law')).toBe('child_in_law');
   });
 
-  it('applies the Class D schedule: 15% to $700k, 16% above', () => {
-    expect(estimateInheritanceTax('D', 100_000)).toBeCloseTo(15_000, 2);
-    expect(estimateInheritanceTax('D', 700_000)).toBeCloseTo(105_000, 2);
-    expect(estimateInheritanceTax('D', 800_000)).toBeCloseTo(121_000, 2);
-  });
-
-  it('returns zero for a zero or negative transfer', () => {
-    expect(estimateInheritanceTax('D', 0)).toBe(0);
-    expect(estimateInheritanceTax('D', -5)).toBe(0);
-  });
-
-  it('shows the cost of the choice: $100k to a niece is $15k', () => {
-    // This is the number that makes the apportionment choice concrete for a
-    // client — it comes out of the residue or out of her gift, but it comes.
-    expect(estimateInheritanceTax('D', 100_000)).toBe(15_000);
+  it('returns null for anything it does not recognise', () => {
+    expect(toRelationship('trusted advisor')).toBeNull();
+    expect(toRelationship('')).toBeNull();
   });
 });
 

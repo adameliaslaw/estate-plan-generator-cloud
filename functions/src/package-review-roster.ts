@@ -15,7 +15,7 @@
  */
 
 import type { PackagePerson, PackageContext } from './package-review';
-import { classifyBeneficiary } from './nj-inheritance-tax';
+import { njClassFor } from './nj-inheritance-tax';
 
 interface SplitName {
   firstName?: unknown;
@@ -67,7 +67,7 @@ export function buildPackageContext(
     if (!name || name.trim().split(/\s+/).length < 2) return;
     // A relationship we do not recognise stays null. Guessing "Class D" would
     // put an 11-16% tax warning on a beneficiary who may owe nothing.
-    const njTaxClass = opts?.relationship ? classifyBeneficiary(opts.relationship) : undefined;
+    const njTaxClass = opts?.relationship ? njClassFor(opts.relationship) : undefined;
     people.push({ name, role, label, njTaxClass, isBeneficiary: opts?.isBeneficiary });
   };
 

@@ -46,182 +46,100 @@
  *   N.J.S.A. 54:35-6; N.J.S.A. 3B:24-1, 3B:24-2, 3B:24-4
  *
  * ---------------------------------------------------------------------------
- * OVERLAP — READ BEFORE EXTENDING
+ * CLASSIFICATION AND RATES LIVE IN THE FILING ENGINE
  *
- * The branch `feat/nj-inheritance-tax-engine` carries a fuller engine ported
- * from elias-estate-suite: a typed Relationship enum, cents-exact bracket
- * arithmetic, dated rule sets, and IT-R / IT-EXT / IT-Estate / L-9A form
- * renderers. It computes and FILES the tax. This module only decides who BEARS
- * it, which that branch does not address at all.
+ * `functions/src/inheritance-tax/` is the source of truth for who is in which
+ * class and what they owe: a typed Relationship enum, cents-exact bracket
+ * arithmetic, and DATED rule sets (2002 / 2017 / 2018) so a death in an earlier
+ * year is computed under the schedule in force then. This module does not
+ * duplicate any of it — `njClassFor` below maps a free-text relationship onto
+ * that enum and delegates.
  *
- * `classifyBeneficiary` and the rate schedule here therefore duplicate
- * `inheritance-tax/engine/classify.ts` and `inheritance-tax/rules/sets/`. That
- * branch has no merge base with main, so it cannot simply be imported today.
- * The two have been checked against each other and AGREE: the bracket widths
- * are identical (that branch applies them after subtracting the $25,000 Class C
- * exemption; this one carries the exemption as a leading 0% band), and the
- * class assignments now match, including the N.J.A.C. 18:26-1.1 subtleties.
- *
- * WHEN THAT BRANCH LANDS: delete `classifyBeneficiary`, `estimateInheritanceTax`,
- * and RATE_SCHEDULE from this file and import from the engine instead. Both
- * classifiers return 'A' | 'C' | 'D' | 'E', so the swap is mechanical. Keep the
- * apportionment clause — it has no counterpart there.
+ * What lives here is the part the engine does not address: the apportionment
+ * clause. The engine computes and FILES the tax; this decides who BEARS it.
  * ---------------------------------------------------------------------------
  */
 
+import { classifyBeneficiary } from './inheritance-tax/engine/classify';
+import type { Relationship, TaxClass } from './inheritance-tax/types';
+
 // ---------------------------------------------------------------------------
-// Beneficiary classes
+// Relationship → the filing engine's typed enum
 // ---------------------------------------------------------------------------
 
-/** Class B was eliminated by statute effective July 1, 1963. */
-export type NJBeneficiaryClass = 'A' | 'C' | 'D' | 'E';
-
 /**
- * Class A, per the Division of Taxation's published class list:
- *   parent · grandparent · spouse · child (including legally adopted child) ·
- *   grandchild, great-grandchild, etc. · stepchild · mutually acknowledged
- *   child · civil union partner (after 2/19/2007) · domestic partner
- *   (after 7/10/2004)
+ * Free-text relationship (as an intake form records it) → the filing engine's
+ * typed Relationship.
  *
- * The parenthetical on the published list is the one that catches drafters:
- * a stepchild is Class A, but the list says expressly that this "does not
- * include a step-grandchild or great-step grandchild." A stepchild's own
- * children are Class D and pay 15–16%.
+ * Only confident mappings belong here. Anything unrecognised returns null, and
+ * null is NOT Class D — guessing would print an 11-16% tax warning about a
+ * beneficiary who may owe nothing.
+ *
+ * The step-relations are the ones that catch drafters, and the engine's own
+ * comments carry the authority: a stepCHILD is Class A, but a step-GRANDchild,
+ * a stepPARENT, a stepSIBLING, and the spouse of a stepchild are all Class D
+ * (N.J.A.C. 18:26-1.1) — even though the spouse of a natural child is Class C.
  */
-const CLASS_A = [
-  /^(spouse|husband|wife|widow|widower)$/,
-  /^(civil union partner|domestic partner)$/,
-  /^(parent|mother|father)$/,
-  /^(grand|great[- ]?grand)(parent|mother|father)$/,
-  /^(child|son|daughter)$/,
-  /^(adopted|legally adopted)[- ]?(child|son|daughter)$/,
-  /^mutually acknowledged child$/,
-  /^step[- ]?(child|son|daughter)$/,
-  /^(grand|great[- ]?grand)(child|son|daughter)$/,
-  /^issue$/,
-  /^(lineal )?descendant$/,
+const RELATIONSHIP_PATTERNS: ReadonlyArray<[RegExp, Relationship]> = [
+  // Order matters: the step- forms must be tested before their base forms.
+  [/^(great[- ]?)?step[- ]?grand(child|son|daughter)$/, 'step_grandchild'],
+  [/^step[- ]?(child|son|daughter)[- ]in[- ]law$/, 'stepchild_in_law'],
+  [/^(spouse|widow|widower|civil union partner) of (a |my )?step[- ]?(child|son|daughter)$/, 'stepchild_in_law'],
+  [/^mutually acknowledged child[- ]in[- ]law$/, 'mutually_acknowledged_child_in_law'],
+  [/^step[- ]?(child|son|daughter)$/, 'stepchild'],
+  [/^step[- ]?(parent|mother|father)$/, 'stepparent'],
+  [/^step[- ]?(brother|sister|sibling)$/, 'stepbrother_stepsister'],
+  [/^ex[- ]?(spouse|husband|wife)$/, 'ex_spouse'],
+
+  [/^(spouse|husband|wife|widow|widower)$/, 'spouse'],
+  [/^civil union partner$/, 'civil_union_partner'],
+  [/^domestic partner$/, 'domestic_partner'],
+  [/^(child|son|daughter|issue|(lineal )?descendant)$/, 'child'],
+  [/^(legally )?adopted[- ]?(child|son|daughter)$/, 'child'],
+  [/^mutually acknowledged child$/, 'mutually_acknowledged_child'],
+  [/^grand(child|son|daughter)$/, 'grandchild'],
+  [/^great[- ]?grand(child|son|daughter)$/, 'great_grandchild'],
+  [/^(parent|mother|father)$/, 'parent'],
+  [/^(grand|great[- ]?grand)(parent|mother|father)$/, 'grandparent'],
+
+  [/^(brother|sister|sibling)$/, 'sibling'],
+  [/^half[- ](brother|sister|sibling)$/, 'sibling'],
+  [/^(son|daughter)[- ]in[- ]law$/, 'child_in_law'],
+  [/^(spouse|widow|widower) of (a |my )?(child|son|daughter)$/, 'child_in_law'],
+
+  [/^(great[- ]?)?(niece|nephew)$/, 'niece_nephew'],
+  [/^(aunt|uncle)$/, 'aunt_uncle'],
+  [/^cousin$/, 'cousin'],
+  [/^(brother|sister)[- ]in[- ]law$/, 'other_individual'],
+  [/^(parent|mother|father)[- ]in[- ]law$/, 'other_individual'],
+  [/^(friend|godchild|neighbor|colleague)$/, 'friend'],
+  [/^(unrelated|no relation|none)$/, 'other_individual'],
+
+  [/^(qualified )?charit(y|able organization)$/, 'charity'],
+  [/^religious (institution|organization)$/, 'religious_organization'],
+  [/^educational (institution|organization)$/, 'educational_organization'],
+  [/^medical institution$/, 'medical_institution'],
+  [/^(the )?state of new jersey$/, 'governmental_entity'],
+  [/^(municipality|county|political subdivision)$/, 'governmental_entity'],
 ];
 
-/**
- * Class C: brother or sister of the decedent (including half blood); the
- * spouse or surviving spouse of a child; the civil union partner or surviving
- * civil union partner (after 2/19/2007) of a child.
- */
-const CLASS_C = [
-  /^(brother|sister|sibling)$/,
-  /^half[- ](brother|sister|sibling)$/,
-  /^(son|daughter)[- ]in[- ]law$/,
-  /^(spouse|widow|widower|civil union partner) of (a |my )?(child|son|daughter)$/,
-];
-
-/** Class E: charities and public bodies — exempt. */
-const CLASS_E = [
-  /^(qualified )?charit(y|able organization)$/,
-  /^religious (institution|organization)$/,
-  /^(educational|medical) institution$/,
-  /^non[- ]?profit/,
-  /^(the )?state of new jersey$/,
-  /^(municipality|county|political subdivision)$/,
-];
-
-/**
- * Best-effort classification of a stated relationship.
- *
- * Returns null when the relationship is not recognised — deliberately, so a
- * caller reports "unclassified, confirm the class" rather than defaulting to a
- * class and being confidently wrong about a 16% tax. An unrecognised
- * relationship is NOT evidence of Class D.
- *
- * "Step-grandchild" and anything else outside Classes A, C, and E resolves to
- * Class D only when it matches an explicitly recognised Class D pattern.
- */
-export function classifyBeneficiary(relationship: string): NJBeneficiaryClass | null {
+/** Normalise a stated relationship to the engine's enum, or null if unknown. */
+export function toRelationship(relationship: string): Relationship | null {
   const r = relationship.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.]/g, '');
   if (!r) return null;
-
-  // Step-descendants below the first generation are the published carve-out
-  // from Class A and must be tested before the Class A stepchild pattern.
-  if (/^(great[- ]?)?step[- ]?grand(child|son|daughter)$/.test(r)) return 'D';
-
-  if (CLASS_A.some((rx) => rx.test(r))) return 'A';
-  if (CLASS_C.some((rx) => rx.test(r))) return 'C';
-  if (CLASS_E.some((rx) => rx.test(r))) return 'E';
-
-  // Recognised Class D relationships — everyone not in A, C, or E. Listed
-  // explicitly rather than inferred, so an unfamiliar word stays unclassified.
-  //
-  // The step-relations below are the ones that catch drafters. A stepCHILD is
-  // Class A, but a stepPARENT, a stepSIBLING, and the spouse of a stepchild are
-  // all Class D. N.J.A.C. 18:26-1.1 puts the spouse of a stepchild in Class D
-  // rather than Class C, even though the spouse of a natural child is Class C.
-  if (
-    /^(niece|nephew|cousin|aunt|uncle|friend|partner|fianc[ée]e?|godchild|neighbor|colleague)$/.test(r) ||
-    /^(step[- ]?)?(parent|mother|father)[- ]in[- ]law$/.test(r) ||
-    /^(brother|sister)[- ]in[- ]law$/.test(r) ||
-    /^(great[- ]?)?(niece|nephew)$/.test(r) ||
-    /^step[- ]?(parent|mother|father)$/.test(r) ||
-    /^step[- ]?(brother|sister|sibling)$/.test(r) ||
-    /^step[- ]?(child|son|daughter)[- ]in[- ]law$/.test(r) ||
-    /^(spouse|widow|widower|civil union partner) of (a |my )?step[- ]?(child|son|daughter)$/.test(r) ||
-    /^mutually acknowledged child[- ]in[- ]law$/.test(r) ||
-    /^ex[- ]?(spouse|husband|wife)$/.test(r) ||
-    /^(unrelated|no relation|none)$/.test(r)
-  ) {
-    return 'D';
-  }
-
+  for (const [rx, rel] of RELATIONSHIP_PATTERNS) if (rx.test(r)) return rel;
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Rate schedule
-// ---------------------------------------------------------------------------
-
-interface Bracket {
-  /** Amount to which `rate` applies, or null for "everything above". */
-  upTo: number | null;
-  rate: number;
-}
-
-/** Published rate schedule. Class A and Class E are exempt. */
-const RATE_SCHEDULE: Record<NJBeneficiaryClass, Bracket[]> = {
-  A: [{ upTo: null, rate: 0 }],
-  C: [
-    { upTo: 25_000, rate: 0 },
-    { upTo: 1_100_000, rate: 0.11 },
-    { upTo: 1_400_000, rate: 0.13 },
-    { upTo: 1_700_000, rate: 0.14 },
-    { upTo: null, rate: 0.16 },
-  ],
-  D: [
-    { upTo: 700_000, rate: 0.15 },
-    { upTo: null, rate: 0.16 },
-  ],
-  E: [{ upTo: null, rate: 0 }],
-};
-
 /**
- * Approximate NJ transfer inheritance tax on a transfer of `amount` to a
- * beneficiary of `cls`.
+ * NJ transfer inheritance tax class for a free-text relationship.
  *
- * For illustrating the cost of an apportionment choice, not for filing. It
- * ignores the Class D $500 floor's interaction with aggregation, exempt
- * transfers such as life insurance paid to a named beneficiary, and the
- * compromise-tax rules for contingent interests.
+ * Delegates to the filing engine's classifier so the two can never disagree.
+ * Returns null when the relationship is not recognised — never a guess.
  */
-export function estimateInheritanceTax(cls: NJBeneficiaryClass, amount: number): number {
-  if (!(amount > 0)) return 0;
-
-  let tax = 0;
-  let floor = 0;
-  for (const bracket of RATE_SCHEDULE[cls]) {
-    const ceiling = bracket.upTo ?? Infinity;
-    const taxableInBracket = Math.min(amount, ceiling) - floor;
-    if (taxableInBracket > 0) tax += taxableInBracket * bracket.rate;
-    if (amount <= ceiling) break;
-    floor = ceiling;
-  }
-  return Math.round(tax * 100) / 100;
+export function njClassFor(relationship: string): TaxClass | null {
+  const rel = toRelationship(relationship);
+  return rel ? classifyBeneficiary(rel) : null;
 }
 
 // ---------------------------------------------------------------------------
