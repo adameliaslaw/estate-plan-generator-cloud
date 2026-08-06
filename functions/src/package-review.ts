@@ -58,7 +58,8 @@ export type PackageFindingReason =
   | 'name-collision'
   | 'suffix-dropped'
   | 'missing-apportionment'
-  | 'toc-mismatch';
+  | 'toc-mismatch'
+  | 'empty-substitution';
 
 export interface PackageFinding {
   /** docType of the document the finding is in. */
@@ -651,6 +652,14 @@ const ENCLOSURE_PATTERNS: ReadonlyArray<{ pattern: RegExp; satisfiedBy: string[]
 // ---------------------------------------------------------------------------
 
 /**
+ * Bracketed notation that belongs in a signed instrument. Compared
+ * case-insensitively against the inside of a single-bracket ALL-CAPS match.
+ */
+const EXECUTION_MARKERS: ReadonlySet<string> = new Set([
+  'SEAL', 'L.S.', 'LS', 'NOTARY SEAL', 'CORPORATE SEAL', 'AFFIX SEAL',
+]);
+
+/**
  * Handlebars expressions or drafting markers that survived rendering. These are
  * always generation bugs and must never reach a client, so they are high
  * severity without exception.
@@ -662,6 +671,15 @@ function checkUnresolvedTokens(doc: PackageDoc, text: string): PackageFinding[] 
   const patterns: Array<{ rx: RegExp; what: string }> = [
     { rx: /\{\{[^{}]{1,80}\}\}/g, what: 'an unrendered Handlebars expression' },
     { rx: /\[\[[^[\]]{1,80}\]\]/g, what: 'an unrendered placeholder token' },
+    // Single-bracket ALL-CAPS, e.g. [SIGNING CITY] or [SETTLOR NAME]. This is
+    // the convention the mined clause corpus uses, so it reaches generated text
+    // by a different route than Handlebars does. The lookarounds keep it from
+    // re-reporting the inner half of a [[…]] token already caught above.
+    //
+    // Bounded to ALL-CAPS deliberately: bracketed lower- or mixed-case text is
+    // ordinary legal prose — [sic], an alteration inside a quotation — and
+    // flagging it would make the check noise.
+    { rx: /(?<!\[)\[[A-Z][A-Z0-9 ._/-]{2,60}\](?!\])/g, what: 'an unfilled placeholder' },
     { rx: /\b(TODO|TBD|FIXME|XXX)\b/g, what: 'a drafting marker' },
   ];
 
@@ -670,6 +688,9 @@ function checkUnresolvedTokens(doc: PackageDoc, text: string): PackageFinding[] 
     while ((m = rx.exec(text)) !== null) {
       const token = m[0];
       if (seen.has(token)) continue;
+      // [SEAL] and [L.S.] are execution-block notation, not placeholders — they
+      // are SUPPOSED to survive into the signed instrument.
+      if (EXECUTION_MARKERS.has(token.slice(1, -1).trim().toUpperCase())) continue;
       seen.add(token);
       findings.push({
         docType: doc.docType,
@@ -749,6 +770,76 @@ function checkUnfilledBlanks(doc: PackageDoc, text: string): PackageFinding[] {
           `the provision if it does not apply.`,
       });
       break; // one finding per line is enough to prompt a look
+    }
+  }
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
+// Check 2b — a substituted value that came out empty
+// ---------------------------------------------------------------------------
+
+/**
+ * The other half of the blank problem, and the half an underscore scan cannot
+ * see: the template resolved, the variable was empty, and the surrounding
+ * punctuation closed over nothing. "in , New Jersey" — the municipality is
+ * gone, and there is no underscore and no token left to find.
+ *
+ * Distinct from `checkUnfilledBlanks` (a blank was DRAWN and never filled) and
+ * from `checkUnresolvedTokens` (the placeholder SURVIVED). Here the placeholder
+ * resolved successfully to nothing at all, which is why neither of the others
+ * fires on it.
+ *
+ * NOTE the deliberate difference from `checkUnfilledBlanks`: this check does
+ * NOT skip execution blocks. A drawn blank in a signature line is correct and
+ * must be ignored there, but a *collapsed* one is a defect wherever it lands —
+ * an execution line reading "in , New Jersey" is exactly where this shows up.
+ */
+const EMPTY_SUBSTITUTION_PATTERNS: ReadonlyArray<{ rx: RegExp; what: string }> = [
+  {
+    // A preposition that governs a value, followed straight by the comma that
+    // was meant to come after it.
+    rx: /\b(?:in|of|at|on|to|for|from|by|between|with)\s+,/gi,
+    what: 'a preposition followed immediately by a comma, with the value missing between them',
+  },
+  {
+    // A list or address where one element rendered empty.
+    rx: /,\s*,/g,
+    what: 'two commas with nothing between them',
+  },
+];
+
+function checkEmptySubstitution(doc: PackageDoc, text: string): PackageFinding[] {
+  const findings: PackageFinding[] = [];
+  const seen = new Set<string>();
+
+  for (const { rx, what } of EMPTY_SUBSTITUTION_PATTERNS) {
+    rx.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(text)) !== null) {
+      // Report once per distinct surrounding phrase — a boilerplate line
+      // repeated in six documents should not become six near-identical rows.
+      const context = text
+        .slice(Math.max(0, m.index - 40), m.index + m[0].length + 40)
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (seen.has(context)) continue;
+      seen.add(context);
+
+      findings.push({
+        docType: doc.docType,
+        title: doc.title,
+        location: locateSection(text, m.index),
+        severity: 'high',
+        reason: 'empty-substitution',
+        summary: 'A merge value rendered empty, leaving the punctuation around it stranded',
+        detail:
+          `The generated text reads "…${truncate(context, 120)}…", which contains ${what}. ` +
+          `A value the template expected to substitute resolved to nothing, so this is a data ` +
+          `gap rather than a rendering failure — the template worked and was handed an empty ` +
+          `field. Supply the missing value and regenerate. Note this can appear inside an ` +
+          `execution block, where it matters most and where a blank-line scan would not see it.`,
+      });
     }
   }
   return findings;
@@ -1013,6 +1104,7 @@ export function reviewPackage(
     const text = htmlToText(doc.content);
     findings.push(...checkUnresolvedTokens(doc, text));
     findings.push(...checkUnfilledBlanks(doc, text));
+    findings.push(...checkEmptySubstitution(doc, text));
     findings.push(...checkUtmaAgeCap(doc, text));
     findings.push(...checkInoperativeSnt(doc, text));
     findings.push(...checkTocMismatch(doc, text));
