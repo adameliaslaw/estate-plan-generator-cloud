@@ -42,22 +42,39 @@ Source** selector that reaches `unified-generator.ts` at draft time; `formatting
 drafting from them is the mission, not a workaround of it. **Do not "helpfully" remove or narrow any
 of that.**
 
-Two working rules:
+### ✅ SETTLED 2026-08-06 by Adam — do not re-raise
 
-1. **Licence terms govern, per source.** They are a property of the specific agreement, not of
-   whether a vendor competes with us, not of how material was obtained, and not of whether money
-   changed hands. Do not generalise from one source to another, and do not invent categories.
-2. **What we have actually read:** the Statular documents carry express single-matter language on
-   their face. Terms for the other sources above are **unread** — record that as unknown rather than
-   assuming in either direction.
+Three questions were open. All three are answered. His answers, recorded:
 
-Practical consequence for the video pass: the **Statular documents** are evaluation material, not a
-template source — treat them accordingly. **UI and feature observation is unaffected by any of
-this** and is ordinary product analysis: describe a screen, decide whether we want an equivalent,
-build our own.
+1. **This is a tool for his firm.** Not a product sold to other firms.
+2. **The form-bank agreements acknowledge that he retains ownership of the finalized, assembled
+   documents.** That is the point of a form bank: you assemble, the output is yours.
+3. **The 512-trust corpus has no single-source derivation.** Drafted over a long period from
+   software, from templates shared and reused, and from clauses written from scratch and rewritten.
+   No document was generated uniquely from another.
 
-Licence questions are Adam's call as the attorney who signed the agreements. Flag one rather than
-deciding it.
+**What follows from that:** there is no licensing constraint on uploading vendor templates, drafting
+from them, or mining the firm's own executed documents. An earlier version of this file invented one.
+Do not reconstruct it, and do not ask these questions again.
+
+**One thing is unchanged and is not a licensing question at all:** the **PII gate on the clause
+catalog**. `piiBlocked=276` exists because those are real client documents and one client's name must
+not surface in another client's will. That is confidentiality, and it stands on its own.
+
+**C1 is therefore a clean engineering call** — curate ~60 good clauses or tune the scanner to release
+the 276 — with no provenance overlay on it.
+
+Two residual notes, neither a constraint:
+
+- **Statular's documents** carry single-matter language on their face. Different source, different
+  terms, and they are evaluation material rather than a template source. Treat them as such.
+- **If this ever becomes a product other firms buy**, question 1 changes and the answer above stops
+  covering it. Everything is already firm-scoped in `firestore.rules`
+  (`firms/{firmId}/documentTemplates`, `/clauseCatalog`, `/knowledgeBase`), so one firm's templates
+  cannot reach another firm's generation path. Keep that property.
+
+**UI and feature observation was never implicated** and is ordinary product analysis: describe a
+screen, decide whether we want an equivalent, build our own.
 
 ## Already reviewed — do not redo
 
