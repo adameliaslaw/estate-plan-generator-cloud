@@ -33,7 +33,31 @@ clause catalog — the single-matter licence on their documents is unaffected by
 
 | # | Item | Why it is first |
 |---|------|-----------------|
-| **A1** | **Confirm the PII scrub actually ran against prod.** `#270` merged 2026-08-03 16:38 with `runCatalog` redacting every family whose `piiScanStatus !== 'clean'`. The fix only takes effect when a `STAGE=catalog` run executes against pilot-1. Runs #72–#78 all post-date the merge, but **no run has been confirmed to be a `catalog` stage** — the workflow API does not expose dispatch inputs, so this needs a job-log read. | The security-rules comment promises "NO raw client text by construction". Until a post-#270 `catalog` run is confirmed, 281 blocked families may still hold full clause text in Firestore, readable by any firm attorney/paralegal. Believed fixed ≠ verified fixed. |
+| ~~**A1**~~ | ~~**Confirm the PII scrub actually ran against prod.**~~ **✅ VERIFIED 2026-08-06 — it ran.** | See below. |
+
+**A1 evidence — the scrub executed, and the run was on post-fix code.** Workflow run **#75**
+(job `92091639452`, 2026-08-04 18:31–18:36 UTC):
+
+```
+IN_STAGE: catalog
+Executing stage 'catalog' …
+clause-miner: stage 'catalog' firm=firm-001 run=pilot-1
+catalog: {"written":302,"variants":1394,"occurrences":3965}
+Container called exit(0).
+```
+
+The run's image was built from `27b4260` (#276), which is **after** `b4aca06` (#270, 2026-08-03
+16:38) — so the redaction was in the code that executed. Confirmed at that SHA:
+`catalog.ts:305` computes `blocked = fam.piiScanStatus !== 'clean'` and `catalog.ts:317` writes
+`scrubBlockedCatalogDoc(doc)` with **`{ merge: false }`**, which overwrites rather than merges —
+the point being that a `merge:false` write *removes* the text a previous run had already shipped.
+`written: 302` is the whole catalog, so every blocked family was rewritten text-free, not just
+newly-mined ones.
+
+**What is now true:** the security-rules comment ("NO raw client text by construction") is accurate
+for `clauseCatalog` as of 2026-08-04 18:36 UTC. **What is still open (checkpoint-2 report M7),** and
+was never part of this item: server-side *rules* hardening, and durable human-clearance state. The
+guarantee today rests on the writer scrubbing correctly, not on the rules refusing the read.
 
 ---
 
