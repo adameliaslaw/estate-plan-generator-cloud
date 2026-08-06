@@ -62,22 +62,22 @@ firebase deploy --only storage:rules
 ```
 estate-plan-generator-cloud/
 ├── src/                     # React frontend
-│   ├── pages/               # Route-level pages (20 files)
-│   ├── components/          # Feature components (90+ files, 11 domains)
-│   ├── services/            # Frontend API wrappers (4 files)
-│   ├── hooks/               # Custom React hooks (7 files)
+│   ├── pages/               # Route-level pages (23 files)
+│   ├── components/          # Feature components (98 files, 14 domains)
+│   ├── services/            # Frontend API wrappers (9 files)
+│   ├── hooks/               # Custom React hooks (8 files)
 │   ├── contexts/            # Auth + Questionnaire contexts
 │   ├── types/               # Comprehensive TypeScript types (index.ts, 1200+ lines)
 │   ├── config/              # Constants, Firebase config, formatting presets
 │   └── lib/                 # Utilities (sanitize, utils)
-├── functions/               # Firebase Cloud Functions (78 .ts files)
+├── functions/               # Firebase Cloud Functions (92 .ts files)
 │   └── src/
 │       ├── generators/      # Per-document-type generators (10 files)
 │       ├── templates/       # Handlebars templates (poa-comprehensive.hbs, poa-simple.hbs)
 │       └── *.ts             # All other function modules (one concern per file)
 ├── functions-backfill/      # Isolated package for embedding backfill operations
 ├── tests/
-│   ├── unit/                # 12 unit tests (schemas, serializer, security rules, exports)
+│   ├── unit/                # 64 unit tests (schemas, serializer, security rules, exports)
 │   ├── integration/         # 2 integration tests (auth, dashboard)
 │   ├── e2e/                 # 3 e2e tests (doc generation, security access, questionnaire)
 │   └── helpers/             # Mock data + Firebase test utilities
@@ -85,8 +85,8 @@ estate-plan-generator-cloud/
 ├── scripts/                 # Build/deployment scripts
 ├── samples/                 # Sample data/templates
 ├── public/                  # Static assets
-├── firestore.rules          # Production access control (583 lines — READ before editing)
-├── storage.rules            # Storage access control (99 lines — READ before editing)
+├── firestore.rules          # Production access control (768 lines — READ before editing)
+├── storage.rules            # Storage access control (130 lines — READ before editing)
 ├── firestore.indexes.json   # Composite indexes (removing one silently breaks prod queries)
 └── firebase.json            # Hosting, functions, emulator config
 ```
@@ -108,11 +108,13 @@ Organized by feature domain — do not add generic utilities here:
 | Directory | Purpose |
 |-----------|---------|
 | `ai/` | AI document drafting widget |
+| `clauses/` | Clause library browse, insert and calibration UI |
 | `clients/` | Client bulk import, deadline management |
 | `common/` | Error boundary, loading spinner, privilege notice |
 | `dashboard/` | Analytics, calendar, payments, tasks, notes |
 | `documents/` | Document vault, generation UI, export, review |
 | `editor/` | TipTap rich-text editor, version history, comments |
+| `inheritance-tax/` | NJ inheritance tax forms and workpapers |
 | `knowledge/` | Knowledge base management, template library |
 | `layout/` | App shell, sidebar, client layout |
 | `payments/` | Payment dialogs and management |
@@ -124,10 +126,17 @@ Organized by feature domain — do not add generic utilities here:
 
 Thin wrappers over Firebase Callable Functions. Never call `httpsCallable` directly from components — always go through a service file.
 
-- `documentService.ts` — document generation, export, version history
-- `knowledgeBaseService.ts` — KB CRUD and search
-- `recommendationEngineService.ts` — AI recommendations
-- `storageService.ts` — Firebase Storage uploads/downloads
+Filenames are kebab-case. All nine:
+
+- `document-service.ts` — document generation, export, version history
+- `knowledge-base-service.ts` — KB CRUD and search
+- `recommendation-engine.ts` — AI recommendations (no `-service` suffix)
+- `storage-service.ts` — Firebase Storage uploads/downloads
+- `client-service.ts` — client CRUD
+- `clause-library-service.ts` — clause catalog reads
+- `clause-calibration-service.ts` — calibration packet / labelling
+- `inheritance-tax-service.ts` — NJ inheritance tax callables
+- `pending-transcript-service.ts` — transcript → matter flow
 
 ### Hooks (`src/hooks/`)
 
@@ -135,7 +144,10 @@ Thin wrappers over Firebase Callable Functions. Never call `httpsCallable` direc
 - `useFirestore.ts` — typed Firestore helpers
 - `useAudioRecorder.ts` — note dictation
 - `usePermissions.ts` — capability checks
-- (plus 3 others)
+- `useFirmBranding.ts` — firm-level styling config
+- `useRequireAuth.ts` — auth guard
+- `useCreateClientRedirect.ts` — post-create routing
+- `useGooglePlacesAutocomplete.ts` — address autocomplete
 
 ### State & Types
 
@@ -279,7 +291,7 @@ Builds the structured context object injected into every AI prompt. **Schema cha
 
 ## Security & Access Control
 
-### Firestore Rules (`firestore.rules` — 583 lines)
+### Firestore Rules (`firestore.rules` — 768 lines)
 
 Role-based access control with four roles: `admin`, `attorney`, `paralegal`, `client`. A custom capabilities system sits on top for fine-grained feature flags. All access is firm-scoped — users can only read/write within their own firm's data.
 
@@ -298,7 +310,7 @@ Role-based access control with four roles: `admin`, `attorney`, `paralegal`, `cl
 
 **Never loosen rules without explicit instruction. Test with the Firebase emulator before deploying.**
 
-### Storage Rules (`storage.rules` — 99 lines)
+### Storage Rules (`storage.rules` — 130 lines)
 
 | Path | Max Size | MIME Restriction |
 |------|----------|-----------------|
@@ -397,7 +409,7 @@ npm run test -- --watch      # watch mode
 
 | Directory | Count | Covers |
 |-----------|-------|--------|
-| `tests/unit/` | 12 | sanitize, document schemas, client-data-serializer, template fidelity, data integrity, questionnaire logic, Firestore security rules, export functions |
+| `tests/unit/` | 64 | sanitize, document schemas, client-data-serializer, template fidelity, data integrity, questionnaire logic, Firestore security rules, export functions |
 | `tests/integration/` | 2 | auth flow, client dashboard |
 | `tests/e2e/` | 3 | document generation pipeline, security access control, questionnaire scenarios |
 | `tests/helpers/` | — | Mock data factory, Firebase test utilities |
