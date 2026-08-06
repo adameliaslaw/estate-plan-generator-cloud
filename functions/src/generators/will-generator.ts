@@ -63,6 +63,8 @@ DOCUMENT STRUCTURE (required articles):
 
 %%TAX_APPORTIONMENT%%
 
+%%CLAUSE_LIBRARY%%
+
 CONSISTENCY RULE: You will receive a standardized CLIENT DATA BLOCK.
 Use EXACTLY the names, addresses, and relationships as provided —
 do not rephrase, abbreviate, or reformat any proper nouns.
@@ -161,12 +163,18 @@ Generate the complete, execution-ready will now. Include all required articles, 
     ((safeFirm as Record<string, unknown>)?.taxApportionmentMode as ApportionmentMode | undefined)
     ?? 'hybrid';
 
+  // Firm clause library, selected and resolved by unified-generator. Empty
+  // string when the firm has no approved clauses for this docType — the
+  // document then generates exactly as it did before the catalog was wired in.
+  const clauseBlock = ((safe as Record<string, unknown>)._clauseBlock as string) ?? '';
+
   const systemPrompt = WILL_SYSTEM_PROMPT_BASE
     .replace('%%FORMATTING_RULES%%', formattingRules)
     .replace(
       '%%TAX_APPORTIONMENT%%',
       buildApportionmentPromptBlock({ mode: apportionmentMode, instrument: 'will' }),
-    );
+    )
+    .replace('%%CLAUSE_LIBRARY%%', clauseBlock);
 
   const raw = await callAI(systemPrompt, userPrompt, safeFirm, {
     model: safeFirm?.documentDraftingModel || 'claude-opus-5',
