@@ -54,7 +54,9 @@ export type PackageFindingReason =
   | 'missing-instrument'
   | 'enclosure-mismatch'
   | 'statutory-limit'
-  | 'inoperative-provision';
+  | 'inoperative-provision'
+  | 'name-collision'
+  | 'suffix-dropped';
 
 export interface PackageFinding {
   /** docType of the document the finding is in. */
@@ -82,6 +84,37 @@ export interface PackageDoc {
   content: string;
   /** Documents that failed to generate are skipped. */
   status?: string;
+}
+
+/**
+ * Who a person is in the plan.
+ *
+ * The distinction that matters is IDENTITY vs. ROLE. `client`, `spouse`, and
+ * `child` each denote a distinct human being, so two of them sharing a name is
+ * evidence of a data error. `fiduciary` is a role *assignment* — the spouse is
+ * routinely also the executor and the POA agent — so fiduciary entries are
+ * duplicates of people already on the roster and must never be compared for
+ * collisions.
+ */
+export type PersonRole = 'client' | 'spouse' | 'child' | 'fiduciary';
+
+export interface PackagePerson {
+  /** Full name as recorded, including any suffix, e.g. "Constantine Rios Jr." */
+  name: string;
+  role: PersonRole;
+  /** Human-readable role for finding text, e.g. "child", "executor". */
+  label?: string;
+}
+
+/**
+ * Structured facts about the plan, supplied by the caller.
+ *
+ * Deliberately not parsed out of the generated prose: the pipeline already
+ * holds this as data, and regexing names out of legal text would invent
+ * failures that the roster answers exactly.
+ */
+export interface PackageContext {
+  people: PackagePerson[];
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +207,230 @@ function maskNestedTrusts(text: string): string {
     /\b(special|supplemental)\s+needs\s+trusts?\b/gi,
     (m) => 'x'.repeat(m.length),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Name handling
+// ---------------------------------------------------------------------------
+
+/**
+ * Generational suffixes, lowercased and stripped of punctuation. "V" is
+ * included but only ever matched as a whole trailing token, so a middle
+ * initial cannot be mistaken for one.
+ */
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v']);
+
+/** Case- and punctuation-insensitive form for comparing two names. */
+export function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.,]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Split a normalized name into its base and any trailing generational suffix. */
+export function splitSuffix(name: string): { base: string; suffix?: string } {
+  const tokens = normalizeName(name).split(' ').filter(Boolean);
+  if (tokens.length < 2) return { base: tokens.join(' ') };
+
+  const last = tokens[tokens.length - 1];
+  if (NAME_SUFFIXES.has(last)) {
+    return { base: tokens.slice(0, -1).join(' '), suffix: last };
+  }
+  return { base: tokens.join(' ') };
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The name minus its generational suffix, in the original casing.
+ *
+ * Findings are read by attorneys, so they must quote the name the way the
+ * document spells it. The normalized form is for comparison only and must
+ * never reach user-facing prose.
+ */
+function displayBase(name: string): string {
+  const tokens = name.trim().split(/\s+/);
+  if (tokens.length < 2) return name.trim();
+  const last = tokens[tokens.length - 1].replace(/[.,]/g, '').toLowerCase();
+  return NAME_SUFFIXES.has(last) ? tokens.slice(0, -1).join(' ') : name.trim();
+}
+
+/**
+ * A name repeated throughout an instrument has no meaningful single location,
+ * and pinning the finding to whichever heading happened to precede the first
+ * hit (often the letterhead) reads as precision that isn't there.
+ */
+const PERVASIVE_THRESHOLD = 3;
+
+/**
+ * Matches a name in document text while tolerating the whitespace and
+ * punctuation that rendering introduces, and refusing to match when a
+ * generational suffix follows.
+ *
+ * The negative lookahead is what makes the suffix-drop check honest: without
+ * it, "Constantine Rios Jr." would itself count as a suffix-dropped reference,
+ * because the base name is a prefix of the full one.
+ */
+function buildBareNameRegex(base: string): RegExp {
+  const pattern = escapeRegex(base).replace(/ /g, '[\\s.,]+');
+  const suffixAlt = [...NAME_SUFFIXES].join('|');
+  return new RegExp(`\\b${pattern}\\b(?![\\s,]*(?:${suffixAlt})\\b)`, 'gi');
+}
+
+/** People whose names denote distinct human beings — see PersonRole. */
+const IDENTITY_ROLES: ReadonlySet<PersonRole> = new Set<PersonRole>(['client', 'spouse', 'child']);
+
+function countMatches(text: string, rx: RegExp): number {
+  rx.lastIndex = 0;
+  let n = 0;
+  while (rx.exec(text) !== null) n++;
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Check 7 — two different people share a name
+// ---------------------------------------------------------------------------
+
+/**
+ * A beneficiary whose full name equals the testator's or a settlor's makes
+ * every gift to that name ambiguous on the face of the instrument, and the
+ * prose reads perfectly well either way — which is what makes it dangerous.
+ *
+ * Observed in a real generated trust: the settlor and his son were both
+ * rendered "CONSTANTINE RIOS" because the son's "Jr." was never captured, so
+ * "When CONSTANTINE RIOS reaches 40 years of age" sat in the dispositive
+ * article alongside "CONSTANTINE RIOS" as settlor and trustee.
+ *
+ * Roster-level, so it fires on the underlying data error rather than on one
+ * document's rendering of it — one collision, one finding, one fix.
+ */
+function checkNameCollision(docs: PackageDoc[], context: PackageContext): PackageFinding[] {
+  const people = context.people.filter(
+    (p) => IDENTITY_ROLES.has(p.role) && normalizeName(p.name).split(' ').filter(Boolean).length >= 2,
+  );
+
+  const findings: PackageFinding[] = [];
+  const reported = new Set<string>();
+
+  for (let i = 0; i < people.length; i++) {
+    for (let j = i + 1; j < people.length; j++) {
+      const a = people[i];
+      const b = people[j];
+      const key = normalizeName(a.name);
+      if (key !== normalizeName(b.name)) continue;
+      if (reported.has(key)) continue;
+      reported.add(key);
+
+      // Attribute the finding to the instrument where the ambiguous name
+      // appears most often — that is the one a reviewer should open first.
+      const rx = new RegExp(`\\b${escapeRegex(key).replace(/ /g, '[\\s.,]+')}\\b`, 'gi');
+      let worst: { doc: PackageDoc; count: number } | null = null;
+      let affected = 0;
+      for (const doc of docs) {
+        const count = countMatches(htmlToText(doc.content), rx);
+        if (count === 0) continue;
+        affected++;
+        if (!worst || count > worst.count) worst = { doc, count };
+      }
+      if (!worst) continue;
+
+      const roleA = a.label ?? a.role;
+      const roleB = b.label ?? b.role;
+      const worstText = htmlToText(worst.doc.content);
+      rx.lastIndex = 0;
+      const firstHit = rx.exec(worstText);
+      findings.push({
+        docType: worst.doc.docType,
+        title: worst.doc.title,
+        location:
+          worst.count > PERVASIVE_THRESHOLD || !firstHit
+            ? 'Throughout'
+            : locateSection(worstText, firstHit.index),
+        severity: 'high',
+        reason: 'name-collision',
+        summary: `"${a.name}" names both the ${roleA} and the ${roleB}`,
+        detail:
+          `Two different people in this plan are recorded under the identical name ` +
+          `"${a.name}" — one as the ${roleA}, one as the ${roleB}. The name appears ` +
+          `${worst.count} time${worst.count === 1 ? '' : 's'} in this document and in ` +
+          `${affected} document${affected === 1 ? '' : 's'} overall, so every reference to it ` +
+          `is ambiguous on the face of the instrument. If they are distinguished in life by a ` +
+          `generational suffix, record it (for example "Jr.") and regenerate; otherwise add a ` +
+          `middle name or other identifier so each gift names one person only.`,
+      });
+    }
+  }
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
+// Check 8 — a generational suffix was dropped in the generated text
+// ---------------------------------------------------------------------------
+
+/**
+ * The roster is right but a document rendered the person without their suffix.
+ * Distinct from a collision in the roster: the data is correct and the drafting
+ * lost it, so the fix is in the template or the fill, not the intake.
+ *
+ * Severity turns on consequence. If dropping the suffix makes the reference
+ * indistinguishable from another person in the plan, the gift is ambiguous and
+ * it is high. If not, it is an identification inconsistency across documents —
+ * worth correcting, not worth alarming over.
+ */
+function checkSuffixDropped(docs: PackageDoc[], context: PackageContext): PackageFinding[] {
+  const findings: PackageFinding[] = [];
+
+  const identityNames = context.people
+    .filter((p) => IDENTITY_ROLES.has(p.role))
+    .map((p) => ({ person: p, normalized: normalizeName(p.name) }));
+
+  for (const person of context.people) {
+    const { base, suffix } = splitSuffix(person.name);
+    if (!suffix || base.split(' ').filter(Boolean).length < 2) continue;
+
+    // Does the bare name belong to somebody else in the plan?
+    const collidesWith = identityNames.find(
+      (p) => p.normalized === base && normalizeName(p.person.name) !== normalizeName(person.name),
+    );
+
+    const rx = buildBareNameRegex(base);
+    for (const doc of docs) {
+      const text = htmlToText(doc.content);
+      rx.lastIndex = 0;
+      const first = rx.exec(text);
+      if (!first) continue;
+      const count = countMatches(text, rx) ;
+
+      const otherRole = collidesWith ? (collidesWith.person.label ?? collidesWith.person.role) : null;
+      const shown = displayBase(person.name);
+      const times = `${count} time${count === 1 ? '' : 's'}`;
+      findings.push({
+        docType: doc.docType,
+        title: doc.title,
+        location: count > PERVASIVE_THRESHOLD ? 'Throughout' : locateSection(text, first.index),
+        severity: collidesWith ? 'high' : 'low',
+        reason: 'suffix-dropped',
+        summary: collidesWith
+          ? `"${person.name}" appears without their suffix, matching the ${otherRole}`
+          : `"${person.name}" appears without their "${suffix.toUpperCase()}" suffix`,
+        detail: collidesWith
+          ? `This document refers to ${person.name} as "${shown}" — without the generational ` +
+            `suffix — ${times}. Because "${shown}" is also the ${otherRole}'s full name, each of ` +
+            `those references is ambiguous between two people, and the prose reads correctly ` +
+            `either way. Restore the suffix everywhere this person is named.`
+          : `This document refers to ${person.name} as "${shown}" — without the generational ` +
+            `suffix — ${times}, while the name is recorded with it elsewhere in the plan. ` +
+            `Inconsistent identification across instruments invites questions at probate or from ` +
+            `a title company. Restore the suffix, or drop it consistently if it is not part of ` +
+            `their legal name.`,
+      });
+    }
+  }
+  return findings;
 }
 
 // ---------------------------------------------------------------------------
@@ -546,7 +803,10 @@ const SEVERITY_RANK: Record<PackageFindingSeverity, number> = { high: 0, medium:
  * Findings come back sorted most-urgent-first, then grouped by document, so the
  * caller can render the list without further processing.
  */
-export function reviewPackage(docs: PackageDoc[]): PackageFinding[] {
+export function reviewPackage(
+  docs: PackageDoc[],
+  context?: PackageContext,
+): PackageFinding[] {
   const reviewable = docs.filter((d) => d.status !== 'error' && (d.content ?? '').trim().length > 0);
   if (reviewable.length === 0) return [];
 
@@ -555,6 +815,13 @@ export function reviewPackage(docs: PackageDoc[]): PackageFinding[] {
   // Package-level checks — these need the whole set.
   findings.push(...checkMissingInstrument(reviewable));
   findings.push(...checkEnclosureMismatch(reviewable));
+
+  // Roster-driven checks. Skipped entirely without a roster: guessing at names
+  // from the prose would manufacture findings the caller can already answer.
+  if (context?.people?.length) {
+    findings.push(...checkNameCollision(reviewable, context));
+    findings.push(...checkSuffixDropped(reviewable, context));
+  }
 
   // Per-document checks.
   for (const doc of reviewable) {

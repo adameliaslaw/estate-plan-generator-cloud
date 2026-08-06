@@ -475,3 +475,255 @@ describe('locateSection — letterhead is not a heading', () => {
     expect(locateSection(t, t.indexOf('A provision'))).toBe('Elias Counsel Llc');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Roster-driven checks — name collision and dropped generational suffix
+// ---------------------------------------------------------------------------
+
+import { normalizeName, splitSuffix, type PackageContext } from '../../functions/src/package-review';
+import { buildPackageContext, personName } from '../../functions/src/package-review-roster';
+
+describe('name utilities', () => {
+  it('normalizes case, punctuation, and spacing', () => {
+    expect(normalizeName('  Constantine   RIOS,  Jr. ')).toBe('constantine rios jr');
+  });
+
+  it('splits a trailing generational suffix off the base name', () => {
+    expect(splitSuffix('Constantine Rios Jr.')).toEqual({ base: 'constantine rios', suffix: 'jr' });
+    expect(splitSuffix('Howard Moore III')).toEqual({ base: 'howard moore', suffix: 'iii' });
+  });
+
+  it('does not treat a middle initial as a suffix', () => {
+    // "V" is a valid suffix token, but only as the trailing one.
+    expect(splitSuffix('Adam V. Elias')).toEqual({ base: 'adam v elias' });
+    expect(splitSuffix('Adam Elias V')).toEqual({ base: 'adam elias', suffix: 'v' });
+  });
+});
+
+describe('name-collision', () => {
+  const ROSTER: PackageContext = {
+    people: [
+      { name: 'Constantine Rios', role: 'client', label: 'settlor' },
+      { name: 'Denissie Rios', role: 'spouse', label: 'spouse' },
+      { name: 'Constantine Rios', role: 'child', label: 'child' },
+      { name: 'Dominick Rios', role: 'child', label: 'child' },
+    ],
+  };
+
+  const TRUST = doc(
+    'trust',
+    `<h2>DISPOSITION</h2>
+     <p>The trustee shall distribute 33.3% of the final trust estate to a separate trust for
+     CONSTANTINE RIOS. When CONSTANTINE RIOS reaches 40 years of age, they shall become
+     vested in the entire principal.</p>`,
+    'The Rios Family Living Trust',
+  );
+
+  it('flags a beneficiary whose full name equals the settlor\'s', () => {
+    const hits = reviewPackage([TRUST], ROSTER).filter((f) => f.reason === 'name-collision');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('high');
+    expect(hits[0].summary).toContain('settlor');
+    expect(hits[0].summary).toContain('child');
+  });
+
+  it('reports one finding per collision, not one per document', () => {
+    const hits = reviewPackage([TRUST, { ...TRUST, docType: 'pourOverWill' }], ROSTER)
+      .filter((f) => f.reason === 'name-collision');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].detail).toMatch(/2 documents overall/);
+  });
+
+  it('locates a collision honestly rather than defaulting to a stock label', () => {
+    const once = reviewPackage(
+      [doc('trust', '<h3>Section 4.02</h3><p>A share for CONSTANTINE RIOS.</p>')],
+      ROSTER,
+    ).filter((f) => f.reason === 'name-collision');
+    expect(once[0].location).toBe('Section 4.02');
+
+    const pervasive = doc('trust', '<p>CONSTANTINE RIOS shall take. </p>'.repeat(6));
+    const many = reviewPackage([pervasive], ROSTER).filter((f) => f.reason === 'name-collision');
+    expect(many[0].location).toBe('Throughout');
+  });
+
+  it('stays silent once the suffix distinguishes them', () => {
+    const fixed: PackageContext = {
+      people: ROSTER.people.map((p) =>
+        p.role === 'child' && p.name === 'Constantine Rios' ? { ...p, name: 'Constantine Rios Jr.' } : p,
+      ),
+    };
+    expect(reviewPackage([TRUST], fixed).filter((f) => f.reason === 'name-collision')).toHaveLength(0);
+  });
+
+  it('does not flag one person holding several fiduciary roles', () => {
+    // The spouse is routinely also the executor and the POA agent. That is one
+    // person in three roles, not three people sharing a name.
+    const ctx: PackageContext = {
+      people: [
+        { name: 'Adam Elias', role: 'client', label: 'testator' },
+        { name: 'Karen Elias', role: 'spouse', label: 'spouse' },
+        { name: 'Karen Elias', role: 'fiduciary', label: 'executor' },
+        { name: 'Karen Elias', role: 'fiduciary', label: 'power of attorney' },
+      ],
+    };
+    const docs = [doc('will', '<p>I appoint KAREN ELIAS as my executor.</p>')];
+    expect(reviewPackage(docs, ctx).filter((f) => f.reason === 'name-collision')).toHaveLength(0);
+  });
+
+  it('stays silent when the shared name never appears in any document', () => {
+    const docs = [doc('poa', '<p>I appoint an agent to act for me.</p>')];
+    expect(reviewPackage(docs, ROSTER).filter((f) => f.reason === 'name-collision')).toHaveLength(0);
+  });
+
+  it('runs no roster checks at all without a roster', () => {
+    const all = reviewPackage([TRUST]);
+    expect(all.filter((f) => f.reason === 'name-collision')).toHaveLength(0);
+    expect(all.filter((f) => f.reason === 'suffix-dropped')).toHaveLength(0);
+  });
+});
+
+describe('suffix-dropped', () => {
+  const ROSTER: PackageContext = {
+    people: [
+      { name: 'Constantine Rios', role: 'client', label: 'settlor' },
+      { name: 'Constantine Rios Jr.', role: 'child', label: 'child' },
+    ],
+  };
+
+  it('flags a bare reference that collides with another person, at high severity', () => {
+    const hits = reviewPackage(
+      [doc('trust', '<p>A share for CONSTANTINE RIOS, to vest at 40.</p>', 'Rios Trust')],
+      ROSTER,
+    ).filter((f) => f.reason === 'suffix-dropped');
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('high');
+    expect(hits[0].detail).toMatch(/ambiguous between two people/);
+  });
+
+  it('does not count the correctly suffixed name as a dropped reference', () => {
+    const hits = reviewPackage(
+      [doc('trust', '<p>A share for CONSTANTINE RIOS JR., to vest at 40.</p>')],
+      ROSTER,
+    ).filter((f) => f.reason === 'suffix-dropped');
+    expect(hits).toHaveLength(0);
+  });
+
+  it('tolerates the punctuation and spacing rendering introduces', () => {
+    const hits = reviewPackage(
+      [doc('trust', '<p>A share for Constantine\n  Rios,  Jr. shall vest at 40.</p>')],
+      ROSTER,
+    ).filter((f) => f.reason === 'suffix-dropped');
+    expect(hits).toHaveLength(0);
+  });
+
+  it('treats a harmless inconsistency as low severity', () => {
+    const ctx: PackageContext = {
+      people: [
+        { name: 'Adam Elias', role: 'client', label: 'testator' },
+        { name: 'Howard Moore III', role: 'fiduciary', label: 'executor' },
+      ],
+    };
+    const hits = reviewPackage(
+      [doc('will', '<p>I appoint HOWARD MOORE as my executor.</p>')],
+      ctx,
+    ).filter((f) => f.reason === 'suffix-dropped');
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('low');
+    expect(hits[0].summary).toContain('III');
+  });
+
+  it('flags a possessive reference, which is still a dropped suffix', () => {
+    const hits = reviewPackage(
+      [doc('trust', "<p>CONSTANTINE RIOS's share shall be held in trust.</p>")],
+      ROSTER,
+    ).filter((f) => f.reason === 'suffix-dropped');
+    expect(hits).toHaveLength(1);
+  });
+
+  it('quotes the name in its original casing, never the normalized form', () => {
+    // The normalized string is for comparison only. An attorney reading
+    // 'constantine rios' in a finding would take it for a bug.
+    const hits = reviewPackage(
+      [doc('trust', '<p>A share for CONSTANTINE RIOS, to vest at 40.</p>')],
+      ROSTER,
+    ).filter((f) => f.reason === 'suffix-dropped');
+    expect(hits[0].detail).toContain('"Constantine Rios"');
+    expect(hits[0].detail).not.toContain('constantine rios');
+  });
+
+  it('says "Throughout" rather than pinpointing a pervasive name', () => {
+    // Pinning to whichever heading preceded the first hit — often letterhead —
+    // claims a precision the finding does not have.
+    const body = '<p>CONSTANTINE RIOS shall take. </p>'.repeat(6);
+    const hits = reviewPackage([doc('trust', `<h2>ELIAS COUNSEL LLC</h2>${body}`)], ROSTER)
+      .filter((f) => f.reason === 'suffix-dropped');
+    expect(hits[0].location).toBe('Throughout');
+  });
+
+  it('still pinpoints a section when the name appears only once or twice', () => {
+    const hits = reviewPackage(
+      [doc('trust', '<h3>Section 4.02</h3><p>A share for CONSTANTINE RIOS.</p>')],
+      ROSTER,
+    ).filter((f) => f.reason === 'suffix-dropped');
+    expect(hits[0].location).toBe('Section 4.02');
+  });
+
+  it('says nothing about people whose names carry no suffix', () => {
+    const ctx: PackageContext = {
+      people: [
+        { name: 'Adam Elias', role: 'client' },
+        { name: 'Karen Elias', role: 'spouse' },
+      ],
+    };
+    const hits = reviewPackage([doc('will', '<p>I give all to KAREN ELIAS.</p>')], ctx)
+      .filter((f) => f.reason === 'suffix-dropped');
+    expect(hits).toHaveLength(0);
+  });
+});
+
+describe('buildPackageContext', () => {
+  it('prefers split name parts and includes the suffix', () => {
+    expect(personName({ firstName: 'Constantine', lastName: 'Rios', suffix: 'Jr.' }))
+      .toBe('Constantine Rios Jr.');
+  });
+
+  it('falls back to the legacy joined name for pre-refactor records', () => {
+    expect(personName({ name: 'Dominick Rios' })).toBe('Dominick Rios');
+  });
+
+  it('collects client, spouse, children, and fiduciaries with readable labels', () => {
+    const { people } = buildPackageContext({
+      personalInfo: { firstName: 'Constantine', lastName: 'Rios' },
+      spouseInfo: { firstName: 'Denissie', lastName: 'Rios' },
+      children: [
+        { firstName: 'Constantine', lastName: 'Rios', suffix: 'Jr.' },
+        { name: 'Dominick Rios' },
+      ],
+      fiduciaries: { powerOfAttorney: { name: 'Denissie Rios' } },
+    });
+
+    expect(people.map((p) => `${p.role}:${p.name}`)).toEqual([
+      'client:Constantine Rios',
+      'spouse:Denissie Rios',
+      'child:Constantine Rios Jr.',
+      'child:Dominick Rios',
+      'fiduciary:Denissie Rios',
+    ]);
+    expect(people.find((p) => p.role === 'fiduciary')?.label).toBe('power of attorney');
+  });
+
+  it('drops single-token and empty names rather than comparing them', () => {
+    const { people } = buildPackageContext({
+      personalInfo: { firstName: 'Cher' },
+      children: [{ name: '' }, { name: '   ' }],
+    });
+    expect(people).toEqual([]);
+  });
+
+  it('survives a client record with nothing on it', () => {
+    expect(buildPackageContext(null).people).toEqual([]);
+    expect(buildPackageContext({}).people).toEqual([]);
+  });
+});

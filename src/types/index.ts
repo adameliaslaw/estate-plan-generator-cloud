@@ -847,7 +847,9 @@ export type PackageFindingReason =
   | 'missing-instrument'
   | 'enclosure-mismatch'
   | 'statutory-limit'
-  | 'inoperative-provision';
+  | 'inoperative-provision'
+  | 'name-collision'
+  | 'suffix-dropped';
 
 export interface PackageFinding {
   docType: string;

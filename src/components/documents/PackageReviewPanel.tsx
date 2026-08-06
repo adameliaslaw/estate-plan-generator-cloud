@@ -79,6 +79,8 @@ const REASON_LABELS: Record<PackageFindingReason, string> = {
   'enclosure-mismatch': 'Enclosure list mismatch',
   'statutory-limit': 'Verify against statute',
   'inoperative-provision': 'No operative effect',
+  'name-collision': 'Two people, one name',
+  'suffix-dropped': 'Name inconsistency',
 };
 
 // ---------------------------------------------------------------------------

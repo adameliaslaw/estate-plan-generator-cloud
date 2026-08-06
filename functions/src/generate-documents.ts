@@ -18,6 +18,7 @@ import {
 } from './unified-generator';
 import { aggregateClientContext } from './client-context-aggregator';
 import { reviewPackage, summarizeFindings } from './package-review';
+import { buildPackageContext } from './package-review-roster';
 import {
   DocxTemplateMapping,
   fillDocxForEntry,
@@ -371,6 +372,9 @@ export const generateDocuments = onCall(
         content: r.content,
         status: r.status,
       })),
+      // The roster comes from the client record we already loaded, so the
+      // name checks compare against data rather than guessing at the prose.
+      buildPackageContext(preloadedContext?.client),
     );
     const reviewSummary = summarizeFindings(packageFindings);
 
