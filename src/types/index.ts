@@ -850,7 +850,8 @@ export type PackageFindingReason =
   | 'inoperative-provision'
   | 'name-collision'
   | 'suffix-dropped'
-  | 'missing-apportionment';
+  | 'missing-apportionment'
+  | 'toc-mismatch';
 
 export interface PackageFinding {
   docType: string;

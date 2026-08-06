@@ -819,3 +819,69 @@ describe('missing-apportionment', () => {
       .toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Check — contents page that promises sections the document lacks
+// ---------------------------------------------------------------------------
+
+describe('toc-mismatch', () => {
+  const toc = (titles: string[]) =>
+    titles.map((t, i) => `<p>1.${String(i + 1).padStart(2, '0')} ${t}</p>`).join('');
+  const body = (titles: string[]) =>
+    titles.map((t) => `<h3>${t}</h3><p>${'Operative provision text. '.repeat(20)}</p>`).join('');
+
+  const LISTED = [
+    'Opening Declaration', 'Family', 'Trust Estate', 'Successor Trustees',
+    'Waiver of Bond', 'Trustee Powers', 'Marital Trust', 'Bypass Trust',
+    'Disclaimer Trust', 'Family Pot Trust',
+  ];
+  const PRESENT = LISTED.slice(0, 6);
+
+  it('flags a contents page listing sections that appear nowhere in the body', () => {
+    const hits = reviewPackage([doc('trust', toc(LISTED) + body(PRESENT), 'The Family Trust')])
+      .filter((f) => f.reason === 'toc-mismatch');
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('medium');
+    expect(hits[0].location).toBe('Table of Contents');
+    expect(hits[0].summary).toContain('4 section(s)');
+    expect(hits[0].detail).toContain('Marital Trust');
+  });
+
+  it('stays silent when the contents page matches the document', () => {
+    const hits = reviewPackage([doc('trust', toc(PRESENT) + body(PRESENT))])
+      .filter((f) => f.reason === 'toc-mismatch');
+    expect(hits).toHaveLength(0);
+  });
+
+  it('tolerates dot leaders, page numbers, and tab artifacts', () => {
+    // Real contents pages carry this debris; the body headings do not. Comparing
+    // raw titles reported EVERY entry as missing on both real trusts (78 of 78).
+    const noisy = LISTED.map(
+      (t, i) => `<p>1.${String(i + 1).padStart(2, '0')} ${t}[ ] ...... ${i + 3}</p>`,
+    ).join('');
+    const hits = reviewPackage([doc('trust', noisy + body(LISTED))])
+      .filter((f) => f.reason === 'toc-mismatch');
+    expect(hits).toHaveLength(0);
+  });
+
+  it('ignores a document with no contents page', () => {
+    const hits = reviewPackage([doc('will', body(PRESENT))])
+      .filter((f) => f.reason === 'toc-mismatch');
+    expect(hits).toHaveLength(0);
+  });
+
+  it('does not treat a couple of reworded headings as a broken contents page', () => {
+    // Ordinary drift in how a heading was phrased is not the defect this looks
+    // for; a systematically wrong contents page is.
+    const hits = reviewPackage([doc('trust', toc(LISTED) + body(LISTED.slice(0, 8)))])
+      .filter((f) => f.reason === 'toc-mismatch');
+    expect(hits).toHaveLength(0);
+  });
+
+  it('needs a real run of numbered lines, not a few numbered paragraphs', () => {
+    const few = '<p>1.01 Opening Declaration</p><p>1.02 Family</p>' + body(['Something Else']);
+    expect(reviewPackage([doc('trust', few)]).filter((f) => f.reason === 'toc-mismatch'))
+      .toHaveLength(0);
+  });
+});

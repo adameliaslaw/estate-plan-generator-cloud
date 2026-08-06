@@ -82,6 +82,7 @@ const REASON_LABELS: Record<PackageFindingReason, string> = {
   'name-collision': 'Two people, one name',
   'suffix-dropped': 'Name inconsistency',
   'missing-apportionment': 'Death tax unallocated',
+  'toc-mismatch': 'Contents page is wrong',
 };
 
 // ---------------------------------------------------------------------------

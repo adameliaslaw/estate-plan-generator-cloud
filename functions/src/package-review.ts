@@ -57,7 +57,8 @@ export type PackageFindingReason =
   | 'inoperative-provision'
   | 'name-collision'
   | 'suffix-dropped'
-  | 'missing-apportionment';
+  | 'missing-apportionment'
+  | 'toc-mismatch';
 
 export interface PackageFinding {
   /** docType of the document the finding is in. */
@@ -517,6 +518,106 @@ function checkMissingApportionment(
 }
 
 // ---------------------------------------------------------------------------
+// Check 10 — a table of contents that promises sections the document lacks
+// ---------------------------------------------------------------------------
+
+/**
+ * A generated instrument whose table of contents is a static master list of
+ * every section the template *can* emit, rather than one built from the
+ * sections it actually emitted.
+ *
+ * Observed in a real generated trust: the TOC listed a Marital Trust, Bypass
+ * Trust, Disclaimer Trust, Survivor's Trust, Family Pot Trust, and Qualified
+ * Domestic Trust. A full-text search of that document's body found ZERO
+ * occurrences of any of them — not zero headings, zero mentions. A successor
+ * trustee navigating by the contents page would conclude the marital and
+ * bypass provisions had been omitted in error, or that pages were missing from
+ * their copy.
+ *
+ * Matched on the body TEXT rather than on heading structure, because a section
+ * can legitimately be rendered at a different heading level than the TOC
+ * implies. Only a title that appears nowhere in the body at all is reported.
+ */
+
+/** A TOC line: leading section number, then the title. */
+const TOC_LINE = /^\s*(\d+\.\d+)\s*([A-Z][^\n]{2,70}?)\s*(?:\.{2,}\s*\d+)?\s*$/;
+
+/**
+ * Strip the trailing debris a contents page carries — dot leaders, page
+ * numbers, tab-stop and field artifacts — so the title compares against body
+ * prose rather than against its own formatting.
+ *
+ * Without this the check reported EVERY entry as missing on both real trusts
+ * (78 of 78), because their TOC lines end in a bracketed tab artifact the body
+ * headings do not have. A check that flags everything is worse than no check.
+ */
+function normalizeTocTitle(raw: string): string {
+  return raw
+    .replace(/\[\s*\]/g, ' ')          // bracketed tab/field artifacts
+    .replace(/\.{2,}\s*\d*\s*$/, ' ')  // dot leaders and page numbers
+    .replace(/\s*\d+\s*$/, ' ')        // a bare trailing page number
+    // \u00A0 written as an escape: a literal NBSP in source trips no-irregular-whitespace.
+    .replace(/[\s\u00A0]+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/** Enough consecutive numbered lines to be a contents page rather than prose. */
+const MIN_TOC_ENTRIES = 8;
+
+function checkTocMismatch(doc: PackageDoc, text: string): PackageFinding[] {
+  const lines = text.split('\n');
+
+  // Locate the TOC: the longest run of numbered title lines near the top.
+  const entries: Array<{ num: string; title: string; key: string; line: number }> = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(TOC_LINE);
+    if (!m) continue;
+    const key = normalizeTocTitle(m[2]);
+    if (key.length < 4) continue;
+    entries.push({ num: m[1], title: m[2].replace(/\[\s*\]/g, '').trim(), key, line: i });
+  }
+  if (entries.length < MIN_TOC_ENTRIES) return [];
+
+  // Body is everything after the last TOC entry.
+  const tocEnd = entries[entries.length - 1].line;
+  const body = lines.slice(tocEnd + 1).join('\n');
+  if (body.split(/\s+/).length < 200) return [];
+
+  // Normalise the body the same way, so a heading rendered with its own tab or
+  // page artifacts still matches the contents entry that points at it.
+  const bodyKey = normalizeTocTitle(body.replace(/\n/g, ' '));
+  const missing = entries.filter((e) => !bodyKey.includes(e.key)).map((e) => e.title);
+
+  // A couple of near-misses are ordinary drift in how a heading was worded.
+  // A contents page is only *wrong* when it systematically promises sections
+  // that were never generated.
+  if (missing.length < 3) return [];
+
+  const shown = missing.slice(0, 6).join(', ');
+  const more = missing.length > 6 ? `, and ${missing.length - 6} more` : '';
+
+  return [
+    {
+      docType: doc.docType,
+      title: doc.title,
+      location: 'Table of Contents',
+      severity: 'medium',
+      reason: 'toc-mismatch',
+      summary: `Table of contents lists ${missing.length} section(s) not present in the document`,
+      detail:
+        `The contents page for this document lists sections that do not appear anywhere in its ` +
+        `body: ${shown}${more}. That is the signature of a table of contents assembled from a ` +
+        `master list of every section the template can produce, rather than from the sections ` +
+        `this document actually contains. A reader navigating by the contents page — a ` +
+        `successor fiduciary, opposing counsel, a court — would reasonably conclude that ` +
+        `provisions were omitted in error or that pages are missing. Regenerate the contents ` +
+        `page from the delivered document.`,
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // docType groupings
 // ---------------------------------------------------------------------------
 
@@ -914,6 +1015,7 @@ export function reviewPackage(
     findings.push(...checkUnfilledBlanks(doc, text));
     findings.push(...checkUtmaAgeCap(doc, text));
     findings.push(...checkInoperativeSnt(doc, text));
+    findings.push(...checkTocMismatch(doc, text));
   }
 
   return findings.sort(
