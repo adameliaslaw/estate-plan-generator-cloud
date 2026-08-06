@@ -36,6 +36,7 @@ import { runCatalog, assembleUnionTemplate } from './stages/catalog.js';
 import { runSeed } from './stages/seed.js';
 import { runCalibrate } from './stages/calibrate.js';
 import { runGates } from './stages/gates.js';
+import { runClauseAudit } from './stages/clause-audit.js';
 import { formatPreflight, runPreflight } from './stages/preflight.js';
 import type { BatchClient, DocStore } from './clients/interfaces.js';
 
@@ -56,6 +57,7 @@ const STAGES = [
   'catalog', // Stage 9 — catalog write (§9); union template is checkpoint-2
   'gates', // Stage V — §11 P3 validation gates; gates Adam's review
   'template', // Stage 9b — union template assembly (checkpoint-2 stub)
+  'clause-audit', // HOMEWORK J1 — read-only corpus composition audit; metadata only, spends nothing
 ] as const;
 
 type Stage = (typeof STAGES)[number];
@@ -209,6 +211,14 @@ async function main(): Promise<void> {
     }
     case 'template': {
       assembleUnionTemplate();
+      break;
+    }
+    case 'clause-audit': {
+      const report = await runClauseAudit({ store, blobs }, env);
+      console.log('clause-audit:', JSON.stringify(report, null, 2));
+      // An empty catalog is an ERROR, not a finding of "no families" — it must
+      // not read as a successful audit to whoever dispatched this (rule 10).
+      if (report.catalog.status === 'empty') process.exitCode = 4;
       break;
     }
   }

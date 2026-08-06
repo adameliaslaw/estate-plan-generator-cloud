@@ -46,6 +46,7 @@ on:
           - stats
           - catalog
           - gates
+          - clause-audit
       firm_id:
         description: 'FIRM_ID — Firestore scope firms/{firmId}/…'
         type: string
