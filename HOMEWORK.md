@@ -4,6 +4,136 @@ Items requiring human action or decisions before the next agent session can proc
 
 ---
 
+# ⏸ PAUSED 2026-08-06 — START HERE IF YOU ARE A NEW SESSION
+
+**The ordered list below is paused at Adam's instruction.** Do not pick items off it until the
+competitive-review pass described here is done. Nothing in it is blocked or broken; it is
+deliberately set down.
+
+## What the next session is for
+
+Adam has recorded **several full-screen videos** of estate-planning software and has documents to go
+with them. The next session reviews them and scopes what, if anything, we build.
+
+### Intent — read this before touching any of it
+
+Adam's words, 2026-08-06:
+
+> *"the intent here is not to steal another company's proprietary data and ship the product. The
+> intent is to do a deep dive in all the features of different software's and documents to
+> substitute, complement, and/or reaffirm decisions previously made with our own engineering
+> intuition."*
+
+Three outcomes are all wins, and **"reaffirm" is a real outcome, not a consolation prize.** If a
+review concludes we already had it right, say so plainly and move on — do not manufacture a backlog
+item to justify the time spent. Equally, if something we built is worse, say that too.
+
+The failure mode to avoid is *cargo-culting*: copying a competitor's shape because it exists rather
+than because it solves a problem we actually have. Every item that comes out of this pass should
+name the problem it solves for **this firm**, not the screen it was seen on.
+
+### The operative line — what may and may not be used
+
+This is settled; do not re-litigate it, and do not widen it.
+
+| | |
+|---|---|
+| ✅ **Feature and design observation from the product UI** — what screens exist, what a setting controls, what the information architecture is, what a workflow's steps are. This is ordinary competitive product analysis. Describe it, reason about it, decide whether we want an equivalent, and build our own. | |
+| ✅ **Our own independent implementation** of a capability we decide we want, written from our own understanding of the legal problem. | |
+| ❌ **Competitor document text.** The Statular documents Adam holds carry a **single-matter licence**: no use as a template / form / exemplar / starting point; no extraction, copying, paraphrasing or adaptation of any clause, provision, structure or organisational scheme for use elsewhere; no creation of any clause library, form bank, drafting system, knowledge base or training corpus from them; no reverse engineering. Free-trial documents additionally may not be used to provide legal services to a client. | |
+| ❌ **Their content in our stores.** Nothing from a competitor goes into `documentTemplates`, the knowledge base, or `clauseCatalog`. Not as a template, not as a seed, not as a "reference copy". | |
+| ⚠️ **Feeding competitor documents to an LLM.** The free-trial terms forbid it. Adam waived that clause *as the account holder, for the Rios trust evaluation only.* That waiver does not generalise — ask before doing it again with a different document. | |
+
+**Why the distinction holds:** looking at a settings screen and concluding "we need firm-level
+drafting defaults" is an idea, and the licence does not reach ideas. Lifting a paragraph of drafted
+trust prose is expression, and it does. When in doubt, the test is: *could I write this from the
+description alone, without the source document open?* If no, stop.
+
+Adam is the attorney and this is his call in the end — flag the question rather than deciding it
+alone if a genuinely new situation comes up.
+
+## Already reviewed — do not redo
+
+| Material | Verdict |
+|---|---|
+| `Dashboard _ Statular.mp4` (in repo, 11m24s) | **Dead capture.** Content stops changing at ~6s; frames at 3:20/6:40/10:00/11:23 differ by 35–107 px out of 921,600. The recorder froze on the New Matter dialog. The only salvage was two screens: the Dashboard and the Matters list. |
+| `Suggestions.mp4` (in repo, 13s) | Reviewed previously — the pre-generation AI suggestions. |
+| `ScreenRecording_08-06-2026 01-09-42_1.MP4` (Drive → `Statular/`, 5m42s) | **Fully reviewed 2026-08-06.** Interview Settings (9 sections), Client Experience (5 tabs), Clauses (57), Drafting Assistant, Flowcharts, Code Search. Everything material from it is already written up as sections D, E and F of the ordered list. |
+| `exported_50A2…jpeg`, `exported_97E5…jpeg` (on `main`) | iPhone Control Center; Settings → Client Experience. Folded into section E. |
+| `Adam_Elias_v1.docx`, `v2.docx`, `v1 (1).docx`, the Rios trust, + two later trust docs | Reviewed previously. **These are the licence-bearing documents** — the ❌ rows above are about these. |
+
+**Still never captured, and worth getting on video if the new set does not already cover it:** the
+Document Selection page a matter actually flows through (we have only the *defaults* screen that
+feeds it), a generated Flowchart's output (Adam's account had none), and what the Drafting Assistant
+returns for a real prompt rather than its empty state.
+
+## The practical pipeline — how to actually get a video reviewed
+
+This cost most of a session to work out. Do not rediscover it.
+
+**Getting the file in.** Both obvious routes fail on a real screen recording:
+
+- The **Google Drive connector caps downloads at 10 MB.** A 5-minute iPhone capture is ~140 MB.
+- **GitHub's web uploader ("Add files via upload") caps at 25 MB per file**; `git push` warns at
+  50 MB and hard-blocks at 100 MB. This is why the 2026-08-05 upload attempts failed — the file was
+  never going to land, and nothing was wrong with what Adam did.
+
+**What works:** Adam sets the file in Drive to *Anyone with the link → Viewer*, then:
+
+```bash
+# Large public Drive file. Clears the virus-scan interstitial, and — importantly —
+# fails LOUDLY rather than silently writing an HTML error page that looks like a video.
+ID=<drive file id>; OUT=/tmp/video.mp4
+url="https://drive.usercontent.google.com/download?id=${ID}&export=download"
+curl -sSL -c /tmp/cj -b /tmp/cj -o /tmp/dl.html "$url"
+tok=$(grep -o 'name="confirm" value="[^"]*"' /tmp/dl.html | head -1 | sed 's/.*value="\([^"]*\)".*/\1/')
+[ -n "$tok" ] && url="${url}&confirm=${tok}"
+curl -sSL -c /tmp/cj -b /tmp/cj -o "$OUT" "$url"
+file -b --mime-type "$OUT"   # must be video/mp4 — text/html means it is still private
+```
+
+If it redirects to `accounts.google.com`, the file is **still private** — that is a distinct
+failure, not an empty result. Say so; do not report "nothing found".
+
+**Reading the video.** No `ffmpeg` on PATH and `apt-get install ffmpeg` fails on this image. Use the
+one that ships with `imageio-ffmpeg`:
+
+```bash
+pip install imageio-ffmpeg   # already present as of 2026-08-06
+FF=$(python3 -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
+
+# iPhone captures are HEVC 10-bit HDR (bt2020/smpte2084). WITHOUT tonemapping every
+# frame extracts as washed-out grey and is unreadable.
+"$FF" -v error -i video.mp4 -vf \
+  "fps=2/3,zscale=t=linear:npl=100,tonemap=hable:desat=0,zscale=p=bt709:t=bt709:m=bt709:r=tv,format=yuv420p,scale=900:-1" \
+  -q:v 3 frames/f%03d.jpg
+```
+
+Then sample every ~15 s and read the frames. Deduping by pixel-difference does **not** work on a
+phone capture — continuous scrolling makes every frame "distinct" — so a fixed interval plus
+targeted fill-ins beats a clever threshold.
+
+**Sanity check the capture before reviewing it.** A frozen recorder looks exactly like a boring one.
+Compare two frames a few minutes apart; if they differ by a few dozen pixels out of ~1M, the
+recording died and only its clock is moving.
+
+## Where the paused work stands
+
+| | Status |
+|---|--------|
+| **PR #280** | ✅ **MERGED** 2026-08-06 as `96cc067` — package review engine + findings panel, NJ apportionment, clause catalog wired into generation. Adam signed off the `src/types/index.ts` Never-Break change. Functions + hosting deployed by CI on the merge. |
+| **A1** (PII scrub verification) | ✅ Done — verified it ran. Evidence in section A below. |
+| **B1** (Rule 7) | ✅ Lifted 2026-08-06 on Adam's instruction. Agent squash-merges are live again; Never-Break still needs sign-off. |
+| **B3** (five stale PRs: #266, #260, #258, #215, #21) | ⏸ Paused. Mine to execute. Needs a proper look at each first — do not merge them blind. |
+| **B4** (delete `feat/nj-inheritance-tax-engine`) | ⏸ Paused, **awaiting Adam's explicit go.** Verified fully superseded; deleting a remote branch is hard to reverse, so it was not done unilaterally. |
+| **C1** (clause library: curate ~60 vs unblock 276) | ⏸ Paused — and this is the one the video pass may well answer. It is upstream of C2/C3 and the PII tuning. |
+| Everything else | ⏸ Paused in place. Nothing is blocked; the list is intact below. |
+
+**To resume:** the ordered list picks up at **B3 / B4**, with **C1** as the first decision — unless
+the new review changes the ordering, which is a legitimate outcome of doing it.
+
+---
+
 # 📋 THE ORDERED LIST (2026-08-06) — work this top to bottom
 
 Everything outstanding, in one place, in the order it should happen. Previously the open items were
