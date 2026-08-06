@@ -1,9 +1,24 @@
 # Statular package analysis — branch homework
 
-**Branch:** `claude/statular-package-analysis`
-**Scope:** this file is deliberately branch-local. It does **not** replace the root
-`HOMEWORK.md`, which tracks main-line work and is being updated by the concurrent
-calibration effort. Do not merge this file's contents into the root file.
+**Scope:** a record of the 2026-08-02 DOCX forensics pass, kept beside the harness that produced
+it. It does **not** replace the root `HOMEWORK.md` and its contents should not be folded into it.
+
+> **⚠ Read this first — dated 2026-08-02, partially superseded 2026-08-06.**
+>
+> - **The "hard constraints" below are spent.** Rule 7 was un-suspended on 2026-08-06 (root
+>   HOMEWORK B1); the calibration task that motivated the freeze is finished. Agent squash-merges
+>   are live again. Never-Break changes still need Adam's sign-off, but that is the standing rule,
+>   not this branch's freeze.
+> - **A second, larger Statular pass has happened since** — five screen captures, 34.4 min, written
+>   up in root `STATULAR-VIDEO-REVIEW.md` and as section **J** of root `HOMEWORK.md`. Where the two
+>   disagree, the newer one wins: it observed the live product UI, whereas this file reasons from
+>   generated `.docx` output alone.
+> - **What is still uniquely here and worth keeping:** the determinism control (99.80% of paragraphs
+>   byte-identical across two runs of the same answers), the engine fingerprint, the ~31%
+>   boilerplate measurement, and the 8-for-8 validation of the `trust-joint.hbs` article spine. The
+>   video pass produced none of those.
+> - The two self-corrections in this file (the overstated TOC "defect", the retracted gap analysis)
+>   are kept deliberately. They are the reason for the discipline note at the end.
 
 ---
 
