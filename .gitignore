@@ -84,4 +84,6 @@ recent_changes.txt
 out/
 
 # Local Claude Code config (per-machine, not for repo)
-.claude/
+.claude/*
+# Exception: project-scoped settings are shared with collaborators
+!.claude/settings.json
