@@ -1,8 +1,9 @@
 /**
  * functions/src/nj-inheritance-tax.ts
  *
- * New Jersey transfer inheritance tax — beneficiary classification, the rate
- * schedule, and the apportionment clause our documents were missing.
+ * New Jersey transfer inheritance tax — the apportionment clause our documents
+ * were missing, plus the bridge from a free-text relationship to the filing
+ * engine's beneficiary class. Rates and computation live in the engine.
  *
  * WHY THIS EXISTS
  *
