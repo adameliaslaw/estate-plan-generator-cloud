@@ -83,17 +83,44 @@ screen, decide whether we want an equivalent, build our own.
 | `Dashboard _ Statular.mp4` (in repo, 11m24s) | **Dead capture.** Content stops changing at ~6s; frames at 3:20/6:40/10:00/11:23 differ by 35–107 px out of 921,600. The recorder froze on the New Matter dialog. The only salvage was two screens: the Dashboard and the Matters list. |
 | `Suggestions.mp4` (in repo, 13s) | Reviewed previously — the pre-generation AI suggestions. |
 | `ScreenRecording_08-06-2026 01-09-42_1.MP4` (Drive → `Statular/`, 5m42s) | **Fully reviewed 2026-08-06.** Interview Settings (9 sections), Client Experience (5 tabs), Clauses (57), Drafting Assistant, Flowcharts, Code Search. Everything material from it is already written up as sections D, E and F of the ordered list. |
+| `New Matter.mp4` (Drive → `Statular/`, 59s) | **Fully reviewed 2026-08-06 (second pass).** New-matter modal, clients list, client record, matter workspace, and the interview's **Document Selection** page — which closed that gap. Written up in section J. |
+| `Matter Dashboard.mp4` (Drive → `Statular/`, 2m14s) | **Fully reviewed 2026-08-06.** Matter tabs, seeded phase-based task checklist, generated-documents list with versioning and per-document suggestion dots, invoicing, embedded Word Online preview, audit history. |
+| `Client Questionnaire.mp4` (Drive → `Statular/`, 2m32s) | **Fully reviewed 2026-08-06.** The client-facing tokenised questionnaire — field patterns, asset capture with per-asset uploads, and the three-tier contingency ladder. Feeds J5 and J6. |
+| `Drafting Will Package (Individual).mp4` (Drive → `Statular/`, 7m45s) | **Fully reviewed 2026-08-06.** 15-page will interview, per-field Clause Library / Draft with AI, and the **Analysis & Review** panel — the most significant finding of the pass. Feeds J2. |
+| `Full User Experience.mp4` (Drive → `Statular/`, 20m25s) | **Reviewed 2026-08-06 — but it is not a product walkthrough.** 60%+ is a scroll through Statular's own User Guide; only the Dashboard (0:20) and the last ~3 minutes (Knowledge Base, Legal Research, Forum, Drafting Assistant, Flowcharts, Clauses) are live UI. That tail closed two of the three gaps. Do not assume a long capture is a long demo. |
 | `exported_50A2…jpeg`, `exported_97E5…jpeg` (on `main`) | iPhone Control Center; Settings → Client Experience. Folded into section E. |
 | `Adam_Elias_v1.docx`, `v2.docx`, `v1 (1).docx`, the Rios trust, + two later trust docs | Reviewed previously. These are the Statular documents carrying the single-matter language noted above — evaluation material, not a template source. |
 
-**Still never captured, and worth getting on video if the new set does not already cover it:** the
-Document Selection page a matter actually flows through (we have only the *defaults* screen that
-feeds it), a generated Flowchart's output (Adam's account had none), and what the Drafting Assistant
-returns for a real prompt rather than its empty state.
+**All three of those gaps are now closed or advanced by the second pass (2026-08-06)** — see section J
+and `STATULAR-VIDEO-REVIEW.md`:
+
+- **Document Selection** — closed. It is page 1 of the interview, and it composes the rest of it.
+- **Drafting Assistant on a real prompt** — closed. A general chat beside the product, not grounded
+  in the matter; it declines to name its own model.
+- **A generated Flowchart's output** — mechanism found (it generates from an *uploaded* document),
+  **output still uncaptured** because Adam's account has none. This is the only thing still worth
+  getting on video, and only if a flowchart is ever generated.
 
 ## The practical pipeline — how to actually get a video reviewed
 
 This cost most of a session to work out. Do not rediscover it.
+
+> **⚠ Partly superseded 2026-08-06 by the second pass. Read this box first — three of the steps
+> below are now unnecessary, and following them wastes time.**
+>
+> - **Downloading:** `yt-dlp -o NAME "https://drive.google.com/file/d/<ID>/view"` fetches a public
+>   Drive file directly. The curl / virus-scan-interstitial dance below is no longer needed. (The
+>   Drive **connector**'s 10 MB cap still stands — that part is correct.)
+> - **ffmpeg:** `apt-get install ffmpeg` **does** work, provided `apt-get update` runs first. The
+>   `imageio-ffmpeg` workaround is no longer needed.
+> - **Tonemapping:** required for **phone** captures only. The 2026-08-06 set are desktop
+>   h264 / yuv420p / 2560x1036 and need no tonemap filter. Check `pix_fmt` before assuming.
+> - **New — index before you read.** Crop the browser tab/URL strip every 15s and tile it:
+>   `ffmpeg -i V.mp4 -vf "fps=1/15,crop=1700:62:60:0,scale=1150:-1,tile=1x14" -q:v 3 idx_%02d.jpg`.
+>   Six small images indexed 20 minutes by URL and located the live-UI segment that closed two gaps.
+>   Reading full frames blind costs several times the context and can miss it entirely.
+>
+> Full detail in `STATULAR-VIDEO-REVIEW.md` §8.
 
 **Getting the file in.** Both obvious routes fail on a real screen recording:
 
@@ -230,7 +257,7 @@ guarantee today rests on the writer scrubbing correctly, not on the rules refusi
 
 | # | Decision | What it blocks |
 |---|----------|----------------|
-| **C1** 🆕 | **Clause library strategy: curate ~60, or unblock the 276?** Statular ships **57** clauses — vendor-authored, tagged (Tax / Powers / Trust Administration / Family), searchable, with "+ New Clause" for firm additions. Ours is 302 mined families with `piiBlocked=276`. | This is now **upstream of C2, C3 and C4.** If the answer is curation, the PII over-aggression tuning (old ▶ NEXT item 4) may not be worth doing at all, and the recall-scope argument largely dissolves. Decide before any more scanner work. |
+| **C1** 🆕 | **Clause library strategy — which clauses are worth carrying?** **Reframed 2026-08-06 (second video pass); the earlier framing is struck.** It previously read "curate ~60, or unblock the 276," resting on Statular shipping 57. That is not a standard — 57 is equally consistent with an early-stage tool, and a count says nothing about whether a given clause earns its place. Neither 57 nor 302 is a target. The real question is a **value test**: does the clause neutralise a nameable failure mode, is it anchored to a citation, is it reused across matters, is it non-obvious under time pressure, and is it absent from the template? | Still **upstream of C2, C3 and C4** — but **do J1 first.** J1 is a metadata-only audit that answers this with evidence instead of assertion. The PII-tuning consequence is now assumed in **neither** direction: whether tuning is warranted depends on whether the 276 blocked families carry disproportionate value, which J1 measures without unblocking anything. |
 | **C2** | **Recall scope:** exclude corpus-unreachable will clauses from Gate 1's denominator, or treat 65% as the trust-only floor and revisit after the wills mine. | Either unblocks the catalog review. |
 | **C3** | **The two 5-minute calls:** (a) the 2 purity families — same clause reused or genuinely distinct? (b) canary — drop the 4 duplicated files from `CLAUSE_MINER_CANARY_FOLDER_IDS` and re-run `gates` ($0) for a clean holdout read. | Both gates currently fail for **scope** reasons, not correctness ones. |
 | **C4** | **Quarantine tail** — ~141 of 512 trusts never mined. **PENDING at Adam's word (2026-08-05: "leave it as pending").** | Nothing, while parked. Listed so it is not forgotten. |
@@ -319,6 +346,36 @@ Questionnaires · Client Portal · Public Intake Questionnaires · Client Email 
 | DZ remainder — payments `sum()` composite indexes | Open, Never-Break (`firestore.indexes.json`) → needs sign-off. |
 | `willsDriveWebhook` channel-token model | Open (BM remainder), low priority. |
 | Standing watch-item: OAuth durability alert | Passive — silence = healthy. |
+
+---
+
+## J · SECOND VIDEO PASS 🆕 (2026-08-06) — five captures, 34.4 min
+
+Full evidence, with frame timestamps, is in **`STATULAR-VIDEO-REVIEW.md`**. This section is only the
+work that pass generates. Sources: `New Matter`, `Matter Dashboard`, `Client Questionnaire`,
+`Drafting Will Package (Individual)`, `Full User Experience` — all Drive → `Statular/`.
+
+**All three previously-uncaptured gaps are now closed or advanced.** See the "Already reviewed" table.
+
+| # | Item | Why |
+|---|------|-----|
+| **J1** | **Clause corpus metadata audit — do this before deciding C1.** Pull the occurrence-frequency distribution across all 302 families and cross-tabulate against `piiBlocked` and `seedMatched`. **Metadata only** — no clause text read, nothing unblocked, the PII gate untouched. | Answers C1 with measurement instead of assertion. Also settles whether the PII over-aggression tuning is warranted: if the blocked 276 skew toward high-occurrence and seed-matched families, value is trapped and tuning matters; if they skew toward one-occurrence families, it is cleanup. Cheapest item on the list and upstream of C1/C2/C3/C4. An afternoon. |
+| **J2** | **Benchmark PR #280's review engine against four finding classes their Analysis & Review demonstrably catches**, on a real will package: (a) unfilled placeholders surviving into rendered output, (b) cross-party inconsistency, (c) statutory conflict with citation, (d) logical dead-ends in the document's own cross-references. | This is the direct competitor to what #280 shipped, and these four are a ready-made test set. (a) and (b) are template hygiene we can do quickly. (c) is where they are ahead on legal substance. (d) is the hard one — it reasons over the document's internal references, not the intake data. |
+| **J3** | **Document Selection composes the interview.** Their page 1 determines which of the remaining pages exist — 12 pages for an advance-directives package, 15 for a will package (adds Executors, Distribution, Will Provisions). Assess whether our generation pipeline can adopt this, or whether it conflicts with the questionnaire model. | Architectural, and the most significant structural finding of the pass. Selection is not a picker feeding a generator; it is the thing that shapes intake. Decide before more questionnaire work lands. |
+| **J4** | **Jurisdiction-aware controls that explain themselves.** They grey out short-form POA for NJ *with the reason stated inline* — no statutory form exists, so the long form is used. Our jurisdiction logic lives in generators where the user never sees it. | Cheap, and it converts hidden behaviour into something the attorney learns from. |
+| **J5** | **Ask the three-tier contingency ladder at intake**, in plain English, as separate questions: specific gifts → remainder → backup takers → last-resort preference (offering a class, named people, or charities). | Maps directly onto the residue and allocation model (#210). Strongest evidence yet that the ladder belongs at intake rather than derived at draft time. |
+| **J6** | **Small intake wins, all observed working:** a "clear selection" link under every radio group (radios cannot otherwise be unset); address autocomplete that decomposes to street/city/state/ZIP/**county**; per-asset supporting-document upload; worked-example placeholders rather than hints. | County capture at intake matters for NJ deed work and we currently infer it later. The rest are hours, not days. |
+| **J7** | **Flowcharts — an opening, not a catch-up.** Theirs generates from an **uploaded** `.docx`/`.pdf`, reverse-engineering a finished document. Generating forward from structured intake — data we already hold — is something they do not do. | Recorded as an opportunity. Not proposed as work yet. |
+
+**Observed and recorded, not proposed as work:** Trust Accounting (court-style schedules with a
+reconciliation that must balance before a period closes; immutable closed periods), Deed Pulling,
+Matter Invoicing, Smart Import, an in-product Community Forum, and an embedded Microsoft Word Online
+preview/edit surface. These are large modules; they are in `STATULAR-VIDEO-REVIEW.md` so they are not
+rediscovered, not because anyone is proposing to build them.
+
+**Also worth knowing:** their polish is not uniform — the custom client email arrived rendering
+`John SmithDear John Smith,`, a merge-variable concatenation bug. And their Code Search returned
+Internal Revenue Code hits on farm valuation and pooled income funds for a "No Contest Clause" query.
 
 ---
 
