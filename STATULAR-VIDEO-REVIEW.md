@@ -19,7 +19,16 @@ named only as evidence of what subject matter their library covers — not as te
 
 ## 1 · C1 — the clause library decision
 
-**Recommendation: curate. Target roughly 60 statute-anchored clauses. Do not chase 302.**
+**No count is recommended, because no count is derivable from this evidence.** What follows records
+what was observed, proposes a test for whether a clause is worth having, and proposes the audit that
+would actually settle C1.
+
+> **Struck 2026-08-06, on Adam's challenge.** An earlier draft of this section recommended
+> "curate ~60" and rested that on Statular shipping 57 with a firm-authored folder reading 0. That
+> reasoning was wrong and has been removed. 57 is not a gold standard — it is equally consistent with
+> an early-stage tool, and an empty firm folder is equally consistent with a firm that has not got
+> round to it. Neither observation says anything about whether a *particular clause* is worth having.
+> The count was never the question.
 
 ### What was observed
 
@@ -64,32 +73,92 @@ The 57 split into two populations:
 
 Placeholders are bracketed capitals (`[SETTLOR NAME]`, `[SURVIVING SPOUSE]`, `[NAME]`).
 
-### Why this settles C1
+### What the observation is actually good for
 
-- A shipping commercial competitor considers **57 curated clauses sufficient** to sell the product.
-- `My Clauses = 0` on a real account, months in, is the stronger signal: **the vendor set is not a
-  starting point users are expected to extend.** It is the product. The `+ New Clause` affordance
-  exists and goes unused.
-- The value is demonstrably **not volume**. It is (a) a citation behind each clause and (b) coverage
-  of the specific traps in one jurisdiction.
-- Against that, our 302 mined families with `piiBlocked=276` is the wrong axis of competition. ~26
-  usable clauses is short of the bar; 302 is far past it, and past it in the wrong currency.
+Not a target number. The one durable thing here is that a clause library contains **two populations
+with completely different value profiles**, and lumping them together is what makes counts
+meaningless:
 
-### What follows if this recommendation is accepted
+- **Statutory savers.** Each exists because a specific statute produces a bad result if you say
+  nothing. Its value is legible: name the failure mode, cite the provision.
+- **Drafting boilerplate.** Trustee powers, definitional clauses, discretionary standards. Real
+  drafting content, but the base template should already carry most of it, and where it does, a
+  library entry is duplication rather than coverage.
 
-- The PII over-aggression tuning (old ▶ NEXT item 4) likely **does not need doing at all** — it only
-  matters if unblocking the 276 is the goal, and on this evidence that should not be the goal.
+A library of 200 boilerplate variants and one of 40 statutory savers can have the same headline
+count and completely different worth. **That is why C1 cannot be answered by counting, from either
+direction — ours or theirs.**
 
-  **This is not a reason to touch the PII gate itself.** Per HOMEWORK.md, `piiBlocked=276` is a
-  confidentiality control, not a licensing one: those are real client documents, and one client's
-  name must not surface in another client's will. The gate stands on its own regardless of which way
-  C1 goes. The argument above is only that we need not do the *tuning work*, not that the gate is
-  loosenable.
-- The recall-scope argument behind C2/C3/C4 largely dissolves, as HOMEWORK anticipated.
-- The work becomes editorial rather than extractive: pick ~60 targets, anchor each to an N.J.S.A.
-  citation, and write them. Mining stops being the bottleneck.
+### A test for whether a clause earns its place
 
-**This is a recommendation, not a decision. C1 is Adam's call.**
+Proposed, to be argued with. A clause is worth carrying when it meets **all five**:
+
+1. **Nameable failure mode.** You can state in one sentence what goes wrong in a real matter if the
+   clause is absent. If you cannot, it is decoration.
+2. **Anchored.** It cites a controlling statute or rule, or encodes a settled drafting convention.
+   Anchoring is not decoration either — it is what makes the clause **maintainable**: when the
+   statute moves, you know exactly which clauses to revisit. An unanchored clause silently rots.
+3. **Reusable.** It applies across matters of a type, not to the one matter it was mined from.
+4. **Non-obvious under time pressure.** A competent attorney would not reliably reproduce it from
+   scratch at 6pm. Clauses that fail this are better as template defaults than as library entries.
+5. **Not already in the template.** Otherwise it is a duplicate maintenance surface.
+
+Criterion 2 is the one that matters most and the one our mined corpus is least likely to satisfy,
+because mining recovers *text* and not *citations*. That is a specific, checkable worry rather than a
+general one.
+
+### What we can already test, using data we hold and they do not
+
+We have something Statular's library structurally cannot have: **usage evidence from a real
+practice's own archive.** The last catalog run recorded
+`302 families / 1,394 variants / 3,965 occurrences`, plus `seedMatched=85`.
+
+Two signals fall straight out of that, at no new cost:
+
+- **Occurrence frequency is a reuse signal.** A family appearing across dozens of matters has
+  demonstrated criterion 3 empirically. A family with one occurrence is matter-specific text that
+  survived extraction, and is exactly what criterion 3 is meant to exclude. The distribution across
+  those 3,965 occurrences is the first thing to look at, and nobody has looked at it.
+- **`seedMatched=85` is an expert-curation signal.** Those families matched the hand-curated
+  AAA WILL PIECES set — a human already judged that material worth keeping, before we mined anything.
+  That is 85 families carrying independent evidence of value.
+
+Neither number has been examined. That is the gap, not the total.
+
+### The correction this forces on the PII question
+
+An earlier draft claimed the PII over-aggression tuning "likely does not need doing at all." **That
+followed from the struck argument and is withdrawn.**
+
+Whether the tuning is warranted now depends on something nobody has measured: **do the 276 blocked
+families carry disproportionate value?** Blocked families were written text-free, so their metadata —
+including occurrence counts — survives and is inspectable **without unblocking anything**. If the
+blocked set skews toward high-occurrence, seed-matched families, tuning is important and the value is
+trapped. If it skews toward one-occurrence families, tuning is cleanup. It is an empirical question
+with a cheap answer, and it should be answered before it is decided.
+
+**None of this touches the PII gate itself.** Per HOMEWORK.md, `piiBlocked=276` is a confidentiality
+control, not a licensing one: those are real client documents and one client's name must not surface
+in another client's will. Nothing above is an argument for loosening it — only for *measuring what is
+behind it*.
+
+### The audit that would settle C1
+
+Cheap, and it produces a defensible number rather than an asserted one:
+
+1. Pull the occurrence-frequency distribution across all 302 families, and cross-tabulate it against
+   `piiBlocked` and `seedMatched`. **No text required** — metadata only. This alone may reframe the
+   question.
+2. Take a stratified sample — say 30 families spanning high/medium/low occurrence — and score each
+   against the five criteria.
+3. Extrapolate. The output is not "curate N"; it is *what fraction of the corpus is statutory saver,
+   what fraction is boilerplate duplication, and what fraction is matter-specific noise.* The number
+   falls out of that, and can be defended.
+
+Step 1 is metadata-only and could be done in an afternoon. **Recommend doing step 1 before deciding
+C1 at all** — it is the cheapest thing on the list and it is upstream of the decision it would inform.
+
+**C1 remains open. This section no longer recommends a number, and should not be read as doing so.**
 
 ---
 
