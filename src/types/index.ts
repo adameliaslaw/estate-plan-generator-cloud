@@ -832,6 +832,44 @@ export interface ClientDeadline {
 }
 
 // ============================================================================
+// Package review — cross-document findings on a generated document set
+//
+// Mirrors the shapes in functions/src/package-review.ts, which is the source of
+// truth for the checks. Kept structurally identical so a finding can round-trip
+// through Firestore without translation.
+// ============================================================================
+
+export type PackageFindingSeverity = 'high' | 'medium' | 'low';
+
+export type PackageFindingReason =
+  | 'blank-field'
+  | 'unresolved-token'
+  | 'missing-instrument'
+  | 'enclosure-mismatch'
+  | 'statutory-limit'
+  | 'inoperative-provision';
+
+export interface PackageFinding {
+  docType: string;
+  title: string;
+  /** Nearest section citation, or a structural label like "Body Paragraph". */
+  location: string;
+  severity: PackageFindingSeverity;
+  reason: PackageFindingReason;
+  summary: string;
+  detail: string;
+}
+
+export interface PackageReview {
+  findings: PackageFinding[];
+  summary: { total: number; high: number; medium: number; low: number };
+  /** True when `findings` was capped; `summary` still counts the full set. */
+  truncated: boolean;
+  packageType: PackageType;
+  reviewedAt: Timestamp;
+}
+
+// ============================================================================
 // Client — /firms/{firmId}/clients/{clientId}
 // ============================================================================
 
@@ -886,6 +924,12 @@ export interface Client {
   documents?: Document[];
   /** Set true by the generation pipeline once documents have been generated. */
   documentsGenerated?: boolean;
+  /**
+   * Cross-document review of the last generated package. Written by
+   * generateDocuments; see functions/src/package-review.ts for the checks.
+   * Absent on clients whose documents predate the review pass.
+   */
+  packageReview?: PackageReview;
 
   // Matter deadlines (signing ceremonies, filings, follow-ups)
   deadlines?: ClientDeadline[];

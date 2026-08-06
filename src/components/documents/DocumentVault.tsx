@@ -61,7 +61,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-import { type Document, type PackageType } from '@/types';
+import { type Document, type PackageType, type PackageReview } from '@/types';
+import PackageReviewPanel from '@/components/documents/PackageReviewPanel';
 import { useCollection, deleteDoc } from '@/hooks/useFirestore';
 import { documentService, type ReviewDocumentResponse } from '@/services/document-service';
 import { COLLECTIONS } from '@/config/constants';
@@ -385,6 +386,8 @@ interface Props {
   questionnaireComplete: boolean;
   clientUpdatedAt?: { seconds: number } | null;
   isMarried?: boolean;
+  /** Cross-document review of the last generated package, if one has run. */
+  packageReview?: PackageReview;
 }
 
 export default function DocumentVault({
@@ -396,6 +399,7 @@ export default function DocumentVault({
   questionnaireComplete,
   clientUpdatedAt,
   isMarried,
+  packageReview,
 }: Props) {
   // ── Firestore ────────────────────────────────────────────────────────────
   const { data: documents, loading, error: loadError } = useCollection<Document>(
@@ -597,6 +601,10 @@ export default function DocumentVault({
   // ── Main vault ───────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
+      {/* Cross-document review of the generated set — above the list, because it
+          is about the package as a whole rather than any one row. */}
+      <PackageReviewPanel review={packageReview} docTypeLabels={DOC_TYPE_LABELS} />
+
       {/* Top toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Left: search + filters */}
