@@ -5,9 +5,23 @@
         "source": "github",
         "repo": "bradautomates/claude-video"
       }
+    },
+    "superpowers-dev": {
+      "source": {
+        "source": "github",
+        "repo": "adameliaslaw/superpowers"
+      }
+    },
+    "adhd": {
+      "source": {
+        "source": "github",
+        "repo": "adameliaslaw/adhd"
+      }
     }
   },
   "enabledPlugins": {
-    "watch@claude-video": true
+    "watch@claude-video": true,
+    "superpowers@superpowers-dev": true,
+    "adhd@adhd": true
   }
 }
