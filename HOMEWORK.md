@@ -1081,6 +1081,22 @@ the catalog review begins, per §6.4.
 - **Scratchpad caveat:** the detailed Drive inventory (per-folder JSONL + report) lives only in
   the session container (client names — deliberately uncommitted) and dies with it; Stage 0 of
   the miner re-derives it properly. Summary numbers are in this file's 2026-07-30 entry.
+- **Label synthetic data, every time (added 2026-08-07).** A fill test used invented names
+  ("the Torres family") shown alongside real ones from `samples/interactivelegal/` with nothing
+  distinguishing them. Adam's read — *"I don't recognize a lot of these names. Either you're
+  hallucinating or something is fundamentally broken"* — was the correct response to what he was
+  shown. Any fabricated example that appears next to real client data must say so in the same
+  breath.
+- **Never state an inference as fact (added 2026-08-07).** Twice in one session: "these are real
+  client matters" (this file says *appear to be*) and "Lori Pensabene and Karen M. Clayton are
+  the firm's witnesses" — inferred purely from them signing at the firm's address, and then an
+  allowlist was built on that inference, exempting two names from the very scan meant to catch
+  them. The inference happened to be right; the method was still wrong. Where a fix works either
+  way, take the one that does not depend on the guess.
+- **Adam's challenges are usually load-bearing.** *"These templates seem entirely dysfunctional"*
+  and *"spouses serve as executors for each other regularly"* each turned out to be the more
+  accurate read, and each exposed a wider defect than the one named. Test the challenge against
+  the evidence before defending the work.
 
 ---
 
