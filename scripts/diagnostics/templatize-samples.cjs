@@ -122,7 +122,7 @@ function replaceInParagraph(paragraphXml, pairs) {
   // "MARIA RIZZO", and "RIZZO FAMILY LIVING TRUST" over both.
   const matches = [];
   const taken = new Array(joined.length).fill(false);
-  for (const { literal, placeholder } of pairs) {
+  for (const { literal, resolve } of pairs) {
     let from = 0;
     for (;;) {
       const at = joined.indexOf(literal, from);
@@ -138,7 +138,9 @@ function replaceInParagraph(paragraphXml, pairs) {
       }
       if (!overlaps) {
         for (let i = at; i < end; i += 1) taken[i] = true;
-        matches.push({ at, end, placeholder, literal });
+        // Resolved per occurrence: the same person is the spouse in one
+        // sentence and the Executor two articles later.
+        matches.push({ at, end, placeholder: resolve(joined, at, end), literal });
       }
       from = at + 1;
     }
@@ -245,14 +247,168 @@ const BACKED_FIELDS = new Set([
 const CLIENT_ADDRESS = '{{clientAddress}}, {{clientCity}}, {{clientState}}';
 
 /**
- * Jessica Byrnes married set. Sean is both the husband and the appointed
- * Executor/Health Care Representative in these samples; one literal can only
- * map to one placeholder, so he maps to {{spouseFullName}} — the role he
- * holds in the most passages. A firm reviewing the template should switch
- * the Executor appointment paragraph to {{executorName}} if the two are not
- * always the same person.
+ * A person's placeholder is decided by the slot they occupy in the sentence,
+ * not by who they are.
+ *
+ * A spouse commonly serves as the other's Executor, so in a sample the same
+ * name lands in both the "I am married to X" recital and the Executor
+ * appointment. Mapping the name to one placeholder is wrong either way round:
+ * pick {{spouseFullName}} and a client whose executor is not their spouse
+ * gets the spouse's name in the Executor slot; pick {{executorName}} and the
+ * marriage recital breaks. Both placeholders have to appear, each where its
+ * role is being appointed — when the spouse *is* the executor both resolve to
+ * the same person and the document reads exactly as it does today.
+ *
+ * The same applies further down. In this set Anthony Esernio is the successor
+ * Funeral Representative, the First Level Successor Executor, a guardian, and
+ * the First Level Successor Attorney-in-Fact; Cathleen Esernio is the Second
+ * Level Successor Executor, a guardian, the Second Level Successor
+ * Attorney-in-Fact, and the First Level Successor Health Care Representative.
+ * One placeholder each cannot express that.
  */
-const BYRNES = {
+const ROLE_PLACEHOLDERS = {
+  // index = 0 primary, 1 first successor, 2 second, 3 third
+  executor: [
+    '{{executorName}}',
+    '{{alternateExecutorName}}',
+    '{{secondAlternateExecutorName}}',
+    '{{thirdAlternateExecutorName}}',
+  ],
+  trustee: ['{{trusteeName}}', '{{alternateTrusteeName}}'],
+  guardian: ['{{guardianName}}', '{{alternateGuardianName}}'],
+  poaAgent: [
+    '{{poaAgentName}}',
+    '{{poaAlternateAgentName}}',
+    '{{poaSecondAlternateAgentName}}',
+  ],
+  healthcareAgent: [
+    '{{healthcareAgentName}}',
+    '{{healthcareAlternateAgentName}}',
+    '{{healthcareSecondAlternateAgentName}}',
+  ],
+  funeralRepresentative: [
+    '{{funeralRepresentativeName}}',
+    '{{successorFuneralRepresentativeName}}',
+  ],
+};
+
+/**
+ * Scanned FORWARD from the name, because these instruments always read
+ * "NAME, of ADDRESS, to serve as ROLE". Scanning backwards would make every
+ * child listed after "to serve as Trustee for my children, ..." a trustee.
+ * First cue within the window wins.
+ */
+const APPOINTMENT_CUES = [
+  [/Funeral Representative/, 'funeralRepresentative'],
+  [/Attorney-in-Fact/, 'poaAgent'],
+  [/Health Care Representative/, 'healthcareAgent'],
+  [/\bguardians?\b/i, 'guardian'],
+  [/(?:as|serve as)\s+(?:an?\s+)?(?:Co-)?Trustees?\b/, 'trustee'],
+  [/(?:to serve as|as)\s+Executor\b/, 'executor'],
+];
+
+const CUE_WINDOW = 260;
+
+/**
+ * Which rank of the role this is. The ordinal sits either in the paragraph's
+ * heading ("Appointment of Second Level Successor Executor.") or between the
+ * name and the cue ("to act as my successor Funeral Representative"), so both
+ * spans are searched. The heading can be far from the name — the whole
+ * preceding text of the paragraph is used rather than a fixed window.
+ */
+function ordinalOf(before, between) {
+  const span = `${before} ${between}`;
+  if (/Third Level|Third Successor/i.test(span)) return 3;
+  if (/Second Level|Second Successor/i.test(span)) return 2;
+  if (/First Level|successor|substitute|alternate/i.test(span)) return 1;
+  return 0;
+}
+
+/**
+ * Two people can be appointed to one slot: "I appoint my parents, A and B, as
+ * guardians". They are still two different people, so the second gets its own
+ * placeholder rather than repeating the first — otherwise the template says
+ * "{{guardianName}} and {{guardianName}}" and prints one name twice.
+ * Matches both "A and B" and "A and my sister-in-law, B".
+ */
+const CO_APPOINTEE_TAIL = /\band\b(?:\s+(?:my|our)\s+[A-Za-z-]+\s*,?)?\s*$/;
+
+/** The same join, read forwards: what may sit between two co-appointees. */
+const CO_APPOINTEE_JOIN = /^[\s,]*and\b(?:\s+(?:my|our)\s+[A-Za-z-]+\s*,?)?\s*$/;
+
+/**
+ * How far ahead a role cue may bind to this name.
+ *
+ * A cue stops belonging to a name once another person is named in between —
+ * the POA opens "I, PRINCIPAL, residing at …, designate my husband, AGENT, to
+ * be my Attorney-in-Fact", and without this the Principal reaches past the
+ * agent and claims the agent's cue. Co-appointees are stepped over rather
+ * than treated as interruptions, so "my parents, A and B, as guardians" still
+ * reaches its cue from A.
+ */
+function cueWindow(after, peopleGlobalRe) {
+  peopleGlobalRe.lastIndex = 0;
+  let cursor = 0;
+  let m;
+  while ((m = peopleGlobalRe.exec(after)) !== null) {
+    if (!CO_APPOINTEE_JOIN.test(after.slice(cursor, m.index))) {
+      return after.slice(0, m.index);
+    }
+    cursor = m.index + m[0].length;
+    peopleGlobalRe.lastIndex = cursor;
+  }
+  return after;
+}
+
+const asCoPlaceholder = (placeholder) =>
+  placeholder.replace(
+    /^\{\{(\w)(\w*)\}\}$/,
+    (_, first, rest) => `{{co${first.toUpperCase()}${rest}}}`,
+  );
+
+/** Resolve one person occurrence to a placeholder. */
+function resolvePerson(fallback, people, joined, at, end) {
+  const after = cueWindow(joined.slice(end, end + CUE_WINDOW), people.global);
+  let best = null;
+  for (const [pattern, role] of APPOINTMENT_CUES) {
+    const m = pattern.exec(after);
+    if (m && (best === null || m.index < best.index)) {
+      best = { index: m.index, role };
+    }
+  }
+  // No appointment cue ahead — this is a recital ("I am married to X") or a
+  // list of children, where the person's own default is right.
+  if (!best) return fallback;
+
+  const before = joined.slice(0, at);
+  const ranks = ROLE_PLACEHOLDERS[best.role];
+  const rank = ordinalOf(before, after.slice(0, best.index));
+  const placeholder = ranks[Math.min(rank, ranks.length - 1)];
+
+  const tail = before.slice(-80);
+  if (CO_APPOINTEE_TAIL.test(tail) && people.plain.test(tail)) {
+    return asCoPlaceholder(placeholder);
+  }
+  return placeholder;
+}
+
+/**
+ * An address belongs to the nearest person named before it — the documents
+ * write "NAME, of ADDRESS". This runs as a second pass, after the names are
+ * already placeholders, so the owner is simply the closest preceding tag.
+ */
+function resolveAddressByOwner(joined, at) {
+  const before = joined.slice(0, at);
+  const tags = [...before.matchAll(/\{\{(\w+)\}\}/g)];
+  const owner = tags.length ? tags[tags.length - 1][1] : 'clientFullName';
+  if (owner === 'clientFullName' || owner === 'clientAddress') {
+    return CLIENT_ADDRESS;
+  }
+  return `{{${owner.replace(/(?:Full)?Name$/, '')}Address}}`;
+}
+
+/** Jessica Byrnes married set: will, power of attorney, health care directive. */
+const BYRNES_PEOPLE = {
   'JESSICA BYRNES': '{{clientFullName}}',
   'SEAN BYRNES': '{{spouseFullName}}',
   'ANTHONY ESERNIO': '{{alternateExecutorName}}',
@@ -263,12 +419,25 @@ const BYRNES = {
   'JACK BYRNES': '{{childOneName}}',
   'LYLA BYRNES': '{{childTwoName}}',
   'MADELYN BYRNES': '{{childThreeName}}',
-  '16 Saddle Court, Monroe Township, New Jersey': CLIENT_ADDRESS,
-  '315 East 72nd Street, Apt. PH, New York, New York':
-    '{{alternateExecutorAddress}}',
 };
 
-/** Rizzo trust + pour-over set. Vito is the client, Vita Maria the spouse. */
+const BYRNES_ADDRESSES = [
+  '16 Saddle Court, Monroe Township, New Jersey',
+  '315 East 72nd Street, Apt. PH, New York, New York',
+];
+
+/**
+ * Rizzo trust + pour-over set. Vito is the client, Vita Maria the spouse.
+ *
+ * Deliberately NOT role-resolved. A joint revocable trust makes the grantors
+ * their own initial trustees — "We appoint Vito Rizzo and Vita Maria Rizzo to
+ * serve as Co-Trustees" — so an Executor/Trustee cue here would collapse two
+ * different people onto {{trusteeName}}. Naming them {{clientFullName}} and
+ * {{spouseFullName}} in the trustee slots is what the instrument means. The
+ * successor-trustee sentences read correctly under the same mapping:
+ * "We appoint our daughter, {{childOneName}}, to serve as a Trustee if and
+ * when {{clientFullName}} fails to qualify".
+ */
 const RIZZO = {
   'RIZZO FAMILY LIVING TRUST': '{{trustName}}',
   'VITA MARIA RIZZO': '{{spouseFullName}}',
@@ -369,20 +538,27 @@ function residualCandidates(text) {
 // Templatize
 // ---------------------------------------------------------------------------
 
-/** Expand each literal into the case variants that actually occur in samples. */
-function buildPairs(mappings) {
+const CASE_VARIANTS = (literal) => [
+  literal,
+  literal.toUpperCase(),
+  literal.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()),
+];
+
+/**
+ * Expand each literal into the case variants that occur in the samples, and
+ * attach the resolver that decides its placeholder. `spec` maps a literal to
+ * either a fixed placeholder string or a `(joined, at, end) => string`.
+ */
+function buildPairs(spec) {
   const pairs = [];
   const seen = new Set();
-  for (const [literal, placeholder] of Object.entries(mappings)) {
-    const variants = [
-      literal,
-      literal.toUpperCase(),
-      literal.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()),
-    ];
-    for (const variant of variants) {
+  for (const [literal, target] of Object.entries(spec)) {
+    const resolve =
+      typeof target === 'function' ? target : () => target;
+    for (const variant of CASE_VARIANTS(literal)) {
       if (seen.has(variant)) continue;
       seen.add(variant);
-      pairs.push({ literal: variant, placeholder, source: literal });
+      pairs.push({ literal: variant, resolve, source: literal });
     }
   }
   // Longest first so "VITA MARIA RIZZO" claims its span before "VITO RIZZO".
@@ -392,7 +568,13 @@ function buildPairs(mappings) {
 
 const results = [];
 
-function templatize(sourceFile, destFileName, mappings) {
+/**
+ * `passes` is one or more literal->target specs, applied in order. People are
+ * replaced before addresses so that an address pass can identify an address's
+ * owner from the placeholder already standing in front of it.
+ */
+function templatize(sourceFile, destFileName, passes) {
+  const specs = Array.isArray(passes) ? passes : [passes];
   const sourcePath = path.resolve(REPO_ROOT, sourceFile);
   const destPath = path.join(REPO_ROOT, 'functions', 'templates', destFileName);
 
@@ -403,9 +585,19 @@ function templatize(sourceFile, destFileName, mappings) {
   }
 
   const zip = new PizZip(fs.readFileSync(sourcePath, 'binary'));
-  const original = zip.file('word/document.xml').asText();
-  const pairs = buildPairs(mappings);
-  const { xml, totals } = replaceInDocument(original, pairs);
+  let xml = zip.file('word/document.xml').asText();
+  const pairs = [];
+  const totals = Object.create(null);
+  for (const spec of specs) {
+    const specPairs = buildPairs(spec);
+    const pass = replaceInDocument(xml, specPairs);
+    xml = pass.xml;
+    pairs.push(...specPairs);
+    for (const [literal, n] of Object.entries(pass.totals)) {
+      totals[literal] = (totals[literal] || 0) + n;
+    }
+  }
+  const mappings = Object.assign({}, ...specs);
 
   zip.file('word/document.xml', xml);
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
@@ -464,6 +656,32 @@ function verifyTemplate(result) {
 // ---------------------------------------------------------------------------
 
 const SAMPLES = 'samples/interactivelegal';
+
+// Two passes for the Byrnes set: names resolved by the role they are being
+// appointed to, then addresses attributed to the name standing in front of
+// them.
+// Longest first, so the alternation matches "SEAN BYRNES" rather than
+// stopping at a shorter name that is a prefix of it.
+const byrnesNameAlternation = Object.keys(BYRNES_PEOPLE)
+  .flatMap(CASE_VARIANTS)
+  .sort((a, b) => b.length - a.length)
+  .map((n) => n.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))
+  .join('|');
+const byrnesPeopleRes = {
+  plain: new RegExp(byrnesNameAlternation),
+  global: new RegExp(byrnesNameAlternation, 'g'),
+};
+const byrnesPeople = Object.fromEntries(
+  Object.entries(BYRNES_PEOPLE).map(([name, fallback]) => [
+    name,
+    (joined, at, end) =>
+      resolvePerson(fallback, byrnesPeopleRes, joined, at, end),
+  ]),
+);
+const byrnesAddresses = Object.fromEntries(
+  BYRNES_ADDRESSES.map((addr) => [addr, resolveAddressByOwner]),
+);
+const BYRNES = [byrnesPeople, byrnesAddresses];
 
 templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', BYRNES);
 templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', BYRNES);
