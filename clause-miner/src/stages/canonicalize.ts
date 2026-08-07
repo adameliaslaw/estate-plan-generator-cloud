@@ -26,8 +26,9 @@ import {
 import {
   buildPiiGateRequests,
   buildRosterSweep,
-  gateVerdict,
+  gateOutcome,
   sweepText,
+  type GateReason,
   type PiiScanStatus,
 } from '../pii-gates.js';
 import {
@@ -178,6 +179,26 @@ export const LABEL_TOOL = {
     required: ['title', 'functionSummary', 'category', 'switchName', 'mappings'],
   },
 };
+
+/**
+ * The `piiFindings` entry a variant's gate outcome earns, or null when the
+ * gate cleared it.
+ *
+ * Fail-closed is unchanged: a variant with NO result still blocks. What
+ * changed (2026-08-07) is that it no longer records the same label as a model
+ * objection. The old code pushed a bare `haiku-gate:` for all three of
+ * "the model found PII", "the call errored" and "no verdict came back", which
+ * left the audit unable to tell a finding from a failure — the corpus-wide
+ * 94.5% block rate could not be interpreted because of it.
+ */
+export function gateFinding(
+  outcome: { verdict: PiiScanStatus; reason: GateReason } | undefined,
+  hash12: string,
+): string | null {
+  if (outcome === undefined) return `haiku-gate-missing:${hash12}`;
+  if (outcome.verdict !== 'blocked') return null;
+  return `haiku-gate-${outcome.reason}:${hash12}`;
+}
 
 export function buildLabelRequest(familyId: string, canonicalText: string): BatchRequest {
   return {
@@ -568,11 +589,11 @@ export async function runCanonicalize(
       gateTexts.push({ id: `${p.family.familyId}:${v.sigHash.slice(0, 12)}`, text: v.normText });
     }
   }
-  const gateVerdicts = new Map<string, PiiScanStatus>();
+  const gateVerdicts = new Map<string, { verdict: PiiScanStatus; reason: GateReason }>();
   if (gateTexts.length > 0) {
     const batchId = await deps.batches.submitBatch('pii-gate', buildPiiGateRequests(gateTexts));
     for (const result of await deps.batches.pollBatch(batchId)) {
-      gateVerdicts.set(result.customId.replace(/^pii:/, ''), gateVerdict(result));
+      gateVerdicts.set(result.customId.replace(/^pii:/, ''), gateOutcome(result));
     }
   }
 
@@ -606,11 +627,13 @@ export async function runCanonicalize(
           ...result.hits.map((h) => `roster:${h.term}@${v.sigHash.slice(0, 12)}:${h.index}`),
         );
       }
-      const verdict =
-        gateVerdicts.get(`${p.family.familyId}:${v.sigHash.slice(0, 12)}`) ?? 'blocked';
-      if (verdict === 'blocked') {
+      const finding = gateFinding(
+        gateVerdicts.get(`${p.family.familyId}:${v.sigHash.slice(0, 12)}`),
+        v.sigHash.slice(0, 12),
+      );
+      if (finding !== null) {
         pii = 'blocked';
-        piiFindings.push(`haiku-gate:${v.sigHash.slice(0, 12)}`);
+        piiFindings.push(finding);
       }
     }
     if (pii === 'blocked') summary.piiBlocked++;

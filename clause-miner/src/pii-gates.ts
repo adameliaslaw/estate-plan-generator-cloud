@@ -214,6 +214,16 @@ export function buildPiiGateRequests(
 export type PiiScanStatus = 'clean' | 'blocked';
 
 /**
+ * WHY the gate reached its verdict. `flagged` is the model objecting; `error`
+ * is the call failing. Both block — fail-closed is unchanged — but recording
+ * them identically made a broken batch indistinguishable from a PII hit in
+ * `piiFindings`, so the audit could not tell a finding from a failure
+ * (CLAUDE.md rule 10). `missing` is raised by the caller, for a variant no
+ * result came back for at all.
+ */
+export type GateReason = 'clean' | 'flagged' | 'error';
+
+/**
  * Fail closed (§5.3 net 3): a hit blocks; an errored/unparseable gate result
  * ALSO blocks — publication is impossible until a human clears it.
  */
@@ -221,6 +231,18 @@ export function gateVerdict(result: {
   ok: boolean;
   toolInput: Record<string, unknown> | undefined;
 }): PiiScanStatus {
-  if (!result.ok || result.toolInput === undefined) return 'blocked';
-  return result.toolInput.pii_found === false ? 'clean' : 'blocked';
+  return gateOutcome(result).verdict;
+}
+
+/** `gateVerdict` plus the reason it reached that verdict. Same blocking rules. */
+export function gateOutcome(result: {
+  ok: boolean;
+  toolInput: Record<string, unknown> | undefined;
+}): { verdict: PiiScanStatus; reason: GateReason } {
+  if (!result.ok || result.toolInput === undefined) {
+    return { verdict: 'blocked', reason: 'error' };
+  }
+  return result.toolInput.pii_found === false
+    ? { verdict: 'clean', reason: 'clean' }
+    : { verdict: 'blocked', reason: 'flagged' };
 }

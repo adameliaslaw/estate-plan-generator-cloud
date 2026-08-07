@@ -1,11 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildLabelRequest,
+  gateFinding,
   parseLabelMappings,
   selectCanonical,
   tokenLevenshteinRatio,
 } from '../src/stages/canonicalize.js';
 import { config } from '../src/config.js';
+
+describe('gateFinding — a failure must not be recorded as a finding', () => {
+  it('records a variant the batch never covered as MISSING, still blocking', () => {
+    // The whole point: fail-closed is preserved (non-null ⇒ the family blocks),
+    // but the label says the gate did not run rather than that it objected.
+    expect(gateFinding(undefined, 'abc123def456')).toBe('haiku-gate-missing:abc123def456');
+  });
+
+  it('separates a model objection from a failed call', () => {
+    expect(gateFinding({ verdict: 'blocked', reason: 'flagged' }, 'aaa')).toBe(
+      'haiku-gate-flagged:aaa',
+    );
+    expect(gateFinding({ verdict: 'blocked', reason: 'error' }, 'aaa')).toBe(
+      'haiku-gate-error:aaa',
+    );
+  });
+
+  it('records nothing when the gate cleared the variant', () => {
+    expect(gateFinding({ verdict: 'clean', reason: 'clean' }, 'aaa')).toBeNull();
+  });
+
+  it('never emits the ambiguous legacy label', () => {
+    const labels = [
+      gateFinding(undefined, 'h'),
+      gateFinding({ verdict: 'blocked', reason: 'flagged' }, 'h'),
+      gateFinding({ verdict: 'blocked', reason: 'error' }, 'h'),
+    ];
+    for (const label of labels) expect(label).not.toBe('haiku-gate:h');
+  });
+});
 
 describe('tokenLevenshteinRatio (§6.2 / Gate 3 divergence diagnostic)', () => {
   it('identical texts → 1, disjoint texts → 0', () => {

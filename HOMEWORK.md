@@ -470,7 +470,35 @@ it projects `counts.occurrences`, `piiScanStatus` and `category`, and nothing el
 report by `pipelineVersion` is a pure-metadata addition** — no new field, no confidentiality change —
 and it would say immediately whether the 477 spans generations.
 
-Until that is done, treat the three conclusions above as **directionally sound but measured on a
+### ▶ J1b — BUILT 2026-08-07, needs one $0 dispatch
+
+Both gaps above are now closed in code. **`STAGE=clause-audit`, `firm-001` / `pilot-1`** — same
+inputs as run #81, still metadata-only, still no LLM, still $0 — now additionally reports:
+
+- **`blockReasons`** — for every blocked family, *which net fired*: a **roster** hit (the
+  Aho-Corasick sweep matched a real name from the run's own party roster) versus the **model gate**
+  alone. Split per family (`rosterOnly` / `gateOnly` / `both`) and per finding, plus the count of
+  **distinct** roster terms. **This is the number C1 turns on.** The terms themselves are never
+  emitted — a roster finding *contains the client surname*, so the report counts them and nothing
+  more, with a test asserting no term survives serialisation.
+- **`generations`** — catalog docs grouped by `pipelineVersion` with `updatedAt` bounds. More than
+  one row and the report says so in prose: the totals are the size of the *collection*, not of a run.
+- **`coverage`** — how many blocked catalog families the artifact actually covers. The
+  477-vs-302 gap should surface here as `missingFromArtifact`.
+
+**Read the result with one caveat in front of you.** Every gate finding in the *existing* pilot-1
+artifact carries the old bare `haiku-gate:` label, which conflated "the model objected", "the batch
+errored" and "no verdict came back". The audit reports those as `gate-unspecified` and refuses to
+call them objections. `canonicalize` now writes `haiku-gate-flagged` / `-error` / `-missing`
+separately (fail-closed unchanged — a variant with no verdict still blocks), so the three become
+distinguishable **after the next canonicalize run**, not before.
+
+So the dispatch answers *roster vs gate* — which is the load-bearing half — and leaves *why the
+gate objected* to the remediation re-run. If the split comes back roster-heavy, the text really does
+carry client names and C1 is a remediation question, not a tuning one. If it comes back gate-heavy,
+the gate is the whole story.
+
+Until that runs, treat the three conclusions above as **directionally sound but measured on a
 possibly-mixed denominator**. The shape is not in doubt — a stale generation would have to be
 implausibly different to move a 94.5% blanket block rate or to unblock any of 17/17 seed matches —
 but the exact figures should be restated after the grouping lands.
