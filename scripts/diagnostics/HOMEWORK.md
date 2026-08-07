@@ -1,5 +1,35 @@
 # Statular package analysis — branch homework
 
+## ▶▶ START HERE — two open items, take them head on
+
+**1. Draft the trust prose. This is the work.**
+`functions/src/templates/trust-joint.hbs` — **151** `[[DRAFT: ...]]` stubs.
+`functions/src/templates/trust-single.hbs` — **134**.
+
+Everything else is done. The pipeline is wired, the article spine is validated against a
+reference instrument, the conditionals are bound to real fields, and both templates render
+clean. The only thing standing between the current AI-generated trusts and deterministic
+template rendering is the prose — and it is attorney work product, not model output. It carries
+a bar number.
+
+No code change follows it. `loadBundledTemplate` holds a file back while it still contains
+`[[DRAFT`; the moment the last marker goes, that trust starts rendering from the template on
+its own. Work one article at a time and run `npm run test` after each — a partially drafted
+file stays held back, which is intended, not a failure.
+
+⚠ `npm run test` needs `npm ci --prefix functions` first, or 36 files fail on an import error
+that reads like a real break.
+
+Do **not** add or remove sections. See *Package 3* below for the 13 conditional sections and
+what gates each one.
+
+**2. Prune five merged branches — and you cannot do it from a remote session.**
+The session git proxy returns `HTTP 403` on ref deletion and there is no delete-branch tool in
+the GitHub MCP set. Do not retry it here; run it from a local checkout or GitHub's UI. Command
+and the safety verification are in *OUTSTANDING — prune five merged branches* below.
+
+---
+
 **Scope:** a record of the 2026-08-02 DOCX forensics pass, kept beside the harness that produced
 it. It does **not** replace the root `HOMEWORK.md` and its contents should not be folded into it.
 
