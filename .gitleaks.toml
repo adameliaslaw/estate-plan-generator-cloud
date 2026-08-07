@@ -1,0 +1,25 @@
+# Gitleaks configuration — extends the default ruleset.
+#
+# The allowlist below carries the two values in this repository that pattern-
+# match as secrets but are not:
+#
+#   1. The Firebase *web* API key. It identifies the Firebase project and is
+#      baked into every client bundle served from estate-plan-generator.web.app
+#      — public by design (access control lives in firestore.rules / App
+#      Check, never in this key). It appears in the hosting deploy workflow
+#      and, historically, in firebase-config.json.
+#   2. The e-sign HMAC test fixture in tests/unit/esign-hmac.test.ts.
+#
+# Genuinely-leaked-then-rotated historical findings are NOT allowlisted here —
+# they are pinned by fingerprint in .gitleaksignore, where each line documents
+# the rotation evidence. New findings fail the Secret Scan workflow.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secrets: public Firebase web API key + test fixtures"
+regexes = [
+  '''AIzaSyCMSjBKJ4vr8zXTPk2lpNNDWgCG4AR88oo''',
+  '''test_api_key_abc123''',
+]

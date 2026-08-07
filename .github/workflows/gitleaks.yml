@@ -1,0 +1,42 @@
+name: Secret Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history — the scan covers every commit, not just the push range,
+      # so a secret sneaked in several commits back still fails the next run.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Pinned binary + checksum instead of the marketplace action: no license
+      # dependency, and a supply-chain-tampered download fails the checksum
+      # step distinctly rather than "finding nothing".
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          curl -sSfL -o gitleaks.tgz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+
+      # Picks up .gitleaks.toml (allowlisted non-secrets) and .gitleaksignore
+      # (fingerprints of dead historical leaks) from the repo root. --redact
+      # keeps any hit out of the public log; the finding's location is enough.
+      - name: Scan full git history
+        run: ./gitleaks git --no-banner --redact --verbose .

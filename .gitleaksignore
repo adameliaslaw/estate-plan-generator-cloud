@@ -1,0 +1,25 @@
+# Historical findings in files long since deleted from the tree. Every entry
+# below is a credential that is verifiably dead, plus the OAuth/account state
+# files that carried them. The blobs remain in git history (rewrite marked
+# optional in HOMEWORK.md — the credentials are inert); these fingerprints
+# keep the full-history scan green without allowlisting the patterns, so a
+# NEW occurrence of any of these shapes still fails the Secret Scan workflow.
+#
+# service-account.json (5ee4084a): firebase-adminsdk key bdb5f411… — auto-
+# disabled by Google's scanner (EXPOSED), deleted, replaced 2026-07-27.
+5ee4084adb65fcbb68a753d1811ce07e22880c20:service-account.json:private-key:5
+# .gitignore paste accident (223bdeb9): appspot SA key c059f6a5… — verified
+# deleted from GCP 2026-07-27 (HOMEWORK.md session record).
+223bdeb9ce3f87cffbd39a90005fd8162d22b88a:.gitignore:private-key:81
+# auth.json / accounts.json (Firebase CLI auth state, committed by accident,
+# deleted from the tree): OAuth credentials rotated 2026-04-23 — versions 1–4
+# destroyed, stable on v5 (HOMEWORK-ARCHIVE.md).
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:6
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:18
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:30
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:41
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:145
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:175
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:187
+32e70abde1df7709d44c1fcf538d71de6cb3504a:auth.json:generic-api-key:199
+46c60f4fb0437010c96e467a24e486720e5f8d03:accounts.json:generic-api-key:24
