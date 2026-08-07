@@ -15,7 +15,14 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { PDFDocument } from 'pdf-lib';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// Full-suite load pushes the fill/read-back cycles near vitest's 5s default,
+// and each new test file in the suite adds contention — this file flaked once
+// the suite grew (the risk scripts/diagnostics/HOMEWORK.md documents). PDF
+// work is legitimately slow; give the file its own ceiling instead of letting
+// suite growth decide when it times out.
+vi.setConfig({ testTimeout: 30_000 });
 import { computeEstate } from '../../functions/src/inheritance-tax/engine';
 import { buildITRFormData } from '../../functions/src/inheritance-tax/forms';
 import { fillITRPdf } from '../../functions/src/inheritance-tax/forms/it-r-pdf';

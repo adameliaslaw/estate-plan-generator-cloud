@@ -15,7 +15,7 @@ import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { loadFirmSecrets } from './firm-secrets';
-import { callAI, sanitizeForPrompt, type FirmData, callPerplexityWithCitations } from './ai-client';
+import { callAI, sanitizeForPrompt, sanitizeObject, type FirmData, callPerplexityWithCitations } from './ai-client';
 import { searchCaseLaw, formatCaseCitations } from './courtlistener-client';
 import { aggregateClientContext, ClientContext, aggregateMinimalContext, KBSnapshot, DocSnapshot } from './client-context-aggregator';
 import { getLearningContext, formatLearningPrompt } from './template-learning';
@@ -385,8 +385,10 @@ async function buildContextString(
         contextStr += formatKBForPrompt(ctx.knowledgeResources);
       }
 
-      // Full client data as JSON for comprehensive context
-      contextStr += `\n\nFULL CLIENT DATA:\n${JSON.stringify(ctx.client, null, 2).slice(0, 8000)}`;
+      // Full client data as JSON for comprehensive context. Sanitized field-by-
+      // field first — every string in this record is client/attorney-authored
+      // free text, the classic indirect-prompt-injection carrier (issue #169).
+      contextStr += `\n\nFULL CLIENT DATA:\n${JSON.stringify(sanitizeObject(ctx.client), null, 2).slice(0, 8000)}`;
       contextStr += `\n\nFIRM: ${ctx.firm.firmName}, ${ctx.firm.firmAddress}, ${ctx.firm.firmPhone}`;
       contextStr += `\nBar Number: ${ctx.firm.barNumber ?? ''}`;
     } catch (err) {
@@ -395,7 +397,7 @@ async function buildContextString(
       const clientDoc = await admin.firestore()
         .collection('firms').doc(firmId).collection('clients').doc(clientId).get();
       if (clientDoc.exists) {
-        contextStr += `\nViewing Client: ${JSON.stringify(clientDoc.data())}`;
+        contextStr += `\nViewing Client: ${JSON.stringify(sanitizeObject(clientDoc.data()))}`;
       }
     }
   } else {
@@ -414,7 +416,7 @@ async function buildContextString(
   }
 
   if (contextParams) {
-    contextStr += `\nAdditional UI Context: ${JSON.stringify(contextParams)}`;
+    contextStr += `\nAdditional UI Context: ${JSON.stringify(sanitizeObject(contextParams))}`;
   }
 
   return contextStr;
