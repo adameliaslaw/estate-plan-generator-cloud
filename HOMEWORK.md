@@ -254,9 +254,12 @@ the resume-point note above updated (J1b ran; C1's gate is now Adam's roster-ter
   confidentiality exposure — the live KB templates in Storage still carry the old leak).
 - **Adam, hours:** the trust prose — 283 `[[DRAFT]]` markers across the two skeletons
   (`scripts/diagnostics/HOMEWORK.md` has the protocol). This is the whole remaining templatizer task.
-- **Agent, immediately available:** A2 (watch the first real `{{#firmClauses}}` fill — it fails
-  silently by design) · triage the 11 open issues into this list · J2 (benchmark #280's review
-  engine) · then C2/C3 once C1 is settled, then D1.
+- **Agent, immediately available:** ~~A2~~ (✅ done 2026-08-07 — silent-empty confirmed twice over,
+  raw-token leak fixed; see section A and new decision **C5**) · ~~triage the 11 open issues~~
+  (✅ done 2026-08-07 — see new section **K**; #177 closed, nine folded in with owners) ·
+  from K, agent-immediate: **#171** welcome-email fix, **#169** chat-ai sanitize, **#166**
+  escaping, gitleaks CI step · J2 (benchmark #280's review engine) · then C2/C3 once C1 is
+  settled, then D1.
 
 ---
 
@@ -290,7 +293,7 @@ reproduced here.
 | # | Item | Why it is first |
 |---|------|-----------------|
 | ~~**A1**~~ | ~~**Confirm the PII scrub actually ran against prod.**~~ **✅ VERIFIED 2026-08-06 — it ran.** | See below. |
-| **A2** 🆕 | **Watch the first real `{{#firmClauses}}` fill.** The clause library's deterministic path (#295) is wired end to end — `generateHighFidelityDocx` loads the catalog, runs the same `selectClausesForDocument` the generator uses, and the template carries a three-paragraph loop region before the execution block. It has **only ever been exercised with synthetic clauses**: an empty array leaves the document byte-identical, three test clauses render one paragraph each. It has never met a real catalog entry. | Cheap to check and it fails quietly if wrong. `selectClausesForDocument` **skips** any clause whose placeholders do not fully resolve, so a catalog whose tokens do not match `buildClausePlaceholderValues` produces an empty region and a document that looks perfectly normal — the clauses simply are not there. Look for the `[generateHighFidelityDocx] Clause library (…)` log line, which reports the selection, and compare it against the region actually rendered. Note this only runs on the high-fidelity `.docx` path; the hybrid/AI path still goes through `buildClausePromptBlock`. |
+| ~~**A2**~~ 🆕 | ~~**Watch the first real `{{#firmClauses}}` fill.**~~ **✅ INVESTIGATED 2026-08-07 — the feared silent empty is real, twice over; one half fixed, the other is decision C5.** Static trace plus a local experiment running miner-shaped clauses through the real `selectClausesForDocument` + `fillDocxTemplate`. **(1) docType disjunction → C5:** `catalog.ts:250` stamps every mined clause `docType:'trust'`, but only the two *will* templates carry a `{{#firmClauses}}` region (`templatize-samples.cjs:1028,1032`) — a will fill routes all 26 approved clauses to `otherDocTypeCount` and renders an empty region; a trust fill logs "N injected" that never renders, because `Married_Trust.docx` has no region. **No mined clause can currently reach any document.** **(2) Gate/renderer asymmetry — FIXED 2026-08-07:** the gate folds ordinals (`{{TRUSTEE_1}}` satisfied by TRUSTEE) but the resolver correctly does not, and `{{XREF:Article FOURTH}}` is invisible to `PLACEHOLDER_RX` — so clauses shipped with **raw tokens in the final .docx**, undetected (`missingTags` can't see data). Fixed with a post-resolution residue check in `clause-selection.ts` (any remaining `{{…}}` → `skipped`), pinned by two tests that fail without it. | **Remaining live check:** one high-fidelity fill per docType against the real catalog, reading the `[generateHighFidelityDocx] Clause library (…)` line against the rendered region — which also reveals what tokens the 26 real clean families actually carry. |
 
 **A1 evidence — the scrub executed, and the run was on post-fix code.** Workflow run **#75**
 (job `92091639452`, 2026-08-04 18:31–18:36 UTC):
@@ -340,6 +343,7 @@ guarantee today rests on the writer scrubbing correctly, not on the rules refusi
 | **C2** | **Recall scope:** exclude corpus-unreachable will clauses from Gate 1's denominator, or treat 65% as the trust-only floor and revisit after the wills mine. | Either unblocks the catalog review. |
 | **C3** | **The two 5-minute calls:** (a) the 2 purity families — same clause reused or genuinely distinct? (b) canary — drop the 4 duplicated files from `CLAUSE_MINER_CANARY_FOLDER_IDS` and re-run `gates` ($0) for a clean holdout read. | Both gates currently fail for **scope** reasons, not correctness ones. |
 | **C4** | **Quarantine tail** — ~141 of 512 trusts never mined. **PENDING at Adam's word (2026-08-05: "leave it as pending").** | Nothing, while parked. Listed so it is not forgotten. |
+| **C5** 🆕 | **Resolve the clause docType disjunction** (found by A2, 2026-08-07): every mined clause is stamped `docType:'trust'` (`clause-miner/src/stages/catalog.ts:250`) while only the two **will** templates carry a `{{#firmClauses}}` region — so **no mined clause can render into any document today**, whatever C1 decides. Either add the region to the trust template (the corpus is trusts, so that is where the clauses belong — note the live KB copy is a manual Storage upload, same mechanics as B7) or stop hard-coding `'trust'` in the catalog stage. Cheap adjacent fixes when this is decided: log when `firmClauses` is non-empty but the template has no region tag; and `ADDRESS` is registered auto-fillable (`fill-contract.ts:119`) but absent from `buildClausePlaceholderValues` — supply it or drop it so the contract stays honest. | Blocks any real clause reaching any generated document. Sits with C1 — decide together. |
 
 ---
 
@@ -635,6 +639,29 @@ rediscovered, not because anyone is proposing to build them.
 **Also worth knowing:** their polish is not uniform — the custom client email arrived rendering
 `John SmithDear John Smith,`, a merge-variable concatenation bug. And their Code Search returned
 Internal Revenue Code hits on farm valuation and pooled income funds for a "No Contest Clause" query.
+
+---
+
+## K · 2026-07-18 ISSUE TRIAGE 🆕 (done 2026-08-07) — all 11 open issues dispositioned
+
+Every claim in every issue was re-verified against `main` at `85404f5`. **#177 closed with
+evidence** (CI failure fixed by #180 on 2026-07-20; 31 consecutive green deploys since). **#175
+stays open as the umbrella index** — 4 of its 13 children were fixed by PR #176 back in July
+(#163/#164/#165/#167). The nine live ones, folded here so the issues stop being untracked:
+
+| Issue | State on `main` today (verified) | Disposition |
+|---|---|---|
+| **#162** SA key in git history | Headline key `c059f6a5…` **provably dead** (7/27 GCP-verified session record below); history never rewritten (blob inert, marked optional); two stray user-managed keys still parked for Adam; **no secret scanner or push protection exists anywhere** — that half was tracked nowhere. | **Adam:** confirm the 7/27 record closes the headline; delete the two stray keys (parked item). **Agent:** add a gitleaks CI step. **Adam:** enable GitHub push protection. |
+| **#166** email callables | All six still take recipients from `request.data`, but `assertStaff()` (T6) closed the client-side path; Adam skipped T9 server-resolve (section I) — that half stands as decided. **Unfixed + untracked:** HTML-escaping gaps at `lawpay-integration.ts:461,467` (clientName/description) and `buildEmailHtml` (`email-notifications.ts:137-147`, firmName/logoUrl raw into every outbound email). | **Agent:** escape the LawPay email fields and `buildEmailHtml` inputs. Small, no Never-Break surface. |
+| **#168** Levitate sync | `levitate-sync.ts:44` still logs the webhook-URL **credential** in plaintext; full identity PII pushed on every client onCreate; no consent gate, no audit entry, failure only console.error'd. (Credential *storage* was already fixed pre-issue by #59 — secrets doc, browser sees Set/Last4 only.) | **Agent:** redact the log, minimize the payload, emit `integration_synced` audit entries. **Adam:** the consent / default-off gate — an RPC 1.6 disclosure question, same territory as the clause-corpus stance. |
+| **#169** chat-ai prompt injection | Verbatim as reported: `chat-ai.ts:389` and `:398` embed raw client JSON into prompts; `sanitizeObject` exists (`ai-client.ts:757`) and is simply unused; bonus raw embed at `:417`. Per-note text *is* sanitized (`:367`) — the fix pattern is already in the file. | **Agent, immediate:** wrap all three paths in `sanitizeObject` + unit test mirroring `ai-client-sanitize.test.ts`. |
+| **#170** portal trust boundary | Token minted once and reused forever (`create-registration-link.ts:53-62`; `registrationTokenCreatedAt` written, read by nothing); the claim path re-points `linkedUserId` **before** the rate limiter (`register-client.ts:115-131`); no expiry, revocation, or audit. Rules self-update has no `hasOnly` field allowlist (`firestore.rules:403-421`) — a client can write arbitrary fields on their own record, including `registrationToken`. Only H3's rate-limit shipped. | **Agent:** token TTL + rotation action + claim audit. **Agent + Adam sign-off (Never-Break):** the rules field allowlist (the idiom already exists at `:297-300` for users). Urgency rises when E1/E2 add a second public write path. |
+| **#171** welcome email never fires | Bug live, character-for-character: `email-notifications.ts:1293-1298` reads top-level `email`/`firstName`; every writer stores `personalInfo.*` (`register-client.ts:151`); the guard silently returns, so the welcome email **has never sent**. Its audit-trail call (added since) is dead code behind the guard. | **Agent, immediate:** ~2-line field-path fix + test. |
+| **#172** audit-trail gaps | All five claims current: zero `logAuditEvent` calls in export-pdf/docx/batch, drive-sync, levitate-sync (`document_exported`/`data_exported` are enum-only); no TTL/retention; blank actor in trigger context (`audit-trail.ts:250-251,325-326`); caller-trusted `logAccess`; the `>500 → cents` amount heuristic (`:293-298`). | **Agent:** audit the three export paths + syncs; write `amountCents` at creation. **Adam:** pick the retention period; agent then adds TTL. |
+| **#173** dependency/config hygiene | All ten claims current, including: no vuln scanning (26 root / 31 functions advisories today), CSP duplicated **and divergent** (`index.html:9` lacks the header's `*.8am.com` + maps.gstatic entries, so the intersection nullifies them), `window.__firebase` exposed unconditionally (`firebase.ts:120-123`), 14 files still on functions v1, duplicate `ClientDashboardPage` routes (`App.tsx:118,134`). | **Agent:** one hygiene PR — dep fixes, dependabot, `window.__firebase` DEV-gate (check admin-console usage first), dead enum emits, duplicate route. **Adam sign-off:** CSP single-sourcing (`firebase.json`, Never-Break-adjacent) and the v1→v2 migration. |
+| **#174** compliance & lifecycle | No client-deletion cascade or retention/TTL paths anywhere; no DPA register; e-sign still **defaults to test mode** (`esign-service.ts:182`) with no UI banner; per-firm `lawpayPaymentPageUrl` now exists (partial credit). No App Check (`enforceAppCheck` appears nowhere). | **Adam:** retention schedule, DPA register, e-sign default policy. **Agent after (banner now):** the TEST MODE banner just surfaces existing state and could ship immediately; `deleteClientData` cascade + TTLs once the schedule exists. |
+| **#175** umbrella audit report | 4/13 children fixed (PR #176); 9 dispositioned above. | Keep open as the index; close with a pointer-comment once the children land. |
+| **#177** CI hosting failure | Failures were on `5567ba3`/`5ad6f55` (Jul 18–20), caused by a broken e-sign test mock; fixed by PR #180 (`ada5c1a`, run #90 green 2026-07-20T23:03Z). Hosting deploys green ever since, #121 at `bb57a43` today. | **✅ CLOSED 2026-08-07 with evidence.** |
 
 ---
 

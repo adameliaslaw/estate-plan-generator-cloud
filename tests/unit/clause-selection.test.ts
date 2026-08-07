@@ -168,6 +168,43 @@ describe('placeholder handling', () => {
     ]);
   });
 
+  it('REFUSES a clause whose ordinal token passes the gate but not the resolver', () => {
+    // The gate folds {{TRUSTEE_1}} to its base, so a TRUSTEE value satisfies it —
+    // but the resolver deliberately does not fold: TRUSTEE_1 and TRUSTEE_2 may be
+    // different people, and filling both with one name would be wrong. Without a
+    // residue check the clause passes "fully resolved" and ships the raw token
+    // into the client's document, where docxtemplater treats it as data and
+    // missingTags never fires.
+    const sel = selectClausesForDocument({
+      docType: 'will',
+      values: VALUES, // TRUSTEE present, TRUSTEE_1 absent
+      entries: [
+        entry({ id: 'ord', title: 'Trustee Powers', canonicalText: 'I appoint {{TRUSTEE_1}} as trustee.' }),
+      ],
+    });
+    expect(sel.clauses).toEqual([]);
+    expect(sel.skipped).toEqual([
+      { id: 'ord', title: 'Trustee Powers', unresolved: ['TRUSTEE_1'] },
+    ]);
+  });
+
+  it('REFUSES a clause carrying a token the placeholder regex cannot see', () => {
+    // The miner emits {{XREF:Article FOURTH}} for canonicalized cross-references.
+    // Colon, space and lowercase make it invisible to PLACEHOLDER_RX, so the gate
+    // and the resolver both pass it through untouched.
+    const sel = selectClausesForDocument({
+      docType: 'will',
+      values: VALUES,
+      entries: [
+        entry({ id: 'xref', title: 'Residue', canonicalText: 'As provided in {{XREF:Article FOURTH}}.' }),
+      ],
+    });
+    expect(sel.clauses).toEqual([]);
+    expect(sel.skipped).toEqual([
+      { id: 'xref', title: 'Residue', unresolved: ['XREF:Article FOURTH'] },
+    ]);
+  });
+
   it('never emits an unresolved token into an injected clause', () => {
     const sel = selectClausesForDocument({
       docType: 'will',

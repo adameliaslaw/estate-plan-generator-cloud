@@ -116,6 +116,18 @@ export const MAX_INJECTED_CLAUSES = 25;
 const PLACEHOLDER_RX = /\{\{([A-Z0-9_]+)\}\}/g;
 
 /**
+ * Any {{…}} residue at all, whatever its alphabet. PLACEHOLDER_RX deliberately
+ * matches only registry-shaped tokens, which leaves two ways for a token to
+ * survive resolution: an ordinal ({{TRUSTEE_1}}) that the gate folds to its
+ * base but the resolver — correctly — does not fill, since TRUSTEE_1 and
+ * TRUSTEE_2 may be different people; and a token outside the registry alphabet
+ * entirely, like the miner's {{XREF:Article FOURTH}}. Either would ship raw
+ * into a client document as docxtemplater DATA, where missingTags cannot see
+ * it. So selection re-checks the RESOLVED text against this broader pattern.
+ */
+const RESIDUAL_TOKEN_RX = /\{\{([^{}]+)\}\}/g;
+
+/**
  * Fill {{PLACEHOLDER}} tokens from known values.
  *
  * Mirrors `resolveClausePlaceholders` in src/services/clause-library-service.ts
@@ -249,12 +261,15 @@ export function selectClausesForDocument(options: SelectClausesOptions): ClauseS
       skipped.push({ id: e.id, title, unresolved: missing });
       continue;
     }
-    clauses.push({
-      id: e.id,
-      title,
-      category: e.category,
-      text: resolveClausePlaceholders(raw, values).trim(),
-    });
+
+    const text = resolveClausePlaceholders(raw, values).trim();
+    const residual = [...new Set([...text.matchAll(RESIDUAL_TOKEN_RX)].map((m) => m[1]))];
+    if (residual.length > 0) {
+      skipped.push({ id: e.id, title, unresolved: residual });
+      continue;
+    }
+
+    clauses.push({ id: e.id, title, category: e.category, text });
   }
 
   // Stable order so the same client regenerates the same document.
