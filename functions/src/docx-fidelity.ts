@@ -90,6 +90,14 @@ export function buildDocxTemplateData(
   const executor = (fiduciaries.executor ?? {}) as Record<string, unknown>;
   const trustee = (fiduciaries.trustee ?? {}) as Record<string, unknown>;
   const guardian = (fiduciaries.guardian ?? {}) as Record<string, unknown>;
+  // Guardians are collected by the questionnaire into TOP-LEVEL guardianPrimary
+  // / guardianAlternate, not under fiduciaries.guardian — client-data-serializer
+  // falls back the same way. Reading only the nested slot left {{guardianName}}
+  // blank for every client whose guardian came through the questionnaire.
+  const guardianPrimary = guardian.primary ?? client.guardianPrimary;
+  const guardianAlternate = guardian.alternate ?? client.guardianAlternate;
+  const guardianCo = guardian.coGuardian ?? client.guardianCoPrimary;
+  const guardianCoAlternate = guardian.coAlternate ?? client.guardianCoAlternate;
   const healthcare = (fiduciaries.healthcareProxy ?? {}) as Record<string, unknown>;
   const funeral = (fiduciaries.funeralRepresentative ?? {}) as Record<string, unknown>;
   const person = (p: unknown): string =>
@@ -134,6 +142,7 @@ export function buildDocxTemplateData(
     clientZip: pi.zip ?? '',
     clientDob: pi.dob ?? '',
     maritalStatus: pi.maritalStatus ?? '',
+    funeralWishes: client.funeralWishes ?? '',
     // Fiduciaries
     executorName: person(executor.primary),
     alternateExecutorName: person(executor.alternate),
@@ -146,15 +155,15 @@ export function buildDocxTemplateData(
     trusteeName: person(trustee.primary),
     alternateTrusteeName: person(trustee.alternate),
     coTrusteeName: person(trustee.coTrustee),
-    guardianName: person(guardian.primary),
-    alternateGuardianName: person(guardian.alternate),
+    guardianName: person(guardianPrimary),
+    alternateGuardianName: person(guardianAlternate),
     poaAgentName: person(poa.agent),
     poaAlternateAgentName: person(poa.alternateAgent),
     poaSecondAlternateAgentName: person(poa.successorAgent),
     healthcareAgentName: person(healthcarePrimary),
     healthcareAlternateAgentName: person(healthcare.alternateAgent),
-    coGuardianName: person(guardian.coGuardian),
-    coAlternateGuardianName: person(guardian.coAlternate),
+    coGuardianName: person(guardianCo),
+    coAlternateGuardianName: person(guardianCoAlternate),
     // N.J.S.A. 45:27-22 — a statutory appointment separate from the executor.
     funeralRepresentativeName: person(funeral.primary),
     successorFuneralRepresentativeName: person(funeral.alternate),
@@ -169,16 +178,16 @@ export function buildDocxTemplateData(
     trusteeRelation: relation(trustee.primary),
     alternateTrusteeRelation: relation(trustee.alternate),
     coTrusteeRelation: relation(trustee.coTrustee),
-    guardianRelation: relation(guardian.primary),
-    alternateGuardianRelation: relation(guardian.alternate),
+    guardianRelation: relation(guardianPrimary),
+    alternateGuardianRelation: relation(guardianAlternate),
     poaAgentRelation: relation(poa.agent),
     poaAlternateAgentRelation: relation(poa.alternateAgent),
     healthcareAgentRelation: relation(healthcarePrimary),
     secondAlternateExecutorRelation: relation(executor.successor),
     poaSecondAlternateAgentRelation: relation(poa.successorAgent),
     healthcareAlternateAgentRelation: relation(healthcare.alternateAgent),
-    coGuardianRelation: relation(guardian.coGuardian),
-    coAlternateGuardianRelation: relation(guardian.coAlternate),
+    coGuardianRelation: relation(guardianCo),
+    coAlternateGuardianRelation: relation(guardianCoAlternate),
     funeralRepresentativeRelation: relation(funeral.primary),
     successorFuneralRepresentativeRelation: relation(funeral.alternate),
     // Fiduciaries' own addresses. The executor need not live with the client;
@@ -186,7 +195,7 @@ export function buildDocxTemplateData(
     executorAddress: address(executor.primary),
     alternateExecutorAddress: address(executor.alternate),
     trusteeAddress: address(trustee.primary),
-    guardianAddress: address(guardian.primary),
+    guardianAddress: address(guardianPrimary),
     poaAgentAddress: address(poa.agent),
     poaAlternateAgentAddress: address(poa.alternateAgent),
     healthcareAgentAddress: address(healthcarePrimary),

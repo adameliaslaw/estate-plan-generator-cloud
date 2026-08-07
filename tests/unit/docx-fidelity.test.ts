@@ -233,6 +233,56 @@ describe('buildDocxTemplateData', () => {
     expect(data.funeralRepresentativeRelation).toBe('mother');
   });
 
+  it('reads guardians from the top-level slot the questionnaire writes', () => {
+    // children_guardian writes guardianPrimary / guardianCoPrimary at the top
+    // level, not under fiduciaries.guardian. Reading only the nested slot left
+    // {{guardianName}} blank for every questionnaire-collected guardian.
+    const ctx = {
+      client: {
+        personalInfo: {},
+        fiduciaries: { executor: { primary: { name: 'A' } } },
+        guardianPrimary: { name: 'Ruth Vance', relationship: 'Mother' },
+        guardianCoPrimary: { name: 'Alan Vance', relationship: 'Father' },
+        guardianAlternate: { name: 'Kim Osei', relationship: 'Sister' },
+        guardianCoAlternate: { name: 'Tomas Osei', relationship: 'Brother-in-law' },
+        funeralWishes: 'To be buried at sea.',
+      },
+      firm: {},
+      computed: { clientFullName: 'Client', spouseTitle: '', spousePronouns: undefined },
+      notes: [],
+      existingDocuments: [],
+      knowledgeResources: [],
+    } as unknown as ClientContext;
+
+    const data = buildDocxTemplateData(ctx);
+    expect(data.guardianName).toBe('Ruth Vance');
+    expect(data.coGuardianName).toBe('Alan Vance');
+    expect(data.alternateGuardianName).toBe('Kim Osei');
+    expect(data.coAlternateGuardianName).toBe('Tomas Osei');
+    expect(data.guardianRelation).toBe('mother');
+    expect(data.funeralWishes).toBe('To be buried at sea.');
+  });
+
+  it('prefers the nested fiduciaries.guardian slot when both are present', () => {
+    const ctx = {
+      client: {
+        personalInfo: {},
+        fiduciaries: {
+          executor: { primary: { name: 'A' } },
+          guardian: { primary: { name: 'Nested Guardian' } },
+        },
+        guardianPrimary: { name: 'Top Level Guardian' },
+      },
+      firm: {},
+      computed: { clientFullName: 'Client', spouseTitle: '', spousePronouns: undefined },
+      notes: [],
+      existingDocuments: [],
+      knowledgeResources: [],
+    } as unknown as ClientContext;
+
+    expect(buildDocxTemplateData(ctx).guardianName).toBe('Nested Guardian');
+  });
+
   it('returns an empty relation rather than a partial address when unset', () => {
     const ctx = {
       client: { personalInfo: {}, fiduciaries: { executor: { primary: { name: 'A' } } } },

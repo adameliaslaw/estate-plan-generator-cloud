@@ -187,8 +187,16 @@ export interface QuestionnaireData {
     notes?: string;
     _pendingNameSplit?: { firstName: string; middleName: string; lastName: string; suffix: string };
   }>;
+  /** Free text the Will renders as the client's funeral directions. */
+  funeralWishes?: string;
   guardianPrimary?: Partial<FiduciaryPerson>;
+  /** Second guardian serving alongside guardianPrimary — a couple appointed
+   *  together. Kept at top level beside guardianPrimary rather than under
+   *  fiduciaries.guardian, which is where the rest of this questionnaire's
+   *  guardian data already lives. */
+  guardianCoPrimary?: Partial<FiduciaryPerson>;
   guardianAlternate?: Partial<FiduciaryPerson>;
+  guardianCoAlternate?: Partial<FiduciaryPerson>;
 
   // Section 4: Assets
   assets: Partial<Assets>;
@@ -294,6 +302,74 @@ export function createEmptyQuestionnaireData(): QuestionnaireData {
 // ============================================================================
 // Section metadata
 // ============================================================================
+
+// ----------------------------------------------------------------------------
+// Shared option lists
+//
+// These exist so steps added from here on share one list rather than another
+// inline copy. The steps written before this was introduced still carry their
+// own copies; they are identical, and rewriting them is a separate change.
+// ----------------------------------------------------------------------------
+
+export const SUFFIX_OPTIONS: SelectOption[] = [
+  { label: 'Jr.', value: 'Jr.' },
+  { label: 'Sr.', value: 'Sr.' },
+  { label: 'II', value: 'II' },
+  { label: 'III', value: 'III' },
+  { label: 'IV', value: 'IV' },
+  { label: 'Esq.', value: 'Esq.' },
+];
+
+/** Relationship words a document renders as an appositive: "my daughter, NAME". */
+export const RELATIONSHIP_OPTIONS: SelectOption[] = [
+        // 1st degree
+        { label: 'Spouse', value: 'Spouse' },
+        { label: 'Parent', value: 'Parent' },
+        { label: 'Mother', value: 'Mother' },
+        { label: 'Father', value: 'Father' },
+        { label: 'Son', value: 'Son' },
+        { label: 'Daughter', value: 'Daughter' },
+        { label: 'Child', value: 'Child' },
+        // 2nd degree
+        { label: 'Sibling', value: 'Sibling' },
+        { label: 'Brother', value: 'Brother' },
+        { label: 'Sister', value: 'Sister' },
+        { label: 'Grandparent', value: 'Grandparent' },
+        { label: 'Grandmother', value: 'Grandmother' },
+        { label: 'Grandfather', value: 'Grandfather' },
+        { label: 'Grandchild', value: 'Grandchild' },
+        { label: 'Grandson', value: 'Grandson' },
+        { label: 'Granddaughter', value: 'Granddaughter' },
+        // 3rd degree
+        { label: 'Uncle', value: 'Uncle' },
+        { label: 'Aunt', value: 'Aunt' },
+        { label: 'Nephew', value: 'Nephew' },
+        { label: 'Niece', value: 'Niece' },
+        { label: 'Great-Grandparent', value: 'Great-Grandparent' },
+        { label: 'Great-Grandchild', value: 'Great-Grandchild' },
+        // 4th degree
+        { label: 'First Cousin', value: 'First Cousin' },
+        { label: 'Great-Uncle', value: 'Great-Uncle' },
+        { label: 'Great-Aunt', value: 'Great-Aunt' },
+        { label: 'Great-Nephew', value: 'Great-Nephew' },
+        { label: 'Great-Niece', value: 'Great-Niece' },
+        { label: 'Great-Great-Grandparent', value: 'Great-Great-Grandparent' },
+        { label: 'Great-Great-Grandchild', value: 'Great-Great-Grandchild' },
+        // In-laws & other
+        { label: 'Mother-in-Law', value: 'Mother-in-Law' },
+        { label: 'Father-in-Law', value: 'Father-in-Law' },
+        { label: 'Son-in-Law', value: 'Son-in-Law' },
+        { label: 'Daughter-in-Law', value: 'Daughter-in-Law' },
+        { label: 'Brother-in-Law', value: 'Brother-in-Law' },
+        { label: 'Sister-in-Law', value: 'Sister-in-Law' },
+        { label: 'Stepparent', value: 'Stepparent' },
+        { label: 'Stepchild', value: 'Stepchild' },
+        { label: 'Stepsibling', value: 'Stepsibling' },
+        { label: 'Domestic Partner', value: 'Domestic Partner' },
+        { label: 'Friend', value: 'Friend' },
+        { label: 'Professional Advisor', value: 'Professional Advisor' },
+        { label: 'Other', value: 'Other' },
+      ];
 
 export const SECTION_META: SectionMeta[] = [
   {
@@ -1036,6 +1112,76 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
         width: 'full',
       },
       {
+        name: 'heading_guardian_co_primary',
+        label: 'Second Guardian (optional)',
+        type: 'heading',
+        helpText:
+          'If you want two people to serve together — a couple, for example — name the second here. Leave blank to appoint one guardian.',
+        width: 'full',
+      },
+      {
+        name: 'picker_guardian_co_primary',
+        targetPath: 'guardianCoPrimary',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
+        name: 'guardianCoPrimary.firstName',
+        label: 'First Name',
+        type: 'text',
+        placeholder: 'First name',
+        width: 'half',
+      },
+      {
+        name: 'guardianCoPrimary.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'guardianCoPrimary.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'guardianCoPrimary.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: SUFFIX_OPTIONS,
+      },
+      {
+        name: 'guardianCoPrimary.relationship',
+        label: 'Relationship to You',
+        type: 'combobox',
+        placeholder: 'Type to search…',
+        width: 'half',
+        options: RELATIONSHIP_OPTIONS,
+      },
+      {
+        name: 'guardianCoPrimary.gender',
+        label: 'Gender',
+        helpText: 'Used only to render correct pronouns in your documents. Optional.',
+        type: 'select',
+        width: 'half',
+        options: [
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'guardianCoPrimary',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
+      },
+      {
         name: 'heading_guardian_alternate',
         label: 'Alternate Guardian',
         type: 'heading',
@@ -1136,6 +1282,75 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
       },
       {
         name: 'guardianAlternate',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
+      },
+      {
+        name: 'heading_guardian_co_alternate',
+        label: 'Second Alternate Guardian (optional)',
+        type: 'heading',
+        helpText: 'If two people should serve together as alternates.',
+        width: 'full',
+      },
+      {
+        name: 'picker_guardian_co_alternate',
+        targetPath: 'guardianCoAlternate',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
+        name: 'guardianCoAlternate.firstName',
+        label: 'First Name',
+        type: 'text',
+        placeholder: 'First name',
+        width: 'half',
+      },
+      {
+        name: 'guardianCoAlternate.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'guardianCoAlternate.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'guardianCoAlternate.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: SUFFIX_OPTIONS,
+      },
+      {
+        name: 'guardianCoAlternate.relationship',
+        label: 'Relationship to You',
+        type: 'combobox',
+        placeholder: 'Type to search…',
+        width: 'half',
+        options: RELATIONSHIP_OPTIONS,
+      },
+      {
+        name: 'guardianCoAlternate.gender',
+        label: 'Gender',
+        helpText: 'Used only to render correct pronouns in your documents. Optional.',
+        type: 'select',
+        width: 'half',
+        options: [
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'guardianCoAlternate',
         label: 'Address',
         type: 'address',
         width: 'full',
@@ -1900,6 +2115,174 @@ export const QUESTIONNAIRE_STEPS: QuestionnaireStep[] = [
     ],
   },
 
+  {
+    id: 'fiduciaries_funeral',
+    section: 'fiduciaries',
+    title: 'Who should control your funeral arrangements?',
+    subtitle:
+      'New Jersey law (N.J.S.A. 45:27-22) lets you name a Funeral Representative in your Will — the person who decides your funeral arrangements and the disposition of your remains. It is a separate appointment from your Executor, though many people name the same person. If you are not sure, you can skip this step and discuss it during your consultation.',
+    estimatedMinutes: 1,
+    fields: [
+      {
+        name: 'heading_funeral_primary',
+        label: 'Funeral Representative',
+        type: 'heading',
+        width: 'full',
+      },
+      {
+        name: 'picker_funeral_primary',
+        targetPath: 'fiduciaries.funeralRepresentative.primary',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.firstName',
+        label: 'First Name',
+        type: 'text',
+        placeholder: 'First name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: SUFFIX_OPTIONS,
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.relationship',
+        label: 'Relationship to You',
+        type: 'combobox',
+        placeholder: 'Type to search…',
+        width: 'half',
+        options: RELATIONSHIP_OPTIONS,
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.gender',
+        label: 'Gender',
+        helpText: 'Used only to render correct pronouns in your documents. Optional.',
+        type: 'select',
+        width: 'half',
+        options: [
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary.phone',
+        label: 'Phone',
+        type: 'phone',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.primary',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
+      },
+      {
+        name: 'heading_funeral_alternate',
+        label: 'Alternate Funeral Representative',
+        type: 'heading',
+        helpText: 'In case your first choice is unable or unwilling to serve.',
+        width: 'full',
+      },
+      {
+        name: 'picker_funeral_alternate',
+        targetPath: 'fiduciaries.funeralRepresentative.alternate',
+        label: 'Pick from people already in the questionnaire',
+        helpText: 'Selecting a person auto-fills the name and address below. You can still edit any field after selecting.',
+        type: 'personPicker',
+        width: 'full',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.firstName',
+        label: 'First Name',
+        type: 'text',
+        placeholder: 'First name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.middleName',
+        label: 'Middle Name',
+        type: 'text',
+        placeholder: 'Middle name (optional)',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.lastName',
+        label: 'Last Name',
+        type: 'text',
+        placeholder: 'Last name',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.suffix',
+        label: 'Suffix',
+        type: 'select',
+        placeholder: 'Jr., Sr., III…',
+        width: 'third',
+        options: SUFFIX_OPTIONS,
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.relationship',
+        label: 'Relationship to You',
+        type: 'combobox',
+        placeholder: 'Type to search…',
+        width: 'half',
+        options: RELATIONSHIP_OPTIONS,
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.gender',
+        label: 'Gender',
+        helpText: 'Used only to render correct pronouns in your documents. Optional.',
+        type: 'select',
+        width: 'half',
+        options: [
+          { label: 'Male', value: 'male' },
+          { label: 'Female', value: 'female' },
+        ],
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate.phone',
+        label: 'Phone',
+        type: 'phone',
+        width: 'half',
+      },
+      {
+        name: 'fiduciaries.funeralRepresentative.alternate',
+        label: 'Address',
+        type: 'address',
+        width: 'full',
+      },
+      {
+        name: 'funeralWishes',
+        label: 'Funeral and burial wishes',
+        helpText:
+          'Anything you want your Funeral Representative to follow — burial, cremation, a particular cemetery or service. Left blank, your Will simply appoints the representative without directing them.',
+        type: 'textarea',
+        placeholder: 'e.g. To be cremated.',
+        width: 'full',
+      },
+    ],
+  },
   {
     id: 'fiduciaries_trustee',
     section: 'fiduciaries',

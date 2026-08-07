@@ -251,6 +251,7 @@ guarantee today rests on the writer scrubbing correctly, not on the rules refusi
 | ~~**B3**~~ | ~~**Triage five stale open PRs.**~~ **✅ DONE 2026-08-06.** Three resolved, two await sign-off. | **Closed #21** — would have *regressed* CLAUDE.md, describing AI routing as a three-provider automatic cascade when `main` correctly says there is none. **Closed #215** — its content is already on `main` twice (section I row, and the ❌ NOT DOING section). **Merged #260** — DOCX forensics harness, verified against a real DOCX first; its branch homework had its spent constraints marked before merging. **#266 and #258 remain open for your sign-off — see B5.** |
 | **B5** 🆕 | **Sign off the template pair, in order: #266 then #258.** | Both are Never-Break (`src/types/index.ts`; plus `templates/*.hbs` for #258). **Traced, not assumed: each is a no-op alone.** `getTemplate()` has one caller, which has three callers, all passing `undefined` for `variant` — so #266's lookups all return null and fall through to AI, and #258's `.hbs` files are unreachable without #266. **Whichever merges second flips trust generation from 100% AI to deterministic template.** That is the moment to be deliberate about. Merge #266 first (the no-op, smaller diff, makes #258 testable); then read the two `.hbs` files for prose before merging #258 — that is the part no tracing can verify for you. |
 | **B6** 🆕 | **Decide whether `samples/interactivelegal/` belongs in git.** | Nine HotDocs-derived `.docx` files that look like **real client matters** — named wills, POAs and trusts. Confirmed by inspection: one carries a client name in the filename, `last_modified_by: Adam Elias`, `revision: 91`. Raised in #260's analysis and not acted on. This is a confidentiality question, not a tidiness one, and it sits in the same territory as `piiBlocked=276`: the clause corpus is gated precisely because real client documents must not leak, while these sit unredacted in the repo. Note that removing them from `HEAD` does not remove them from history. |
+| **B7** 🆕 | **Replace the three live Knowledge Base templates** (`NJ_Will_Married.docx`, `NJ_POA_Married.docx`, `NJ_HC_Married.docx`) **with the regenerated files.** | The live copies were built by the old templatizer and still carry the source client's name, their family's names and their home address, plus single-brace `{client_name}` placeholders that docxtemplater never fills. #295 fixed the generator and the corrected files were delivered in-session, but **the generator does not touch Storage** — replacing the live copies is a manual upload. Until then, generation from the KB copies keeps producing the old output. Regenerate any time with `npm ci --prefix functions && node scripts/diagnostics/templatize-samples.cjs`; it exits non-zero if anything is wrong. |
 | **B4** | **Delete `feat/nj-inheritance-tax-engine`.** | Verified fully superseded: 64 inheritance-tax paths on `main` vs 37 on the branch, **zero unique to the branch**, `main`'s copies later where they differ, `engine/classify.ts` byte-identical, and the branch's page/service/route/sidebar commits all live on `main`. No merge base — it was an unrelated-history import — which never mattered. |
 
 ---
@@ -334,6 +335,8 @@ Questionnaires · Client Portal · Public Intake Questionnaires · Client Email 
 | **H1** | **A real payment through the payment page** — proves the LawPay webhook end to end after #186. Existing "Paid" records came from Record Payment and the payment-page link, never from the card dialog. |
 | **H2** | **Open a pre-allocation-model matter in the browser** — normalisation is tested; the screen reading correctly afterwards is not. |
 | **H3** | **App Check / reCAPTCHA provisioning** — `registerClientFromLink` is public; rate-limit shipped, App Check still unset. Becomes more pressing once E1/E2 add a second unauthenticated write path. |
+| **H4** 🆕 | **The guardian article's grammar when no relationship is captured.** Renders "I appoint GUARDIAN, as guardians of the person" — a stray comma and a plural for one person, inherited from the sample's "my parents, A and B, as guardians" phrasing. Fixing it means **editing attorney prose**, not substituting into it, which is why it was left. Two minutes with the sentence in front of you. |
+| **H5** 🆕 | **Existing clients have no funeral representative and no co-guardian.** #300 added the questionnaire steps; it did not backfill. Those articles keep omitting for anyone who completed intake earlier — correct behaviour, not a regression, but worth knowing before you wonder why a re-generated will is missing them. |
 
 ---
 
@@ -611,6 +614,55 @@ by percentage**, not a general-purpose bequest algebra.
 
 **Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. Throwaway work
 covering one sixth of the problem.
+
+---
+
+## 🔵 SESSION — 2026-08-07 (the templatizer — every generated document carried one client's data)
+
+Adam: *"Scrub the document templates … less of a security concern and more of a functional issue
+of not templatizing properly."* He was right on both counts, and right again later that the
+templates were "entirely dysfunctional" — the errors were symptoms of one thing, not a list.
+
+**The mechanism.** A finished client document is an *instance* of a template, not a template.
+`scripts/diagnostics/templatize-samples.cjs` recovered the variable **values** by find-and-replace
+and could never recover the variable **structure**, because every conditional had already been
+resolved into flat prose when the sample was printed.
+
+**What was actually wrong** — five defects, each breaking a document on its own:
+
+1. **Single-brace `{client_name}`.** `docx-fidelity.ts` configures docxtemplater with `{{ }}`, so
+   these were never placeholders; they printed literally.
+2. **Run splitting — the one that leaked names.** Word breaks a paragraph into `<w:r>`/`<w:t>` runs
+   at arbitrary points. `16 Saddle Court, Monroe Township, New Jersey` is visible **twice** per
+   Byrnes document and appears **zero** times in the raw `document.xml`. `Vita Maria Rizzo` is
+   visible 12 times in the trust, zero in the XML. A regex over the XML matched nothing, replaced
+   nothing, and printed "Successfully templatized".
+3. **The maps covered 6 of ~20 real people** per document set.
+4. **One placeholder per person**, when a spouse is commonly also the executor and Anthony Esernio
+   holds four different roles across the set.
+5. **`'Married' → 'Single'`** relabelled a married will while leaving every spouse clause intact.
+
+**Shipped — #295 (merged `4d33eca`, functions deploy #168 and hosting #120 both green):**
+run-aware replacement; role resolution by appointment slot; witnesses templatized rather than
+allowlisted on an inference; the conditionals restored so articles omit instead of naming nobody;
+relationship fields so "my Husband" becomes whoever actually fills the slot; and the clause
+library's **first deterministic path** — a `{{#firmClauses}}` region places approved language
+verbatim, which `buildClausePromptBlock` can only ask a model to respect.
+
+**Shipped — #300:** questionnaire steps for the NJ funeral representative (N.J.S.A. 45:27-22) and
+co-guardians, plus a bug #295 introduced — `buildDocxTemplateData` read guardians only from
+`fiduciaries.guardian`, but the questionnaire writes them to top-level `guardianPrimary`, so
+`{{guardianName}}` was blank and the article printed "I appoint , as guardians".
+
+**Method note worth carrying.** Almost every defect after the first was found by a *gate*, not by
+reading: `ARTICLE XI` also matches `ARTICLE XIINo Contest` (the No Contest heading was being
+suppressed); the trustee cue claimed the trust's signature block; `BACKED_FIELDS` was a hand-kept
+copy of the contract that had already drifted. And once, a failure-path probe overwrote the real
+output and the next thing verified was the broken build — hence `TEMPLATE_OUT`. Adam also caught a
+genuine failure of mine: I showed fabricated test names (the "Torres" family) next to real ones
+without labelling them, and had twice stated an inference as fact.
+
+**▶ NEXT:** **B7** — the live KB copies still need replacing; nothing else in this arc is blocked.
 
 ---
 
