@@ -271,7 +271,7 @@ guarantee today rests on the writer scrubbing correctly, not on the rules refusi
 
 | # | Decision | What it blocks |
 |---|----------|----------------|
-| **C1** 🆕 | **Clause library strategy — which clauses are worth carrying?** **Reframed 2026-08-06 (second video pass); the earlier framing is struck.** It previously read "curate ~60, or unblock the 276," resting on Statular shipping 57. That is not a standard — 57 is equally consistent with an early-stage tool, and a count says nothing about whether a given clause earns its place. Neither 57 nor 302 is a target. The real question is a **value test**: does the clause neutralise a nameable failure mode, is it anchored to a citation, is it reused across matters, is it non-obvious under time pressure, and is it absent from the template? | Still **upstream of C2, C3 and C4**. ~~do J1 first~~ — **J1 RAN 2026-08-06; see its read-out in section J.** What it changes: the "curate down to ~60" half is **struck by measurement** — zero families occur fewer than three times, so there is no noise tail to curate away and no evidence for any target count. The live question is now only the second half — **the 451 of 477 families (94.5%) behind the PII gate, including 17 of 17 seed-matched ones.** Whether that is over-blocking or honest blocking is **still unmeasured**, and the one diagnostic that separates them (the `roster:` vs `haiku-gate:` split already sitting in `piiFindings`) costs $0 and has not been run. **Do that before deciding C1.** |
+| **C1** 🆕 | **Clause library strategy — which clauses are worth carrying?** **Reframed 2026-08-06 (second video pass); the earlier framing is struck.** It previously read "curate ~60, or unblock the 276," resting on Statular shipping 57. That is not a standard — 57 is equally consistent with an early-stage tool, and a count says nothing about whether a given clause earns its place. Neither 57 nor 302 is a target. The real question is a **value test**: does the clause neutralise a nameable failure mode, is it anchored to a citation, is it reused across matters, is it non-obvious under time pressure, and is it absent from the template? | Still **upstream of C2, C3 and C4**. ~~do J1 first~~ — **J1 RAN 2026-08-06; see its read-out in section J.** What it changes: the "curate down to ~60" half is **struck by measurement** — zero families occur fewer than three times, so there is no noise tail to curate away and no evidence for any target count. The live question was the second half — **the 451 of 477 families (94.5%) behind the PII gate, including 17 of 17 seed-matched ones** — and **J1b answered its mechanism on 2026-08-07: 276 of 276 measurable families are blocked by a ROSTER hit, zero by the model gate alone.** So the block is the deterministic name sweep finding names in the text, not a model being over-cautious; **tuning the model gate is ruled out**. What remains before C1 is one cheap human check: **are all 104 distinct roster terms actually client names?** They are Adam's own clients' names, so reading the list settles it in minutes — see the J1b read-out in section J. |
 | **C2** | **Recall scope:** exclude corpus-unreachable will clauses from Gate 1's denominator, or treat 65% as the trust-only floor and revisit after the wills mine. | Either unblocks the catalog review. |
 | **C3** | **The two 5-minute calls:** (a) the 2 purity families — same clause reused or genuinely distinct? (b) canary — drop the 4 duplicated files from `CLAUSE_MINER_CANARY_FOLDER_IDS` and re-run `gates` ($0) for a clean holdout read. | Both gates currently fail for **scope** reasons, not correctness ones. |
 | **C4** | **Quarantine tail** — ~141 of 512 trusts never mined. **PENDING at Adam's word (2026-08-05: "leave it as pending").** | Nothing, while parked. Listed so it is not forgotten. |
@@ -470,7 +470,65 @@ it projects `counts.occurrences`, `piiScanStatus` and `category`, and nothing el
 report by `pipelineVersion` is a pure-metadata addition** — no new field, no confidentiality change —
 and it would say immediately whether the 477 spans generations.
 
-### ▶ J1b — BUILT 2026-08-07, needs one $0 dispatch
+### ✅ J1b RAN 2026-08-07 — C1's open question is ANSWERED: it is the roster, not the model
+
+Run **#82** (attempt 2; attempt 1 died on a Docker Hub `auth.docker.io` **500** fetching
+`node:22-bookworm` — external blip, the build never reached our code). `$0`, no AI.
+
+```
+blockReasons.coverage : catalogBlocked 451 · matchedInArtifact 276 · missingFromArtifact 175
+blockReasons.families : rosterOnly 235 · both 41 · gateOnly 0 · blockedWithNoFindings 0
+blockReasons.findings : roster 50,504 · gate-unspecified 167
+                        gate-flagged 0 · gate-error 0 · gate-missing 0 · unrecognized 0
+distinctRosterTerms   : 104
+```
+
+**Every single blocked family the artifact covers — 276 of 276 — has a roster hit. Not one was
+blocked by the model gate alone.** The hypothesis that the 94.5% rate comes from an over-aggressive
+*model* gate is **dead**: the model gate is not the mechanism. What is blocking the catalog is the
+deterministic Aho-Corasick sweep matching names drawn from the run's own party roster, in the clause
+text.
+
+**What that does and does not license.** It settles the *mechanism* beyond doubt. It does **not**
+establish that all 104 terms are genuine client names — the audit counts roster terms and never
+emits them, so it cannot see what they are. Two readings remain open and the numbers fit both:
+
+- **50,504 hits from 104 terms across 276 families** is ~183 hits per family. That is entirely
+  ordinary if a settlor's name recurs a handful of times per clause across dozens of variants —
+  trust prose names its parties constantly.
+- It is equally consistent with **a few terms being mis-extracted party names** — a common given
+  name, or a word an extraction pass mistook for a person — matching everywhere at once. The
+  §5.3 FP engineering (case-sensitive, whole-word, surname stoplist) guards legal-term *surnames*,
+  but a bare given name still matches alone by design.
+
+**The cheapest way to tell them apart is Adam, not more code.** The 104 terms are his own clients'
+names; there is no confidentiality barrier between him and that list, only between it and a report.
+Reading them takes minutes and settles it outright. **Recommended before any tuning work.** A
+leak-free alternative if that is inconvenient: report the hits-per-term *distribution* (max, median,
+top-10 counts, no terms) — one term carrying most of the 50,504 would convict itself.
+
+⚠️ **Do not tune the model gate.** It contributed **zero** gate-only blocks. Tuning it would change
+nothing and would burn a canonicalize re-run finding out.
+
+**The 477-vs-302 gap is confirmed and quantified: 175.** `missingFromArtifact: 175` is exactly
+`477 − 302`. Those families are in the catalog collection but not in pilot-1's canonical artifact,
+and the breakdown says nothing about them.
+
+⚠️ **Correction — the `generations` grouping did not do the job it was added for.** It returned a
+single row, `clause-miner/1`, covering all 477: `pipelineVersion` is a coarse package constant, not
+a per-run stamp, so it cannot separate generations and the multi-generation prose warning never
+fired. What *did* catch it was the artifact-coverage join, and the `updatedAt` bounds it reports —
+`2026-08-03T19:15:51Z → 2026-08-04T18:33:31Z` — which straddle two distinct catalog writes (#62 on
+the 3rd, #75 on the 4th). Useful, but by accident of the bounds rather than by the grouping key. **If
+generation separation is wanted properly, `catalog` must stamp the writing `runId`** — a one-field
+change, worth doing before the remediation re-run so the next audit does not need this footnote.
+
+**Still deferred to the remediation re-run:** the 167 `gate-unspecified` findings (all on the 41
+`both` families) keep the legacy label and cannot be split into objected / errored / never-ran.
+They change nothing about the conclusion above — those 41 families are blocked by roster hits
+regardless.
+
+### ~~▶ J1b — BUILT 2026-08-07, needs one $0 dispatch~~ (dispatched; result above)
 
 Both gaps above are now closed in code. **`STAGE=clause-audit`, `firm-001` / `pilot-1`** — same
 inputs as run #81, still metadata-only, still no LLM, still $0 — now additionally reports:
