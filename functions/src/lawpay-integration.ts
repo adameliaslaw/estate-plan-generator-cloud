@@ -617,7 +617,7 @@ export const lawpayWebhook = onRequest(
     } catch (parseError) {
       console.error('[lawpayWebhook] Failed to parse request body:', parseError);
       // Return 200 so LawPay doesn't retry a malformed payload
-      res.status(200).send('OK');
+      res.status(200).send('OK: malformed-body');
       return;
     }
 
@@ -628,7 +628,7 @@ export const lawpayWebhook = onRequest(
 
     if (!transactionId) {
       console.error('[lawpayWebhook] Missing data.id in webhook payload');
-      res.status(200).send('OK');
+      res.status(200).send('OK: missing-data-id');
       return;
     }
 
@@ -650,7 +650,7 @@ export const lawpayWebhook = onRequest(
       console.error(
         `[lawpayWebhook] Gateway does not know transactionId=${transactionId} — ignoring (payload was not authentic, or the charge is gone)`,
       );
-      res.status(200).send('OK');
+      res.status(200).send('OK: gateway-unknown-transaction');
       return;
     }
     const charge = lookup.charge;
@@ -660,7 +660,7 @@ export const lawpayWebhook = onRequest(
       console.error(
         `[lawpayWebhook] Refusing to mark paid — gateway status="${charge.status}" for transactionId=${transactionId}`,
       );
-      res.status(200).send('OK');
+      res.status(200).send(`OK: gateway-status-not-paid status="${charge.status}"`);
       return;
     }
 
@@ -702,7 +702,10 @@ export const lawpayWebhook = onRequest(
           console.warn(
             `[lawpayWebhook] No Payment doc found for transactionId=${transactionId}`,
           );
-          res.status(200).send('OK');
+          // referenceParts, not the reference itself: enough to tell "the gateway sent no
+          // usable reference" from "it sent one and the doc is gone", without putting firm and
+          // client ids in an HTTP body.
+          res.status(200).send(`OK: payment-doc-not-found reference-parts=${refParts.length}`);
           return;
         }
         paymentDocRef = snapshot.docs[0].ref;
@@ -723,14 +726,19 @@ export const lawpayWebhook = onRequest(
       if (!allowed) {
         // Unknown event type — log and acknowledge without mutating Firestore
         console.log(`[lawpayWebhook] Unhandled event type="${type}" — ignoring`);
-        res.status(200).send('OK');
+        res.status(200).send(`OK: unhandled-event-type type="${type}"`);
         return;
       }
+
+      // What the transaction actually did, so the response can say so. Without this the
+      // "skipped" and "updated" cases are both a bare 200 and are indistinguishable from outside.
+      let outcome = 'updated';
 
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(paymentDocRef!);
         if (!snap.exists) {
           console.warn(`[lawpayWebhook] Payment doc disappeared mid-transaction transactionId=${transactionId}`);
+          outcome = 'payment-doc-vanished';
           return;
         }
         const currentStatus = (snap.data() as Record<string, unknown>).status as string | undefined;
@@ -738,6 +746,7 @@ export const lawpayWebhook = onRequest(
           console.log(
             `[lawpayWebhook] Skipping ${type} — current status "${currentStatus}" not in allowed set [${allowed.join(', ')}]`,
           );
+          outcome = `transition-not-allowed from="${currentStatus}"`;
           return;
         }
 
@@ -769,13 +778,16 @@ export const lawpayWebhook = onRequest(
       });
 
       console.log(`[lawpayWebhook] Payment doc updated — transactionId=${transactionId} type=${type}`);
+      res.status(200).send(`OK: ${outcome}`);
+      return;
     } catch (error) {
       // Log the error but return 200 so LawPay doesn't retry indefinitely.
       // We rely on Cloud Logging alerts to catch persistent failures.
       console.error('[lawpayWebhook] Error processing webhook:', error);
+      // The message only — never the stack, and never anything read from the gateway.
+      res.status(200).send(`OK: handler-error ${error instanceof Error ? error.message : 'unknown'}`);
+      return;
     }
-
-    res.status(200).send('OK');
   },
 );
 

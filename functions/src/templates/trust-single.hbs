@@ -1,0 +1,330 @@
+{{!--
+  trust-single.hbs — Revocable Living Trust (one settlor)
+
+  SPINE: settlor's lifetime → settlor's death. No first/second-death sequence.
+  Use when personalInfo.maritalStatus !== 'Married', or when spouses want
+  separate trusts rather than a joint instrument.
+
+  Mirrors trust-joint.hbs section-for-section so the two stay diffable.
+  Prose marked [[DRAFT: ...]] is yours to fill.
+
+  REQUIRES the same schema additions listed at the bottom of trust-joint.hbs.
+--}}
+
+<h1 style="text-align:center; font-size:18pt; margin-bottom:4pt;">{{upper trustName}}</h1>
+<p style="text-align:center; font-size:10pt; color:#555; margin-bottom:24pt;">
+  A Revocable Living Trust &mdash; {{governingState}}
+  {{#if (eq governingState 'New Jersey')}}<br/>Pursuant to N.J.S.A. 3B:31-1 <em>et seq.</em>{{/if}}
+</p>
+
+<h2>DECLARATION OF TRUST</h2>
+
+<p><strong>Opening Declaration.</strong> This Trust Agreement is made on {{fillOrBlank executionDate}} by
+<strong>{{clientFullName}}</strong>, of {{personalInfo.address}}, {{personalInfo.city}},
+{{personalInfo.county}} County, {{personalInfo.state}} {{personalInfo.zip}}
+(the &ldquo;settlor,&rdquo; &ldquo;I,&rdquo; &ldquo;me,&rdquo; or &ldquo;my&rdquo;), as settlor and as initial trustee.</p>
+
+<p><strong>Family.</strong>
+{{#if (eq personalInfo.maritalStatus 'Married')}}I am married to {{fullName spouseInfo}}. [[DRAFT: intentional use of a separate rather than joint trust; elective share considerations]]
+{{else if (eq personalInfo.maritalStatus 'Widowed')}}I am a widow or widower. [[DRAFT: reference to predeceased spouse if relevant]]
+{{else if (eq personalInfo.maritalStatus 'Divorced')}}I am divorced. [[DRAFT: former spouse expressly excluded]]
+{{else}}I am not married.{{/if}}
+{{#hasItems children}}I have the following {{#if (gt children.length 1)}}children{{else}}child{{/if}}:</p>
+<ul>
+  {{#each children}}
+  <li><strong>{{name}}</strong>, born {{formatDate dob}}{{#if isMinor}} (a minor){{/if}}{{#if specialNeeds}} &mdash; see <em>Administration of Special Needs Trust(s)</em>{{/if}}</li>
+  {{/each}}
+</ul>
+<p>{{else}}I have no living children.</p><p>{{/hasItems}}
+[[DRAFT: class-gift intent; after-born and adopted children; deliberate omissions]]</p>
+
+<p><strong>Trust Estate.</strong> [[DRAFT: transfer of property to trustee; trust estate defined]]</p>
+<p><strong>Additions to Trust.</strong> [[DRAFT: additional property may be added by the settlor, by will, or by beneficiary designation]]</p>
+
+<h2>TRUSTEESHIP</h2>
+
+<p><strong>Settlor as Initial Trustee.</strong> I shall serve as initial trustee. [[DRAFT: authority while serving]]</p>
+
+{{#if fiduciaries.trustee.primary}}
+<p><strong>Successor Trustee.</strong> On my death, resignation, or incapacity, <strong>{{fullName fiduciaries.trustee.primary}}</strong>{{#if fiduciaries.trustee.primary.relationship}}, {{fiduciaries.trustee.primary.relationship}}{{/if}}{{#if fiduciaries.trustee.primary.city}}, of {{fiduciaries.trustee.primary.city}}, {{fiduciaries.trustee.primary.state}}{{/if}}, shall serve as successor trustee.</p>
+{{#if fiduciaries.trustee.alternate}}
+<p><strong>Alternate Successor Trustee.</strong> <strong>{{fullName fiduciaries.trustee.alternate}}</strong>{{#if fiduciaries.trustee.alternate.relationship}}, {{fiduciaries.trustee.alternate.relationship}}{{/if}}.</p>
+{{/if}}
+{{#if fiduciaries.trustee.successor}}
+<p><strong>Second Alternate Successor Trustee.</strong> <strong>{{fullName fiduciaries.trustee.successor}}</strong>{{#if fiduciaries.trustee.successor.relationship}}, {{fiduciaries.trustee.successor.relationship}}{{/if}}.</p>
+{{/if}}
+{{/if}}
+
+<p><strong>Vacancy in Office.</strong> [[DRAFT: appointment mechanism when all named trustees are unable to serve]]</p>
+
+{{#if fiduciaries.trustee.coTrustee}}
+<p><strong>Co-trustees.</strong> <strong>{{fullName fiduciaries.trustee.coTrustee}}</strong>{{#if fiduciaries.trustee.coTrustee.relationship}}, {{fiduciaries.trustee.coTrustee.relationship}},{{/if}} shall serve as co-trustee. [[DRAFT: concurrent authority; deadlock resolution]]</p>
+{{/if}}
+
+<p><strong>{{#if fiduciaries.trustee.bondRequired}}Bond Required{{else}}Waiver of Bond{{/if}}.</strong> [[DRAFT: {{#if fiduciaries.trustee.bondRequired}}bond requirement{{else}}no trustee shall be required to post bond or other security{{/if}}]]</p>
+
+<p><strong>Resignation of a Trustee.</strong> [[DRAFT: notice requirements; delivery of records to successor]]</p>
+
+<p><strong>Reimbursement and Compensation.</strong>
+{{#if (eq fiduciaries.trustee.compensation 'waived')}}[[DRAFT: trustee serves without compensation; expenses still reimbursed]]
+{{else if (eq fiduciaries.trustee.compensation 'fixed')}}[[DRAFT: fixed compensation of {{currency fiduciaries.trustee.compensationAmount}}]]
+{{else}}[[DRAFT: reasonable compensation per {{governingState}} statute; expense reimbursement]]{{/if}}</p>
+
+<p><strong>Limited Waiver of Duty to Account.</strong> [[DRAFT: waiver during settlor's lifetime; accounting duties on incapacity and after death]]</p>
+
+{{#if trustOptions.specialTrustee}}
+<p><strong>Special Trustee.</strong> [[DRAFT: appointment and removal; holds only those tax-sensitive powers an interested trustee may not exercise. See <em>Definition of Independent Trustee and Interested Trustee</em>]]</p>
+{{/if}}
+
+<p><strong>Depreciation Reserve.</strong> [[DRAFT: trustee's discretion whether to establish a reserve for depreciation, and the effect on income and principal accounting]]</p>
+<p><strong>Trustee&rsquo;s Liability.</strong> [[DRAFT: good-faith standard; exculpation limits; no liability for predecessor's acts]]</p>
+
+<h2>TRUSTEE POWERS</h2>
+
+<p><strong>General Powers of Trustee.</strong> [[DRAFT: broad grant{{#if (eq governingState 'New Jersey')}}, incorporating N.J.S.A. 3B:14-23{{/if}}]]</p>
+
+<p><strong>Specific Powers of Trustee.</strong> Without limiting the foregoing, the trustee may:</p>
+<ol>
+  <li><strong>Collect and Retain Trust Assets.</strong> [[DRAFT]]</li>
+  <li><strong>Manage Trust Assets.</strong> [[DRAFT]]</li>
+  <li><strong>Manage Financial Accounts.</strong> [[DRAFT]]</li>
+  <li><strong>Invest and Reinvest.</strong> [[DRAFT: prudent investor standard]]</li>
+  <li><strong>Manage Educational Savings Plans.</strong> [[DRAFT: 529 accounts]]</li>
+  <li><strong>Exercise the Rights of a Shareholder.</strong> [[DRAFT]]</li>
+  <li><strong>Hold and Deposit Securities.</strong> [[DRAFT: nominee name; custodial arrangements]]</li>
+  <li><strong>Borrow Money.</strong> [[DRAFT]]</li>
+  <li><strong>Act as Creditor.</strong> [[DRAFT]]</li>
+  <li><strong>Enter into Contracts and Agreements.</strong> [[DRAFT]]</li>
+  <li><strong>Hire Agents and Delegates.</strong> [[DRAFT: counsel, accountants, investment advisors]]</li>
+  <li><strong>Litigate and Settle Claims.</strong> [[DRAFT]]</li>
+  <li><strong>Purchase and Collect from Insurance Policies.</strong> [[DRAFT]]</li>
+  <li><strong>File Taxes and Make Tax Elections.</strong> [[DRAFT]]</li>
+  <li><strong>Obtain Public Benefits for Settlor.</strong> [[DRAFT]]</li>
+  <li><strong>Access Digital Devices, Accounts, and Assets.</strong> [[DRAFT: RUFADAA{{#if (eq governingState 'New Jersey')}} — N.J.S.A. 3B:14-61.1 et seq.{{/if}}{{#if specialConsiderations.hasDigitalAssets}}; {{specialConsiderations.digitalAssetsDetails}}{{/if}}]]</li>
+  <li><strong>Divide or Combine Trust Assets.</strong> [[DRAFT]]</li>
+  <li><strong>Comply with Environmental Law.</strong> [[DRAFT]]</li>
+  {{#if specialConsiderations.hasBusinessSuccession}}
+  <li><strong>Manage Businesses.</strong> [[DRAFT: operate and retain closely held interests — {{specialConsiderations.businessSuccessionDetails}}]]</li>
+  {{else}}
+  <li><strong>Manage Businesses.</strong> [[DRAFT: operate and retain closely held equity interests]]</li>
+  {{/if}}
+  <li><strong>Change Situs.</strong> [[DRAFT: move administration to another jurisdiction; governing-law consequences]]</li>
+  <li><strong>Deal with Real Property.</strong> [[DRAFT]]</li>
+  <li><strong>Disclaim and Release Powers.</strong> [[DRAFT]]</li>
+</ol>
+
+<p><strong>Distribution Powers.</strong></p>
+<p><strong>Power to Determine Income and Principal.</strong> [[DRAFT]]</p>
+<p><strong>Distribution in Cash or in Kind.</strong> [[DRAFT: non-pro-rata division authority]]</p>
+<p><strong>Distributions to Young and Incapacitated Beneficiaries.</strong> [[DRAFT: direct payment, custodianship, or application for benefit]]</p>
+
+{{#if trustOptions.substanceAbuseProvisions}}
+<p><strong>Substance Abuse Provisions.</strong></p>
+<p>[[DRAFT: trustee may request examination on reasonable suspicion]]</p>
+<p>[[DRAFT: suspension of mandatory distributions and withdrawal rights on confirmed use]]</p>
+<p>[[DRAFT: conditions for reinstatement]]</p>
+<p>[[DRAFT: no liability for trustee or retained medical provider]]</p>
+{{/if}}
+
+<p><strong>Divorce and Creditors&rsquo; Claims.</strong> [[DRAFT: discretionary withholding during pending divorce or creditor action]]</p>
+<p><strong>Beneficiaries Receiving Public Benefits.</strong> [[DRAFT: supplemental-needs conversion for any beneficiary on means-tested benefits]]</p>
+<p><strong>Written Notice to Trustee.</strong> [[DRAFT: trustee protected until actual written notice of a triggering event]]</p>
+
+<p><strong>Powers Retained by Settlor.</strong></p>
+<p><strong>Revocation and Amendment.</strong> [[DRAFT: settlor may revoke or amend at any time by written instrument delivered to the trustee{{#if (eq governingState 'New Jersey')}}; N.J.S.A. 3B:31-27, -28{{/if}}]]</p>
+<p><strong>Maintenance of Principal Residence.</strong> [[DRAFT: right of occupancy; carrying costs{{#hasItems assets.realEstate}}{{#each assets.realEstate}}{{#if transferToTrust}} — {{address}}, {{city}}, {{../personalInfo.state}} {{zip}}{{#if blockLot}} (Block/Lot {{blockLot}}){{/if}}{{/if}}{{/each}}{{/hasItems}}]]</p>
+<p><strong>Tangible Personal Property.</strong> [[DRAFT: retained use; disposition by separate writing]]</p>
+<p><strong>Exercise of Settlor&rsquo;s Powers by Others.</strong> [[DRAFT: agent under POA or conservator — scope and limits]]</p>
+
+{{#if trustProtector.enabled}}
+<h2>TRUST PROTECTOR</h2>
+
+<p><strong>Appointment of Trust Protector.</strong> <strong>{{fullName trustProtector.initial}}</strong>{{#if trustProtector.initial.relationship}}, {{trustProtector.initial.relationship}},{{/if}}{{#if trustProtector.initial.address}} of {{trustProtector.initial.address}}, {{trustProtector.initial.city}}, {{trustProtector.initial.state}} {{trustProtector.initial.zip}},{{/if}} shall serve as initial Trust Protector.</p>
+<p><strong>Successor Trust Protector.</strong> [[DRAFT: appointment by written instrument]]</p>
+<p><strong>Restrictions on Appointment.</strong> [[DRAFT: excluded persons — settlor, beneficiaries, related or subordinate parties under IRC §672(c)]]</p>
+<p><strong>Resignation and Removal.</strong> [[DRAFT]]</p>
+<p><strong>Vacancy in Office.</strong> [[DRAFT]]</p>
+
+<p><strong>Powers and Authority of Trust Protector.</strong></p>
+<p><strong>Trustee Removal and Appointment.</strong> [[DRAFT]]</p>
+<p><strong>Trust Modification and Administration.</strong> [[DRAFT: amendment to conform to tax law changes or beneficiary circumstances]]</p>
+<p><strong>Administrative Powers.</strong> [[DRAFT: deadlock and dispute resolution]]</p>
+
+<p><strong>Administrative Provisions.</strong></p>
+<p><strong>Non-Fiduciary Capacity.</strong> [[DRAFT]]</p>
+<p><strong>Liability Protection.</strong> [[DRAFT: willful misconduct standard]]</p>
+<p><strong>No General Power of Appointment.</strong> [[DRAFT: avoids IRC §2041 inclusion]]</p>
+<p><strong>Release of Powers.</strong> [[DRAFT]]</p>
+<p><strong>Compensation.</strong> [[DRAFT]]</p>
+<p><strong>Professional Services.</strong> [[DRAFT: protector may also serve as counsel to the trust]]</p>
+<p><strong>Access to Information.</strong> [[DRAFT]]</p>
+<p><strong>Not Responsible for Predecessors.</strong> [[DRAFT]]</p>
+{{/if}}
+
+<h2>DISTRIBUTION DURING THE SETTLOR&rsquo;S LIFETIME</h2>
+
+<p><strong>Distribution of Income and Principal.</strong> [[DRAFT: to or for the settlor on demand]]</p>
+<p><strong>Exercise of Invasion Power.</strong> [[DRAFT]]</p>
+<p><strong>Distribution on Incapacity of Settlor.</strong> [[DRAFT: standard for distributions to an incapacitated settlor and dependents{{#if specialConsiderations.hasMedicaidPlanning}}; coordinate with Medicaid planning: {{specialConsiderations.medicaidPlanningDetails}}{{/if}}]]</p>
+
+<h2>DISTRIBUTION ON THE SETTLOR&rsquo;S DEATH</h2>
+
+<p><strong>Payment of Taxes, Debts, and Expenses.</strong> [[DRAFT: apportionment; source of payment]]</p>
+<p><strong>Debts and Advancements.</strong> [[DRAFT: whether lifetime advances to a beneficiary are charged against that beneficiary's share, and how they are valued]]</p>
+<p><strong>Tangible Personal Property.</strong> [[DRAFT: separate writing; division; dispute resolution]]</p>
+
+{{#hasItems distribution.specificBequests}}
+<p><strong>Specific Bequests.</strong></p>
+<ul>
+  {{#each distribution.specificBequests}}
+  <li>[[DRAFT: bequest to {{recipient}}{{#if description}} — {{description}}{{/if}}]]</li>
+  {{/each}}
+</ul>
+{{/hasItems}}
+
+{{#hasItems assets.retirementAccounts}}
+<p><strong>Distribution of Retirement Accounts.</strong></p>
+<p><strong>Applicability.</strong> [[DRAFT: this section controls over contrary provisions for Retirement Account Assets payable to the trust]]</p>
+<p><strong>Trustee&rsquo;s Rights.</strong> [[DRAFT]]</p>
+<p><strong>Application of Conduit and Accumulation Provisions.</strong> [[DRAFT: which shares are conduit, which are accumulation{{#if trustOptions.retirementTreatment}} — elected: {{trustOptions.retirementTreatment}}{{/if}}]]</p>
+<p><strong>Beneficiaries Receiving Public Benefits.</strong> [[DRAFT: override — accumulation treatment notwithstanding a conduit election]]</p>
+<p><strong>Conduit Trust Provisions.</strong> [[DRAFT: all RMDs and withdrawn amounts passed through in the year received]]</p>
+<p><strong>Accumulation Trust Provisions.</strong> [[DRAFT: trustee may accumulate; identifiable-beneficiary limits]]</p>
+<p><strong>Required Minimum Distribution.</strong> [[DRAFT: SECURE Act 10-year rule; EDB life expectancy where applicable]]</p>
+<p><strong>Income Apportionment.</strong> [[DRAFT]]</p>
+<p><strong>Distribution to Identifiable Individuals Only.</strong> [[DRAFT: estates and charities excluded from any share receiving Retirement Account Assets]]</p>
+<p><strong>Reporting Requirements.</strong> [[DRAFT: documentation to plan administrator per Treas. Reg. §1.401(a)(9)-4(f)]]</p>
+<p><strong>Trustee&rsquo;s Authority.</strong> [[DRAFT: establish inherited IRAs for separate shares]]</p>
+<p><strong>Restrictions on Use of Retirement Assets.</strong> [[DRAFT: no payment of debts, taxes, or expenses from Retirement Account Assets]]</p>
+<p><strong>Purpose and Amendment.</strong> [[DRAFT: savings clause preserving maximum deferral]]</p>
+{{/hasItems}}
+
+{{#if trustOptions.familyPotTrust}}
+<p><strong>Family Pot Trust.</strong> [[DRAFT: children's shares held as a single pooled fund rather than divided immediately; distribution standard across beneficiaries; the event that terminates the pot and triggers division]]</p>
+{{/if}}
+
+{{#hasItems distribution.residualDistributions}}
+<p><strong>Distribution of Residue.</strong> The residue shall be distributed as follows:</p>
+<ul>
+  {{#each distribution.residualDistributions}}
+  <li><strong>{{percentage}}%</strong> to <strong>{{recipient}}</strong>{{#if recipientRelationship}} ({{recipientRelationship}}){{/if}},
+      {{#if perStirpes}}per stirpes{{else}}per capita{{/if}}{{#if alternateRecipient}}; if not surviving, to {{alternateRecipient}}{{/if}}.</li>
+  {{/each}}
+</ul>
+{{else}}
+<p><strong>Distribution to Children.</strong></p>
+<p><strong>Distribution to Living Children.</strong> [[DRAFT: equal shares to my then-living children]]</p>
+<p><strong>Distribution for Deceased Children.</strong> [[DRAFT: a deceased child's share to that child's descendants, per stirpes]]</p>
+{{/hasItems}}
+
+{{#if trustOptions.terminationAge}}
+<p><strong>Retained Shares for Young Beneficiaries.</strong> [[DRAFT: share held in trust until age {{trustOptions.terminationAge}}; HEMS distributions in the interim]]</p>
+{{/if}}
+
+{{#if specialConsiderations.hasCharitableGoals}}
+<p><strong>Charitable Distribution.</strong> [[DRAFT: {{specialConsiderations.charitableGoalsDetails}}]]</p>
+{{/if}}
+
+{{#if specialConsiderations.hasPetProvision}}
+<p><strong>Pet Trust.</strong> [[DRAFT: care of {{specialConsiderations.petDetails}}{{#if specialConsiderations.petCaretaker}}; caretaker {{specialConsiderations.petCaretaker}}{{/if}}{{#if (eq governingState 'New Jersey')}}; N.J.S.A. 3B:11-38{{/if}}]]</p>
+{{/if}}
+
+<p><strong>Default Provision.</strong> [[DRAFT: distribution if no named beneficiary survives — heirs at law under {{governingState}} intestacy]]</p>
+
+{{#if specialConsiderations.hasSpecialNeedsChild}}
+<p><strong>Administration of Special Needs Trust(s).</strong></p>
+{{#each children}}{{#if specialNeeds}}
+<p><em>For {{name}}{{#if specialNeedsDetails}} &mdash; {{specialNeedsDetails}}{{/if}}.</em></p>
+{{/if}}{{/each}}
+<p><strong>Purpose of Trust.</strong> [[DRAFT: third-party supplemental needs trust; not self-settled]]</p>
+<p><strong>Definition of Special Needs.</strong> [[DRAFT]]</p>
+<p><strong>Distribution for Special Needs.</strong> [[DRAFT: sole and absolute discretion; supplement not supplant]]</p>
+<p><strong>Prohibited Distributions.</strong> [[DRAFT: no distribution that reduces or replaces means-tested benefits]]</p>
+<p><strong>Protection of Trust Assets.</strong> [[DRAFT: not an available resource]]</p>
+<p><strong>Early Termination.</strong> [[DRAFT]]</p>
+<p><strong>Modification.</strong> [[DRAFT: trustee may conform to changes in benefit law]]</p>
+<p><strong>Distribution on Death of Beneficiary.</strong> [[DRAFT: remainder to surviving descendants; NO payback — third-party trust]]</p>
+{{/if}}
+
+<h2>ADMINISTRATIVE PROVISIONS</h2>
+
+<p><strong>Definitions of Class Terms.</strong> [[DRAFT: child, descendant, per stirpes, adopted, after-born]]</p>
+
+<p><strong>Determination of Incapacity.</strong></p>
+<p><strong>Settlor Incapacity.</strong> [[DRAFT: triggering conditions]]</p>
+<p><strong>Any Two Physicians.</strong> [[DRAFT: two physicians licensed in the state where the settlor resides; written certification]]</p>
+<p><strong>Trustee Incapacity.</strong> [[DRAFT: standard for a non-settlor trustee]]</p>
+<p><strong>Restoration of Capacity.</strong> [[DRAFT]]</p>
+<p><strong>Other Beneficiaries.</strong> [[DRAFT: no formal determination required]]</p>
+
+{{#if distribution.spendthriftProvision}}
+<p><strong>Spendthrift Clause.</strong> [[DRAFT: no voluntary or involuntary alienation{{#if (eq governingState 'New Jersey')}}; N.J.S.A. 3B:31-35{{/if}}]]</p>
+{{/if}}
+
+<p><strong>Perpetuities Savings Clause.</strong> [[DRAFT: {{governingState}} rule against perpetuities]]</p>
+<p><strong>Survivorship Requirement.</strong> [[DRAFT: beneficiary must survive by {{#if distribution.survivorshipPeriod}}{{distribution.survivorshipPeriod}} days{{else}}[[DRAFT: period]]{{/if}}; simultaneous death presumption]]</p>
+<p><strong>Definitions of Taxes, Debts, and Expenses.</strong> [[DRAFT]]</p>
+<p><strong>Definition of Discretionary Distribution.</strong> [[DRAFT: HEMS / ascertainable standard{{#if trustOptions.distributionStandard}} — {{trustOptions.distributionStandard}}{{/if}}]]</p>
+<p><strong>Definition of Disappearance.</strong> [[DRAFT: presumption of death after absence]]</p>
+<p><strong>Definition of Education.</strong> [[DRAFT]]</p>
+<ol>
+  <li>[[DRAFT: elementary, middle, and secondary schooling]]</li>
+  <li>[[DRAFT: undergraduate and graduate study]]</li>
+  <li>[[DRAFT: trade, vocational, and technical programs]]</li>
+</ol>
+<p><strong>Definition of Retirement Account and Eligible Designated Beneficiary.</strong> [[DRAFT: conform to IRC §401(a)(9)(E)]]</p>
+
+{{#if trustOptions.specialTrustee}}
+<p><strong>Definition of Independent Trustee and Interested Trustee.</strong> [[DRAFT: an interested trustee is a settlor, a beneficiary, or a related or subordinate party under IRC §672(c); an independent trustee is anyone else]]</p>
+{{/if}}
+
+<p><strong>Headings.</strong> [[DRAFT: for convenience only]]</p>
+<p><strong>Gender and Number.</strong> [[DRAFT]]</p>
+<p><strong>Severability.</strong> [[DRAFT]]</p>
+<p><strong>Governing Law.</strong> [[DRAFT: this trust is governed by the laws of {{governingState}}]]</p>
+<p><strong>Termination of Uneconomic Trust.</strong> [[DRAFT: threshold value; trustee discretion to terminate]]</p>
+
+{{#if distribution.noContestClause}}
+<p><strong>No-Contest Clause.</strong> [[DRAFT: forfeiture on challenge; probable-cause exception if required by {{governingState}} law]]</p>
+{{/if}}
+
+{{#if specialConsiderations.additionalNotes}}
+<p><strong>Additional Provisions.</strong> [[DRAFT: {{specialConsiderations.additionalNotes}}]]</p>
+{{/if}}
+
+<h2>SIGNATURE AND EXECUTION</h2>
+
+<p>I certify that I have read this Trust Agreement and that it correctly states my intentions.</p>
+
+<p style="margin-top:24pt;">_______________________________<br/><strong>{{clientFullName}}</strong>, Settlor and Trustee</p>
+<p style="margin-top:18pt;">Dated: {{fillOrBlank executionDate}}</p>
+
+<h2>ACKNOWLEDGMENT</h2>
+<p>[[DRAFT: {{governingState}} notarial acknowledgment]]</p>
+
+<h2>SCHEDULE A &mdash; TRUST PROPERTY</h2>
+{{#hasItems assets.realEstate}}
+<p><strong>Real Property</strong></p>
+<ul>
+  {{#each assets.realEstate}}{{#if transferToTrust}}
+  <li>{{address}}, {{city}}, {{../personalInfo.state}} {{zip}}{{#if blockLot}} &mdash; Block/Lot {{blockLot}}{{/if}}</li>
+  {{/if}}{{/each}}
+</ul>
+{{/hasItems}}
+{{#hasItems assets.bankAccounts}}
+<p><strong>Bank Accounts</strong></p>
+<ul>
+  {{#each assets.bankAccounts}}{{#if transferToTrust}}
+  <li>{{institution}} &mdash; {{accountType}}{{#if accountNumberLast4}} (ending {{accountNumberLast4}}){{/if}}</li>
+  {{/if}}{{/each}}
+</ul>
+{{/hasItems}}
+{{#hasItems assets.investmentAccounts}}
+<p><strong>Investment Accounts</strong></p>
+<ul>
+  {{#each assets.investmentAccounts}}{{#if transferToTrust}}
+  <li>{{institution}} &mdash; {{accountType}}{{#if accountNumberLast4}} (ending {{accountNumberLast4}}){{/if}}</li>
+  {{/if}}{{/each}}
+</ul>
+{{/hasItems}}
+<p style="font-size:9pt; color:#555;">Retirement accounts are not retitled to the trust. Beneficiary designations are coordinated separately.</p>
