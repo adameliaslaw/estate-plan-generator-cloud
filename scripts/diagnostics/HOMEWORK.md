@@ -539,6 +539,45 @@ That was tried and reverted: `tests/setup.ts:158` calls
 `Object.defineProperty(window, 'matchMedia', ...)` and dies without jsdom, so the file
 collects zero tests and the suite goes green by not running them.
 
+### ▶ OUTSTANDING — prune five merged branches
+
+Five branches from the 2026-08-07 session are merged but still on the remote:
+
+```
+claude/trust-template-schema
+claude/template-disk-fallback
+claude/statular-package-analysis
+claude/homework-session-close
+claude/suspend-automerge
+```
+
+All five are **verified safe** — each contribution was confirmed present on `main` by content,
+not by ancestry (squash merges leave the branch tip a non-ancestor, so `git branch --merged`
+reports nothing):
+
+| Branch | Confirmed on `main` |
+|---|---|
+| `trust-template-schema` | `survivorsTrust`, `bypassTrust`, `familyPotTrust`, `specialTrustee`, `TrustProtector`, `governingState` |
+| `template-disk-fallback` | `functions/src/bundled-templates.ts`, its test, `'bundled'` in `generate-documents.ts` |
+| `statular-package-analysis` | `docx-forensics.py`, this file |
+| `homework-session-close` | byte-identical to `main` |
+| `suspend-automerge` | block deliberately removed later — its absence is correct |
+
+```bash
+git push origin --delete \
+  claude/trust-template-schema \
+  claude/template-disk-fallback \
+  claude/statular-package-analysis \
+  claude/homework-session-close \
+  claude/suspend-automerge
+```
+
+**⚠ This cannot be done from a Claude Code web/remote session.** The session git proxy returns
+`HTTP 403` on ref deletion — it permits creating and updating refs but not deleting them. A new
+remote session will hit the same wall. Run it locally, or delete the branches in GitHub's UI.
+
+Do **not** touch the other ~20 `claude/*` branches on the remote; they belong to other sessions.
+
 ### Unresolved — cancelled Functions deploy on `b4b480b4` (#293), 2026-08-06
 
 Investigated 2026-08-07 and **not resolvable**: the run-level log archive is an empty 22-byte
