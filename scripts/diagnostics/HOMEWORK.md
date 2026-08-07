@@ -23,7 +23,7 @@ that reads like a real break.
 Do **not** add or remove sections. See *Package 3* below for the 13 conditional sections and
 what gates each one.
 
-**2. Prune five merged branches — and you cannot do it from a remote session.**
+**2. Prune seven merged branches — and you cannot do it from a remote session.**
 The session git proxy returns `HTTP 403` on ref deletion and there is no delete-branch tool in
 the GitHub MCP set. Do not retry it here; run it from a local checkout or GitHub's UI. Command
 and the safety verification are in *OUTSTANDING — prune five merged branches* below.
@@ -569,17 +569,22 @@ That was tried and reverted: `tests/setup.ts:158` calls
 `Object.defineProperty(window, 'matchMedia', ...)` and dies without jsdom, so the file
 collects zero tests and the suite goes green by not running them.
 
-### ▶ OUTSTANDING — prune five merged branches
+### ▶ OUTSTANDING — prune seven merged branches
 
-Five branches from the 2026-08-07 session are merged but still on the remote:
+Seven branches from the 2026-08-07 session are merged but still on the remote:
 
 ```
 claude/trust-template-schema
 claude/template-disk-fallback
 claude/statular-package-analysis
-claude/homework-session-close
 claude/suspend-automerge
+claude/homework-session-close
+claude/homework-outstanding-prune
+claude/homework-start-here
 ```
+
+(The last two were created after this entry was first written, which is why an earlier revision
+said five. Verify against the remote rather than trusting this list.)
 
 All five are **verified safe** — each contribution was confirmed present on `main` by content,
 not by ancestry (squash merges leave the branch tip a non-ancestor, so `git branch --merged`
@@ -598,8 +603,10 @@ git push origin --delete \
   claude/trust-template-schema \
   claude/template-disk-fallback \
   claude/statular-package-analysis \
+  claude/suspend-automerge \
   claude/homework-session-close \
-  claude/suspend-automerge
+  claude/homework-outstanding-prune \
+  claude/homework-start-here
 ```
 
 **⚠ This cannot be done from a Claude Code web/remote session.** The session git proxy returns
@@ -643,18 +650,18 @@ analysed above; the Bypass A/B comparison run was never taken.
    `trust-generator.ts:172` already branches on `packageType === 'fortress'` to produce a joint
    irrevocable Medicaid instrument — if Statular ships an equivalent package, diffing it against
    the revocable one yields their MAPT clause set, which is NJ work and squarely in scope.
-3. **Resolve the template-resolution decision above.** It blocks every `.hbs` deliverable,
-   including PR #258.
+3. ~~Resolve the template-resolution decision.~~ **DONE** — PR #266 added
+   `functions/src/bundled-templates.ts`; disk templates are reachable at runtime.
 
 ---
 
 ## Related
 
-- **PR #258** (`claude/trust-template-schema`) — `trust-joint.hbs` / `trust-single.hbs`
-  skeletons plus `TrustOptions`, `TrustProtector`, `Client.governingState`,
-  `Client.executionDate`. Open, unmerged, awaiting sign-off; touches two Never-Break List
-  areas. Inert as committed — nothing routes `trust` to an `.hbs`. Under the confirmed
-  objective `governingState` is vestigial but harmless; leave it rather than churn the PR.
+- **PR #258** (`claude/trust-template-schema`) — **MERGED** as `e0d2b5b`. `trust-joint.hbs` /
+  `trust-single.hbs` skeletons plus `TrustOptions`, `TrustProtector`, `Client.governingState`,
+  `Client.executionDate`. The first-death subtrusts were later remodelled from a single
+  `taxPlanning` enum to independent flags — see *Session close* above. `governingState` is
+  vestigial under the confirmed NJ-only objective but harmless.
 - `samples/interactivelegal/` — nine HotDocs-derived DOCX files. These appear to be **real
   client matters** (named wills, POAs, trusts) committed to the repo. Worth a deliberate
   decision about whether they belong in git.
