@@ -35,6 +35,18 @@ const BUNDLED_TEMPLATES: Readonly<Record<string, string>> = {
   'poa:comprehensive': 'poa-comprehensive.hbs',
 };
 
+/**
+ * Marker left in a template where prose is still to be drafted. A template
+ * carrying any of these is a skeleton, not an instrument.
+ *
+ * Skeletons are committed deliberately — structure and conditionals land first
+ * so they can be reviewed against a reference, and the prose follows. Until it
+ * does, the template must never reach a client document: a trust whose articles
+ * read "[[DRAFT: spendthrift clause]]" is worse than one the AI wrote, because
+ * it looks finished at a glance.
+ */
+const DRAFT_MARKER = '[[DRAFT';
+
 /** Resolved file contents, keyed by registry key. Read once per cold start. */
 const cache = new Map<string, string | null>();
 
@@ -53,9 +65,19 @@ function readTemplate(key: string): string | null {
   if (file) {
     try {
       const text = readFileSync(join(templateDir(), file), 'utf8');
-      content = text.trim() ? text : null;
-      if (!content) {
+      if (!text.trim()) {
         console.warn(`[bundledTemplates] "${file}" is present but empty — ignoring.`);
+      } else if (text.includes(DRAFT_MARKER)) {
+        // Count for the log so the message says how much is left, not just that
+        // something is.
+        const remaining = text.split(DRAFT_MARKER).length - 1;
+        console.warn(
+          `[bundledTemplates] "${file}" still has ${remaining} unfilled ${DRAFT_MARKER}...]] ` +
+          `marker${remaining === 1 ? '' : 's'} — treating as unavailable. The caller falls ` +
+          `through to AI generation until the prose is written.`,
+        );
+      } else {
+        content = text;
       }
     } catch {
       // Expected while a template is authored on a branch but not yet merged.

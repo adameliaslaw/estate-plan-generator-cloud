@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFileSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
 import {
   loadBundledTemplate,
   deriveBundledVariant,
   __resetBundledTemplateCache,
 } from '../../functions/src/bundled-templates';
+
+const TEMPLATE_DIR = join(__dirname, '../../functions/src/templates');
 
 describe('bundled templates — the deploy ships its own last-resort templates', () => {
   beforeEach(() => __resetBundledTemplateCache());
@@ -40,6 +44,56 @@ describe('bundled templates — the deploy ships its own last-resort templates',
 
   it('returns null for an unknown variant of a known docType', () => {
     expect(loadBundledTemplate('poa', 'nonexistent')).toBeNull();
+  });
+
+  describe('unfilled skeletons never reach a document', () => {
+    // trust-single.hbs is a registry key whose file arrives with the trust
+    // template PR. Writing one here exercises the real resolution path rather
+    // than a stub, and asserts on the guard that matters most: a template whose
+    // articles are still [[DRAFT: ...]] placeholders looks finished at a glance
+    // and must not be served.
+    const scratch = join(TEMPLATE_DIR, 'trust-single.hbs');
+    let preexisting = false;
+
+    beforeEach(() => {
+      preexisting = existsSync(scratch);
+      __resetBundledTemplateCache();
+    });
+    afterEach(() => {
+      if (!preexisting && existsSync(scratch)) rmSync(scratch);
+      __resetBundledTemplateCache();
+    });
+
+    it('refuses a template that still carries draft markers', () => {
+      if (preexisting) return; // the real template has landed; nothing to stub
+      writeFileSync(
+        scratch,
+        '<h2>DECLARATION OF TRUST</h2>\n<p><strong>Spendthrift Clause.</strong> [[DRAFT: no alienation]]</p>\n',
+        'utf8',
+      );
+      expect(loadBundledTemplate('trust', 'single')).toBeNull();
+    });
+
+    it('serves the same template once the markers are gone', () => {
+      if (preexisting) return;
+      writeFileSync(
+        scratch,
+        '<h2>DECLARATION OF TRUST</h2>\n<p><strong>Spendthrift Clause.</strong> No beneficiary may alienate their interest.</p>\n',
+        'utf8',
+      );
+      const t = loadBundledTemplate('trust', 'single');
+      expect(t).not.toBeNull();
+      expect(t!.docType).toBe('trust');
+      expect(t!.variant).toBe('single');
+      expect(t!.content).not.toContain('[[DRAFT');
+    });
+
+    it('refuses when even one section of many is still a stub', () => {
+      if (preexisting) return;
+      const mostlyDone = Array.from({ length: 40 }, (_, i) => `<p>Section ${i} prose.</p>`).join('\n');
+      writeFileSync(scratch, `${mostlyDone}\n<p>[[DRAFT: the last one]]</p>\n`, 'utf8');
+      expect(loadBundledTemplate('trust', 'single')).toBeNull();
+    });
   });
 
   describe('deriveBundledVariant', () => {
