@@ -256,6 +256,42 @@ function wrapParagraphs(xml, rules) {
   return { xml: out, counts };
 }
 
+/**
+ * Insert a firm-clause region immediately before an anchor paragraph.
+ *
+ * With paragraphLoop, a loop that occupies a whole paragraph repeats that
+ * paragraph once per item and disappears entirely when the array is empty —
+ * so an empty catalog leaves the document byte-identical to one without a
+ * region at all.
+ *
+ * Placement is a legal-structure decision, not a mechanical one: clauses land
+ * after the last substantive article and before the execution block, which is
+ * where an added provision belongs and where it cannot displace an
+ * attestation. The anchor is a single string, so moving it is a one-line
+ * change if the firm wants them elsewhere.
+ */
+function insertClauseRegion(xml, anchorText, field) {
+  // Three paragraphs, not one. docxtemplater repeats a paragraph per item
+  // only when the loop tags each occupy a paragraph of their own; with both
+  // tags inline in a single paragraph it concatenates every clause into one
+  // run instead — "…digital assets.No Contest. Any beneficiary…".
+  const para = (inner) =>
+    `<w:p><w:r><w:t xml:space="preserve">${inner}</w:t></w:r></w:p>`;
+  const paragraph =
+    para(`{{#${field}}}`) + para('{{title}}. {{text}}') + para(`{{/${field}}}`);
+  let inserted = 0;
+  const out = xml.replace(PARAGRAPH_RE, (p) => {
+    if (inserted > 0) return p;
+    const text = [...p.matchAll(TEXT_NODE_RE)]
+      .map((m) => xmlUnescape(m[2]))
+      .join('');
+    if (!text.includes(anchorText)) return p;
+    inserted += 1;
+    return paragraph + p;
+  });
+  return { xml: out, inserted };
+}
+
 // ---------------------------------------------------------------------------
 // Reading .docx text (for verification)
 // ---------------------------------------------------------------------------
@@ -647,7 +683,7 @@ const results = [];
  * replaced before addresses so that an address pass can identify an address's
  * owner from the placeholder already standing in front of it.
  */
-function templatize(sourceFile, destFileName, passes, conditionals = []) {
+function templatize(sourceFile, destFileName, passes, conditionals = [], clauseAnchor = null) {
   const specs = Array.isArray(passes) ? passes : [passes];
   const sourcePath = path.resolve(REPO_ROOT, sourceFile);
   // TEMPLATE_OUT lets a modified copy of this script (e.g. one with a rule
@@ -687,6 +723,13 @@ function templatize(sourceFile, destFileName, passes, conditionals = []) {
     wrapCounts = wrapped.counts;
   }
 
+  let clauseRegion = null;
+  if (clauseAnchor) {
+    const r = insertClauseRegion(xml, clauseAnchor, 'firmClauses');
+    xml = r.xml;
+    clauseRegion = { anchor: clauseAnchor, inserted: r.inserted };
+  }
+
   zip.file('word/document.xml', xml);
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
   fs.writeFileSync(
@@ -707,6 +750,7 @@ function templatize(sourceFile, destFileName, passes, conditionals = []) {
     mappings,
     byLiteral,
     wrapCounts,
+    clauseRegion,
     status: 'written',
   });
   console.log(`WROTE ${destFileName}  <- ${path.basename(sourceFile)}`);
@@ -881,6 +925,10 @@ const RIZZO_RELATIONS = {
 };
 
 const WILL_CONDITIONALS = [
+  // The model has no funeral-representative slot at all, so without this the
+  // article renders "I appoint , to act as my representative pursuant to
+  // N.J.S.A. 45:27-22 ... If  is not living at my death".
+  { contains: 'N.J.S.A. 45:27-22', field: 'funeralRepresentativeName' },
   { contains: 'Appointment of First Level Successor Executor', field: 'alternateExecutorName' },
   // unbacked today -> suppressed until buildDocxTemplateData gains the field
   { contains: 'Appointment of Second Level Successor Executor', field: 'secondAlternateExecutorName' },
@@ -914,11 +962,11 @@ const BYRNES = [byrnesPeople, byrnesAddresses, WITNESSES, CHILD_LISTS];
 // passes produced, and differ per instrument.
 const RIZZO_PASSES = [RIZZO, WITNESSES, RIZZO_RELATIONS];
 
-templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', [...BYRNES, WILL_RELATIONS], WILL_CONDITIONALS);
+templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', [...BYRNES, WILL_RELATIONS], WILL_CONDITIONALS, 'IN WITNESS WHEREOF');
 templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', [...BYRNES, POA_RELATIONS], POA_CONDITIONALS);
 templatize(`${SAMPLES}/Jessica Byrnes- HC 11.3.25.docx`, 'NJ_HC_Married.docx', [...BYRNES, HC_RELATIONS], HC_CONDITIONALS);
 templatize(`${SAMPLES}/Rizzo Living Trust.docx`, 'Married_Trust.docx', RIZZO_PASSES);
-templatize(`${SAMPLES}/Vito Rizzo- Pourover Will 11.19.25.docx`, 'NJ_Pourover_Will.docx', RIZZO_PASSES);
+templatize(`${SAMPLES}/Vito Rizzo- Pourover Will 11.19.25.docx`, 'NJ_Pourover_Will.docx', RIZZO_PASSES, [], 'IN WITNESS WHEREOF');
 
 // NJ_Will_Single.docx is deliberately not generated. The previous version
 // produced it from Jessica's married will by string-swapping "Married" ->
@@ -951,6 +999,17 @@ for (const result of written) {
   );
   for (const [literal, n] of Object.entries(result.byLiteral)) {
     if (n === 0) console.log(`    note: "${literal}" not present in this document`);
+  }
+  if (result.clauseRegion) {
+    if (result.clauseRegion.inserted !== 1) {
+      failures += 1;
+      console.error(
+        `  FAIL: clause region anchor matched ${result.clauseRegion.inserted} paragraph(s): ` +
+          `"${result.clauseRegion.anchor}"`,
+      );
+    } else {
+      console.log('  ok: firm-clause region inserted before the execution block');
+    }
   }
   if (result.wrapCounts.size > 0) {
     // Exactly one paragraph per anchor. Zero means the wrapper quietly stopped
