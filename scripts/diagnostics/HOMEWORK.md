@@ -525,14 +525,37 @@ and takes **87–95 seconds** under full-suite load. Vitest allocates a worker p
 CPU-bound suite past its timeout. The 12ms of assertions are irrelevant — it is the worker
 slot.
 
-**Deploys are gated on tests**, so this can abort a Firebase deploy and will look like an
-inheritance-tax failure. Fix is to raise the timeout on that file. It was left alone because
-it belongs to the inheritance-tax work.
+**Deploys are gated on tests**, so this can abort a Firebase deploy and would present as an
+inheritance-tax failure. Fix is to raise the timeout on that file. It was left alone because it
+belongs to the inheritance-tax work.
+
+**Update — it did NOT reproduce in CI.** Both deploys of the merge (`e3381c9`, `e0d2b5b`) passed
+the test gate and shipped green. The GitHub runner has more headroom than the 4-core container
+where this was measured, so treat the risk as latent rather than active. It is still closer to
+its ceiling than before: one more test *file* could tip it in CI too.
 
 Do **not** "fix" this by adding `// @vitest-environment node` to the bundled-templates suite.
 That was tried and reverted: `tests/setup.ts:158` calls
 `Object.defineProperty(window, 'matchMedia', ...)` and dies without jsdom, so the file
 collects zero tests and the suite goes green by not running them.
+
+### Unresolved — cancelled Functions deploy on `b4b480b4` (#293), 2026-08-06
+
+Investigated 2026-08-07 and **not resolvable**: the run-level log archive is an empty 22-byte
+ZIP and the job log endpoint 404s, so the logs are gone.
+
+What the metadata rules out — the job's conclusion is `cancelled`, not `failure`, so it was not
+a test or build failure; `timeout-minutes: 120` and there are no step-level timeouts, so it was
+not a timeout; `cancel-in-progress: false` and it was the only run that day between 12:58 and
+the next push eight hours later, so nothing superseded it.
+
+It ran exactly 15:01 (17:35:06 → 17:50:07) against a healthy baseline of ~11.7 min. Either a
+manual cancellation, or the runner was lost — the missing logs favour the latter, since GitHub
+retains Actions logs for 90 days and a clean user cancellation normally preserves output.
+
+**No action needed.** #293's changes shipped in the next Functions deploy (`8cce6f8`) anyway,
+which is why it went unnoticed. If certainty is ever wanted, GitHub's UI surfaces a
+cancellation actor the API does not — Actions → run `31123551307`.
 
 ### Statular trial
 
