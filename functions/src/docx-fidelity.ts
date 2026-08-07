@@ -91,6 +91,7 @@ export function buildDocxTemplateData(
   const trustee = (fiduciaries.trustee ?? {}) as Record<string, unknown>;
   const guardian = (fiduciaries.guardian ?? {}) as Record<string, unknown>;
   const healthcare = (fiduciaries.healthcareProxy ?? {}) as Record<string, unknown>;
+  const funeral = (fiduciaries.funeralRepresentative ?? {}) as Record<string, unknown>;
   const person = (p: unknown): string =>
     formatFullName(p as Record<string, unknown> | null | undefined);
 
@@ -144,6 +145,7 @@ export function buildDocxTemplateData(
     secondAlternateExecutorName: person(executor.successor),
     trusteeName: person(trustee.primary),
     alternateTrusteeName: person(trustee.alternate),
+    coTrusteeName: person(trustee.coTrustee),
     guardianName: person(guardian.primary),
     alternateGuardianName: person(guardian.alternate),
     poaAgentName: person(poa.agent),
@@ -151,6 +153,11 @@ export function buildDocxTemplateData(
     poaSecondAlternateAgentName: person(poa.successorAgent),
     healthcareAgentName: person(healthcarePrimary),
     healthcareAlternateAgentName: person(healthcare.alternateAgent),
+    coGuardianName: person(guardian.coGuardian),
+    coAlternateGuardianName: person(guardian.coAlternate),
+    // N.J.S.A. 45:27-22 — a statutory appointment separate from the executor.
+    funeralRepresentativeName: person(funeral.primary),
+    successorFuneralRepresentativeName: person(funeral.alternate),
     // Relationship words. A template renders these as
     // {{#executorRelation}}my {{executorRelation}}, {{/executorRelation}}
     // so the phrase disappears rather than leaving a dangling "my ,".
@@ -161,6 +168,7 @@ export function buildDocxTemplateData(
     alternateExecutorRelation: relation(executor.alternate),
     trusteeRelation: relation(trustee.primary),
     alternateTrusteeRelation: relation(trustee.alternate),
+    coTrusteeRelation: relation(trustee.coTrustee),
     guardianRelation: relation(guardian.primary),
     alternateGuardianRelation: relation(guardian.alternate),
     poaAgentRelation: relation(poa.agent),
@@ -169,6 +177,10 @@ export function buildDocxTemplateData(
     secondAlternateExecutorRelation: relation(executor.successor),
     poaSecondAlternateAgentRelation: relation(poa.successorAgent),
     healthcareAlternateAgentRelation: relation(healthcare.alternateAgent),
+    coGuardianRelation: relation(guardian.coGuardian),
+    coAlternateGuardianRelation: relation(guardian.coAlternate),
+    funeralRepresentativeRelation: relation(funeral.primary),
+    successorFuneralRepresentativeRelation: relation(funeral.alternate),
     // Fiduciaries' own addresses. The executor need not live with the client;
     // in the sample set the successor executor lives in another state.
     executorAddress: address(executor.primary),

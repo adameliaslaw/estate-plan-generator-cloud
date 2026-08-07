@@ -320,15 +320,33 @@ function readDocumentXml(filePath) {
 // failure mode here; a real person's name is not.
 // ---------------------------------------------------------------------------
 
-const BACKED_FIELDS = new Set([
-  'clientFullName', 'spouseFullName', 'clientAddress', 'clientCity',
-  'clientCounty', 'clientState', 'clientZip', 'clientDob', 'maritalStatus',
-  'executorName', 'alternateExecutorName', 'trusteeName',
-  'alternateTrusteeName', 'guardianName', 'alternateGuardianName',
-  'poaAgentName', 'poaAlternateAgentName', 'healthcareAgentName',
-  'childCount', 'childrenNames', 'hasMinorChildren', 'estimatedTotalAssets',
-  'firmName', 'attorneyName', 'todayFormatted', 'todayISO',
-]);
+/**
+ * The fields buildDocxTemplateData actually returns, read from the source
+ * rather than restated here — a hand-kept copy drifts the moment a field is
+ * added, and then the "renders blank" warning lies in the safe direction,
+ * which is the one you do not notice.
+ */
+const BACKED_FIELDS = (() => {
+  const src = fs.readFileSync(
+    path.join(REPO_ROOT, 'functions', 'src', 'docx-fidelity.ts'),
+    'utf8',
+  );
+  const body = src.slice(src.indexOf('export function buildDocxTemplateData'));
+  // Search for the close AFTER the return, or an arrow helper defined above it
+  // ends the slice first and the whole contract reads as empty.
+  const open = body.indexOf('return {');
+  const ret = body.slice(open, body.indexOf('\n  };', open));
+  const names = [...ret.matchAll(/^\s{4}(\w+):/gm)].map((m) => m[1]);
+  if (names.length < 20) {
+    console.error(
+      'FATAL: could not read the placeholder contract from docx-fidelity.ts ' +
+        `(found ${names.length} fields). Refusing to report every placeholder ` +
+        'as unbacked.',
+    );
+    process.exit(2);
+  }
+  return new Set(names);
+})();
 
 const CLIENT_ADDRESS = '{{clientAddress}}, {{clientCity}}, {{clientState}}';
 
@@ -389,7 +407,7 @@ const APPOINTMENT_CUES = [
   [/Attorney-in-Fact/, 'poaAgent'],
   [/Health Care Representative/, 'healthcareAgent'],
   [/\bguardians?\b/i, 'guardian'],
-  [/(?:as|serve as)\s+(?:an?\s+)?(?:Co-)?Trustees?\b/, 'trustee'],
+  [/to serve as\s+(?:an?\s+)?(?:Co-)?Trustees?\b/, 'trustee'],
   [/(?:to serve as|as)\s+Executor\b/, 'executor'],
 ];
 
@@ -402,11 +420,14 @@ const CUE_WINDOW = 260;
  * spans are searched. The heading can be far from the name — the whole
  * preceding text of the paragraph is used rather than a fixed window.
  */
-function ordinalOf(before, between) {
+function ordinalOf(before, between, after = '') {
   const span = `${before} ${between}`;
   if (/Third Level|Third Successor/i.test(span)) return 3;
   if (/Second Level|Second Successor/i.test(span)) return 2;
   if (/First Level|successor|substitute|alternate/i.test(span)) return 1;
+  // Trailing condition, e.g. "to serve as a Trustee if and when {{clientFullName}}
+  // fails to qualify or ceases to serve as a Trustee".
+  if (/fails? to qualify|ceases? to serve|no longer able/i.test(after)) return 1;
   return 0;
 }
 
@@ -454,7 +475,8 @@ const asCoPlaceholder = (placeholder) =>
 
 /** Resolve one person occurrence to a placeholder. */
 function resolvePerson(fallback, people, joined, at, end) {
-  const after = cueWindow(joined.slice(end, end + CUE_WINDOW), people.global);
+  const raw = joined.slice(end, end + CUE_WINDOW);
+  const after = cueWindow(raw, people.global);
   let best = null;
   for (const [pattern, role] of APPOINTMENT_CUES) {
     const m = pattern.exec(after);
@@ -468,7 +490,7 @@ function resolvePerson(fallback, people, joined, at, end) {
 
   const before = joined.slice(0, at);
   const ranks = ROLE_PLACEHOLDERS[best.role];
-  const rank = ordinalOf(before, after.slice(0, best.index));
+  const rank = ordinalOf(before, after.slice(0, best.index), raw.slice(best.index, best.index + 160));
   const placeholder = ranks[Math.min(rank, ranks.length - 1)];
 
   const tail = before.slice(-80);
@@ -524,8 +546,7 @@ const BYRNES_ADDRESSES = [
  * "We appoint our daughter, {{childOneName}}, to serve as a Trustee if and
  * when {{clientFullName}} fails to qualify".
  */
-const RIZZO = {
-  'RIZZO FAMILY LIVING TRUST': '{{trustName}}',
+const RIZZO_PEOPLE = {
   'VITA MARIA RIZZO': '{{spouseFullName}}',
   'VITO RIZZO': '{{clientFullName}}',
   // Order and roles taken from the will's own Family Information article:
@@ -535,9 +556,17 @@ const RIZZO = {
   'LISA ANN RIZZO': '{{childTwoName}}',
   'JOSEPH CASISA': '{{grandchildOneName}}',
   'LIA CASISA': '{{grandchildTwoName}}',
-  '603 Waterside Boulevard, Monroe Township, New Jersey': CLIENT_ADDRESS,
-  '549 Laurelwood Court, Howell, New Jersey': '{{childOneAddress}}',
-  '190 River Road, Edgewater, New Jersey': '{{childTwoAddress}}',
+};
+
+const RIZZO_ADDRESSES = [
+  '603 Waterside Boulevard, Monroe Township, New Jersey',
+  '549 Laurelwood Court, Howell, New Jersey',
+  '190 River Road, Edgewater, New Jersey',
+];
+
+/** Not people or their homes — the trust's own name, property and date. */
+const RIZZO_OTHER = {
+  'RIZZO FAMILY LIVING TRUST': '{{trustName}}',
   '125 Texas Avenue, Lower Township, New Jersey': '{{trustPropertyAddress}}',
   'January 9, 2026': '{{todayFormatted}}',
   // The trust preamble names the grantors' municipality on its own, with no
@@ -778,6 +807,7 @@ function verifyTemplate(result) {
   const unbacked = new Set();
   for (const tag of text.match(/\{\{(\w+)\}\}/g) || []) {
     const name = tag.slice(2, -2);
+    if (name === 'title' || name === 'text') continue; // {{#firmClauses}} scope
     if (!BACKED_FIELDS.has(name)) unbacked.add(name);
   }
   const singleBrace = (text.match(/(?<!\{)\{\w+\}(?!\})/g) || []).length;
@@ -909,13 +939,22 @@ const HC_RELATIONS = {
 };
 
 const RIZZO_RELATIONS = {
-  'my wife, {{spouseFullName}}': relationPhrase('spouseRelation', 'spouseFullName'),
+  'my wife, {{funeralRepresentativeName}}':
+    relationPhrase('funeralRepresentativeRelation', 'funeralRepresentativeName'),
+  'my daughter, {{successorFuneralRepresentativeName}}':
+    relationPhrase('successorFuneralRepresentativeRelation', 'successorFuneralRepresentativeName'),
+  'my wife, {{executorName}}': relationPhrase('executorRelation', 'executorName'),
+  'my daughter, {{alternateExecutorName}}':
+    relationPhrase('alternateExecutorRelation', 'alternateExecutorName'),
+  'my daughter, {{secondAlternateExecutorName}}':
+    relationPhrase('secondAlternateExecutorRelation', 'secondAlternateExecutorName'),
+  'my daughter, {{trusteeName}}': relationPhrase('trusteeRelation', 'trusteeName'),
+  // Named as a parent, not a fiduciary: "Trustee for any children my
+  // daughter, NAME may have".
   'my daughter, {{childOneName}}': relationPhrase('childOneRelation', 'childOneName'),
   'my daughter, {{childTwoName}}': relationPhrase('childTwoRelation', 'childTwoName'),
-  'our daughter, {{childOneName}}':
-    relationPhrase('childOneRelation', 'childOneName', 'our'),
-  'our daughter, {{childTwoName}}':
-    relationPhrase('childTwoRelation', 'childTwoName', 'our'),
+  'our daughter, {{alternateTrusteeName}}':
+    relationPhrase('alternateTrusteeRelation', 'alternateTrusteeName', 'our'),
   // "my grandchildren" is invariant, like "my children" — only the second
   // name needs guarding so a single grandchild does not print "A and ".
   '{{grandchildOneName}} and {{grandchildTwoName}}':
@@ -958,9 +997,33 @@ const HC_CONDITIONALS = [
 // The witness pass runs last, so name and address resolution still see the
 // original text and are unaffected by it.
 const BYRNES = [byrnesPeople, byrnesAddresses, WITNESSES, CHILD_LISTS];
+
+// Same treatment for the Rizzo instruments. Previously these mapped each
+// person to one placeholder, so a daughter named as successor executor stayed
+// {{childOneName}} and the appointment filled from a child slot rather than
+// the executor slot she actually occupies.
+const rizzoNameAlternation = Object.keys(RIZZO_PEOPLE)
+  .flatMap(CASE_VARIANTS)
+  .sort((a, b) => b.length - a.length)
+  .map((n) => n.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))
+  .join('|');
+const rizzoPeopleRes = {
+  plain: new RegExp(rizzoNameAlternation),
+  global: new RegExp(rizzoNameAlternation, 'g'),
+};
+const rizzoPeople = Object.fromEntries(
+  Object.entries(RIZZO_PEOPLE).map(([name, fallback]) => [
+    name,
+    (joined, at, end) => resolvePerson(fallback, rizzoPeopleRes, joined, at, end),
+  ]),
+);
+const rizzoAddresses = Object.fromEntries(
+  RIZZO_ADDRESSES.map((a) => [a, resolveAddressByOwner]),
+);
+const RIZZO_BASE = [rizzoPeople, rizzoAddresses, RIZZO_OTHER, WITNESSES];
 // Relationship passes run last: they rewrite the placeholders the earlier
 // passes produced, and differ per instrument.
-const RIZZO_PASSES = [RIZZO, WITNESSES, RIZZO_RELATIONS];
+const RIZZO_PASSES = [...RIZZO_BASE, RIZZO_RELATIONS];
 
 templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', [...BYRNES, WILL_RELATIONS], WILL_CONDITIONALS, 'IN WITNESS WHEREOF');
 templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', [...BYRNES, POA_RELATIONS], POA_CONDITIONALS);

@@ -191,6 +191,48 @@ describe('buildDocxTemplateData', () => {
     expect(data.spousePronounObject).toBe('her');
   });
 
+  it('exposes the co-appointee and funeral-representative slots', () => {
+    // Two people in one slot ("my parents, A and B, as guardians") and the
+    // N.J.S.A. 45:27-22 appointment, which had no field at all and left the
+    // article rendering "I appoint , to act as my representative".
+    const ctx = {
+      client: {
+        personalInfo: {},
+        fiduciaries: {
+          executor: { primary: { name: 'A' } },
+          guardian: {
+            primary: { name: 'Ruth Vance', relationship: 'Mother' },
+            coGuardian: { name: 'Alan Vance', relationship: 'Father' },
+            alternate: { name: 'Kim Osei', relationship: 'Sister' },
+            coAlternate: { name: 'Tomas Osei', relationship: 'Brother-in-law' },
+          },
+          trustee: {
+            primary: { name: 'Ruth Vance' },
+            coTrustee: { name: 'Alan Vance' },
+          },
+          funeralRepresentative: {
+            primary: { name: 'Ruth Vance', relationship: 'Mother' },
+            alternate: { name: 'Kim Osei', relationship: 'Sister' },
+          },
+        },
+      },
+      firm: {},
+      computed: { clientFullName: 'Client', spouseTitle: '', spousePronouns: undefined },
+      notes: [],
+      existingDocuments: [],
+      knowledgeResources: [],
+    } as unknown as ClientContext;
+
+    const data = buildDocxTemplateData(ctx);
+    expect(data.coGuardianName).toBe('Alan Vance');
+    expect(data.coAlternateGuardianName).toBe('Tomas Osei');
+    expect(data.coGuardianRelation).toBe('father');
+    expect(data.coTrusteeName).toBe('Alan Vance');
+    expect(data.funeralRepresentativeName).toBe('Ruth Vance');
+    expect(data.successorFuneralRepresentativeName).toBe('Kim Osei');
+    expect(data.funeralRepresentativeRelation).toBe('mother');
+  });
+
   it('returns an empty relation rather than a partial address when unset', () => {
     const ctx = {
       client: { personalInfo: {}, fiduciaries: { executor: { primary: { name: 'A' } } } },
