@@ -23,10 +23,11 @@ that reads like a real break.
 Do **not** add or remove sections. See *Package 3* below for the 13 conditional sections and
 what gates each one.
 
-**2. Prune seven merged branches — and you cannot do it from a remote session.**
-The session git proxy returns `HTTP 403` on ref deletion and there is no delete-branch tool in
-the GitHub MCP set. Do not retry it here; run it from a local checkout or GitHub's UI. Command
-and the safety verification are in *OUTSTANDING — prune five merged branches* below.
+**2. Prune NINE merged branches, and turn on auto-delete so it stops recurring.**
+Adam's, at a computer — a remote session cannot delete a remote ref, and this was **tested, not
+assumed** (2026-08-07): create succeeded and delete returned `HTTP 403` seconds later on the same
+credentials. Do not retry it here. The **first** action is the repo setting that prevents the next
+nine; the command and the full evidence are in *OUTSTANDING — prune nine merged branches* below.
 
 ---
 
@@ -569,34 +570,15 @@ That was tried and reverted: `tests/setup.ts:158` calls
 `Object.defineProperty(window, 'matchMedia', ...)` and dies without jsdom, so the file
 collects zero tests and the suite goes green by not running them.
 
-### ▶ OUTSTANDING — prune seven merged branches
+### ▶ OUTSTANDING — prune NINE merged branches (Adam, at a computer)
 
-Seven branches from the 2026-08-07 session are merged but still on the remote:
+**Do the repo setting first — it is the only part that stops this recurring.**
 
-```
-claude/trust-template-schema
-claude/template-disk-fallback
-claude/statular-package-analysis
-claude/suspend-automerge
-claude/homework-session-close
-claude/homework-outstanding-prune
-claude/homework-start-here
-```
+**① Settings → General → "Automatically delete head branches."** One checkbox. Merged PR branches
+then disappear on their own and this item never comes back. It only affects *future* merges, so the
+nine below still need one manual sweep either way — but without it, every future session adds more.
 
-(The last two were created after this entry was first written, which is why an earlier revision
-said five. Verify against the remote rather than trusting this list.)
-
-All five are **verified safe** — each contribution was confirmed present on `main` by content,
-not by ancestry (squash merges leave the branch tip a non-ancestor, so `git branch --merged`
-reports nothing):
-
-| Branch | Confirmed on `main` |
-|---|---|
-| `trust-template-schema` | `survivorsTrust`, `bypassTrust`, `familyPotTrust`, `specialTrustee`, `TrustProtector`, `governingState` |
-| `template-disk-fallback` | `functions/src/bundled-templates.ts`, its test, `'bundled'` in `generate-documents.ts` |
-| `statular-package-analysis` | `docx-forensics.py`, this file |
-| `homework-session-close` | byte-identical to `main` |
-| `suspend-automerge` | block deliberately removed later — its absence is correct |
+**② Clear the nine.** GitHub's Branches page has a trash icon per row (~30 seconds), or locally:
 
 ```bash
 git push origin --delete \
@@ -606,12 +588,46 @@ git push origin --delete \
   claude/suspend-automerge \
   claude/homework-session-close \
   claude/homework-outstanding-prune \
-  claude/homework-start-here
+  claude/homework-start-here \
+  claude/homework-md-rlra3s \
+  claude/scratch-delete-probe
 ```
 
-**⚠ This cannot be done from a Claude Code web/remote session.** The session git proxy returns
-`HTTP 403` on ref deletion — it permits creating and updating refs but not deleting them. A new
-remote session will hit the same wall. Run it locally, or delete the branches in GitHub's UI.
+**All nine re-verified 2026-08-07 against `main` at `ee4756b`: every one is content-identical to
+`main`** (`git diff <remote-sha> origin/main` empty for each). Confirmed by content, not ancestry —
+squash merges leave the branch tip a non-ancestor, so `git branch --merged` reports nothing.
+
+| Branch | Note |
+|---|---|
+| `trust-template-schema` | `survivorsTrust`, `bypassTrust`, `familyPotTrust`, `specialTrustee`, `TrustProtector`, `governingState` on `main` |
+| `template-disk-fallback` | `functions/src/bundled-templates.ts`, its test, `'bundled'` in `generate-documents.ts` |
+| `statular-package-analysis` | `docx-forensics.py`, this file |
+| `homework-session-close` | byte-identical to `main` |
+| `suspend-automerge` | block deliberately removed later — its absence is correct |
+| `homework-outstanding-prune`, `homework-start-here` | created after the entry was first written (why an earlier revision said five, then seven) |
+| **`homework-md-rlra3s`** | 🆕 carried PRs #304, #305, #306, #307 (2026-08-07), all squash-merged |
+| **`scratch-delete-probe`** | 🆕 **my own mess.** Created solely to test the 403 claim below and then could not be removed. It holds no work. |
+
+#### ⚠ Why a remote session cannot do this — TESTED 2026-08-07, not inherited
+
+Adam's question — *"why do I need to do it locally if we're working off a repo?"* — was the right
+one, because the earlier revision of this entry asserted the limit without ever having tried it.
+It was then tested on a throwaway branch:
+
+```
+create  claude/scratch-delete-probe   →  * [new branch]   ✅
+delete  git push origin --delete …    →  HTTP 403         ❌
+delete  git push origin :refs/heads/… →  HTTP 403         ❌
+```
+
+Same session, same credentials, seconds apart. **The session git proxy permits creating and
+updating refs and refuses deleting them** — both delete syntaxes fail identically. Separately, the
+GitHub API toolset (which does not go through the git proxy) exposes `create_branch` and
+`list_branches` but **no delete-branch tool at all**, so neither route offers deletion.
+
+This is a guardrail worth keeping, not a bug to route around: an agent that can delete refs can
+destroy work with nothing to revert. **Do not retry it from a remote session, and do not go looking
+for a workaround.** The cost is one checkbox plus one sweep.
 
 Do **not** touch the other ~20 `claude/*` branches on the remote; they belong to other sessions.
 
