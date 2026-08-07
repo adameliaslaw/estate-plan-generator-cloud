@@ -492,10 +492,13 @@ const RIZZO = {
   'RIZZO FAMILY LIVING TRUST': '{{trustName}}',
   'VITA MARIA RIZZO': '{{spouseFullName}}',
   'VITO RIZZO': '{{clientFullName}}',
-  'SARINA MARIE CASISA': '{{childTwoName}}',
-  'LISA ANN RIZZO': '{{childOneName}}',
-  'JOSEPH CASISA': '{{childTwoSpouseName}}',
-  'LIA CASISA': '{{grandchildOneName}}',
+  // Order and roles taken from the will's own Family Information article:
+  // "My children ... are Sarina Marie Casisa and Lisa Ann Rizzo. My
+  // grandchildren ... are Joseph Casisa and Lia Casisa."
+  'SARINA MARIE CASISA': '{{childOneName}}',
+  'LISA ANN RIZZO': '{{childTwoName}}',
+  'JOSEPH CASISA': '{{grandchildOneName}}',
+  'LIA CASISA': '{{grandchildTwoName}}',
   '603 Waterside Boulevard, Monroe Township, New Jersey': CLIENT_ADDRESS,
   '549 Laurelwood Court, Howell, New Jersey': '{{childOneAddress}}',
   '190 River Road, Edgewater, New Jersey': '{{childTwoAddress}}',
@@ -734,7 +737,18 @@ function verifyTemplate(result) {
     if (!BACKED_FIELDS.has(name)) unbacked.add(name);
   }
   const singleBrace = (text.match(/(?<!\{)\{\w+\}(?!\})/g) || []).length;
-  return { leaked, residual, unbacked, singleBrace, text };
+  // A relationship word still hardcoded in front of a placeholder — "my
+  // brother, {{trusteeName}}" — asserts something false about whoever fills
+  // the slot. "my children" is genuinely invariant and is the one exception.
+  const staleRelations = [
+    ...new Set(
+      (text.match(/\b(?:my|our)\s+[A-Za-z][A-Za-z-]*,\s*\{\{/g) || [])
+        .map((m) => m.trim())
+        // Invariant of whoever fills the slot, so correct to leave literal.
+        .filter((m) => !/^(?:my|our)\s+(?:children|grandchildren|knowledge),/i.test(m)),
+    ),
+  ];
+  return { leaked, residual, unbacked, singleBrace, staleRelations, text };
 }
 
 // ---------------------------------------------------------------------------
@@ -789,6 +803,83 @@ const CHILD_LISTS = {
  * map grows the field, which is strictly better than printing an appointment
  * article that names nobody.
  */
+/**
+ * Relationship appositives.
+ *
+ * The sample says "I appoint my Husband, SEAN BYRNES, to serve as Executor".
+ * Sean was Jessica's husband; another client's executor is their daughter, or
+ * their accountant. Substituting the name alone leaves the relationship word
+ * asserting something false about whoever fills the slot.
+ *
+ * Rendered as a section so the phrase omits cleanly rather than printing
+ * "I appoint my , NAME" when a firm has not captured the relationship:
+ *   {{#executorRelation}}my {{executorRelation}}, {{/executorRelation}}{{executorName}}
+ *
+ * Co-appointees get the same treatment on their conjunction — "my parents, A
+ * and B" must not become "A and " when only one is named.
+ */
+const relationPhrase = (relation, name, poss = 'my') =>
+  `{{#${relation}}}${poss} {{${relation}}}, {{/${relation}}}{{${name}}}`;
+
+const coAppointee = (name) => `{{#${name}}} and {{${name}}}{{/${name}}}`;
+
+const WILL_RELATIONS = {
+  'my husband, {{funeralRepresentativeName}}':
+    relationPhrase('funeralRepresentativeRelation', 'funeralRepresentativeName'),
+  'my father, {{successorFuneralRepresentativeName}}':
+    relationPhrase('successorFuneralRepresentativeRelation', 'successorFuneralRepresentativeName'),
+  'my Husband, {{executorName}}': relationPhrase('executorRelation', 'executorName'),
+  'my father, {{alternateExecutorName}}':
+    relationPhrase('alternateExecutorRelation', 'alternateExecutorName'),
+  'my mother, {{secondAlternateExecutorName}}':
+    relationPhrase('secondAlternateExecutorRelation', 'secondAlternateExecutorName'),
+  'my sister, {{thirdAlternateExecutorName}}':
+    relationPhrase('thirdAlternateExecutorRelation', 'thirdAlternateExecutorName'),
+  'my brother, {{trusteeName}}': relationPhrase('trusteeRelation', 'trusteeName'),
+  'my parents, {{guardianName}} and {{coGuardianName}}':
+    relationPhrase('guardianRelation', 'guardianName') + coAppointee('coGuardianName'),
+  'my brother, {{alternateGuardianName}} and my sister-in-law, {{coAlternateGuardianName}}':
+    relationPhrase('alternateGuardianRelation', 'alternateGuardianName') +
+    coAppointee('coAlternateGuardianName'),
+  // "my Husband" is a defined term established in the Family Information
+  // article and referenced by the residue and no-contest articles. It has to
+  // move as one, or the definition and its references disagree. The executor
+  // appointment is a longer literal above, so it claims its own span first.
+  'my Husband': 'my {{spouseRelationCapitalized}}',
+  'shall be to him': 'shall be to {{spousePronounObject}}',
+};
+
+const POA_RELATIONS = {
+  'my husband, {{poaAgentName}}': relationPhrase('poaAgentRelation', 'poaAgentName'),
+  'my father, {{poaAlternateAgentName}}':
+    relationPhrase('poaAlternateAgentRelation', 'poaAlternateAgentName'),
+  'my mother, {{poaSecondAlternateAgentName}}':
+    relationPhrase('poaSecondAlternateAgentRelation', 'poaSecondAlternateAgentName'),
+};
+
+const HC_RELATIONS = {
+  'my husband, {{healthcareAgentName}}':
+    relationPhrase('healthcareAgentRelation', 'healthcareAgentName'),
+  'my mother, {{healthcareAlternateAgentName}}':
+    relationPhrase('healthcareAlternateAgentRelation', 'healthcareAlternateAgentName'),
+};
+
+const RIZZO_RELATIONS = {
+  'my wife, {{spouseFullName}}': relationPhrase('spouseRelation', 'spouseFullName'),
+  'my daughter, {{childOneName}}': relationPhrase('childOneRelation', 'childOneName'),
+  'my daughter, {{childTwoName}}': relationPhrase('childTwoRelation', 'childTwoName'),
+  'our daughter, {{childOneName}}':
+    relationPhrase('childOneRelation', 'childOneName', 'our'),
+  'our daughter, {{childTwoName}}':
+    relationPhrase('childTwoRelation', 'childTwoName', 'our'),
+  // "my grandchildren" is invariant, like "my children" — only the second
+  // name needs guarding so a single grandchild does not print "A and ".
+  '{{grandchildOneName}} and {{grandchildTwoName}}':
+    '{{grandchildOneName}}' + coAppointee('grandchildTwoName'),
+  'my Wife': 'my {{spouseRelationCapitalized}}',
+  'shall be to her': 'shall be to {{spousePronounObject}}',
+};
+
 const WILL_CONDITIONALS = [
   { contains: 'Appointment of First Level Successor Executor', field: 'alternateExecutorName' },
   // unbacked today -> suppressed until buildDocxTemplateData gains the field
@@ -819,11 +910,13 @@ const HC_CONDITIONALS = [
 // The witness pass runs last, so name and address resolution still see the
 // original text and are unaffected by it.
 const BYRNES = [byrnesPeople, byrnesAddresses, WITNESSES, CHILD_LISTS];
-const RIZZO_PASSES = [RIZZO, WITNESSES];
+// Relationship passes run last: they rewrite the placeholders the earlier
+// passes produced, and differ per instrument.
+const RIZZO_PASSES = [RIZZO, WITNESSES, RIZZO_RELATIONS];
 
-templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', BYRNES, WILL_CONDITIONALS);
-templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', BYRNES, POA_CONDITIONALS);
-templatize(`${SAMPLES}/Jessica Byrnes- HC 11.3.25.docx`, 'NJ_HC_Married.docx', BYRNES, HC_CONDITIONALS);
+templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', [...BYRNES, WILL_RELATIONS], WILL_CONDITIONALS);
+templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', [...BYRNES, POA_RELATIONS], POA_CONDITIONALS);
+templatize(`${SAMPLES}/Jessica Byrnes- HC 11.3.25.docx`, 'NJ_HC_Married.docx', [...BYRNES, HC_RELATIONS], HC_CONDITIONALS);
 templatize(`${SAMPLES}/Rizzo Living Trust.docx`, 'Married_Trust.docx', RIZZO_PASSES);
 templatize(`${SAMPLES}/Vito Rizzo- Pourover Will 11.19.25.docx`, 'NJ_Pourover_Will.docx', RIZZO_PASSES);
 
@@ -849,7 +942,7 @@ if (written.length === 0) {
 }
 
 for (const result of written) {
-  const { leaked, residual, unbacked, singleBrace } = verifyTemplate(result);
+  const { leaked, residual, unbacked, singleBrace, staleRelations } = verifyTemplate(result);
   console.log(`\n${result.destFileName}`);
   const replaced = Object.entries(result.byLiteral).filter(([, n]) => n > 0);
   console.log(
@@ -874,6 +967,11 @@ for (const result of written) {
         `  ok: ${total} paragraph(s) wrapped by ${result.wrapCounts.size} conditional(s)`,
       );
     }
+  }
+  if (staleRelations.length > 0) {
+    failures += 1;
+    console.error('  FAIL: relationship word still hardcoded before a placeholder:');
+    for (const r of staleRelations) console.error(`    ${r}…`);
   }
   if (singleBrace > 0) {
     console.error(`  FAIL: ${singleBrace} single-brace {placeholder}(s) — docxtemplater uses {{ }}`);

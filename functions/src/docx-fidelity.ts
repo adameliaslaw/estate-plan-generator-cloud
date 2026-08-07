@@ -88,6 +88,34 @@ export function buildDocxTemplateData(
   const person = (p: unknown): string =>
     formatFullName(p as Record<string, unknown> | null | undefined);
 
+  /**
+   * The relationship word a document uses as an appositive: "I appoint my
+   * husband, NAME, to serve as Executor". Required on FiduciaryPerson, so a
+   * template can render the phrase conditionally and drop it when a firm has
+   * not captured one, rather than printing "I appoint my , NAME".
+   *
+   * Lowercased to match ctx.computed.*Title, which derives the same words for
+   * the .hbs templates — same source field, same casing, so a document does
+   * not read "my Husband" in one article and "my husband" in the next.
+   */
+  const relation = (p: unknown): string => {
+    const rel = (p as Record<string, unknown> | null | undefined)?.relationship;
+    return typeof rel === 'string' ? rel.trim().toLowerCase() : '';
+  };
+
+  /** "12 Vine Street, Camden, New Jersey" from a fiduciary's own address. */
+  const address = (p: unknown): string => {
+    const f = (p ?? {}) as Record<string, unknown>;
+    return [f.address, f.city, f.state].map((v) => (v ?? '').toString().trim())
+      .filter(Boolean)
+      .join(', ');
+  };
+
+  const capitalize = (s: string): string =>
+    s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
+  const healthcarePrimary = healthcare.primary ?? healthcare.agent;
+
   return {
     // Client + spouse
     clientFullName: ctx.computed.clientFullName,
@@ -108,7 +136,31 @@ export function buildDocxTemplateData(
     alternateGuardianName: person(guardian.alternate),
     poaAgentName: person(poa.agent),
     poaAlternateAgentName: person(poa.alternateAgent),
-    healthcareAgentName: person(healthcare.primary ?? healthcare.agent),
+    healthcareAgentName: person(healthcarePrimary),
+    // Relationship words. A template renders these as
+    // {{#executorRelation}}my {{executorRelation}}, {{/executorRelation}}
+    // so the phrase disappears rather than leaving a dangling "my ,".
+    spouseRelation: ctx.computed.spouseTitle,
+    spouseRelationCapitalized: capitalize(ctx.computed.spouseTitle),
+    spousePronounObject: ctx.computed.spousePronouns?.object ?? 'them',
+    executorRelation: relation(executor.primary),
+    alternateExecutorRelation: relation(executor.alternate),
+    trusteeRelation: relation(trustee.primary),
+    alternateTrusteeRelation: relation(trustee.alternate),
+    guardianRelation: relation(guardian.primary),
+    alternateGuardianRelation: relation(guardian.alternate),
+    poaAgentRelation: relation(poa.agent),
+    poaAlternateAgentRelation: relation(poa.alternateAgent),
+    healthcareAgentRelation: relation(healthcarePrimary),
+    // Fiduciaries' own addresses. The executor need not live with the client;
+    // in the sample set the successor executor lives in another state.
+    executorAddress: address(executor.primary),
+    alternateExecutorAddress: address(executor.alternate),
+    trusteeAddress: address(trustee.primary),
+    guardianAddress: address(guardian.primary),
+    poaAgentAddress: address(poa.agent),
+    poaAlternateAgentAddress: address(poa.alternateAgent),
+    healthcareAgentAddress: address(healthcarePrimary),
     // Family
     childCount: ctx.computed.childCount,
     childrenNames: (Array.isArray(client.children) ? client.children : [])
