@@ -207,6 +207,56 @@ function replaceInDocument(xml, pairs) {
 }
 
 // ---------------------------------------------------------------------------
+// Conditional sections
+//
+// A finished document has already resolved every conditional into flat prose:
+// Jessica had three children and four levels of successor executor, so the
+// sample states three children and contains four appointment articles. Filled
+// for a client with two children and one alternate, that prints a dangling
+// "and ." and two appointment articles naming nobody.
+//
+// These wrappers put the conditionality back. They only ever OMIT — no branch
+// invents replacement prose, because the prose in these samples is attorney
+// reviewed and writing new legal text is not this script's job. An article
+// that does not apply disappears; nothing is rewritten.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wrap whole paragraphs in {{#field}} … {{/field}}.
+ *
+ * A rule matching no paragraph is a hard error rather than a quiet no-op —
+ * that is how a wrapper silently stops applying when a sample is re-exported
+ * with different wording.
+ */
+function wrapParagraphs(xml, rules) {
+  const counts = new Map(rules.map((r) => [r.contains, 0]));
+  const out = xml.replace(PARAGRAPH_RE, (paragraph) => {
+    const nodes = [...paragraph.matchAll(TEXT_NODE_RE)];
+    if (nodes.length === 0) return paragraph;
+    const text = nodes.map((m) => xmlUnescape(m[2])).join('');
+    const rule = rules.find((r) => text.includes(r.contains));
+    if (!rule) return paragraph;
+    counts.set(rule.contains, counts.get(rule.contains) + 1);
+
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    let result = '';
+    let cursor = 0;
+    for (const node of nodes) {
+      const open = withSpacePreserve(node[1]);
+      let inner = xmlUnescape(node[2]);
+      if (node === first) inner = `{{#${rule.field}}}${inner}`;
+      if (node === last) inner = `${inner}{{/${rule.field}}}`;
+      result += paragraph.slice(cursor, node.index);
+      result += open + xmlEscape(inner) + node[3];
+      cursor = node.index + node[0].length;
+    }
+    return result + paragraph.slice(cursor);
+  });
+  return { xml: out, counts };
+}
+
+// ---------------------------------------------------------------------------
 // Reading .docx text (for verification)
 // ---------------------------------------------------------------------------
 
@@ -594,10 +644,17 @@ const results = [];
  * replaced before addresses so that an address pass can identify an address's
  * owner from the placeholder already standing in front of it.
  */
-function templatize(sourceFile, destFileName, passes) {
+function templatize(sourceFile, destFileName, passes, conditionals = []) {
   const specs = Array.isArray(passes) ? passes : [passes];
   const sourcePath = path.resolve(REPO_ROOT, sourceFile);
-  const destPath = path.join(REPO_ROOT, 'functions', 'templates', destFileName);
+  // TEMPLATE_OUT lets a modified copy of this script (e.g. one with a rule
+  // deliberately broken, to check the gate fires) write somewhere else. Run
+  // such a probe without it and it silently overwrites the real templates,
+  // so the next thing you verify is the broken build.
+  const destPath = path.join(
+    process.env.TEMPLATE_OUT || path.join(REPO_ROOT, 'functions', 'templates'),
+    destFileName,
+  );
 
   if (!fs.existsSync(sourcePath)) {
     console.error(`SKIP  ${destFileName}: source not found — ${sourceFile}`);
@@ -620,6 +677,13 @@ function templatize(sourceFile, destFileName, passes) {
   }
   const mappings = Object.assign({}, ...specs);
 
+  let wrapCounts = new Map();
+  if (conditionals.length > 0) {
+    const wrapped = wrapParagraphs(xml, conditionals);
+    xml = wrapped.xml;
+    wrapCounts = wrapped.counts;
+  }
+
   zip.file('word/document.xml', xml);
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
   fs.writeFileSync(
@@ -639,6 +703,7 @@ function templatize(sourceFile, destFileName, passes) {
     sourceFile,
     mappings,
     byLiteral,
+    wrapCounts,
     status: 'written',
   });
   console.log(`WROTE ${destFileName}  <- ${path.basename(sourceFile)}`);
@@ -702,14 +767,63 @@ const byrnesPeople = Object.fromEntries(
 const byrnesAddresses = Object.fromEntries(
   BYRNES_ADDRESSES.map((addr) => [addr, resolveAddressByOwner]),
 );
+/**
+ * Collapse the fixed child list onto the one field that already holds it.
+ *
+ * buildDocxTemplateData emits childrenNames pre-joined, so this needs no new
+ * field and no loop, and the "ANA, LUIS, and ." dangling comma cannot happen.
+ * Runs after the name pass, on the placeholders that pass produced.
+ */
+const CHILD_LISTS = {
+  '{{childOneName}}, {{childTwoName}}, and {{childThreeName}}': '{{childrenNames}}',
+  '{{childOneName}}, {{childTwoName}} and {{childThreeName}}': '{{childrenNames}}',
+  // Jessica's own funeral directive, which every generated document repeated.
+  'To be cremated.': '{{funeralWishes}}',
+};
+
+/**
+ * Articles that exist in the sample only because this client used them.
+ *
+ * Every field named here is one buildDocxTemplateData already emits, except
+ * the three noted below — those articles stay suppressed until the production
+ * map grows the field, which is strictly better than printing an appointment
+ * article that names nobody.
+ */
+const WILL_CONDITIONALS = [
+  { contains: 'Appointment of First Level Successor Executor', field: 'alternateExecutorName' },
+  // unbacked today -> suppressed until buildDocxTemplateData gains the field
+  { contains: 'Appointment of Second Level Successor Executor', field: 'secondAlternateExecutorName' },
+  { contains: 'Appointment of Third Level Successor Executor', field: 'thirdAlternateExecutorName' },
+  // Anchored on the heading's own words, not "ARTICLE XI" — that also matches
+  // "ARTICLE XII No Contest", which would silently suppress the No Contest
+  // heading for every client without minor children.
+  { contains: 'Appointment of Guardian', field: 'hasMinorChildren' },
+  { contains: 'guardian of the person and the property of any minor child', field: 'hasMinorChildren' },
+  // Conditioned on the appointee, not the children: the article appoints a
+  // trustee, so without one it reads "I appoint my brother, , to serve as".
+  { contains: 'to serve as Trustee for my children', field: 'trusteeName' },
+  { contains: 'conform such arrangements to my wishes', field: 'funeralWishes' },
+];
+
+const POA_CONDITIONALS = [
+  { contains: 'First Level Successor Substitute', field: 'poaAlternateAgentName' },
+  // unbacked today -> suppressed
+  { contains: 'Second Level Successor Substitute', field: 'poaSecondAlternateAgentName' },
+];
+
+const HC_CONDITIONALS = [
+  // unbacked today -> suppressed
+  { contains: 'First Level Successor Health Care Representative', field: 'healthcareAlternateAgentName' },
+];
+
 // The witness pass runs last, so name and address resolution still see the
 // original text and are unaffected by it.
-const BYRNES = [byrnesPeople, byrnesAddresses, WITNESSES];
+const BYRNES = [byrnesPeople, byrnesAddresses, WITNESSES, CHILD_LISTS];
 const RIZZO_PASSES = [RIZZO, WITNESSES];
 
-templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', BYRNES);
-templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', BYRNES);
-templatize(`${SAMPLES}/Jessica Byrnes- HC 11.3.25.docx`, 'NJ_HC_Married.docx', BYRNES);
+templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', BYRNES, WILL_CONDITIONALS);
+templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', BYRNES, POA_CONDITIONALS);
+templatize(`${SAMPLES}/Jessica Byrnes- HC 11.3.25.docx`, 'NJ_HC_Married.docx', BYRNES, HC_CONDITIONALS);
 templatize(`${SAMPLES}/Rizzo Living Trust.docx`, 'Married_Trust.docx', RIZZO_PASSES);
 templatize(`${SAMPLES}/Vito Rizzo- Pourover Will 11.19.25.docx`, 'NJ_Pourover_Will.docx', RIZZO_PASSES);
 
@@ -744,6 +858,22 @@ for (const result of written) {
   );
   for (const [literal, n] of Object.entries(result.byLiteral)) {
     if (n === 0) console.log(`    note: "${literal}" not present in this document`);
+  }
+  if (result.wrapCounts.size > 0) {
+    // Exactly one paragraph per anchor. Zero means the wrapper quietly stopped
+    // applying; more than one means the anchor is a prefix of some other
+    // heading and is suppressing an article nobody asked it to.
+    const dead = [...result.wrapCounts].filter(([, n]) => n !== 1);
+    if (dead.length > 0) {
+      failures += 1;
+      console.error('  FAIL: conditional wrapper did not match exactly one paragraph:');
+      for (const [anchor, n] of dead) console.error(`    ${n}x  "${anchor}"`);
+    } else {
+      const total = [...result.wrapCounts].reduce((a, [, n]) => a + n, 0);
+      console.log(
+        `  ok: ${total} paragraph(s) wrapped by ${result.wrapCounts.size} conditional(s)`,
+      );
+    }
   }
   if (singleBrace > 0) {
     console.error(`  FAIL: ${singleBrace} single-brace {placeholder}(s) — docxtemplater uses {{ }}`);
