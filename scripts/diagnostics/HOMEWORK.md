@@ -49,11 +49,8 @@ What this raises:
 
 ## Hard constraints
 
-- **No merges in the originating session.** A calibration task is running concurrently on
-  `main` (see #255 calibration callables, #256 calibration-session autosave, #257 clause-miner
-  seed files). Everything stays on branches.
-- Root `CLAUDE.md` rule 7 tells agents to squash-merge their own PRs once verified. That rule
-  is **suspended** while calibration is live. Do not auto-merge.
+- **Spent — see the header.** The rule 7 suspension (#261) and the no-merge freeze both
+  applied to the 2026-08-02 session. #258, #260, #261 and #266 have since merged.
 - Branch pushes cannot deploy this repo — both Firebase workflows trigger on `push` to `main`,
   and `njsa-import` is `workflow_dispatch`. Nothing here triggers on `pull_request`, so PRs
   show zero checks. **That is expected, not a failure.** Local verification is the gate.
@@ -465,7 +462,109 @@ never independently verified — treat it as unconfirmed.
 
 ---
 
-## ▶ NEXT
+## Session close 2026-08-07 — what shipped
+
+> Scope note: this section records the **templating work**, not new Statular observations.
+> For the product itself the video pass (root `STATULAR-VIDEO-REVIEW.md`, section J of root
+> `HOMEWORK.md`) is newer and wins on anything it covers.
+
+Four PRs merged. `main` at `e0d2b5b`.
+
+| PR | What |
+|---|---|
+| #260 | `docx-forensics.py` + this file |
+| #261 | rule 7 suspension in `CLAUDE.md` (since removed by someone else) |
+| #266 | `bundled-templates.ts` — disk `.hbs` reachable at runtime |
+| #258 | `trust-joint.hbs`, `trust-single.hbs`, `TrustOptions`, `TrustProtector` |
+
+### The template pipeline is now wired end to end
+
+`getTemplate()` consults, in order: explicit `templateId` → `softwareSource` → `variant` →
+firm default → vector search → knowledge base → legacy collection → **bundled**. A firm's
+uploads always win; the bundled path is skipped entirely when `softwareSource` was specified.
+
+`generateFromTemplate` derives the trust variant from marital status (`Married` + `spouseInfo`
+→ joint, else single). `getTemplate` stays client-unaware. `poa`'s simple/comprehensive split
+is an attorney choice and is never derived.
+
+**Runtime behaviour is unchanged.** `loadBundledTemplate` treats any file containing
+`[[DRAFT` as unavailable, so both trust skeletons are held back and trusts still route to AI
+generation. Verified on merged `main`:
+
+```
+married -> joint  -> AI (skeleton held back)
+single  -> single -> AI (skeleton held back)
+```
+
+### ▶ THE ONE REMAINING TASK
+
+**Fill the `[[DRAFT: ...]]` stubs in `functions/src/templates/trust-joint.hbs` (151) and
+`trust-single.hbs` (134).** Attorney drafting, not engineering.
+
+Nothing else is required. The moment a file has no `[[DRAFT` left, the guard stops holding it
+back and that trust starts rendering from the template instead of the model. There is no flag
+to flip and no code to change.
+
+Do it one article at a time and re-run `npm run test` — the guard is all-or-nothing per file,
+so a partially drafted template stays held back, which is the intended behaviour.
+
+### Structural reference
+
+The eight-article spine matches a maximal-configuration Statular instrument 8-for-8. The 13
+sections that appear only under maximal config are catalogued under *Package 3* above and are
+all wired to conditionals. Do not add articles without checking that catalogue first.
+
+### ⚠ Known issue introduced by these merges
+
+`tests/unit/inheritance-tax-pdf-fill.test.ts` went red on 2 of 3 full-suite runs after
+merging, and clean `main` beforehand was green 3 of 3.
+
+Not a logic break. That file does real PDF rendering, passes 45/45 alone in **61 seconds**,
+and takes **87–95 seconds** under full-suite load. Vitest allocates a worker per test *file*;
+`tests/unit/bundled-templates.test.ts` adds one more worker on a 4-core box and tips the
+CPU-bound suite past its timeout. The 12ms of assertions are irrelevant — it is the worker
+slot.
+
+**Deploys are gated on tests**, so this can abort a Firebase deploy and would present as an
+inheritance-tax failure. Fix is to raise the timeout on that file. It was left alone because it
+belongs to the inheritance-tax work.
+
+**Update — it did NOT reproduce in CI.** Both deploys of the merge (`e3381c9`, `e0d2b5b`) passed
+the test gate and shipped green. The GitHub runner has more headroom than the 4-core container
+where this was measured, so treat the risk as latent rather than active. It is still closer to
+its ceiling than before: one more test *file* could tip it in CI too.
+
+Do **not** "fix" this by adding `// @vitest-environment node` to the bundled-templates suite.
+That was tried and reverted: `tests/setup.ts:158` calls
+`Object.defineProperty(window, 'matchMedia', ...)` and dies without jsdom, so the file
+collects zero tests and the suite goes green by not running them.
+
+### Unresolved — cancelled Functions deploy on `b4b480b4` (#293), 2026-08-06
+
+Investigated 2026-08-07 and **not resolvable**: the run-level log archive is an empty 22-byte
+ZIP and the job log endpoint 404s, so the logs are gone.
+
+What the metadata rules out — the job's conclusion is `cancelled`, not `failure`, so it was not
+a test or build failure; `timeout-minutes: 120` and there are no step-level timeouts, so it was
+not a timeout; `cancel-in-progress: false` and it was the only run that day between 12:58 and
+the next push eight hours later, so nothing superseded it.
+
+It ran exactly 15:01 (17:35:06 → 17:50:07) against a healthy baseline of ~11.7 min. Either a
+manual cancellation, or the runner was lost — the missing logs favour the latter, since GitHub
+retains Actions logs for 90 days and a clean user cancellation normally preserves output.
+
+**No action needed.** #293's changes shipped in the next Functions deploy (`8cce6f8`) anyway,
+which is why it went unnoticed. If certainty is ever wanted, GitHub's UI surfaces a
+cancellation actor the API does not — Actions → run `31123551307`.
+
+### Statular trial
+
+Expired 2026-08-06. No payment method was on file. Three packages were captured and are
+analysed above; the Bypass A/B comparison run was never taken.
+
+---
+
+## ▶ NEXT (superseded — see Session close above)
 
 1. **Await further Statular packages** from Adam. Analyse each on arrival; hold the
    cross-package synthesis until he says the collection is complete. The determinism control is
