@@ -1,3 +1,9 @@
+// @vitest-environment node
+//
+// This suite touches only the filesystem — no DOM. Declaring the node
+// environment keeps it from spinning up a jsdom instance it never uses, which
+// on a 4-core runner is enough contention to push the CPU-bound
+// inheritance-tax-pdf-fill suite past its timeout.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
