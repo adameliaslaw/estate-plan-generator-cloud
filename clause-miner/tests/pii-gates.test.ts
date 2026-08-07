@@ -3,6 +3,7 @@ import {
   AhoCorasick,
   buildPiiGateRequests,
   buildRosterSweep,
+  gateOutcome,
   gateVerdict,
   sweepText,
 } from '../src/pii-gates.js';
@@ -86,5 +87,43 @@ describe('haiku PII gate (net 3 — fail closed)', () => {
     expect(gateVerdict({ ok: false, toolInput: undefined })).toBe('blocked');
     expect(gateVerdict({ ok: true, toolInput: undefined })).toBe('blocked');
     expect(gateVerdict({ ok: true, toolInput: {} })).toBe('blocked'); // fail closed
+  });
+
+  it('separates "the model objected" from "the call failed", both still blocking', () => {
+    // The blocking behaviour is unchanged — only the recorded reason is new.
+    // Without the split, a broken batch is indistinguishable from a PII hit in
+    // `piiFindings`, which is what made the pilot's 94.5% block rate
+    // uninterpretable.
+    expect(gateOutcome({ ok: true, toolInput: { pii_found: false, findings: [] } })).toEqual({
+      verdict: 'clean',
+      reason: 'clean',
+    });
+    expect(gateOutcome({ ok: true, toolInput: { pii_found: true, findings: ['Jane Q'] } })).toEqual({
+      verdict: 'blocked',
+      reason: 'flagged',
+    });
+    expect(gateOutcome({ ok: false, toolInput: undefined })).toEqual({
+      verdict: 'blocked',
+      reason: 'error',
+    });
+    expect(gateOutcome({ ok: true, toolInput: undefined })).toEqual({
+      verdict: 'blocked',
+      reason: 'error',
+    });
+    expect(gateOutcome({ ok: true, toolInput: {} })).toEqual({
+      verdict: 'blocked',
+      reason: 'flagged',
+    });
+  });
+
+  it('keeps gateVerdict in agreement with gateOutcome on every input', () => {
+    const cases = [
+      { ok: true, toolInput: { pii_found: false, findings: [] } },
+      { ok: true, toolInput: { pii_found: true, findings: ['x'] } },
+      { ok: false, toolInput: undefined },
+      { ok: true, toolInput: undefined },
+      { ok: true, toolInput: {} },
+    ];
+    for (const c of cases) expect(gateVerdict(c)).toBe(gateOutcome(c).verdict);
   });
 });
