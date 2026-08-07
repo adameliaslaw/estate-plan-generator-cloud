@@ -21,7 +21,12 @@ vi.mock('firebase-functions/v2/firestore', () => ({ onDocumentCreated: () => und
 vi.mock('firebase-functions/logger', () => ({ info: () => undefined, warn: () => undefined, error: () => undefined }));
 vi.mock('firebase-admin', () => ({ firestore: () => ({}), storage: () => ({}) }));
 
-import { escapeHtml, processCustomTemplate } from '../../functions/src/email-notifications';
+import {
+  escapeHtml,
+  processCustomTemplate,
+  buildEmailHtml,
+  clientContactFields,
+} from '../../functions/src/email-notifications';
 
 describe('escapeHtml', () => {
   it('neutralizes a script-tag injection', () => {
@@ -76,5 +81,72 @@ describe('processCustomTemplate — R5-056 stored-XSS in custom email templates'
   it('does not HTML-escape the plain-text subject', () => {
     const { subject } = processCustomTemplate(template, { clientName: 'O\'Brien & Sons', link: '' });
     expect(subject).toBe("Hello O'Brien & Sons");
+  });
+});
+
+describe('buildEmailHtml — issue #166: firm branding fields are escaped too', () => {
+  // Branding comes from the firm document, which attorneys edit freely in
+  // Settings. The T9 fix escaped caller-supplied request fields but left these
+  // interpolated raw into every outbound email.
+  const branding = {
+    firmName: 'Elias Law',
+    firmPhone: '555-1234',
+    firmEmail: 'firm@x.test',
+    logoUrl: '',
+    primaryColor: '#1a365d',
+  };
+
+  it('escapes a firmName carrying markup everywhere it appears', () => {
+    const html = buildEmailHtml('<p>body</p>', {
+      ...branding,
+      firmName: '</title><script>alert(1)</script>',
+    });
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('drops a non-http(s) logo URL instead of rendering it as an image src', () => {
+    const html = buildEmailHtml('<p>body</p>', {
+      ...branding,
+      logoUrl: 'javascript:alert(1)',
+    });
+    expect(html).not.toContain('javascript:alert(1)');
+    expect(html).not.toContain('<img');
+  });
+
+  it('renders an https logo with attribute-breaking characters escaped', () => {
+    const html = buildEmailHtml('<p>body</p>', {
+      ...branding,
+      logoUrl: 'https://x.test/logo.png?a=1&b="quoted"',
+    });
+    expect(html).toContain('<img src="https://x.test/logo.png?a=1&amp;b=&quot;quoted&quot;"');
+  });
+
+  it('escapes a primaryColor that tries to break out of its style attribute', () => {
+    const html = buildEmailHtml('<p>body</p>', {
+      ...branding,
+      primaryColor: '#fff" onload="alert(1)',
+    });
+    expect(html).not.toContain('" onload="');
+  });
+});
+
+describe('clientContactFields — issue #171: welcome email reads the real field paths', () => {
+  it('finds email and name under personalInfo (the Client data model shape)', () => {
+    expect(clientContactFields({
+      personalInfo: { firstName: 'Karen', lastName: 'Elias', email: 'karen@x.test' },
+    })).toEqual({ email: 'karen@x.test', name: 'Karen Elias' });
+  });
+
+  it('still honors legacy top-level fields, which win over personalInfo', () => {
+    expect(clientContactFields({
+      email: 'top@x.test',
+      firstName: 'Top',
+      personalInfo: { firstName: 'Karen', email: 'karen@x.test' },
+    })).toEqual({ email: 'top@x.test', name: 'Top' });
+  });
+
+  it('returns no email and the fallback name for an empty record', () => {
+    expect(clientContactFields({})).toEqual({ email: undefined, name: 'Client' });
   });
 });

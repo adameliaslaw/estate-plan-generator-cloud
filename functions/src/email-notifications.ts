@@ -131,7 +131,17 @@ export function buildEmailHtml(
   branding: FirmBranding,
   preheader = '',
 ): string {
-  const { firmName, firmPhone, firmEmail, logoUrl, primaryColor } = branding;
+  // Branding comes from the firm document, which attorneys edit freely in
+  // Settings — escape it like any caller-supplied value (issue #166; the BJ/T9
+  // fix covered request fields, these slipped through). Everything this
+  // function emits is HTML, so escaping up front is safe. The logo renders
+  // only for an http(s) URL so a stored javascript: value cannot become an
+  // image src.
+  const firmName = escapeHtml(branding.firmName);
+  const firmPhone = escapeHtml(branding.firmPhone);
+  const firmEmail = escapeHtml(branding.firmEmail);
+  const primaryColor = escapeHtml(branding.primaryColor);
+  const logoUrl = /^https?:\/\//i.test(branding.logoUrl) ? escapeHtml(branding.logoUrl) : '';
 
   const logoBlock = logoUrl
     ? `<img src="${logoUrl}" alt="${firmName}" style="max-height:60px;max-width:200px;display:block;margin:0 auto 12px;" />`
@@ -1276,6 +1286,24 @@ ${urlLine}
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 
 /**
+ * Contact fields for a client document. The Client data model stores name and
+ * email under `personalInfo`; some legacy/import paths wrote them top-level
+ * (which wins when both exist). Reading only the top level meant `clientEmail`
+ * was always undefined and the welcome email never sent (issue #171).
+ */
+export function clientContactFields(clientData: admin.firestore.DocumentData): {
+  email?: string;
+  name: string;
+} {
+  const personalInfo = (clientData.personalInfo ?? {}) as Record<string, unknown>;
+  const email = (clientData.email ?? personalInfo.email) as string | undefined;
+  const firstName = (clientData.firstName ?? personalInfo.firstName) as string | undefined;
+  const lastName = (clientData.lastName ?? personalInfo.lastName) as string | undefined;
+  const name = firstName ? `${firstName} ${lastName ?? ''}`.trim() : 'Client';
+  return { email, name };
+}
+
+/**
  * Automatically send a welcome email if the firm has an active
  * 'client_created' email template.
  */
@@ -1289,11 +1317,7 @@ export const onClientCreatedSendEmail = onDocumentCreated(
     const clientId = event.params.clientId;
     const clientData = snap.data();
 
-    // Check if client has email
-    const clientEmail = clientData.email;
-    const clientName = clientData.firstName
-      ? `${clientData.firstName} ${clientData.lastName || ''}`.trim()
-      : 'Client';
+    const { email: clientEmail, name: clientName } = clientContactFields(clientData);
 
     if (!clientEmail) return;
 

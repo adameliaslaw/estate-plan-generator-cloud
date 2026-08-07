@@ -24,6 +24,7 @@ import { onRequest, HttpsError } from 'firebase-functions/v2/https';
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { loadFirmSecrets } from './firm-secrets';
+import { escapeHtml } from './email-notifications';
 import * as crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
@@ -444,27 +445,32 @@ export const createPaymentRequest = functions
           const firmName = (firmData.firmName as string) || 'Your Estate Planning Firm';
           const firmEmail = (firmData.firmEmail as string) || 'noreply@estateplan.app';
           const firmPhone = (firmData.firmPhone as string) || '';
-          const logoUrl = (firmData.logoUrl as string) || '';
-          const primaryColor = (firmData.primaryColor as string) || '#1a365d';
+          const rawLogoUrl = (firmData.logoUrl as string) || '';
+          // Used only inside email HTML below, so escaped/gated at creation
+          // (issue #166 — this email predates the BJ/T9 escaping pass).
+          // firmName/firmEmail also feed SendGrid's from/subject fields, so
+          // those are escaped per interpolation site instead.
+          const primaryColor = escapeHtml((firmData.primaryColor as string) || '#1a365d');
+          const logoUrl = /^https?:\/\//i.test(rawLogoUrl) ? escapeHtml(rawLogoUrl) : '';
           const formattedAmount = new Intl.NumberFormat('en-US', {
             style: 'currency', currency: 'USD',
           }).format(amount / 100);
 
-          const contactLine = [firmPhone, firmEmail].filter(Boolean).join(' &nbsp;|&nbsp; ');
+          const contactLine = [firmPhone, firmEmail].filter(Boolean).map(escapeHtml).join(' &nbsp;|&nbsp; ');
           const logoBlock = logoUrl
-            ? `<img src="${logoUrl}" alt="${firmName}" style="max-height:60px;max-width:200px;display:block;margin:0 auto 12px;" />`
-            : `<div style="font-size:22px;font-weight:700;color:${primaryColor};text-align:center;">${firmName}</div>`;
+            ? `<img src="${logoUrl}" alt="${escapeHtml(firmName)}" style="max-height:60px;max-width:200px;display:block;margin:0 auto 12px;" />`
+            : `<div style="font-size:22px;font-weight:700;color:${primaryColor};text-align:center;">${escapeHtml(firmName)}</div>`;
 
           const bodyHtml = `
 <h2 style="margin:0 0 16px;font-size:22px;color:#1a202c;">Payment Request</h2>
 <p style="margin:0 0 12px;">
-  Dear ${clientName || 'Valued Client'}, a payment of <strong>${formattedAmount}</strong>
+  Dear ${escapeHtml(clientName || 'Valued Client')}, a payment of <strong>${formattedAmount}</strong>
   is requested for the following:
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;">
   <tr>
     <td style="padding:12px 20px;background:#f0f4f8;border-radius:6px;border-left:4px solid ${primaryColor};">
-      <strong>Description:</strong> ${description.trim()}<br />
+      <strong>Description:</strong> ${escapeHtml(description.trim())}<br />
       <strong>Amount Due:</strong> <span style="font-size:18px;font-weight:700;color:#1a202c;">${formattedAmount}</span>
     </td>
   </tr>
@@ -475,7 +481,7 @@ export const createPaymentRequest = functions
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
   <tr>
     <td align="center" style="border-radius:6px;background-color:${primaryColor};">
-      <a href="${paymentUrl}" target="_blank"
+      <a href="${escapeHtml(paymentUrl)}" target="_blank"
          style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;
                 color:#ffffff;text-decoration:none;border-radius:6px;
                 background-color:${primaryColor};mso-padding-alt:14px 32px;"
@@ -485,16 +491,16 @@ export const createPaymentRequest = functions
 </table>
 <p style="margin:24px 0 0;font-size:13px;color:#718096;">
   If the button does not work, copy and paste this link into your browser:<br />
-  <a href="${paymentUrl}" style="color:${primaryColor};word-break:break-all;">${paymentUrl}</a>
+  <a href="${escapeHtml(paymentUrl)}" style="color:${primaryColor};word-break:break-all;">${escapeHtml(paymentUrl)}</a>
 </p>
 <p style="margin:16px 0 0;font-size:13px;color:#718096;">
   If you have any questions about this payment, please contact us at
-  ${firmEmail || firmPhone || 'our office'}.
+  ${escapeHtml(firmEmail || firmPhone || 'our office')}.
 </p>`;
 
           const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>${firmName}</title></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>${escapeHtml(firmName)}</title></head>
 <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">Payment of ${formattedAmount} requested&nbsp;&zwnj;&hairsp;</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;">
@@ -505,7 +511,7 @@ export const createPaymentRequest = functions
         <tr><td style="padding:32px 40px 24px;color:#1a202c;font-size:15px;line-height:1.6;">${bodyHtml}</td></tr>
         <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #e2e8f0;margin:0;" /></td></tr>
         <tr><td style="padding:20px 40px 28px;color:#718096;font-size:12px;line-height:1.5;">
-          ${contactLine ? `<p style="margin:0 0 8px;">${firmName} &nbsp;|&nbsp; ${contactLine}</p>` : `<p style="margin:0 0 8px;">${firmName}</p>`}
+          ${contactLine ? `<p style="margin:0 0 8px;">${escapeHtml(firmName)} &nbsp;|&nbsp; ${contactLine}</p>` : `<p style="margin:0 0 8px;">${escapeHtml(firmName)}</p>`}
           <p style="margin:0;font-size:11px;color:#a0aec0;">
             <strong>CONFIDENTIALITY NOTICE:</strong> This email and any attachments are for the
             exclusive and confidential use of the intended recipient.
