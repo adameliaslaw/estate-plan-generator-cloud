@@ -189,9 +189,74 @@ the new review changes the ordering, which is a legitimate outcome of doing it.
 > resolved; the single uncaptured item (a generated Flowchart's output) is blocked on Adam's account
 > having none and is not worth holding a backlog for. **B3 has since closed** and **J1 has run**, so
 > the resume point is now **B4 on the release side (B5 merged), and C1 on the decision side** — with C1
-> gated on the $0 PII reason-breakdown described in section J, not on anything of Adam's.
+> now gated on **Adam reading the 104 distinct roster terms** (J1b ran 2026-08-07 and produced the
+> $0 reason breakdown this note used to wait for; see the J1b read-out in section J).
 > Leaving the pause banner in place until Adam says otherwise; recording only that its condition
 > is satisfied.
+
+---
+
+# ✅ FULL-REPO AUDIT 2026-08-07 (Adam's request, post-flurry) — where everything stands
+
+Adam asked for a comprehensive audit after the 48h in which multiple concurrent sessions worked the
+backlog simultaneously. Six independent audit passes ran (build/test health, merged-PR diffs, branch
+inventory, plugin config, this file end-to-end, CI/deploys). Verdicts, so no session re-derives them:
+
+1. **`main` is healthy.** At `8c6cad8`: root+functions+backfill type-check clean, build clean,
+   lint 0 errors (only the 11 pre-existing tolerated warnings), **1228/1228 tests green**, 0 skipped.
+2. **Production matches `main`.** Hosting deploy #121 and functions deploy #169 both green at
+   `bb57a43` (#300); every later commit is HOMEWORK-only except #305's clause-miner hunk, which
+   shipped via clause-miner run #82. The only CI failures since Aug 5 were GitHub runner starvation
+   on Aug 6 (~17:35–20:08 UTC) — no code failure. Functions run **#163** is a zombie stuck "queued"
+   from that window; cancel it from the Actions UI, it will never run.
+3. **The flurry itself was sound.** Of 31 PRs: 10 substantive code, 17 bookkeeping, 3 plugin config,
+   1 borderline (#260 tooling). Never-Break exposure was disciplined — `src/types/index.ts` touched
+   4× (all additive, signed off), templates touched by **new files only**, rules/indexes/serializer/
+   AI-dispatch untouched. The one real cross-PR bug (#295 read guardians only from
+   `fiduciaries.guardian`) was caught and test-pinned by #300. Both trust skeletons still carry
+   `[[DRAFT` markers (150 + 133 re-counted), so trusts still route to AI — runtime unchanged.
+4. **The plugins did NOT cause the simultaneous-session mess.** #282–284 only add three marketplaces
+   + three enabled plugins to `.claude/settings.json` — no permissions, no scheduling, no autonomy.
+   The mechanism was **server-side self-re-arming hourly watcher chains** (`send_later` Routines)
+   bound to ≥3 persistent sessions on Aug 5–6, each of which, woken for a no-op check, obeyed
+   Rule 8 ("never idle") and grabbed this file's backlog. Fix is operational, not in-repo: prune the
+   Routine chains, and qualify Rule 8 so a trigger-woken session whose check is a no-op re-arms and
+   stops instead of picking up `▶ NEXT`. Plugin notes: `watch` is benign and earned its keep
+   (STATULAR-VIDEO-REVIEW.md); `superpowers` injects a ~3 KB behavioral preamble into **every**
+   session on start/clear/compact — keeping it project-wide is a deliberate choice for Adam, not a
+   default; `adhd` (5-parallel-agent ideation fan-out) has no current use here — candidate to disable.
+5. **Branch inventory (extends #308's prune list).** All nine branches on the prune list are
+   confirmed safe. Beyond them: of the 37 non-`main` remote branches, **35 are prunable** — each
+   tip SHA is the head of a squash-merged (or deliberately closed) PR, verified by content, so the
+   #308 list's "do not touch the other ~20" warning is more conservative than the evidence requires.
+   Hold back only: `feat/nj-inheritance-tax-engine` (prunable on the merits — its tip is merged
+   PR #181's head, zero unique paths — but **B4 reserves deletion for Adam's explicit go**) and
+   `claude/homework-continuation-0241ub` (the only branch carrying never-merged commits; both
+   verified stale — a June-30 session note and a deploy-timeout tweak long since superseded on
+   `main`). Deletion is Adam-at-a-computer regardless: remote sessions get HTTP 403 on ref deletion.
+   Flip **Settings → "Automatically delete head branches"** first so the list stops regrowing.
+6. **Untracked by this file:** 11 open GitHub **issues** from the 2026-07-18 audit (incl. #162
+   "SA key in git history — confirm rotation", which overlaps the parked SA-keys item below, and
+   #171, a real welcome-email field-path bug). They predate this file's ordered list and were never
+   folded in — fold in or close deliberately. Also: ~6.7 MB of scratch binaries at repo root from
+   the Aug 5–6 uploads (Adam's own portfolio .docx ×3 — checked: no third-party client PII — two
+   Statular .mp4s, two screenshots incl. one accidental iOS Control Center shot); `#295` hardcodes
+   real client names in `scripts/diagnostics/templatize-samples.cjs` by necessity (entity maps) —
+   same territory as B6; and npm audit reports 26 root / 31 functions advisories — schedule a
+   dependency pass, not deploy-blocking.
+
+**Corrections applied with this audit:** B2 struck (stale — the sign-off happened 2026-08-06), and
+the resume-point note above updated (J1b ran; C1's gate is now Adam's roster-term read).
+
+**The reevaluated next steps, in order** (consistent with the ordered list; nothing re-sequenced):
+- **Adam, minutes each:** B4 go/no-go · read the 104 roster terms (settles C1) · flip auto-delete
+  head branches + one branch sweep · cancel zombie run #163 · B6 and B7 (the only true outstanding
+  confidentiality exposure — the live KB templates in Storage still carry the old leak).
+- **Adam, hours:** the trust prose — 283 `[[DRAFT]]` markers across the two skeletons
+  (`scripts/diagnostics/HOMEWORK.md` has the protocol). This is the whole remaining templatizer task.
+- **Agent, immediately available:** A2 (watch the first real `{{#firmClauses}}` fill — it fails
+  silently by design) · triage the 11 open issues into this list · J2 (benchmark #280's review
+  engine) · then C2/C3 once C1 is settled, then D1.
 
 ---
 
@@ -258,7 +323,7 @@ guarantee today rests on the writer scrubbing correctly, not on the rules refusi
 | # | Item | Notes |
 |---|------|-------|
 | ~~**B1**~~ | ~~**Lift the Rule 7 suspension in `CLAUDE.md`.**~~ **✅ DONE 2026-08-06, on Adam's instruction.** | The block's own lift condition was met: #255 (`a2b7162`), #256 (`f8820e7`), #257 (`3747e5c`) all on `main`. Agent-initiated squash-merges are live again; Never-Break changes still need explicit sign-off. |
-| **B2** | **PR #280 — `src/types/index.ts` sign-off.** | Never-Break List. Mechanically additive: **0 deletions, 0 renamed symbols**; four new exported types + one optional field `packageReview?` on `Client`. `firestore.rules` validates with `hasAll(...)` (minimum-fields, not an allowlist) so an added field cannot be rejected; written by the admin SDK, which bypasses rules anyway. |
+| ~~**B2**~~ | ~~**PR #280 — `src/types/index.ts` sign-off.**~~ **✅ DONE — stale row.** #280 merged 2026-08-06 as `96cc067` *with* the sign-off (the pause-status table above and #280's commit message both record it). Struck 2026-08-07 by the full-repo audit. | ~~Never-Break List. Mechanically additive: **0 deletions, 0 renamed symbols**; four new exported types + one optional field `packageReview?` on `Client`.~~ |
 | ~~**B3**~~ | ~~**Triage five stale open PRs.**~~ **✅ DONE 2026-08-06.** Three resolved, two await sign-off. | **Closed #21** — would have *regressed* CLAUDE.md, describing AI routing as a three-provider automatic cascade when `main` correctly says there is none. **Closed #215** — its content is already on `main` twice (section I row, and the ❌ NOT DOING section). **Merged #260** — DOCX forensics harness, verified against a real DOCX first; its branch homework had its spent constraints marked before merging. ~~**#266 and #258 remain open for your sign-off — see B5.**~~ **Both merged 2026-08-06 — B3 is fully closed.** |
 | ~~**B5**~~ 🆕 | ~~**Sign off the template pair, in order: #266 then #258.**~~ **✅ BOTH MERGED 2026-08-06** — #266 as `e3381c9`, #258 as `e0d2b5b`, in that order. Row corrected 2026-08-07; it was still asking for a sign-off that had already happened. | ⚠️ **The warning this row carried did NOT come true, and that matters.** It said *"whichever merges second flips trust generation from 100% AI to deterministic template."* It did not: `loadBundledTemplate` treats any file containing `[[DRAFT` as unavailable (`bundled-templates.ts:48,70`), and both skeletons are still full of markers — **151** in `trust-joint.hbs`, **134** in `trust-single.hbs`, counted on `main` today. So trusts still route to AI and runtime behaviour is unchanged. The flip happens on its own, with no code change and no flag, the moment the last marker in a file is replaced — which is why the prose is the whole remaining task. See `scripts/diagnostics/HOMEWORK.md`. |
 | **B6** 🆕 | **Decide whether `samples/interactivelegal/` belongs in git.** | Nine HotDocs-derived `.docx` files that look like **real client matters** — named wills, POAs and trusts. Confirmed by inspection: one carries a client name in the filename, `last_modified_by: Adam Elias`, `revision: 91`. Raised in #260's analysis and not acted on. This is a confidentiality question, not a tidiness one, and it sits in the same territory as `piiBlocked=276`: the clause corpus is gated precisely because real client documents must not leak, while these sit unredacted in the repo. Note that removing them from `HEAD` does not remove them from history. |
