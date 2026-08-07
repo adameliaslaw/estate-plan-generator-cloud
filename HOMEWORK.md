@@ -215,6 +215,7 @@ reproduced here.
 | # | Item | Why it is first |
 |---|------|-----------------|
 | ~~**A1**~~ | ~~**Confirm the PII scrub actually ran against prod.**~~ **✅ VERIFIED 2026-08-06 — it ran.** | See below. |
+| **A2** 🆕 | **Watch the first real `{{#firmClauses}}` fill.** The clause library's deterministic path (#295) is wired end to end — `generateHighFidelityDocx` loads the catalog, runs the same `selectClausesForDocument` the generator uses, and the template carries a three-paragraph loop region before the execution block. It has **only ever been exercised with synthetic clauses**: an empty array leaves the document byte-identical, three test clauses render one paragraph each. It has never met a real catalog entry. | Cheap to check and it fails quietly if wrong. `selectClausesForDocument` **skips** any clause whose placeholders do not fully resolve, so a catalog whose tokens do not match `buildClausePlaceholderValues` produces an empty region and a document that looks perfectly normal — the clauses simply are not there. Look for the `[generateHighFidelityDocx] Clause library (…)` log line, which reports the selection, and compare it against the region actually rendered. Note this only runs on the high-fidelity `.docx` path; the hybrid/AI path still goes through `buildClausePromptBlock`. |
 
 **A1 evidence — the scrub executed, and the run was on post-fix code.** Workflow run **#75**
 (job `92091639452`, 2026-08-04 18:31–18:36 UTC):
