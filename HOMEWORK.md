@@ -183,6 +183,16 @@ recording died and only its clock is moving.
 **To resume:** the ordered list picks up at **B3 / B4**, with **C1** as the first decision — unless
 the new review changes the ordering, which is a legitimate outcome of doing it.
 
+> **✅ The pause condition is met (noted 2026-08-07).** The competitive-review pass this section
+> holds the list for is **done** — the second pass covered five captures / 34.4 min and is written up
+> in `STATULAR-VIDEO-REVIEW.md` and section **J**. Every row in the "Already reviewed" table is
+> resolved; the single uncaptured item (a generated Flowchart's output) is blocked on Adam's account
+> having none and is not worth holding a backlog for. **B3 has since closed** and **J1 has run**, so
+> the resume point is now **B4 / B5 on the release side, and C1 on the decision side** — with C1
+> gated on the $0 PII reason-breakdown described in section J, not on anything of Adam's.
+> Leaving the pause banner in place until Adam says otherwise; recording only that its condition
+> is satisfied.
+
 ---
 
 # 📋 THE ORDERED LIST (2026-08-06) — work this top to bottom
@@ -261,7 +271,7 @@ guarantee today rests on the writer scrubbing correctly, not on the rules refusi
 
 | # | Decision | What it blocks |
 |---|----------|----------------|
-| **C1** 🆕 | **Clause library strategy — which clauses are worth carrying?** **Reframed 2026-08-06 (second video pass); the earlier framing is struck.** It previously read "curate ~60, or unblock the 276," resting on Statular shipping 57. That is not a standard — 57 is equally consistent with an early-stage tool, and a count says nothing about whether a given clause earns its place. Neither 57 nor 302 is a target. The real question is a **value test**: does the clause neutralise a nameable failure mode, is it anchored to a citation, is it reused across matters, is it non-obvious under time pressure, and is it absent from the template? | Still **upstream of C2, C3 and C4** — but **do J1 first.** J1 is a metadata-only audit that answers this with evidence instead of assertion. The PII-tuning consequence is now assumed in **neither** direction: whether tuning is warranted depends on whether the 276 blocked families carry disproportionate value, which J1 measures without unblocking anything. |
+| **C1** 🆕 | **Clause library strategy — which clauses are worth carrying?** **Reframed 2026-08-06 (second video pass); the earlier framing is struck.** It previously read "curate ~60, or unblock the 276," resting on Statular shipping 57. That is not a standard — 57 is equally consistent with an early-stage tool, and a count says nothing about whether a given clause earns its place. Neither 57 nor 302 is a target. The real question is a **value test**: does the clause neutralise a nameable failure mode, is it anchored to a citation, is it reused across matters, is it non-obvious under time pressure, and is it absent from the template? | Still **upstream of C2, C3 and C4**. ~~do J1 first~~ — **J1 RAN 2026-08-06; see its read-out in section J.** What it changes: the "curate down to ~60" half is **struck by measurement** — zero families occur fewer than three times, so there is no noise tail to curate away and no evidence for any target count. The live question is now only the second half — **the 451 of 477 families (94.5%) behind the PII gate, including 17 of 17 seed-matched ones.** Whether that is over-blocking or honest blocking is **still unmeasured**, and the one diagnostic that separates them (the `roster:` vs `haiku-gate:` split already sitting in `piiFindings`) costs $0 and has not been run. **Do that before deciding C1.** |
 | **C2** | **Recall scope:** exclude corpus-unreachable will clauses from Gate 1's denominator, or treat 65% as the trust-only floor and revisit after the wills mine. | Either unblocks the catalog review. |
 | **C3** | **The two 5-minute calls:** (a) the 2 purity families — same clause reused or genuinely distinct? (b) canary — drop the 4 duplicated files from `CLAUSE_MINER_CANARY_FOLDER_IDS` and re-run `gates` ($0) for a clean holdout read. | Both gates currently fail for **scope** reasons, not correctness ones. |
 | **C4** | **Quarantine tail** — ~141 of 512 trusts never mined. **PENDING at Adam's word (2026-08-05: "leave it as pending").** | Nothing, while parked. Listed so it is not forgotten. |
@@ -365,13 +375,105 @@ work that pass generates. Sources: `New Matter`, `Matter Dashboard`, `Client Que
 
 | # | Item | Why |
 |---|------|-----|
-| **J1** | **Clause corpus metadata audit — do this before deciding C1.** **The stage is built and tested — it just needs dispatching.** Run the `clause-miner-deploy` workflow with `stage: clause-audit` and the `firm_id` / `run_id` / `gcs_bucket` of the run that produced the current catalog. It reads `firms/{firmId}/clauseCatalog` plus that run's seed-match blob, and writes `…/runs/{runId}/validation/clause-audit.json`. **Metadata only** — an explicit allow-list projection, no clause text read even from clean families, nothing unblocked, the PII gate untouched. No LLM calls, spends nothing. `run_id` must be the run whose `canonicalize` wrote the seed-match blob, or the seed cross-tab reports **unavailable** (never zero). | Answers C1 with measurement instead of assertion. Also settles whether the PII over-aggression tuning is warranted: if the blocked 276 skew toward high-occurrence and seed-matched families, value is trapped and tuning matters; if they skew toward one-occurrence families, it is cleanup. Cheapest item on the list and upstream of C1/C2/C3/C4. An afternoon. |
+| ~~**J1**~~ | ~~**Clause corpus metadata audit — do this before deciding C1.**~~ **✅ RAN 2026-08-06 19:25Z and succeeded — the row went stale before anyone recorded it.** Workflow run **#81** (job `92700776650`, Cloud Run execution `clause-miner-2qtk9`), `stage: clause-audit`, `firm-001` / `pilot-1`. Report at `…/runs/pilot-1/validation/clause-audit.json`; the full JSON is also in the job log. Metadata only, no LLM, $0, as designed. **Results and what they settle are below the table.** | Answered C1 with measurement instead of assertion — partly. See the read-out. |
 | **J2** | **Benchmark PR #280's review engine against four finding classes their Analysis & Review demonstrably catches**, on a real will package: (a) unfilled placeholders surviving into rendered output, (b) cross-party inconsistency, (c) statutory conflict with citation, (d) logical dead-ends in the document's own cross-references. | This is the direct competitor to what #280 shipped, and these four are a ready-made test set. (a) and (b) are template hygiene we can do quickly. (c) is where they are ahead on legal substance. (d) is the hard one — it reasons over the document's internal references, not the intake data. |
 | **J3** | **Document Selection composes the interview.** Their page 1 determines which of the remaining pages exist — 12 pages for an advance-directives package, 15 for a will package (adds Executors, Distribution, Will Provisions). Assess whether our generation pipeline can adopt this, or whether it conflicts with the questionnaire model. | Architectural, and the most significant structural finding of the pass. Selection is not a picker feeding a generator; it is the thing that shapes intake. Decide before more questionnaire work lands. |
 | **J4** | **Jurisdiction-aware controls that explain themselves.** They grey out short-form POA for NJ *with the reason stated inline* — no statutory form exists, so the long form is used. Our jurisdiction logic lives in generators where the user never sees it. | Cheap, and it converts hidden behaviour into something the attorney learns from. |
 | **J5** | **Ask the three-tier contingency ladder at intake**, in plain English, as separate questions: specific gifts → remainder → backup takers → last-resort preference (offering a class, named people, or charities). | Maps directly onto the residue and allocation model (#210). Strongest evidence yet that the ladder belongs at intake rather than derived at draft time. |
 | **J6** | **Small intake wins, all observed working:** a "clear selection" link under every radio group (radios cannot otherwise be unset); address autocomplete that decomposes to street/city/state/ZIP/**county**; per-asset supporting-document upload; worked-example placeholders rather than hints. | County capture at intake matters for NJ deed work and we currently infer it later. The rest are hours, not days. |
 | **J7** | **Flowcharts — an opening, not a catch-up.** Theirs generates from an **uploaded** `.docx`/`.pdf`, reverse-engineering a finished document. Generating forward from structured intake — data we already hold — is something they do not do. | Recorded as an opportunity. Not proposed as work yet. |
+
+### J1 READ-OUT (run #81, 2026-08-06 19:25Z) — what it measured, and the one gap it leaves
+
+**The catalog it audited:** 477 families, **451 PII-blocked (94.5%)**, 26 clean. 6,104 occurrences.
+Seed join `ok`: **17 matched, 17 of them blocked.**
+
+| Occurrences | Families | Blocked | Clean | Seed-matched |
+|---|---|---|---|---|
+| 1 | **0** | 0 | 0 | 0 |
+| 2 | **0** | 0 | 0 | 0 |
+| 3–5 | 228 | 217 | 11 | 10 |
+| 6–10 | 102 | 99 | 3 | 2 |
+| 11–25 | 105 | 95 | 10 | 0 |
+| 26–50 | 21 | 20 | 1 | 1 |
+| 51+ | 21 | 20 | 1 | 4 |
+
+Occurrences: min **3**, median **6**, mean 12.8, max **201**.
+
+**Three things this settles.**
+
+1. **There is no low-value tail to prune. `singletonShare` is 0.0%** — not one family in the catalog
+   occurs fewer than three times, because canonicalize's min-support ≥3 already removed them
+   (2,377 families dropped below support at the pilot). The "extraction noise" half of C1's value
+   test is answered: every surviving family passes the reuse criterion. **Curating downward toward a
+   count is not indicated by anything in this data**, and the report says so itself: *"This stage
+   measures. It does not decide C1, and it recommends no target count."*
+2. **The PII gate is not discriminating — it is near-uniform.** 94.0% of the 6+ tail is blocked
+   against 94.5% overall. Blocking correlates with nothing: not reuse, not band, not category
+   (11 of 14 categories are ≥90% blocked; `Marital-Deduction`, `Testamentary`, `Charitable-Remainder`,
+   `GST`, `Credit-Shelter`, `IDGT` and `Generation-Skipping` are **100%** blocked).
+3. **17 of 17 seed-matched families are blocked.** Those are the families that independently matched
+   Adam's own curated library — the only families in the catalog carrying outside evidence of value —
+   and every one is behind the gate.
+
+**What it does NOT settle, and this is the part to be careful about.** A 94.5% block rate is equally
+consistent with an over-aggressive scanner *and* with the honest fact that clauses mined from real
+client documents mostly do contain client names. **The audit reads `piiScanStatus` and nothing else,
+so it cannot tell those apart.** Do not record "the scanner is over-aggressive" as a finding — it is
+currently a hypothesis, and the earlier note calling it *"likely gazetteer gaps"* was the same
+hypothesis stated with more confidence than it had earned.
+
+**The evidence that separates them already exists and is already metadata.** `canonicalize` writes a
+`piiFindings: string[]` onto each family in the canonical artifact (`canonicalize.ts:639-640`), and
+its entries name the *mechanism*:
+
+- `roster:<term>@<hash>:<idx>` — the Aho-Corasick sweep matched a real name from the run's own
+  party roster. **Genuine client PII in the clause text.**
+- `haiku-gate:<hash>` — the model gate returned `blocked`.
+
+If the blocks are overwhelmingly `roster:`, the text really does carry client names and tuning is not
+the answer — remediation is. If they are overwhelmingly `haiku-gate:`, the model gate is the whole
+story and tuning it is warranted. **That split is the measurement C1 actually needs, it costs $0, and
+nothing has produced it yet.**
+
+⚠️ **One trap in reading it, and it is CLAUDE.md rule 10 exactly.** `haiku-gate:` is emitted for three
+different situations that the artifact cannot distinguish: the model found PII; the batch call
+errored (`gateVerdict` blocks on `!result.ok`); and **no verdict came back at all** — `canonicalize.ts:610`
+reads `gateVerdicts.get(key) ?? 'blocked'`, so an uncovered variant blocks silently. Failing closed is
+correct behaviour; recording all three under one label is not. A reason breakdown must separate
+"the gate ran and objected" from "the gate did not run", or it will read as a finding when it is a
+failure. (The customId keying itself was checked and is sound: `pii:${familyId}:${hash12}` on submit,
+same key after the `^pii:` strip on read.)
+
+⚠️ **Also: a roster finding contains the matched client surname.** Any reason-breakdown report must
+emit *counts by mechanism only* and never the `term`, or the diagnostic leaks the exact thing the
+gate exists to catch.
+
+### ⚠️ J1's denominator does not reconcile — 477 audited vs 302 written
+
+Run **#75** (2026-08-04, the PII-scrub run recorded under A1) reported `catalog: {"written":302,…}`.
+The audit two days later counted **477** families in `firms/firm-001/clauseCatalog`. Nothing between
+them wrote a catalog: #76, #78, #79 and #80 all failed, and #77 was a `triage` re-poll
+(`submitted:0, skipped:18628`). So ~175 of the 477 are docs **no recent catalog run wrote** — almost
+certainly families from an earlier generation whose `familyId`s changed when re-segmentation
+(seg/3 → seg/4) re-cut the corpus. Catalog writes are per-family `set`s; **nothing deletes a family
+that stops existing.**
+
+Stated as fact: the two numbers disagree, and 477 is the size of the *collection*, not of any one
+run's catalog. Stated as inference, not fact: stale generations are the likely reason.
+
+**This is checkpoint-2's M1 staleness finding reappearing in a stage written after that report** —
+and it is cheap to close, because the stamp is already there. Every catalog doc carries
+`pipelineVersion`, `createdAt` and `updatedAt`, and all three already survive
+`scrubBlockedCatalogDoc`. `projectFamily` (`clause-audit.ts:125-137`) simply does not read them:
+it projects `counts.occurrences`, `piiScanStatus` and `category`, and nothing else. **Grouping the
+report by `pipelineVersion` is a pure-metadata addition** — no new field, no confidentiality change —
+and it would say immediately whether the 477 spans generations.
+
+Until that is done, treat the three conclusions above as **directionally sound but measured on a
+possibly-mixed denominator**. The shape is not in doubt — a stale generation would have to be
+implausibly different to move a 94.5% blanket block rate or to unblock any of 17/17 seed matches —
+but the exact figures should be restated after the grouping lands.
 
 **Observed and recorded, not proposed as work:** Trust Accounting (court-style schedules with a
 reconciliation that must balance before a period closes; immutable closed periods), Deed Pulling,
