@@ -459,13 +459,31 @@ const RIZZO = {
 };
 
 /**
+ * The attesting witnesses, templatized rather than allowlisted.
+ *
+ * These two sign at the firm's own address, which is good reason to think
+ * they are firm staff — but that is an inference about people, and a template
+ * should not be built on one. Substituting them is correct either way: if
+ * they are the firm's standing witnesses the placeholders fill from firm
+ * settings, and if they are ever not, nothing of theirs is carried into
+ * another client's document. It also survives the ordinary case of a witness
+ * being out on the day of execution.
+ *
+ * Note this is what makes the gate cover them at all: the residual CAPS scan
+ * cannot see "KAREN M. CLAYTON" (the initial breaks the name pattern), but
+ * every mapped literal is checked explicitly after writing.
+ */
+const WITNESSES = {
+  'LORI PENSABENE': '{{witnessOneName}}',
+  'KAREN M. CLAYTON': '{{witnessTwoName}}',
+};
+
+/**
  * The firm's own details. These are correct to keep literal — every document
- * this firm issues carries the same witnesses, office and attorney of record.
+ * this firm issues carries the same office and attorney of record.
  * Listed so the residual scan does not flag them as leaked client data.
  */
 const FIRM_IDENTITY = [
-  'LORI PENSABENE',
-  'KAREN M. CLAYTON',
   'Adam J. Elias',
   'ADAM J. ELIAS',
   'Elias Counsel',
@@ -496,7 +514,10 @@ const LEGAL_CAPS = new Set(
     .filter(Boolean),
 );
 
-const CAPS_NAME_RE = /\b(?:[A-Z][A-Z'\-]+)(?:\s+[A-Z][A-Z'\-]+){1,3}\b/g;
+// Middle initials are allowed between the first and last token, so a witness
+// or fiduciary written "KAREN M. CLAYTON" is visible to the scan.
+const CAPS_NAME_RE =
+  /\b[A-Z][A-Z'\-]+(?:\s+(?:[A-Z]\.|[A-Z][A-Z'\-]+)){0,2}\s+[A-Z][A-Z'\-]+\b/g;
 const ADDRESS_RE =
   /\b\d{1,5}\s+[A-Z][A-Za-z.'\- ]{2,40}?(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Drive|Dr\.|Court|Ct\.|Lane|Ln\.|Place|Pl\.|Boulevard|Blvd\.|Terrace|Way|Circle|Cir\.)/g;
 
@@ -681,13 +702,16 @@ const byrnesPeople = Object.fromEntries(
 const byrnesAddresses = Object.fromEntries(
   BYRNES_ADDRESSES.map((addr) => [addr, resolveAddressByOwner]),
 );
-const BYRNES = [byrnesPeople, byrnesAddresses];
+// The witness pass runs last, so name and address resolution still see the
+// original text and are unaffected by it.
+const BYRNES = [byrnesPeople, byrnesAddresses, WITNESSES];
+const RIZZO_PASSES = [RIZZO, WITNESSES];
 
 templatize(`${SAMPLES}/Jessica Byrnes - LW&T 11.3.25.docx`, 'NJ_Will_Married.docx', BYRNES);
 templatize(`${SAMPLES}/Jessica Byrnes- POA 11.3.25.docx`, 'NJ_POA_Married.docx', BYRNES);
 templatize(`${SAMPLES}/Jessica Byrnes- HC 11.3.25.docx`, 'NJ_HC_Married.docx', BYRNES);
-templatize(`${SAMPLES}/Rizzo Living Trust.docx`, 'Married_Trust.docx', RIZZO);
-templatize(`${SAMPLES}/Vito Rizzo- Pourover Will 11.19.25.docx`, 'NJ_Pourover_Will.docx', RIZZO);
+templatize(`${SAMPLES}/Rizzo Living Trust.docx`, 'Married_Trust.docx', RIZZO_PASSES);
+templatize(`${SAMPLES}/Vito Rizzo- Pourover Will 11.19.25.docx`, 'NJ_Pourover_Will.docx', RIZZO_PASSES);
 
 // NJ_Will_Single.docx is deliberately not generated. The previous version
 // produced it from Jessica's married will by string-swapping "Married" ->
