@@ -642,10 +642,34 @@ export interface HealthcareProxy {
 
 export interface Guardian {
   primary: FiduciaryPerson;
+  /** Second person serving alongside `primary` — a couple appointed together,
+   * as in "I appoint my parents, A and B, as guardians". Optional: a single
+   * guardian is equally common, and templates omit the conjunction when this
+   * is unset rather than rendering "A and ". */
+  coGuardian?: FiduciaryPerson;
   alternate?: FiduciaryPerson;
+  /** Second person serving alongside `alternate`, same pairing as coGuardian. */
+  coAlternate?: FiduciaryPerson;
   guardianForMinors: boolean;
   guardianForIncapacity: boolean;
   notes?: string;
+}
+
+/**
+ * NJ funeral representative — N.J.S.A. 45:27-22.
+ *
+ * A statutory appointment distinct from the executor: this person controls
+ * funeral arrangements and the disposition of remains, and the statute requires
+ * the appointment be made in the will. Commonly the same person as the
+ * executor, but not necessarily, which is why it is its own slot.
+ *
+ * NOTE: no questionnaire step collects this yet. Until one does it is set by
+ * attorney entry, and a will template omits the article when it is unset
+ * rather than appointing nobody.
+ */
+export interface FuneralRepresentative {
+  primary: FiduciaryPerson;
+  alternate?: FiduciaryPerson;
 }
 
 export interface Fiduciaries {
@@ -654,6 +678,7 @@ export interface Fiduciaries {
   powerOfAttorney: PowerOfAttorney;
   healthcareProxy: HealthcareProxy;
   guardian?: Guardian;
+  funeralRepresentative?: FuneralRepresentative;
 }
 
 // ============================================================================

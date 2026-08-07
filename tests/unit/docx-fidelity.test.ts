@@ -133,4 +133,122 @@ describe('buildDocxTemplateData', () => {
     expect(data.estimatedTotalAssets).toBe(1000);
     expect(data.firmName).toBe('Adam Elias Law LLC');
   });
+
+  it('exposes each fiduciary\'s own relationship and address', () => {
+    // The templates render "I appoint my {{executorRelation}}, {{executorName}},
+    // of {{executorAddress}}" — an executor who is not the spouse and does not
+    // live with the client is the case that breaks when these are missing.
+    const ctx = {
+      client: {
+        personalInfo: { address: '8 Larch Way', city: 'Cherry Hill', state: 'NJ' },
+        fiduciaries: {
+          executor: {
+            primary: {
+              name: 'Margaret Vance',
+              relationship: 'Daughter',
+              address: '3 Oak Lane',
+              city: 'Trenton',
+              state: 'New Jersey',
+            },
+            alternate: { name: 'Paul Reyes', relationship: 'Friend' },
+            successor: { name: 'Nina Okafor', relationship: 'Niece' },
+          },
+          powerOfAttorney: {
+            agent: { name: 'Margaret Vance', relationship: 'Daughter' },
+            successorAgent: { name: 'Paul Reyes', relationship: 'Friend' },
+          },
+          healthcareProxy: {
+            agent: { name: 'Margaret Vance', relationship: 'Daughter' },
+            alternateAgent: { name: 'Nina Okafor', relationship: 'Niece' },
+          },
+        },
+      },
+      firm: {},
+      computed: {
+        clientFullName: 'Daniel Carter',
+        spouseTitle: 'wife',
+        spousePronouns: { subject: 'she', object: 'her', possessive: 'her' },
+      },
+      notes: [],
+      existingDocuments: [],
+      knowledgeResources: [],
+    } as unknown as ClientContext;
+
+    const data = buildDocxTemplateData(ctx);
+    // Lowercased, so a document cannot read "my Daughter" in one article and
+    // "my daughter" in the next.
+    expect(data.executorRelation).toBe('daughter');
+    expect(data.alternateExecutorRelation).toBe('friend');
+    expect(data.executorAddress).toBe('3 Oak Lane, Trenton, New Jersey');
+    // The third executor level in the sample will has no slot in the model.
+    expect(data.secondAlternateExecutorName).toBe('Nina Okafor');
+    expect(data.thirdAlternateExecutorName).toBeUndefined();
+    expect(data.poaSecondAlternateAgentName).toBe('Paul Reyes');
+    expect(data.healthcareAlternateAgentName).toBe('Nina Okafor');
+    // Spouse's defined term and pronoun, shared with the .hbs path.
+    expect(data.spouseRelation).toBe('wife');
+    expect(data.spouseRelationCapitalized).toBe('Wife');
+    expect(data.spousePronounObject).toBe('her');
+  });
+
+  it('exposes the co-appointee and funeral-representative slots', () => {
+    // Two people in one slot ("my parents, A and B, as guardians") and the
+    // N.J.S.A. 45:27-22 appointment, which had no field at all and left the
+    // article rendering "I appoint , to act as my representative".
+    const ctx = {
+      client: {
+        personalInfo: {},
+        fiduciaries: {
+          executor: { primary: { name: 'A' } },
+          guardian: {
+            primary: { name: 'Ruth Vance', relationship: 'Mother' },
+            coGuardian: { name: 'Alan Vance', relationship: 'Father' },
+            alternate: { name: 'Kim Osei', relationship: 'Sister' },
+            coAlternate: { name: 'Tomas Osei', relationship: 'Brother-in-law' },
+          },
+          trustee: {
+            primary: { name: 'Ruth Vance' },
+            coTrustee: { name: 'Alan Vance' },
+          },
+          funeralRepresentative: {
+            primary: { name: 'Ruth Vance', relationship: 'Mother' },
+            alternate: { name: 'Kim Osei', relationship: 'Sister' },
+          },
+        },
+      },
+      firm: {},
+      computed: { clientFullName: 'Client', spouseTitle: '', spousePronouns: undefined },
+      notes: [],
+      existingDocuments: [],
+      knowledgeResources: [],
+    } as unknown as ClientContext;
+
+    const data = buildDocxTemplateData(ctx);
+    expect(data.coGuardianName).toBe('Alan Vance');
+    expect(data.coAlternateGuardianName).toBe('Tomas Osei');
+    expect(data.coGuardianRelation).toBe('father');
+    expect(data.coTrusteeName).toBe('Alan Vance');
+    expect(data.funeralRepresentativeName).toBe('Ruth Vance');
+    expect(data.successorFuneralRepresentativeName).toBe('Kim Osei');
+    expect(data.funeralRepresentativeRelation).toBe('mother');
+  });
+
+  it('returns an empty relation rather than a partial address when unset', () => {
+    const ctx = {
+      client: { personalInfo: {}, fiduciaries: { executor: { primary: { name: 'A' } } } },
+      firm: {},
+      computed: { clientFullName: 'A', spouseTitle: '', spousePronouns: undefined },
+      notes: [],
+      existingDocuments: [],
+      knowledgeResources: [],
+    } as unknown as ClientContext;
+
+    const data = buildDocxTemplateData(ctx);
+    // Blank, so {{#executorRelation}} omits the phrase instead of the
+    // template printing "I appoint my , A".
+    expect(data.executorRelation).toBe('');
+    expect(data.executorAddress).toBe('');
+    expect(data.spouseRelationCapitalized).toBe('');
+    expect(data.spousePronounObject).toBe('them');
+  });
 });
