@@ -156,9 +156,12 @@ Generate the complete, execution-ready will now. Include all required articles, 
 
   // Death-tax apportionment is supplied as fixed prose rather than composed by
   // the model: the clause carries statutory citations that must be byte-identical
-  // on every run, which is exactly what an LLM cannot promise. Absent an explicit
-  // firm election, 'hybrid' matches what clients mean by "free of tax" — Class A
-  // gifts pass whole, Class C/D beneficiaries bear their own inheritance tax.
+  // on every run, which is exactly what an LLM cannot promise. The firm's
+  // election arrives on taxApportionmentMode — written by the Settings →
+  // Interview record via applyInterviewSettingsToFirmData (D2), or by the
+  // legacy top-level firm field. Absent any election, 'hybrid' matches what
+  // clients mean by "free of tax" — Class A gifts pass whole, Class C/D
+  // beneficiaries bear their own inheritance tax.
   const apportionmentMode =
     ((safeFirm as Record<string, unknown>)?.taxApportionmentMode as ApportionmentMode | undefined)
     ?? 'hybrid';

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Mail, Send, Loader2, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { Mail, Send, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,30 @@ export default function ESignatureDialog({
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     const [testMode, setTestMode] = useState(false);
+    // #174: whether the NEXT send will be a test-mode (watermarked,
+    // non-binding) request. Mirrors the server's default in esign-service.ts —
+    // dropboxSignTestMode !== false — so the attorney learns this BEFORE
+    // sending, not from the post-send notice. null while loading; a failed
+    // read defaults to true, because assuming "binding" on no evidence is the
+    // harmful direction.
+    const [preSendTestMode, setPreSendTestMode] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        if (!open || !firmId) return;
+        let cancelled = false;
+        getDoc(doc(getFirestore(), `firms/${firmId}`))
+            .then((snap) => {
+                if (cancelled) return;
+                const data = snap.data() ?? {};
+                setPreSendTestMode((data as { dropboxSignTestMode?: unknown }).dropboxSignTestMode !== false);
+            })
+            .catch(() => {
+                if (!cancelled) setPreSendTestMode(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, firmId]);
 
     const handleSend = async () => {
         if (!signerName.trim() || !signerEmail.trim()) {
@@ -113,6 +138,16 @@ export default function ESignatureDialog({
                     </div>
                 ) : (
                     <div className="grid gap-4 py-4">
+                        {preSendTestMode === true && (
+                            <Alert className="border-amber-200 bg-amber-50">
+                                <FlaskConical className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-sm text-amber-800">
+                                    <strong>TEST MODE</strong> — this request will be watermarked and
+                                    non-binding. Turn off test mode in Settings → Integrations for
+                                    legally binding signatures.
+                                </AlertDescription>
+                            </Alert>
+                        )}
                         {error && (
                             <Alert className="border-red-200 bg-red-50">
                                 <AlertCircle className="h-4 w-4 text-red-600" />

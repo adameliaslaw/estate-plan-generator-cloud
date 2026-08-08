@@ -20,12 +20,14 @@ export const clientService = {
    * existing record by email (R5-010). The firm is derived server-side from the
    * caller's claim; the returned link embeds it in the route.
    */
-  async getRegistrationLink(firmId: string, clientId: string): Promise<string> {
-    const fn = httpsCallable<{ clientId: string }, CreateRegistrationLinkResponse>(
+  async getRegistrationLink(firmId: string, clientId: string, rotate = false): Promise<string> {
+    const fn = httpsCallable<{ clientId: string; rotate?: boolean }, CreateRegistrationLinkResponse>(
       functions,
       'createClientRegistrationLink',
     );
-    const result = await fn({ clientId });
+    // rotate=true mints a fresh token, invalidating every previously shared
+    // copy of the link (#170's revocation path).
+    const result = await fn(rotate ? { clientId, rotate } : { clientId });
     const token = encodeURIComponent(result.data.token);
     return `${window.location.origin}/questionnaire/${firmId}/register?token=${token}`;
   },

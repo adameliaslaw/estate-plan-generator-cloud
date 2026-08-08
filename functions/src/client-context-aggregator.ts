@@ -15,6 +15,7 @@
 import * as admin from 'firebase-admin';
 import { estimateTotalAssets, hasSpousalStatus, isMinorChild } from './client-facts';
 import { loadFirmSecrets } from './firm-secrets';
+import { applyInterviewSettingsToFirmData } from './interview-settings';
 import { searchKnowledgeBase, buildContextQuery, VectorSearchResult } from './kb-vector-search';
 
 // ---------------------------------------------------------------------------
@@ -137,6 +138,9 @@ export async function aggregateClientContext(
 
   const client = clientSnap.data()!;
   const firm = { ...firmSnap.data()!, ...(await loadFirmSecrets(firmId)) };
+  // D2: fold the firm's interview defaults (Settings → Interview) into the
+  // firmData the generators read. One read per aggregation, not per document.
+  await applyInterviewSettingsToFirmData(db, firmId, firm as Record<string, unknown>);
 
   // 2. Fetch notes, existing documents, and knowledge base (parallel)
   const notesQuery = db
