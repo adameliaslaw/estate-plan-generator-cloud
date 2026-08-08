@@ -59,6 +59,11 @@ describe('registerClientFromLink — attorney-issued token required to claim (R5
       firmId,
       personalInfo: { firstName: 'Vera', lastName: 'Victim', email: victimEmail },
       registrationToken,
+      // #170: tokens carry a mint stamp and expire after 14 days; a token
+      // without the stamp fails closed. Every real mint writes both fields
+      // atomically (createClientRegistrationLink), so a live token always
+      // looks like this.
+      registrationTokenCreatedAt: admin.firestore.Timestamp.now(),
       status: 'active',
     });
   });

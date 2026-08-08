@@ -1015,6 +1015,17 @@ continued:
 All of #320 verified (1278/1278, tsc both, lint 0 errors, build) and adversarially reviewed —
 12 claims, 11 held, the 1 break fixed and negative-controlled.
 
+⚠️ **Lesson banked the hard way: the functions deploy workflow ALSO runs `tests/emulator/` —
+which the root `npm run test` excludes.** #320's TTL fail-closed check broke an emulator test
+that seeds a token without a mint stamp (state the system can no longer produce); functions
+run #176 failed on it and #320's function code did not deploy until the follow-up fix. The
+emulator suite runs fine in the remote container (`npx firebase-tools emulators:exec …` — Java
+is present; the bare `firebase` binary is not on PATH). **Any change touching
+functions/src must run the emulator suite locally before pushing.** Also noted: functions runs
+#173/#176 showed the deploy-overlap pattern — two full deploys in flight → per-function update
+contention → the convergence check fails the run; the next clean run converges, so a red run
+whose successor is green is stale, not live.
+
 ---
 
 ## 🔵 SESSION — 2026-08-07 (the templatizer — every generated document carried one client's data)
