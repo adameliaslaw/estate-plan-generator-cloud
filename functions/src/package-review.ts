@@ -680,6 +680,13 @@ function checkUnresolvedTokens(doc: PackageDoc, text: string): PackageFinding[] 
     // ordinary legal prose — [sic], an alteration inside a quotation — and
     // flagging it would make the check noise.
     { rx: /(?<!\[)\[[A-Z][A-Z0-9 ._/-]{2,60}\](?!\])/g, what: 'an unfilled placeholder' },
+    // Colon-form assembly tokens, e.g. [OBJ:WILL 1069] or [XREF:ARTICLE FOUR].
+    // The colon must sit LETTER:LETTER — a digit against the colon means a
+    // statutory citation ([N.J.S.A. 46:38A-1], [3B:3-2]), which is prose to
+    // leave alone. Found by the J2 benchmark: a real InteractiveLegal package
+    // carried ~70 such markers and the class above saw only the 2 space-form
+    // ones — the same shape of gap as {{XREF:…}} in the clause fill contract.
+    { rx: /(?<!\[)\[[A-Z][A-Z0-9 ._/-]{0,20}[A-Z]:[A-Z][A-Z0-9 ._/-]{1,50}\](?!\])/g, what: 'an unrendered assembly token' },
     { rx: /\b(TODO|TBD|FIXME|XXX)\b/g, what: 'a drafting marker' },
   ];
 
@@ -723,8 +730,17 @@ function checkUnresolvedTokens(doc: PackageDoc, text: string): PackageFinding[] 
  * words on both sides (a signature line has nothing after it), and the line
  * must not read like an execution block.
  */
+// "before me" / "personally appeared" are acknowledgment vocabulary — an
+// attorney acknowledgment's execution-date blank ("On December _____, 2025,
+// before me…") is a correct blank, not a defect (J2 benchmark, BM-FP1).
+// Known accepted miss: a survivorship clause containing "…die before me…"
+// within 100 chars of a real blank is now suppressed too — the module's
+// stated bias (prefer missing a defect to inventing one) accepts that trade.
+// A bare "acknowledg" stem was deliberately NOT added: "I acknowledge that I
+// have intentionally omitted ______" is an operative disinheritance clause
+// whose blank must stay flagged.
 const SIGNATURE_CONTEXT =
-  /\b(signature|signed|witness|notar|seal|subscribed|sworn|commission expires|print(ed)? name|date[d]?\b|attest)/i;
+  /\b(signature|signed|witness|notar|seal|subscribed|sworn|commission expires|print(ed)? name|date[d]?\b|attest|before me|personally appeared)/i;
 
 function checkUnfilledBlanks(doc: PackageDoc, text: string): PackageFinding[] {
   const findings: PackageFinding[] = [];
@@ -973,8 +989,15 @@ function checkEnclosureMismatch(docs: PackageDoc[]): PackageFinding[] {
  * unrelated age elsewhere in the document cannot trigger this.
  */
 const UTMA_REFERENCE = /uniform transfers to minors|transfers?[- ]to[- ]minors/gi;
+// Formal drafting spells the age and parenthesizes the digits — "twenty-five
+// (25)" — so the digits are matched either bare or behind one spelled number
+// word (which must then close its parenthesis: "twenty-five (25%" is not an
+// age). A pure-spelled age with no digits anywhere is a known miss. The word
+// before the parens is restricted to number words so a date ("until December
+// 25") cannot read as an age, and the trailing lookahead keeps a DURATION
+// ("until thirty (30) days after my death") from reading as one.
 const AGE_AFTER_UTMA =
-  /\b(?:reaches|attains|turns|until|age of|age)\s+(?:the\s+age\s+of\s+)?(\d{2})\b/i;
+  /\b(?:reaches|attains|turns|until|age of|age)\s+(?:the\s+age\s+of\s+)?(?:(?:twenty|thirty|forty|fifty)(?:-\w+)?\s*\((\d{2})\)|(\d{2})\b)(?!\s*(?:days?|weeks?|months?|%|percent\b))/i;
 const NJ_UTMA_MAX_AGE = 21;
 
 function checkUtmaAgeCap(doc: PackageDoc, text: string): PackageFinding[] {
@@ -990,7 +1013,8 @@ function checkUtmaAgeCap(doc: PackageDoc, text: string): PackageFinding[] {
     const ageMatch = window.match(AGE_AFTER_UTMA);
     if (!ageMatch) continue;
 
-    const age = Number(ageMatch[1]);
+    // Group 1: parenthesized digits behind a spelled number; group 2: bare digits.
+    const age = Number(ageMatch[1] ?? ageMatch[2]);
     if (!Number.isFinite(age) || age <= NJ_UTMA_MAX_AGE) continue;
     if (reportedAges.has(age)) continue;
     reportedAges.add(age);
