@@ -116,8 +116,12 @@ if (useEmulators) {
 
 export { app, auth, db, storage, functions };
 
-// Expose for admin console scripts (CSP blocks external imports)
-if (typeof window !== 'undefined') {
+// Expose for admin console scripts (CSP blocks external imports) — DEV builds
+// only (#173 / audit EE). In production this handed any injected script or
+// browser extension the signed-in user's Firestore/Functions handles. Console
+// workflows against live data belong in a Node admin-SDK script, not a
+// browser tab.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__firebase = { app, auth, db, storage, functions };
 }
