@@ -34,6 +34,7 @@ import {
   Users,
   HardDrive,
   Plus,
+  SlidersHorizontal,
   Trash2,
   Zap,
 } from 'lucide-react';
@@ -55,6 +56,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import DocxTemplateMapCard from '@/components/settings/DocxTemplateMapCard';
+import InterviewSettingsTab from '@/components/settings/InterviewSettingsTab';
 
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -213,7 +215,7 @@ interface FirmSettings {
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-type TabId = 'firm' | 'team' | 'branding' | 'integrations' | 'security' | 'templates' | 'docx';
+type TabId = 'firm' | 'team' | 'branding' | 'integrations' | 'security' | 'templates' | 'docx' | 'interview';
 
 interface TabDef {
   id: TabId;
@@ -229,6 +231,7 @@ const TABS: TabDef[] = [
   { id: 'security', label: 'Security', icon: <Shield className="h-4 w-4" /> },
   { id: 'templates', label: 'Email Templates', icon: <Mail className="h-4 w-4" /> },
   { id: 'docx', label: 'Document Templates', icon: <FileSignature className="h-4 w-4" /> },
+  { id: 'interview', label: 'Interview', icon: <SlidersHorizontal className="h-4 w-4" /> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -2440,6 +2443,8 @@ export default function SettingsPage() {
                 TAB — FIRM .DOCX TEMPLATE MAPPING (high-fidelity generation)
             ════════════════════════════════════════════════════════════ */}
             {activeTab === 'docx' && <DocxTemplateMapCard firmId={firmId} />}
+
+            {activeTab === 'interview' && <InterviewSettingsTab firmId={firmId} />}
 
             {activeTab === 'templates' && (
               <div className="space-y-5">
