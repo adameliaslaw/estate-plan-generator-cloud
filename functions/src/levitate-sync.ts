@@ -1,6 +1,31 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { loadFirmSecrets } from './firm-secrets';
+import { logAuditEvent } from './audit-trail';
+
+/**
+ * Audit a successful push of client identity data to Levitate (#172).
+ * The entry names the client and the route, never the webhook URL — the URL
+ * embeds a credential (see #168) and must not reach the audit log.
+ */
+async function auditLevitateSync(
+    firmId: string,
+    clientId: string,
+    clientName: string,
+    route: 'webhook' | 'api',
+): Promise<void> {
+    await logAuditEvent({
+        firmId,
+        eventType: 'integration_synced',
+        userId: 'system', // onCreate trigger — no acting user in context
+        userEmail: '',
+        userRole: '',
+        clientId,
+        clientName,
+        details: `Client synced to Levitate CRM (${route})`,
+        metadata: { provider: 'levitate', route },
+    });
+}
 
 // Triggered when a new client is created
 export const syncClientToLevitate = functions.region('us-east1').firestore
@@ -54,6 +79,7 @@ export const syncClientToLevitate = functions.region('us-east1').firestore
                     console.error(`[syncClientToLevitate] Webhook failed. Status: ${response.status}`, await response.text());
                 } else {
                     console.log(`[syncClientToLevitate] Webhook sync successful for client ${snap.id}`);
+                    await auditLevitateSync(firmId, snap.id, `${payload.firstName} ${payload.lastName}`.trim(), 'webhook');
                     return;
                 }
             }
@@ -78,6 +104,7 @@ export const syncClientToLevitate = functions.region('us-east1').firestore
                     console.error(`[syncClientToLevitate] API Key sync failed. HTTP ${response.status}:`, await response.text());
                 } else {
                     console.log(`[syncClientToLevitate] API Key sync successful for client ${snap.id}`);
+                    await auditLevitateSync(firmId, snap.id, `${payload.firstName} ${payload.lastName}`.trim(), 'api');
                 }
             }
 

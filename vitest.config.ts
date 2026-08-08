@@ -20,6 +20,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Backend deps live only in functions/node_modules. Pinning them to one
+      // resolved id lets a test file's vi.mock('firebase-admin') intercept the
+      // copy functions/src actually imports — without this, the test file and
+      // functions/src resolve different ids and the mock silently misses.
+      'firebase-admin': path.resolve(__dirname, './functions/node_modules/firebase-admin'),
+      'puppeteer-core': path.resolve(__dirname, './functions/node_modules/puppeteer-core'),
+      '@sparticuz/chromium': path.resolve(__dirname, './functions/node_modules/@sparticuz/chromium'),
     },
   },
 });

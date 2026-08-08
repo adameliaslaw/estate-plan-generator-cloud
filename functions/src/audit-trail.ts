@@ -25,6 +25,9 @@ import * as admin from 'firebase-admin';
 /**
  * Every event type that can appear in the audit log.
  */
+// 'login' and 'settings_changed' were declared here for months with no call
+// site anywhere (#173 item 10) — pruned rather than wired: nothing needs them
+// yet, and a value in this union reads as a promise the log contains it.
 export type AuditEventType =
   | 'client_accessed'
   | 'document_generated'
@@ -33,9 +36,8 @@ export type AuditEventType =
   | 'payment_created'
   | 'payment_updated'
   | 'email_sent'
-  | 'login'
-  | 'settings_changed'
-  | 'data_exported';
+  | 'data_exported'
+  | 'integration_synced';
 
 /**
  * Shape of a single entry in the `firms/{firmId}/auditLog` collection.
@@ -274,6 +276,38 @@ export const onDocumentStatusChanged = onDocumentWritten(
  *
  * Path: `firms/{firmId}/clients/{clientId}/payments/{paymentId}`
  */
+/**
+ * Human-readable amount for a payment record.
+ *
+ * Every current writer stores an explicit `amountCents` (integer) alongside
+ * the legacy `amount`, and that is the only value trusted here. Records
+ * created before `amountCents` existed fall back to the old `amount`
+ * heuristic — which cannot tell a $300 payment stored in dollars from a $3.00
+ * payment stored in cents, and mis-states any cents-stored amount ≤ $5.00
+ * (a real 100-cent test charge displayed as "$100.00"). That ambiguity is why
+ * the explicit field exists; do not extend the heuristic.
+ */
+export function paymentAmountDisplay(data: {
+  amount?: unknown;
+  amountCents?: unknown;
+}): string {
+  const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
+  const cents = data.amountCents;
+  if (typeof cents === 'number' && Number.isFinite(cents)) {
+    return usd.format(cents / 100);
+  }
+
+  // Legacy records: amount may be cents (integer) or dollars (float).
+  const rawAmount = data.amount;
+  if (typeof rawAmount === 'number' && Number.isFinite(rawAmount)) {
+    return rawAmount > 500 // heuristic: values > 500 are likely cents
+      ? usd.format(rawAmount / 100)
+      : usd.format(rawAmount);
+  }
+  return 'unknown amount';
+}
+
 export const onPaymentCreated = onDocumentCreated(
   {
     document: 'firms/{firmId}/clients/{clientId}/payments/{paymentId}',
@@ -289,14 +323,8 @@ export const onPaymentCreated = onDocumentCreated(
       return;
     }
 
-    // Amount may be stored as cents (integer) or dollars (float) — normalise to dollars.
     const rawAmount = data.amount as number | undefined;
-    const amountDisplay =
-      rawAmount != null
-        ? rawAmount > 500 // heuristic: values > 500 are likely cents
-          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(rawAmount / 100)
-          : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(rawAmount)
-        : 'unknown amount';
+    const amountDisplay = paymentAmountDisplay(data);
 
     const clientName =
       (data.clientName as string | undefined) ??
@@ -330,6 +358,7 @@ export const onPaymentCreated = onDocumentCreated(
       metadata: {
         paymentId,
         amountRaw: rawAmount ?? null,
+        amountCents: typeof data.amountCents === 'number' ? data.amountCents : null,
         amountDisplay,
         description,
         status: (data.status as string | undefined) ?? null,

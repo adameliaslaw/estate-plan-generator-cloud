@@ -23,6 +23,7 @@ import { Packer } from 'docx';
 import { buildLegalDocumentHtml, sanitizeFileName, blockExternalRequests } from './export-pdf';
 import { buildDocxDocument } from './export-docx';
 import { resolveExportHtml, resolveDocxExport, DocxExportPlan } from './export-content';
+import { logAuditEvent } from './audit-trail';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -342,6 +343,25 @@ export const exportBatchDocuments = functions
         }
         browser = null;
       }
+
+      // #172 — a batch export is a bulk extraction of the client's whole file,
+      // so it is audited as data_exported rather than document_exported.
+      // logAuditEvent swallows its own failures; it can never fail the export.
+      await logAuditEvent({
+        firmId,
+        eventType: 'data_exported',
+        userId: context.auth.uid,
+        userEmail: (context.auth.token.email as string | undefined) ?? '',
+        userRole: role,
+        clientId,
+        details: `Exported all documents (${documents.length}) as ZIP (${format})`,
+        metadata: {
+          format,
+          documentCount: documents.length,
+          storagePath,
+          zipFileName,
+        },
+      });
 
       return {
         success: true,

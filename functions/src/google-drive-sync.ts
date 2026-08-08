@@ -45,6 +45,7 @@ import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { buildLegalDocumentHtml, sanitizeFileName, blockExternalRequests } from './export-pdf';
 import { assertStaff } from './auth-guards';
+import { logAuditEvent } from './audit-trail';
 import {
   deleteGoogleOAuthTokens,
   loadGoogleOAuthTokens,
@@ -710,6 +711,27 @@ export const onDocumentWrittenSyncToDrive = onDocumentWritten(
       console.error(`[driveSyncTrigger] Drive upload failed for ${documentId}:`, err);
       return;
     }
+
+    // ── Audit the sync (#172) ─────────────────────────────────────────────
+    // The document has left the system for an external service, so it is
+    // audited whether or not the bookkeeping update below succeeds.
+    // logAuditEvent swallows its own failures.
+    await logAuditEvent({
+      firmId,
+      eventType: 'integration_synced',
+      userId: (docData.updatedBy as string | undefined) ?? 'system',
+      userEmail: '', // Not available in Firestore trigger context
+      userRole: '',  // Not available in Firestore trigger context
+      clientId,
+      clientName,
+      documentId,
+      details: `Document '${displayName}' synced to Google Drive`,
+      metadata: {
+        provider: 'google-drive',
+        driveFileId,
+        action: existingFileId ? 'update' : 'create',
+      },
+    });
 
     // ── Update Firestore with Drive file ID ───────────────────────────────
     try {
