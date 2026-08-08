@@ -28,6 +28,8 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { logAuditEvent } from './audit-trail';
+import { registrationTokenIsLive } from './create-registration-link';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -121,6 +123,16 @@ export const registerClientFromLink = onCall(
         throw new HttpsError('not-found', 'This invitation link is invalid or has expired.');
       }
       const clientDoc = tokenSnap.docs[0];
+
+      // #170: the token is a bearer credential, so it must not live forever —
+      // a leaked link was previously a PERMANENT claim on this record. Expired
+      // tokens get the same message as unknown ones (no oracle), and the
+      // attorney's next copy of the link transparently re-mints
+      // (createClientRegistrationLink).
+      if (!registrationTokenIsLive(clientDoc.get('registrationTokenCreatedAt'), Date.now())) {
+        throw new HttpsError('not-found', 'This invitation link is invalid or has expired.');
+      }
+
       const existingLink = clientDoc.get('linkedUserId') as string | undefined;
       if (existingLink !== linkUid) {
         await clientDoc.ref.update({
@@ -128,6 +140,25 @@ export const registerClientFromLink = onCall(
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
+
+      // #170: claiming a record is the portal trust boundary — audit it. The
+      // entry never carries the token itself, only how the link happened.
+      await logAuditEvent({
+        firmId,
+        eventType: 'client_registered',
+        userId: linkUid,
+        userEmail: '',
+        userRole: 'client',
+        clientId: clientDoc.id,
+        details: 'Client record claimed via attorney invite link',
+        metadata: {
+          via: 'invite-token',
+          isNew: false,
+          linkChanged: existingLink !== linkUid,
+          previouslyLinked: Boolean(existingLink),
+        },
+      });
+
       return { clientId: clientDoc.id, isNew: false };
     }
 
@@ -161,6 +192,20 @@ export const registerClientFromLink = onCall(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdVia: 'questionnaire_link',
     });
+
+    // #170: self-registrations are audited like claims — same trust boundary,
+    // different door.
+    await logAuditEvent({
+      firmId,
+      eventType: 'client_registered',
+      userId: linkUid,
+      userEmail: '',
+      userRole: 'client',
+      clientId: ref.id,
+      details: 'New prospect self-registered via the firm questionnaire link',
+      metadata: { via: 'generic-link', isNew: true },
+    });
+
     return { clientId: ref.id, isNew: true };
   },
 );

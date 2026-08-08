@@ -37,7 +37,8 @@ export type AuditEventType =
   | 'payment_updated'
   | 'email_sent'
   | 'data_exported'
-  | 'integration_synced';
+  | 'integration_synced'
+  | 'client_registered';
 
 /**
  * Shape of a single entry in the `firms/{firmId}/auditLog` collection.

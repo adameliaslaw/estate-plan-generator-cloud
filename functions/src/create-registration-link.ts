@@ -25,8 +25,33 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { assertStaff } from './auth-guards';
 
+/**
+ * How long a registration token stays claimable (#170). The token is a bearer
+ * credential; before this TTL it lived forever, so any leaked invite link was
+ * a permanent claim on the client's record. Two weeks covers the ordinary
+ * "attorney sends the link, client gets to it next week" flow; a stale link
+ * fails with the standard invalid-or-expired message and the attorney's next
+ * copy of the link transparently re-mints.
+ */
+export const REGISTRATION_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * True when a stored token is still claimable. A token with no createdAt
+ * stamp is treated as expired — the stamp is always written with the token,
+ * so its absence is an anomaly to fail closed on, not a legacy case.
+ */
+export function registrationTokenIsLive(createdAt: unknown, nowMs: number): boolean {
+  const millis =
+    createdAt && typeof (createdAt as { toMillis?: unknown }).toMillis === 'function'
+      ? (createdAt as { toMillis: () => number }).toMillis()
+      : null;
+  return millis !== null && nowMs - millis <= REGISTRATION_TOKEN_TTL_MS;
+}
+
 const RequestSchema = z.object({
   clientId: z.string().min(1).max(200),
+  /** Mint a fresh token even if a live one exists, invalidating shared links. */
+  rotate: z.boolean().optional(),
 });
 
 export const createClientRegistrationLink = onCall(
@@ -41,7 +66,7 @@ export const createClientRegistrationLink = onCall(
     if (!parsed.success) {
       throw new HttpsError('invalid-argument', 'A valid clientId is required.');
     }
-    const { clientId } = parsed.data;
+    const { clientId, rotate } = parsed.data;
 
     const db = admin.firestore();
     const ref = db.doc(`firms/${caller.firmId}/clients/${clientId}`);
@@ -50,10 +75,15 @@ export const createClientRegistrationLink = onCall(
       throw new HttpsError('not-found', 'Client not found.');
     }
 
-    // Reuse an already-issued token so a previously shared link keeps working;
-    // mint one on first request. base64url avoids URL-unsafe characters.
+    // Reuse an already-issued token so a previously shared link keeps working —
+    // but only while it is inside its TTL (#170): handing back an expired token
+    // would give the attorney a link the claim path is going to refuse. An
+    // expired (or rotate-requested) token is replaced, which is also the
+    // revocation story: rotating kills every previously shared copy.
+    // base64url avoids URL-unsafe characters.
     let token = snap.get('registrationToken') as string | undefined;
-    if (!token) {
+    const live = registrationTokenIsLive(snap.get('registrationTokenCreatedAt'), Date.now());
+    if (!token || !live || rotate === true) {
       token = randomBytes(24).toString('base64url');
       await ref.update({
         registrationToken: token,
