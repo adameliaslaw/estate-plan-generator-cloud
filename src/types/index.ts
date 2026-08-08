@@ -1462,3 +1462,89 @@ export interface FirmInfo {
   primaryAttorney?: string;
   barNumber?: string;
 }
+// ============================================================================
+// Firm Interview Settings — /firms/{firmId}/interviewSettings/current
+// ============================================================================
+// Firm-level drafting DEFAULTS (HOMEWORK D1) — the layer Statular exposes as
+// Settings → Interview: what a new matter starts from before any per-client
+// answer. Every field is optional; an absent field means "use the engine's
+// current built-in default", so shipping this record changes no behaviour
+// until a screen writes it and a generator reads it (D2–D7 wire sections in).
+//
+// Nine sections exist conceptually (Documents · Trust · Definitions · Asset
+// Schedules · Power of Attorney · Healthcare · Deeds · Signing · Fiduciaries).
+// Only the five with concretely-known fields are typed; POA, Deeds, Signing
+// and Fiduciaries arrive with D7 — their fields are not yet known, and typing
+// them now would be invented structure.
+
+/** Mirrors ApportionmentMode in functions/src/nj-inheritance-tax.ts (#280). */
+export type FirmApportionmentMode = 'residuary' | 'apportioned' | 'hybrid';
+
+export type RepresentationType =
+  | 'right-of-representation'
+  | 'per-stirpes'
+  | 'per-capita-at-each-generation';
+
+/** Who may determine incapacity — a multi-select, not one rule (D5). */
+export type IncapacityDeterminer =
+  | 'two-physicians'
+  | 'physician-and-psychologist'
+  | 'attorney-at-law'
+  | 'governmental-official'
+  | 'trust-protector'
+  | 'court';
+
+export interface InterviewDocumentDefaults {
+  /** Documents selected by default on document selection, per package (D6). */
+  defaultDocTypesByPackage?: Partial<Record<PackageType, DocType[]>>;
+  /** Cover letter mode (D6): fixed short letter vs AI distribution summary. */
+  coverLetterMode?: 'short' | 'ai-distribution-summary';
+}
+
+export interface InterviewTrustDefaults {
+  representationType?: RepresentationType;
+  noContestClause?: boolean;
+  trusteeCompensation?: boolean;
+  waiveBond?: boolean;
+  soleTrusteeCoAppointment?: boolean;
+  /** Age at which discretionary "special distributions" become available. */
+  specialDistributionsAge?: number;
+  substanceAbuseProvisions?: boolean;
+  contingentSpecialNeedsTrust?: boolean;
+  /**
+   * D2 — NJ transfer inheritance tax apportionment default. Ours is three
+   * modes with statutory prose (54:35-6 vs 3B:24-1); this makes it a firm
+   * default instead of a code default.
+   */
+  apportionmentMode?: FirmApportionmentMode;
+}
+
+export interface InterviewDefinitionsDefaults {
+  incapacityDeterminedBy?: IncapacityDeterminer[];
+  childrenDefinition?: 'state-probate-code' | 'custom';
+  /** Only read when childrenDefinition === 'custom'. */
+  customChildrenDefinition?: string;
+}
+
+export interface InterviewHealthcareDefaults {
+  /** D4 — the Dementia Directive is a toggle here, not a document type. */
+  dementiaDirective?: boolean;
+  visitationAuthorization?: boolean;
+  leaveInstructionsBlank?: boolean;
+}
+
+export interface InterviewAssetScheduleDefaults {
+  /** Schedule A preamble (D7 note) — HTML; DOMPurify before any render. */
+  scheduleAPreambleHtml?: string;
+}
+
+export interface FirmInterviewSettings {
+  firmId: string;
+  documents?: InterviewDocumentDefaults;
+  trust?: InterviewTrustDefaults;
+  definitions?: InterviewDefinitionsDefaults;
+  healthcare?: InterviewHealthcareDefaults;
+  assetSchedules?: InterviewAssetScheduleDefaults;
+  updatedAt: Timestamp;
+  updatedBy: string;
+}

@@ -619,6 +619,20 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /firms/{firmId}/interviewSettings/{docId}
+    // Firm-level drafting defaults (D1 — the Statular Settings →
+    // Interview layer). One doc, id 'current'. Staff read; writes
+    // follow firm-settings management (admin/attorney or the
+    // manage_firm_settings capability — paralegals read-only, same
+    // policy as firm settings). No client access.
+    // ==========================================================
+    match /firms/{firmId}/interviewSettings/{docId} {
+      allow read: if isFirmAdmin(firmId) || ((hasRole('attorney') || hasRole('paralegal')) && belongsToFirm(firmId));
+      allow create, update: if isFirmAdmin(firmId) || (canManageFirmSettings() && belongsToFirm(firmId));
+      allow delete: if isFirmAdmin(firmId);
+    }
+
+    // ==========================================================
     // CLAUSE-MINING COLLECTIONS (docs/CLAUSE-MINING-PIPELINE.md §9)
     //
     // /firms/{firmId}/clauseCatalog/{clauseId} (+ variants, occurrences)
