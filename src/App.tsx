@@ -131,14 +131,6 @@ export default function App() {
               }
             />
             <Route
-              path="/clients/:clientId/documents"
-              element={
-                <AppLayout allowedRoles={[...STAFF_ROLES]}>
-                  <ClientDashboardPage />
-                </AppLayout>
-              }
-            />
-            <Route
               path="/clients/:clientId/documents/:documentId/edit"
               element={
                 <AppLayout allowedRoles={[...STAFF_ROLES]} fullWidth>
