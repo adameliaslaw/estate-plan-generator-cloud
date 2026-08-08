@@ -258,8 +258,9 @@ the resume-point note above updated (J1b ran; C1's gate is now Adam's roster-ter
   raw-token leak fixed; see section A and new decision **C5**) · ~~triage the 11 open issues~~
   (✅ done 2026-08-07 — see new section **K**; #177 closed, nine folded in with owners) ·
   from K, agent-immediate: **#171** welcome-email fix, **#169** chat-ai sanitize, **#166**
-  escaping, gitleaks CI step · J2 (benchmark #280's review engine) · then C2/C3 once C1 is
-  settled, then D1.
+  escaping, gitleaks CI step · ~~J2 (benchmark #280's review engine)~~ (✅ ran 2026-08-08, #314 —
+  see the J2 row and the 2026-08-08 session entry) · then C2/C3 once C1 is settled, then D1
+  (⏸ built 2026-08-08, PR held for sign-off).
 
 ---
 
@@ -363,7 +364,7 @@ foundation the rest of D sits on.
 
 | # | Item | Notes |
 |---|------|-------|
-| **D1** | **The `FirmInterviewSettings` record** — types, Firestore doc under `firms/{firmId}`, rules, and a settings screen shell. | Touches `src/types/index.ts` (Never-Break → sign-off) and `firestore.rules` (Never-Break → sign-off). Do it once, additively, rather than a Never-Break change per section. |
+| **D1** | **The `FirmInterviewSettings` record** — types, Firestore doc under `firms/{firmId}`, rules, and a settings screen shell. **⏸ BUILT 2026-08-08, PR HELD for Adam's sign-off** — additive types (five known sections; POA/Deeds/Signing/Fiduciaries deliberately untyped until D7 defines them), `interviewSettings` rules block, autosaving Settings → Interview tab. Nothing reads the record yet; D2 is the first consumer. | Touches `src/types/index.ts` (Never-Break → sign-off) and `firestore.rules` (Never-Break → sign-off). Do it once, additively, rather than a Never-Break change per section. |
 | **D2** | **Wire `ApportionmentMode` into it.** | Closes PR #280's loose end. Statular exposes this as a single boolean — *"Prorate estate taxes among beneficiaries"*. Ours is three modes with NJ-specific statutory prose (54:35-6 vs 3B:24-1), which is better on the merits, but theirs is a firm default and ours is a code default. Theirs is the right *shape*. |
 | **D3** | **Trust defaults** — representation type (right of representation / per stirpes / per capita at each generation), no-contest clause, trustee compensation, bond, sole-trustee co-appointment, **Special Distributions Age**, substance-abuse provisions, contingent SNT. | Maps onto work already done. |
 | **D4** | **Healthcare defaults — including the Dementia Directive as a first-class toggle.** | Settles the earlier open question: it is a **toggle under Healthcare defaults**, not a standalone document type. Also: visitation authorisation, "leave health care instructions blank". |
@@ -445,7 +446,7 @@ work that pass generates. Sources: `New Matter`, `Matter Dashboard`, `Client Que
 | # | Item | Why |
 |---|------|-----|
 | ~~**J1**~~ | ~~**Clause corpus metadata audit — do this before deciding C1.**~~ **✅ RAN 2026-08-06 19:25Z and succeeded — the row went stale before anyone recorded it.** Workflow run **#81** (job `92700776650`, Cloud Run execution `clause-miner-2qtk9`), `stage: clause-audit`, `firm-001` / `pilot-1`. Report at `…/runs/pilot-1/validation/clause-audit.json`; the full JSON is also in the job log. Metadata only, no LLM, $0, as designed. **Results and what they settle are below the table.** | Answered C1 with measurement instead of assertion — partly. See the read-out. |
-| **J2** | **Benchmark PR #280's review engine against four finding classes their Analysis & Review demonstrably catches**, on a real will package: (a) unfilled placeholders surviving into rendered output, (b) cross-party inconsistency, (c) statutory conflict with citation, (d) logical dead-ends in the document's own cross-references. | This is the direct competitor to what #280 shipped, and these four are a ready-made test set. (a) and (b) are template hygiene we can do quickly. (c) is where they are ahead on legal substance. (d) is the hard one — it reasons over the document's internal references, not the intake data. |
+| ~~**J2**~~ | ~~**Benchmark PR #280's review engine against four finding classes their Analysis & Review demonstrably catches**, on a real will package.~~ **✅ RAN 2026-08-08 (#314).** Scorecard: (a) CAUGHT in full, (c) CAUGHT on the exact UTMA example, (b) HALF (identity yes, descriptor no), (d) MISSED. Three engine fixes shipped from what the real corpus exposed, adversarially verified. Read-out: `docs/PACKAGE-REVIEW-BENCHMARK.md`; pinned by `tests/unit/package-review-benchmark.test.ts`. Recommendations R1–R5 recorded there — proposed, not started. | This was the direct competitor test to what #280 shipped. (a)/(b) template hygiene confirmed quick; (c) matched on the observed example (breadth still theirs); (d) confirmed the hard one — routed to the AI reviewer (R4) rather than rules machinery. |
 | **J3** | **Document Selection composes the interview.** Their page 1 determines which of the remaining pages exist — 12 pages for an advance-directives package, 15 for a will package (adds Executors, Distribution, Will Provisions). Assess whether our generation pipeline can adopt this, or whether it conflicts with the questionnaire model. | Architectural, and the most significant structural finding of the pass. Selection is not a picker feeding a generator; it is the thing that shapes intake. Decide before more questionnaire work lands. |
 | **J4** | **Jurisdiction-aware controls that explain themselves.** They grey out short-form POA for NJ *with the reason stated inline* — no statutory form exists, so the long form is used. Our jurisdiction logic lives in generators where the user never sees it. | Cheap, and it converts hidden behaviour into something the attorney learns from. |
 | **J5** | **Ask the three-tier contingency ladder at intake**, in plain English, as separate questions: specific gifts → remainder → backup takers → last-resort preference (offering a class, named people, or charities). | Maps directly onto the residue and allocation model (#210). Strongest evidence yet that the ladder belongs at intake rather than derived at draft time. |
@@ -657,8 +658,8 @@ stays open as the umbrella index** — 4 of its 13 children were fixed by PR #17
 | **#169** chat-ai prompt injection | Verbatim as reported: `chat-ai.ts:389` and `:398` embed raw client JSON into prompts; `sanitizeObject` exists (`ai-client.ts:757`) and is simply unused; bonus raw embed at `:417`. Per-note text *is* sanitized (`:367`) — the fix pattern is already in the file. | **✅ FIXED 2026-08-07 (#311):** all three paths wrapped in `sanitizeObject` (the sanitizer itself already test-pinned by `ai-client-sanitize.test.ts`; the context builder is module-internal, same testing posture as the original T9 fix). |
 | **#170** portal trust boundary | Token minted once and reused forever (`create-registration-link.ts:53-62`; `registrationTokenCreatedAt` written, read by nothing); the claim path re-points `linkedUserId` **before** the rate limiter (`register-client.ts:115-131`); no expiry, revocation, or audit. Rules self-update has no `hasOnly` field allowlist (`firestore.rules:403-421`) — a client can write arbitrary fields on their own record, including `registrationToken`. Only H3's rate-limit shipped. | **Agent:** token TTL + rotation action + claim audit. **Agent + Adam sign-off (Never-Break):** the rules field allowlist (the idiom already exists at `:297-300` for users). Urgency rises when E1/E2 add a second public write path. |
 | **#171** welcome email never fires | Bug live, character-for-character: `email-notifications.ts:1293-1298` reads top-level `email`/`firstName`; every writer stores `personalInfo.*` (`register-client.ts:151`); the guard silently returns, so the welcome email **has never sent**. Its audit-trail call (added since) is dead code behind the guard. | **✅ FIXED 2026-08-07 (#311):** `clientContactFields()` reads `personalInfo` with a top-level legacy fallback, test-pinned (3 tests). Welcome emails now actually send for firms with an active `client_created` template — a deliberate behavior change, it's what the feature always claimed to do. |
-| **#172** audit-trail gaps | All five claims current: zero `logAuditEvent` calls in export-pdf/docx/batch, drive-sync, levitate-sync (`document_exported`/`data_exported` are enum-only); no TTL/retention; blank actor in trigger context (`audit-trail.ts:250-251,325-326`); caller-trusted `logAccess`; the `>500 → cents` amount heuristic (`:293-298`). | **Agent:** audit the three export paths + syncs; write `amountCents` at creation. **Adam:** pick the retention period; agent then adds TTL. |
-| **#173** dependency/config hygiene | All ten claims current, including: no vuln scanning (26 root / 31 functions advisories today), CSP duplicated **and divergent** (`index.html:9` lacks the header's `*.8am.com` + maps.gstatic entries, so the intersection nullifies them), `window.__firebase` exposed unconditionally (`firebase.ts:120-123`), 14 files still on functions v1, duplicate `ClientDashboardPage` routes (`App.tsx:118,134`). | **Agent:** one hygiene PR — dep fixes, dependabot, `window.__firebase` DEV-gate (check admin-console usage first), dead enum emits, duplicate route. **Adam sign-off:** CSP single-sourcing (`firebase.json`, Never-Break-adjacent) and the v1→v2 migration. |
+| **#172** audit-trail gaps | ~~Zero `logAuditEvent` calls in export-pdf/docx/batch, drive-sync, levitate-sync; the `>500 → cents` amount heuristic.~~ **✅ Agent half DONE 2026-08-08 (#315):** all three export paths audited (both DOCX success paths), both syncs emit `integration_synced` (Levitate entry never carries the webhook URL), `amountCents` written by every payment creator and preferred by the trigger. Still current: no TTL/retention; blank actor in trigger context; caller-trusted `logAccess`. | **Adam:** pick the retention period; agent then adds TTL. Trigger-actor and logAccess hardening remain unowned. |
+| **#173** dependency/config hygiene | **✅ Auto-mergeable half DONE 2026-08-08 (#316 + the enum prune in #315):** stale deps removed (file-saver, @types/dompurify, adm-zip — all zero-usage), @types/express pinned ^4, audit-fix root 27→2 / functions 32→1, `window.__firebase` DEV-gated (bundle-verified), duplicate route removed, dead enum values pruned. | **Adam sign-off (proposed in the 2026-08-08 session entry):** dependabot + audit CI step · CSP single-sourcing + tightening (`firebase.json`, Never-Break-adjacent) · react-router 6→7 and firebase-admin 13→14 majors · the v1→v2 migration. |
 | **#174** compliance & lifecycle | No client-deletion cascade or retention/TTL paths anywhere; no DPA register; e-sign still **defaults to test mode** (`esign-service.ts:182`) with no UI banner; per-firm `lawpayPaymentPageUrl` now exists (partial credit). No App Check (`enforceAppCheck` appears nowhere). | **Adam:** retention schedule, DPA register, e-sign default policy. **Agent after (banner now):** the TEST MODE banner just surfaces existing state and could ship immediately; `deleteClientData` cascade + TTLs once the schedule exists. |
 | **#175** umbrella audit report | 4/13 children fixed (PR #176); 9 dispositioned above. | Keep open as the index; close with a pointer-comment once the children land. |
 | **#177** CI hosting failure | Failures were on `5567ba3`/`5ad6f55` (Jul 18–20), caused by a broken e-sign test mock; fixed by PR #180 (`ada5c1a`, run #90 green 2026-07-20T23:03Z). Hosting deploys green ever since, #121 at `bb57a43` today. | **✅ CLOSED 2026-08-07 with evidence.** |
@@ -895,6 +896,93 @@ by percentage**, not a general-purpose bequest algebra.
 
 **Deliberately dropped:** the Schedule A grouping patch scoped earlier the same day. Throwaway work
 covering one sixth of the problem.
+
+---
+
+## 🔵 SESSION — 2026-08-08 (J2 benchmark ran · #172 audit trail · #173 hygiene · D1 built and HELD)
+
+**TL;DR — Four queue items in order. J2 ran and produced a scorecard plus three engine fixes
+(#314, merged). The #172 agent half shipped (#315, merged). The #173 auto-mergeable half shipped
+(#316, merged), with the sign-off items proposed below. D1 is built and its PR is HELD for
+Adam's explicit sign-off — types/index.ts and firestore.rules are both Never-Break.**
+
+### J2 — the benchmark (#314; read-out in docs/PACKAGE-REVIEW-BENCHMARK.md)
+
+Scorecard vs Statular's four observed Analysis & Review classes, on the real Byrnes will
+package (will + POA + HC, mammoth-converted, real roster): **(a) unfilled placeholders CAUGHT in
+full · (c) statutory conflict CAUGHT on the exact UTMA-to-25 example, both digit and
+"twenty-five (25)" forms · (b) cross-party inconsistency HALF (identity ambiguity yes,
+relationship-descriptor consistency no) · (d) cross-reference dead-ends MISSED — recommended
+home is the AI reviewer (R4), not new rules machinery.** The converse holds: three of our checks
+(missing-instrument, enclosure-mismatch, missing-apportionment) are package-level with no
+equivalent in their per-document panel.
+
+The real corpus surfaced three engine defects the synthetic fixtures never could — colon-form
+assembly tokens invisible (~70 `[OBJ:…]` markers vs 2 caught; the same gap-shape as A2's
+`{{XREF:…}}` finding, now proven to matter twice), acknowledgment-line blanks as false
+positives, and the UTMA check blind to formal drafting. All fixed failing-first, then hardened
+by a 3-agent adversarial pass that broke the first version of two fixes (spelled durations read
+as ages; the `acknowledg` stem swallowed disinheritance blanks) — both refinements pinned by
+guards. Recommendations R1–R5 in the read-out (descriptor-consistency check, per-row dismiss on
+the findings panel, title-case headings in locateSection, class (d) via the AI reviewer,
+incremental statutory rules) — proposed, not started. Benchmark suite skips (not fails) if B6
+removes the samples.
+
+### #172 — audit-trail agent half (#315)
+
+document_exported / data_exported / new integration_synced now actually written: all three
+export callables (both DOCX success paths), the Drive sync trigger, and the Levitate sync (its
+entry never carries the webhook URL — that's #168's credential). amountCents written at creation
+by every payment writer; onPaymentCreated prefers it — under the old heuristic Adam's real $1.00
+test charge was logged "$100.00". 'login'/'settings_changed' pruned (#173 item 10; zero call
+sites). Tests invoke the callables end-to-end via their v1 `.run()` handles with the real
+logAuditEvent — enabled by a vitest.config.ts alias pinning firebase-admin/puppeteer to
+functions/node_modules; **without that alias a test file's vi.mock never intercepted what
+functions/src imports** (why no prior test could do this; worth knowing for future functions
+tests). **Still open on #172:** Adam picks the retention period → agent adds TTL; blank actor in
+trigger contexts and caller-trusted logAccess stand as recorded.
+
+### #173 — hygiene, the auto-mergeable half (#316)
+
+Shipped: file-saver + @types/file-saver removed (zero usage — the issue's "replace with the
+native pattern" was moot); @types/dompurify removed (dompurify 3.4.2 bundles its own types);
+@types/express pinned ^4; **adm-zip removed from functions deps** (direct dep with a high
+advisory, zero imports — only the archived `functions/scripts/archive/test-export-parity.cjs`
+references it; `npm i adm-zip --no-save` if resurrected); npm audit fix (semver-compatible):
+**root 27 → 2 advisories, functions 32 → 1**; window.__firebase DEV-gated (no in-repo consumer;
+verified absent from the built bundle); duplicate `/clients/:clientId/documents` route removed.
+
+**#173 sign-off items — PROPOSED, not merged (Adam, minutes each to decide):**
+1. **dependabot.yml + an `npm audit --audit-level=high` CI step** — repo automation, same
+   sign-off territory as the gitleaks workflow. Proposed: npm weekly for `/` and `/functions`,
+   minor+patch grouped, plus the github-actions ecosystem.
+2. **CSP single-sourcing** — delete the index.html meta copy; today the stricter meta wins and
+   the firebase.json header's `*.8am.com` + maps.gstatic entries silently do nothing. Then
+   tighten (object-src 'none', base-uri 'none', form-action 'self', test dropping
+   'unsafe-eval'). firebase.json is Never-Break-adjacent.
+3. **The two remaining advisories need major bumps:** react-router 6→7 (root, 2 moderate) and
+   firebase-admin 13→14 (functions, 1 moderate via uuid). Breaking — schedule deliberately.
+4. **v1→v2 functions migration** (14 modules; the inconsistency already caused #165).
+
+### D1 — FirmInterviewSettings: BUILT, PR HELD for sign-off
+
+Per the D1 row: `FirmInterviewSettings` types in src/types/index.ts (additive — container plus
+the five sections with concretely-known fields; POA/Deeds/Signing/Fiduciaries arrive with D7
+because their fields are not yet known and typing them now would be invented structure);
+firestore.rules block for `firms/{firmId}/interviewSettings` (staff read, canManageFirmSettings
+write — the firm-settings policy, paralegals read-only); a Settings → Interview tab with
+autosaving MERGED writes (future sections and concurrent editors never clobber existing keys —
+test-pinned) and the four D7 sections as labeled placeholders. **Nothing reads the record yet**
+— an absent field means the engine's built-in default, so merging changes no behaviour; D2
+(apportionmentMode) is the first consumer. **The PR opened right after this record is HELD for
+Adam's explicit sign-off — do not merge it without his words.**
+
+### Deploys (recorded at close; the armed check-in covers the tail)
+
+#314 → functions run #172 ✅ (J2 touched no hosting paths). #315 → hosting #122 ✅, functions
+#173 (superseded in-flight by #316's push — concurrency cancels stale deploys by design; the
+final state that matters is #316's). #316 → hosting #123 + functions #174, in flight at close
+with a send_later check-in armed to confirm them and to nudge the held D1 PR.
 
 ---
 
