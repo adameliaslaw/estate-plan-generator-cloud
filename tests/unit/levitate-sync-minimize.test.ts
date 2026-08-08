@@ -144,12 +144,21 @@ describe('Levitate sync (#168 agent half)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('a failed push writes an integration_synced audit entry with outcome failed', async () => {
+  it('a failed push writes an integration_synced audit entry with outcome failed — and a hostile error body cannot smuggle the URL into the logs', async () => {
+    // Zapier/Make error bodies (Cloudflare-fronted) routinely echo the webhook
+    // host or the full secret URL. The console must not repeat them. (The
+    // first version of this test fed a benign body and masked exactly that —
+    // found by adversarial verification.)
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: false, status: 500, text: async () => 'upstream error' })),
+      vi.fn(async () => ({
+        ok: false,
+        status: 410,
+        text: async () => `{"status":"error","url":"${WEBHOOK_URL}","host":"hooks.example"}`,
+      })),
     );
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     await runSync();
 
@@ -158,10 +167,18 @@ describe('Levitate sync (#168 agent half)', () => {
     const metadata = entry!.data.metadata as Record<string, unknown>;
     expect(metadata.outcome).toBe('failed');
     expect(metadata.provider).toBe('levitate');
-    // The failure entry must not leak the URL either.
+    // Neither the audit entry nor ANY console line may carry the URL — even
+    // when the vendor's error body hands it to us.
     expect(JSON.stringify(entry!.data)).not.toContain('hooks.example');
+    const allConsole = [...errSpy.mock.calls, ...logSpy.mock.calls]
+      .flat()
+      .map((a) => String(a))
+      .join('\n');
+    expect(allConsole).not.toContain('hooks.example');
+    expect(allConsole).not.toContain('secret-token');
 
     errSpy.mockRestore();
+    logSpy.mockRestore();
     vi.unstubAllGlobals();
   });
 

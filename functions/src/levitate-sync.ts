@@ -83,7 +83,14 @@ export const syncClientToLevitate = functions.region('us-east1').firestore
                 });
 
                 if (!response.ok) {
-                    console.error(`[syncClientToLevitate] Webhook failed. Status: ${response.status}`, await response.text());
+                    // #168: log the status ONLY. The response body is
+                    // third-party controlled and — for Zapier/Make behind
+                    // Cloudflare — routinely echoes the webhook host or the
+                    // full secret URL, which is the credential this file must
+                    // keep out of Cloud Logging. (Found by adversarial
+                    // verification: the first fix redacted our own log line
+                    // but let the vendor's error body carry the URL in.)
+                    console.error(`[syncClientToLevitate] Webhook failed. Status: ${response.status}`);
                     await auditLevitateSync(firmId, snap.id, `${payload.firstName} ${payload.lastName}`.trim(), 'webhook', 'failed', response.status);
                 } else {
                     console.log(`[syncClientToLevitate] Webhook sync successful for client ${snap.id}`);
@@ -109,7 +116,10 @@ export const syncClientToLevitate = functions.region('us-east1').firestore
                 });
 
                 if (!response.ok) {
-                    console.error(`[syncClientToLevitate] API Key sync failed. HTTP ${response.status}:`, await response.text());
+                    // Status only — same posture as the webhook branch. This
+                    // endpoint is a fixed public URL, but a response body is
+                    // still third-party text with no place in our logs.
+                    console.error(`[syncClientToLevitate] API Key sync failed. HTTP ${response.status}`);
                     await auditLevitateSync(firmId, snap.id, `${payload.firstName} ${payload.lastName}`.trim(), 'api', 'failed', response.status);
                 } else {
                     console.log(`[syncClientToLevitate] API Key sync successful for client ${snap.id}`);
