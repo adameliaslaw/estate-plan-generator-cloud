@@ -19,6 +19,7 @@ import * as admin from 'firebase-admin';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { resolveExportHtml } from './export-content';
+import { logAuditEvent } from './audit-trail';
 
 // ── Helper: sanitize a display name for use in a file name ───────────────────
 
@@ -501,6 +502,20 @@ export const exportDocumentPdf = functions
       const [url] = await file.getSignedUrl({
         action: 'read',
         expires: Date.now() + 60 * 60 * 1000, // 1 hour
+      });
+
+      // #172 — exports leave the system, so they are audited. logAuditEvent
+      // swallows its own failures; it can never fail the export.
+      await logAuditEvent({
+        firmId,
+        eventType: 'document_exported',
+        userId: context.auth.uid,
+        userEmail: (context.auth.token.email as string | undefined) ?? '',
+        userRole: role,
+        clientId,
+        documentId,
+        details: `Exported '${displayName}' as PDF`,
+        metadata: { format: 'pdf', storagePath: fileName, documentStatus: status },
       });
 
       return {

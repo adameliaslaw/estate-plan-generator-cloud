@@ -111,6 +111,9 @@ export function RecordPaymentDialog({
                 clientId: values.selectedClientId,
                 description: cleanDescription,
                 amount: amountCents,
+                // #172: explicit cents so the audit trigger never falls back to
+                // the ambiguous legacy `amount` heuristic.
+                amountCents,
                 amountPaid: amountCents,
                 balanceDue: 0,
                 paymentMethod: values.method,

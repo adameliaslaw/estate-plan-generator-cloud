@@ -48,6 +48,7 @@ import {
 } from 'docx';
 import { sanitizeFileName } from './export-pdf';
 import { resolveDocxExport, resolveExportHtml } from './export-content';
+import { logAuditEvent } from './audit-trail';
 
 // ── TR_ Style Map (InteractiveLegal / template-referenced formatting) ────────
 //
@@ -1199,6 +1200,24 @@ export const exportDocumentDocx = functions
           action: 'read',
           expires: Date.now() + 60 * 60 * 1000,
         });
+        // #172 — audit both success paths; this short-circuit is the one a
+        // future edit is most likely to forget. Never fails the export.
+        await logAuditEvent({
+          firmId,
+          eventType: 'document_exported',
+          userId: context.auth.uid,
+          userEmail: (context.auth.token.email as string | undefined) ?? '',
+          userRole: role,
+          clientId,
+          documentId,
+          details: `Exported '${displayName}' as DOCX (preserved binary)`,
+          metadata: {
+            format: 'docx',
+            source: 'preserved-binary',
+            storagePath: plan.storagePath,
+            documentStatus: status,
+          },
+        });
         return {
           success: true,
           downloadUrl: url,
@@ -1243,6 +1262,19 @@ export const exportDocumentDocx = functions
       const [url] = await file.getSignedUrl({
         action: 'read',
         expires: Date.now() + 60 * 60 * 1000,
+      });
+
+      // #172 — see the preserved-binary path above; same event, different source.
+      await logAuditEvent({
+        firmId,
+        eventType: 'document_exported',
+        userId: context.auth.uid,
+        userEmail: (context.auth.token.email as string | undefined) ?? '',
+        userRole: role,
+        clientId,
+        documentId,
+        details: `Exported '${displayName}' as DOCX`,
+        metadata: { format: 'docx', source: 'rebuild', storagePath, documentStatus: status },
       });
 
       return {

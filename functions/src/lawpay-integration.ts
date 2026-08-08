@@ -408,6 +408,7 @@ export const createPaymentRequest = functions
       lawPayReference: paymentReference,
       // Financial details
       amount,                  // in cents
+      amountCents: amount,     // #172: explicit unit for the audit trigger
       amountFormatted: (amount / 100).toFixed(2),
       currency: 'USD',
       description: description.trim(),
@@ -987,6 +988,7 @@ export const processDirectCharge = functions
           firmId,
           clientId,
           amount,
+          amountCents: amount, // #172: explicit unit for the audit trigger
           amountPaid: 0,
           balanceDue: amount,
           description: description.trim(),
@@ -1024,6 +1026,7 @@ export const processDirectCharge = functions
         firmId,
         clientId,
         amount,
+        amountCents: amount, // #172: explicit unit for the audit trigger
         amountPaid: amount,
         balanceDue: 0,
         description: description.trim(),
@@ -1058,6 +1061,7 @@ export const processDirectCharge = functions
           firmId,
           clientId,
           amount,
+          amountCents: amount, // #172: explicit unit for the audit trigger
           amountPaid: 0,
           balanceDue: amount,
           description: description.trim(),
