@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { loadFirmSecrets } from './firm-secrets';
+import { applyInterviewSettingsToFirmData } from './interview-settings';
 import * as crypto from 'crypto';
 
 import { GeneratedDoc } from './generate-documents';
@@ -492,6 +493,9 @@ export async function generateDocument(
 
     clientData = clientSnap.data()!;
     firmData = { ...firmSnap.data()!, ...(await loadFirmSecrets(firmId)) };
+    // D2: fold the firm's interview defaults into firmData, mirroring the
+    // aggregator path (preloadedContext already carries them).
+    await applyInterviewSettingsToFirmData(db, firmId, firmData as Record<string, unknown>);
   }
 
   // Inject model override if specified
